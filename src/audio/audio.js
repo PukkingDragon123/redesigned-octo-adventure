@@ -14,12 +14,13 @@
 import { Kit, clamp, impulse } from './synth.js';
 import { SFX } from './sfx.js';
 import { SFX2 } from './sfx2.js';
+import { SFX3 } from './sfx3.js';
 import { blipVoice, VOICE_NAMES } from './voices.js';
 import { Music, MOOD_NAMES } from './music.js';
 import { Ambience, AMB_NAMES } from './ambience.js';
 import { Bike, Motor } from './vehicle.js';
 
-const LIB = Object.assign(Object.create(null), SFX, SFX2);
+const LIB = Object.assign(Object.create(null), SFX, SFX2, SFX3);
 export const SFX_NAMES = Object.keys(LIB);
 export { VOICE_NAMES, MOOD_NAMES, AMB_NAMES };
 
@@ -34,6 +35,17 @@ const TRIM = {
   thunder: 1.46, meow: 1.09, meow_sad: 1.17, purr: 1.13, scream: 1.28, gasp: 1.65, brrr: 1.57, reaper: 2.41,
   magic: 1.68, chirp: 1.4, goose: 1.2, moose: 0.91, deer: 1.53, crow: 0.89, owl: 0.87, rooster: 0.81,
   snore: 0.85, upgrade: 1.24, delivered: 0.62, collect: 2.32, day_start: 1.28, day_end: 1.39,
+  // sfx3
+  kick: 0.81, pumpkin_bonk: 0.87, pumpkin_roll: 1.55, pumpkin_smash: 0.98, bones_scatter: 1.24, bones_assemble: 0.75,
+  bone_rattle: 1.81, jaw_chatter: 1.11, camera_shutter: 1.22, flash_pop: 0.63, shop_bell: 0.65, register: 0.91,
+  page_flip: 1.04, book_open: 0.9, book_close: 0.6, paper_unfold: 1.56, pencil_scribble: 1.52, stamp: 0.77,
+  knock: 1.09, door_creak: 1.35, candy_rattle: 2.05, plant_dig: 0.88, water_pour: 1.22, sapling_grow: 1.81,
+  trick_whoosh: 1.15, trick_land: 0.92, combo_ding: 1.14, crowd_cheer: 1.69, applause: 1.44, ghost_ooo: 0.58,
+  witch_cackle: 1.29, bat_flutter: 1.12, cauldron_bubble: 1.1, lantern_whoomp: 1.05, spooky_chime: 1.89,
+  bike_mount: 1.34, bike_dismount: 0.97, footstep_wood: 0.71, footstep_grass: 1.26, footstep_stone: 1.17,
+  jump_foot: 1.21, land_foot: 0.9, splash_small: 1.06, quest_new: 1.83, quest_done: 0.8, item_get: 2.03,
+  cat_meow_happy: 0.98, cat_hiss: 0.87, cash_coins: 2.16, cook_sizzle: 0.8, oven_ding: 0.76, pour_cocoa: 1.97,
+  slurp: 2.12,
 };
 
 const MAX_SFX = 40;

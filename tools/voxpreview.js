@@ -1,0 +1,74 @@
+// Dev tool: render every model a module exports in a grid.
+// /tools/voxpreview.html?mod=/src/voxel/models/props.js&only=pumpkin,tomb&cols=4&yaw=0.6&size=0.05
+import * as THREE from 'three';
+import { meshVox } from '../src/voxel/mesh.js';
+import { createVoxelMaterial } from '../src/render/voxelMaterial.js';
+import { G } from '../src/render/shaderlib.js';
+
+const P = new URLSearchParams(location.search);
+const mod = await import(/* @vite-ignore */ P.get('mod'));
+const all = mod.PREVIEW || mod.MODELS || mod.default;
+let names = Object.keys(all);
+if (P.get('only')) names = names.filter((n) => P.get('only').split(',').some((o) => n.includes(o)));
+const cols = +(P.get('cols') || Math.ceil(Math.sqrt(names.length)));
+const yaw = +(P.get('yaw') ?? 0.65);
+const night = P.has('night');
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(1);
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(night ? 0x141832 : 0x6f95e0);
+G.uSunDir.value.set(0.45, 0.75, 0.5).normalize();
+G.uSunColor.value.setRGB(1.25, 1.1, 0.92);
+G.uSkyAmb.value.setRGB(0.42, 0.48, 0.62);
+G.uGroundAmb.value.setRGB(0.3, 0.26, 0.22);
+G.uNight.value = night ? 1 : 0;
+if (night) { G.uSunColor.value.setRGB(0.15, 0.18, 0.3); G.uSkyAmb.value.setRGB(0.08, 0.1, 0.2); }
+const sun = new THREE.DirectionalLight(0xffffff, 1);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+const mat = createVoxelMaterial();
+const rows = Math.ceil(names.length / cols);
+const cell = +(P.get('cell') || 2.4);
+const lbl = document.getElementById('lbl');
+const items = [];
+names.forEach((n, i) => {
+  let r = all[n]();
+  if (r.vox === undefined && r.w) r = { vox: r };
+  const geo = r.geometry || meshVox(r.vox, { size: r.size ?? +(P.get('size') || 0.05), origin: r.origin, jitter: r.jitter ?? 0.04 });
+  const m = new THREE.Mesh(geo, mat);
+  m.castShadow = m.receiveShadow = true;
+  m.customDepthMaterial = mat.userData.depth;
+  const c = i % cols, rr = Math.floor(i / cols);
+  m.position.set((c - (cols - 1) / 2) * cell, 0, (rr - (rows - 1) / 2) * cell);
+  m.rotation.y = yaw;
+  scene.add(m);
+  items.push({ m, n, faces: geo.userData.faces });
+});
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(200, 200), createVoxelMaterial());
+ground.rotation.x = -Math.PI / 2;
+ground.receiveShadow = true;
+const gg = new THREE.PlaneGeometry(200, 200);
+gg.setAttribute('color4', new THREE.Float32BufferAttribute(new Array(4).fill([0.32, 0.36, 0.5, 0]).flat(), 4));
+ground.geometry = gg;
+scene.add(ground);
+const span = Math.max(cols, rows) * cell;
+const cam = new THREE.PerspectiveCamera(30, innerWidth / innerHeight, 0.1, 500);
+const dist = +(P.get('dist') || span * 1.25 + 2);
+cam.position.set(0, dist * 0.55, dist * 0.85);
+cam.lookAt(0, +(P.get('lookY') || 0.6), 0);
+sun.position.set(span * 0.6, span * 1.4, span * 0.9);
+sun.shadow.camera.left = sun.shadow.camera.bottom = -span;
+sun.shadow.camera.right = sun.shadow.camera.top = span;
+sun.shadow.camera.far = span * 4;
+scene.add(sun);
+renderer.render(scene, cam);
+const v = new THREE.Vector3();
+lbl.innerHTML = items.map(({ m, n, faces }) => {
+  v.copy(m.position).project(cam);
+  return `<div style="position:absolute;left:${(v.x * 0.5 + 0.5) * innerWidth}px;top:${(-v.y * 0.5 + 0.5) * innerHeight + 14}px;transform:translateX(-50%)">${n} <small>${faces}</small></div>`;
+}).join('');
+window.__ready = window.__done = true;
