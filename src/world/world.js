@@ -18,7 +18,7 @@ import { createWater } from './water.js';
 import { Atmosphere } from './atmosphere.js';
 import { G } from '../render/shaderlib.js';
 import { DECOR } from './decor.js';
-import { VoxelWorld } from './voxelWorld.js';
+import { VoxelWorld, startBuildingJobs } from './voxelWorld.js';
 import { VoxelForest } from './voxelForest.js';
 import { PhysProps } from './physprops.js';
 import * as VOXPROPS from '../voxel/models/props.js';
@@ -40,6 +40,8 @@ export class World {
     };
     await step(0.05, 'shaping the hills');
     this.terrain = new Terrain();
+    // the voxel houses are built in workers while the forest grows on this thread
+    if (!this.noVoxelTown) this.buildingJobs = startBuildingJobs(this.terrain);
     await step(0.25, 'painting the ground');
     this.textures = createWorldTextures(this.terrain);
     this.terrainMat = createTerrainMaterial();
@@ -138,13 +140,16 @@ export class World {
       this.voxelProps = VOXPROPS;
       this.physprops = new PhysProps(null, this.scene, ctx.lights);
       await step(0.41, 'building voxel houses');
-      this.voxel.buildings(this.buildings);
+      await this.voxel.buildings(this.buildings, () => step(0.42, 'building voxel houses'));
+      const t1 = performance.now();
       await step(0.43, 'carving pumpkins');
       this.voxel.decor(DECOR.list, this.physprops);
       this.voxel.halloween(this.physprops);
+      const t2 = performance.now();
       this.voxel.buildStatic();
       for (const l of this.voxel.lights) ctx.lights.push(l);
-      console.log(`voxel town in ${(performance.now() - t0).toFixed(0)}ms, ${this.physprops.list.length} physics props`);
+      const ms = (a, b) => (b - a).toFixed(0);
+      console.log(`voxel town in ${ms(t0, performance.now())}ms (buildings ${ms(t0, t1)}, props ${ms(t1, t2)}, merge ${ms(t2, performance.now())}), ${this.voxel.cache.size} prop models, ${this.physprops.list.length} physics props`);
     }
     this.townMeshes = [];
     for (const [name, B] of Object.entries(areas)) {

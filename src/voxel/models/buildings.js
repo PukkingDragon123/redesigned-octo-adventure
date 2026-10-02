@@ -101,8 +101,15 @@ class VB {
     return x + this.W * (y + this.H * z);
   }
   set(x, y, z, c) {
-    const i = this.idx(Math.round(x), Math.round(y), Math.round(z));
-    if (i >= 0) this.a[i] = c >>> 0;
+    const lx = Math.round(x) - this.x0, ly = Math.round(y) - this.y0, lz = Math.round(z) - this.z0;
+    if (lx < 0 || ly < 0 || lz < 0 || lx >= this.W || ly >= this.H || lz >= this.D) return;
+    this.a[lx + this.W * (ly + this.H * lz)] = c >>> 0;
+    if (c) {
+      // grow the painted bounds (finish() only scans inside them)
+      const bb = this.bb || (this.bb = [lx, ly, lz, lx, ly, lz]);
+      if (lx < bb[0]) bb[0] = lx; if (ly < bb[1]) bb[1] = ly; if (lz < bb[2]) bb[2] = lz;
+      if (lx > bb[3]) bb[3] = lx; if (ly > bb[4]) bb[4] = ly; if (lz > bb[5]) bb[5] = lz;
+    }
   }
   get(x, y, z) {
     const i = this.idx(Math.round(x), Math.round(y), Math.round(z));
@@ -146,10 +153,11 @@ class VB {
   }
   finish() {
     let x0 = 1e9, y0 = 1e9, z0 = 1e9, x1 = -1, y1 = -1, z1 = -1;
-    const { W, H, D, a } = this;
-    for (let z = 0; z < D; z++) for (let y = 0; y < H; y++) {
+    const { W, H, a } = this;
+    const bb = this.bb || [0, 0, 0, -1, -1, -1];
+    for (let z = bb[2]; z <= bb[5]; z++) for (let y = bb[1]; y <= bb[4]; y++) {
       const row = W * (y + H * z);
-      for (let x = 0; x < W; x++) if (a[row + x]) {
+      for (let x = bb[0]; x <= bb[3]; x++) if (a[row + x]) {
         if (x < x0) x0 = x; if (x > x1) x1 = x;
         if (y < y0) y0 = y; if (y > y1) y1 = y;
         if (z < z0) z0 = z; if (z > z1) z1 = z;

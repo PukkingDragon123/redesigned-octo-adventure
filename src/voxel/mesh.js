@@ -23,46 +23,70 @@ export function meshVox(vox, opts = {}) {
   const W = vox.w, H = vox.h;
   const solid = (x, y, z) => x >= 0 && y >= 0 && z >= 0 && x < W && y < H && z < vox.d && data[x + W * (y + H * z)] !== 0;
 
-  const pos = [], nor = [], col = [], idx = [];
+  // output buffers grow by doubling (no per-face garbage)
+  let cap = 4096;
+  let pos = new Float32Array(cap * 3), nor = new Float32Array(cap * 3), col = new Float32Array(cap * 4), idx = new Uint32Array(cap * 1.5);
+  let nIdx = 0;
+  const grow = () => {
+    cap *= 2;
+    const g3 = (arr, k) => { const n = new Float32Array(cap * k); n.set(arr); return n; };
+    pos = g3(pos, 3); nor = g3(nor, 3); col = g3(col, 4);
+    const ni = new Uint32Array(cap * 1.5); ni.set(idx); idx = ni;
+  };
   let vcount = 0;
+  const aos = [0, 0, 0, 0], cu = [0, 0, 0, 0], cv = [0, 0, 0, 0], pt = [0, 0, 0];
+  const TRI_A = [0, 1, 2, 0, 2, 3], TRI_B = [1, 2, 3, 1, 3, 0];
   const p = [0, 0, 0], q = [0, 0, 0];
 
+  // flat-index strides: the slice / mask loops below walk the volume with plain index arithmetic
+  const st = [1, W, W * H];
+  // how many solid voxels each x / y / z slice holds (empty slices are skipped outright)
+  const occ = [new Uint32Array(W), new Uint32Array(H), new Uint32Array(vox.d)];
+  for (let z = 0, id = 0; z < vox.d; z++) for (let y = 0; y < H; y++) for (let x = 0; x < W; x++, id++) if (data[id] !== 0) { occ[0][x]++; occ[1][y]++; occ[2][z]++; }
   for (let a = 0; a < 3; a++) {
     const u = (a + 1) % 3, v = (a + 2) % 3;
-    const du = dims[u], dv = dims[v];
+    const du = dims[u], dv = dims[v], da = dims[a];
+    const sa = st[a], su_ = st[u], sv_ = st[v];
     const maskC = new Uint32Array(du * dv);
     const maskA = new Uint8Array(du * dv);
     const maskJ = new Float32Array(du * dv);
     for (let s = -1; s <= 1; s += 2) {
-      for (let sl = 0; sl < dims[a]; sl++) {
+      for (let sl = 0; sl < da; sl++) {
+        if (occ[a][sl] === 0) continue;
         // build the face mask for this slice
         let any = false;
-        for (let j = 0; j < dv; j++) for (let i = 0; i < du; i++) {
-          p[a] = sl; p[u] = i; p[v] = j;
-          const c = data[p[0] + W * (p[1] + H * p[2])];
-          const m = i + j * du;
-          maskC[m] = 0;
-          if (!c) continue;
-          q[a] = sl + s; q[u] = i; q[v] = j;
-          if (solid(q[0], q[1], q[2])) continue;
-          // ambient occlusion at the four corners, sampled in the layer in front of the face
-          let ao = 0;
-          for (let k = 0; k < 4; k++) {
-            const su = k === 1 || k === 2 ? 1 : -1;
-            const sv = k >= 2 ? 1 : -1;
-            q[u] = i + su; q[v] = j;
-            const s1 = solid(q[0], q[1], q[2]) ? 1 : 0;
-            q[u] = i; q[v] = j + sv;
-            const s2 = solid(q[0], q[1], q[2]) ? 1 : 0;
-            q[u] = i + su; q[v] = j + sv;
-            const cc = solid(q[0], q[1], q[2]) ? 1 : 0;
-            const val = s1 && s2 ? 0 : 3 - (s1 + s2 + cc);
-            ao |= val << (k * 2);
+        const front = sl + s >= 0 && sl + s < da; // is there a layer in front of these faces?
+        const fo = s * sa;
+        for (let j = 0; j < dv; j++) {
+          const rowBase = sl * sa + j * sv_;
+          for (let i = 0; i < du; i++) {
+            const id = rowBase + i * su_;
+            const c = data[id];
+            const m = i + j * du;
+            maskC[m] = 0;
+            if (!c) continue;
+            if (front && data[id + fo] !== 0) continue;
+            // ambient occlusion at the four corners, sampled in the layer in front of the face
+            let ao = 0;
+            if (!front) ao = 0xff; // nothing in front: no occlusion anywhere
+            else {
+              const f = id + fo;
+              const iL = i > 0, iR = i < du - 1, jD = j > 0, jU = j < dv - 1;
+              for (let k = 0; k < 4; k++) {
+                const ok1 = k === 1 || k === 2 ? iR : iL, ok2 = k >= 2 ? jU : jD;
+                const ou = (k === 1 || k === 2 ? 1 : -1) * su_, ov = (k >= 2 ? 1 : -1) * sv_;
+                const s1 = ok1 && data[f + ou] !== 0 ? 1 : 0;
+                const s2 = ok2 && data[f + ov] !== 0 ? 1 : 0;
+                const cc = ok1 && ok2 && data[f + ou + ov] !== 0 ? 1 : 0;
+                const val = s1 && s2 ? 0 : 3 - (s1 + s2 + cc);
+                ao |= val << (k * 2);
+              }
+            }
+            maskC[m] = c;
+            maskA[m] = ao;
+            if (jitter) { p[a] = sl; p[u] = i; p[v] = j; maskJ[m] = (vhash(p[0], p[1], p[2], seed) - 0.5) * 2 * jitter; } else maskJ[m] = 0;
+            any = true;
           }
-          maskC[m] = c;
-          maskA[m] = ao;
-          maskJ[m] = jitter ? (vhash(p[0], p[1], p[2], seed) - 0.5) * 2 * jitter : 0;
-          any = true;
         }
         if (!any) continue;
         // greedy merge
@@ -90,46 +114,45 @@ export function meshVox(vox, opts = {}) {
       }
     }
   }
+  void solid; void q;
 
   function emit(a, u, v, s, sl, i, j, w, h, c, ao, jit) {
+    if (vcount + 4 > cap) grow();
     const plane = s > 0 ? sl + 1 : sl;
-    const corners = [[i, j], [i + w, j], [i + w, j + h], [i, j + h]];
-    const n = [0, 0, 0];
-    n[a] = s;
+    cu[0] = i; cv[0] = j; cu[1] = i + w; cv[1] = j; cu[2] = i + w; cv[2] = j + h; cu[3] = i; cv[3] = j + h;
+    const n0 = a === 0 ? s : 0, n1 = a === 1 ? s : 0, n2 = a === 2 ? s : 0;
     const fl = c & FLAGS;
     const r = LIN[(c >> 16) & 255], g = LIN[(c >> 8) & 255], b = LIN[c & 255];
     const tint = 1 + jit;
     const em = fl & EMIT ? 1 : fl & GLASS ? 0.5 : 0;
     const base = vcount;
-    const aos = [];
     for (let k = 0; k < 4; k++) {
-      const pt = [0, 0, 0];
       pt[a] = plane;
-      pt[u] = corners[k][0];
-      pt[v] = corners[k][1];
-      pos.push((pt[0] - ox) * size, (pt[1] - oy) * size, (pt[2] - oz) * size);
-      nor.push(n[0], n[1], n[2]);
+      pt[u] = cu[k];
+      pt[v] = cv[k];
+      const o3 = vcount * 3, o4 = vcount * 4;
+      pos[o3] = (pt[0] - ox) * size; pos[o3 + 1] = (pt[1] - oy) * size; pos[o3 + 2] = (pt[2] - oz) * size;
+      nor[o3] = n0; nor[o3 + 1] = n1; nor[o3 + 2] = n2;
       const aov = (ao >> (k * 2)) & 3;
-      aos.push(aov);
+      aos[k] = aov;
       const lit = em ? 1 : 1 - (1 - AO[aov]) * aoK;
-      col.push(r * lit * tint, g * lit * tint, b * lit * tint, em);
+      col[o4] = r * lit * tint; col[o4 + 1] = g * lit * tint; col[o4 + 2] = b * lit * tint; col[o4 + 3] = em;
       vcount++;
     }
     // flip the diagonal so AO gradients don't crease
-    const flip = aos[0] + aos[2] < aos[1] + aos[3];
-    const tri = flip ? [1, 2, 3, 1, 3, 0] : [0, 1, 2, 0, 2, 3];
-    if (s < 0) tri.reverse();
-    for (const t of tri) idx.push(base + t);
+    const tri = aos[0] + aos[2] < aos[1] + aos[3] ? TRI_B : TRI_A;
+    if (s < 0) for (let t = 5; t >= 0; t--) idx[nIdx++] = base + tri[t];
+    else for (let t = 0; t < 6; t++) idx[nIdx++] = base + tri[t];
   }
 
   const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
-  g.setAttribute('color4', new THREE.Float32BufferAttribute(col, 4));
-  g.setIndex(vcount > 65535 ? new THREE.Uint32BufferAttribute(idx, 1) : new THREE.Uint16BufferAttribute(idx, 1));
+  g.setAttribute('position', new THREE.BufferAttribute(pos.slice(0, vcount * 3), 3));
+  g.setAttribute('normal', new THREE.BufferAttribute(nor.slice(0, vcount * 3), 3));
+  g.setAttribute('color4', new THREE.BufferAttribute(col.slice(0, vcount * 4), 4));
+  g.setIndex(vcount > 65535 ? new THREE.BufferAttribute(idx.slice(0, nIdx), 1) : new THREE.BufferAttribute(Uint16Array.from(idx.subarray(0, nIdx)), 1));
   g.computeBoundingSphere();
   g.computeBoundingBox();
-  g.userData.faces = idx.length / 6;
+  g.userData.faces = nIdx / 6;
   return g;
 }
 

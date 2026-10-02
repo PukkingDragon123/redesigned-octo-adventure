@@ -86,32 +86,39 @@ export class VoxelWorld {
   }
 
   // ------------------------------------------------------------ buildings
-  buildings(placed) {
+  // builds every building's voxel model; yields to the browser now and then so the page stays alive
+  async buildings(placed, yieldFn = null) {
     const mat = sharedVoxelMaterial();
+    const pre = this.world.buildingJobs; // models already being built in workers (see startBuildingJobs)
+    let last = performance.now();
     for (const b of L.BUILDINGS) {
+      if (yieldFn && performance.now() - last > 120) { await yieldFn(); last = performance.now(); }
       const at = placed[b.id];
       if (!at) continue;
       const yaw = b.facing || 0;
       let y = at.y0;
-      const opts = { seed: hashStr(b.id) };
-      if (b.stilts) {
-        // posts reach down to the seabed
-        let low = 1e9;
-        for (const [lx, lz] of [[-b.w / 2, -b.d / 2], [b.w / 2, -b.d / 2], [-b.w / 2, b.d / 2], [b.w / 2, b.d / 2], [0, 0]]) {
-          const c = Math.cos(yaw), s = Math.sin(yaw);
-          low = Math.min(low, this.ground(b.x + lx * c + lz * s, b.z - lx * s + lz * c));
-        }
-        opts.stilt = Math.max(1.5, y - Math.min(low, -0.4) + 0.6);
-      }
       if (b.kind === 'lighthouse') y += 0.3;
-      let r;
-      try {
-        r = buildVoxelBuilding({ ...b, ...opts });
-      } catch (e) {
-        console.warn('voxel building failed', b.id, e);
-        continue;
+      let geo, r;
+      const job = pre ? await pre.get(b.id) : null;
+      if (job && !job.error) {
+        geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.BufferAttribute(job.pos, 3));
+        geo.setAttribute('normal', new THREE.BufferAttribute(job.nor, 3));
+        geo.setAttribute('color4', new THREE.BufferAttribute(job.col, 4));
+        geo.setIndex(new THREE.BufferAttribute(job.idx, 1));
+        geo.computeBoundingSphere();
+        geo.computeBoundingBox();
+        r = { meta: job.meta };
+      } else {
+        if (job?.error) console.warn('worker building failed', b.id, job.error);
+        try {
+          r = buildVoxelBuilding(buildingSpec(b, this.terrain));
+        } catch (e) {
+          console.warn('voxel building failed', b.id, e);
+          continue;
+        }
+        geo = meshVox(r.vox, { size: r.size, origin: r.origin, jitter: 0 });
       }
-      const geo = meshVox(r.vox, { size: r.size, origin: r.origin, jitter: 0 });
       const mesh = voxMesh(geo, mat);
       mesh.position.set(b.x, y, b.z);
       mesh.rotation.y = yaw;
@@ -381,6 +388,54 @@ export class VoxelWorld {
     // the rest of the remade map: streets, green, harbour, farm, beach, campground, signposts...
     dressPlaces(this, physprops);
   }
+}
+
+// The spec a building's voxel model is built from (stilt houses reach down to the seabed)
+export function buildingSpec(b, terrain) {
+  const opts = { seed: hashStr(b.id) };
+  if (b.stilts) {
+    const yaw = b.facing || 0, y = L.BOARDWALK[0].h + 0.02;
+    let low = 1e9;
+    for (const [lx, lz] of [[-b.w / 2, -b.d / 2], [b.w / 2, -b.d / 2], [-b.w / 2, b.d / 2], [b.w / 2, b.d / 2], [0, 0]]) {
+      const c = Math.cos(yaw), s = Math.sin(yaw);
+      low = Math.min(low, terrain.heightAt(b.x + lx * c + lz * s, b.z - lx * s + lz * c));
+    }
+    opts.stilt = Math.max(1.5, y - Math.min(low, -0.4) + 0.6);
+  }
+  return { ...b, ...opts };
+}
+
+// Start building every voxel building in Web Workers (in parallel with the forest on the main
+// thread). Returns a Map id -> Promise<{ pos, nor, col, idx, meta } | { error }>, or null.
+export function startBuildingJobs(terrain) {
+  if (typeof Worker === 'undefined') return null;
+  const cores = Math.max(1, Math.min(3, (navigator.hardwareConcurrency || 2) - 1));
+  let workers;
+  try {
+    workers = Array.from({ length: cores }, () => new Worker(new URL('./buildWorker.js', import.meta.url), { type: 'module' }));
+  } catch {
+    return null;
+  }
+  const waiting = new Map(), jobs = new Map();
+  const lists = workers.map(() => []);
+  // biggest first, dealt round-robin so the workers finish together
+  const order = L.BUILDINGS.slice().sort((a, b) => b.w * b.d * (b.floors || 1) - a.w * a.d * (a.floors || 1));
+  order.forEach((b, i) => lists[i % workers.length].push({ id: b.id, spec: buildingSpec(b, terrain) }));
+  for (const b of L.BUILDINGS) jobs.set(b.id, new Promise((res) => waiting.set(b.id, res)));
+  let left = L.BUILDINGS.length;
+  workers.forEach((w, k) => {
+    w.onmessage = (e) => {
+      waiting.get(e.data.id)?.(e.data);
+      if (--left === 0) for (const ww of workers) ww.terminate();
+    };
+    w.onerror = (e) => {
+      // a worker that can't even start: everything it owned falls back to the main thread
+      for (const j of lists[k]) waiting.get(j.id)?.({ id: j.id, error: e.message || 'worker failed' });
+      e.preventDefault?.();
+    };
+    w.postMessage({ jobs: lists[k] });
+  });
+  return jobs;
 }
 
 // Nana's old TV on the porch: Maple Cove TV with the weather and town news
