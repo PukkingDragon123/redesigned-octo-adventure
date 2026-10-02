@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>UI kit preview</title>
+    <style>
+      html, body { margin: 0; height: 100%; overflow: hidden; background: #3a3040; }
+      #bg { position: fixed; inset: 0; background: linear-gradient(180deg, #6a7ea0 0%, #c8906a 55%, #6a4a2a 56%, #4a3020 100%); background-size: cover; background-position: center; }
+      #ui { position: fixed; inset: 0; overflow: auto; }
+    </style>
+  </head>
+  <body>
+    <div id="bg"></div>
+    <div id="ui"></div>
+    <!-- ?page=kit|icons|bubbles|hud ; ?bg=url for a background screenshot -->
+    <script type="module" src="./uipreview.js"></script>
+  </body>
+</html>

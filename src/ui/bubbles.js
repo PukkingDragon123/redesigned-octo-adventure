@@ -1,123 +1,29 @@
-// Black & white pixel-art speech bubbles that float over the real 3D speaker,
-// with emotion-shaped outlines (shouts are spiky, fear is wobbly, thoughts are
-// clouds), little animated mood marks, per-letter text effects and reply
-// bubbles for choices. Narration appears on a torn paper strip.
+// Pixel-art comic speech bubbles that float over the real 3D speaker, with
+// emotion-shaped outlines (shouts are spiky, fear is wobbly, thoughts are clouds,
+// whispers are dashed), little mood marks, per-letter text effects, name plates
+// and reply bubbles for choices. Narration appears on a framed caption plate.
+//
+// Everything is drawn on the kit's pixel grid: frames are 9-slices at a whole
+// number of device pixels per art pixel, text is the pixel font at its native
+// size, positions are snapped to device pixels and all motion moves in whole art
+// pixels (steps()), so nothing is ever resampled or blurred.
 import { input } from '../core/input.js';
 import { sound } from '../game/sound.js';
+import { bubbleArt, bubbleTailArt, BUBBLE_JOIN } from './kitart.js';
+import { glyphURL } from '../art/icons.js';
+import { el, scale, snap } from './kit.js';
 
-const INK = '#1e1418';
-const WHITE = '#fffaf0';
-const SHADE = '#cfc6b8';
-
-const el = (tag, cls, html) => {
-  const e = document.createElement(tag);
-  if (cls) e.className = cls;
-  if (html !== undefined) e.innerHTML = html;
-  return e;
-};
-
-// ---------------------------------------------------------------- pixel frame art (9-slice)
-function canvas(w, h, draw) {
+// ---------------------------------------------------------------- art (cached data URLs)
+const URLS = new Map();
+function toURL(p) {
   const c = document.createElement('canvas');
-  c.width = w;
-  c.height = h;
-  const g = c.getContext('2d');
-  const px = (x, y, col, ww = 1, hh = 1) => { g.fillStyle = col; g.fillRect(x, y, ww, hh); };
-  draw(px, g);
+  c.width = p.w;
+  c.height = p.h;
+  c.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(p.data), p.w, p.h), 0, 0);
   return c.toDataURL();
 }
-
-// 24x24 frames with an 8px slice; the middle tiles
-const FRAMES = {};
-function frame(style) {
-  if (FRAMES[style]) return FRAMES[style];
-  const S = 24;
-  const url = canvas(S, S, (px) => {
-    const inside = (x, y) => {
-      // shape mask per style (x,y in 0..S-1), returns 0 outside, 1 fill
-      const e = 2; // margin for spikes / shadow
-      const cx = Math.min(x - e, S - 1 - e - x), cy = Math.min(y - e, S - 2 - e - y);
-      if (style === 'shout') {
-        // jagged spikes every 4px along the edges
-        const sx = (x % 4 < 2 ? x % 4 : 4 - (x % 4)), sy = (y % 4 < 2 ? y % 4 : 4 - (y % 4));
-        return cx >= -e + sy && cy >= -e + sx && !(cx < 1 && cy < 1);
-      }
-      if (style === 'think') {
-        const bx = ((x + 2) % 6) - 3, by = ((y + 2) % 6) - 3;
-        const bump = 1.5 - Math.sqrt(bx * bx + by * by) * 0.5;
-        return cx >= 1 - Math.max(0, bump) && cy >= 1 - Math.max(0, bump) && cx + cy >= 3;
-      }
-      if (style === 'shaky') {
-        const wy = Math.round(Math.sin(x * 0.9) * 0.8), wx = Math.round(Math.sin(y * 0.9) * 0.8);
-        return cx >= 1 + wx && cy >= 1 + wy && cx + cy >= 3;
-      }
-      // rounded
-      return cx >= 0 && cy >= 0 && !(cx + cy < 3);
-    };
-    // drop shadow
-    for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) if (inside(x - 1, y - 1) && !inside(x, y)) px(x, y, INK);
-    for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
-      if (!inside(x, y)) continue;
-      const edge = !inside(x - 1, y) || !inside(x + 1, y) || !inside(x, y - 1) || !inside(x, y + 1);
-      if (edge) {
-        if (style === 'whisper' && (x + y) % 3 === 0) px(x, y, WHITE);
-        else px(x, y, INK);
-      } else px(x, y, !inside(x, y + 2) ? SHADE : WHITE);
-    }
-  });
-  return (FRAMES[style] = url);
-}
-
-// little tails pointing down at the speaker
-function tail(style) {
-  const key = 'tail:' + style;
-  if (FRAMES[key]) return FRAMES[key];
-  const W = 14, H = 12;
-  const url = canvas(W, H, (px) => {
-    if (style === 'think') {
-      const dots = [[7, 2, 2.6], [5, 7, 1.8], [4, 10, 1.1]];
-      for (const [cx, cy, r] of dots) for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-        const d = Math.hypot(x + 0.5 - cx, y + 0.5 - cy);
-        if (d <= r) px(x, y, d > r - 1 ? INK : WHITE);
-      }
-      return;
-    }
-    // a hooked tail; shouts get a zig-zag lightning tail
-    for (let y = 0; y < H; y++) {
-      let l, r;
-      if (style === 'shout') { const z = y % 4 < 2 ? 0 : 2; l = 3 + Math.floor(y * 0.25) + z; r = 10 - Math.floor(y * 0.6) + z - 1; }
-      else { l = 3 + Math.floor(y * 0.15); r = 11 - Math.floor(y * 0.85); }
-      if (r < l) { if (y < H) px(l, y, INK); continue; }
-      for (let x = l; x <= r; x++) px(x, y, x === l || x === r || y === H - 1 ? INK : WHITE);
-      px(r + 1, y, INK); // shadow side
-    }
-  });
-  return (FRAMES[key] = url);
-}
-
-// tiny mood marks (16x16) that pop around the bubble
-const MARKS = {};
-function mark(name) {
-  if (MARKS[name]) return MARKS[name];
-  const url = canvas(16, 16, (px) => {
-    const P = (rows, ox = 0, oy = 0) => rows.forEach((r, y) => [...r].forEach((ch, x) => ch === '#' ? px(x + ox, y + oy, INK) : ch === 'o' ? px(x + ox, y + oy, WHITE) : 0));
-    switch (name) {
-      case 'anger': P(['..##...##..', '.#oo#.#oo#.', '#ooo#.#ooo#', '#oo#...#oo#', '.##.....##.', '...........', '.##.....##.', '#oo#...#oo#', '#ooo#.#ooo#', '.#oo#.#oo#.', '..##...##..'], 2, 2); break;
-      case 'bang': P(['.###.', '#ooo#', '#ooo#', '#ooo#', '.#o#.', '.#o#.', '.#o#.', '..#..', '.....', '.###.', '#ooo#', '.###.'], 5, 1); break;
-      case 'sweat': P(['....#....', '...#o#...', '..#ooo#..', '.#oooo#..', '#oooooo#.', '#oo#ooo#.', '#ooo#oo#.', '.#oooo#..', '..####...'], 3, 3); break;
-      case 'heart': P(['.##...##.', '#oo#.#oo#', '#ooo#ooo#', '#ooooooo#', '.#ooooo#.', '..#ooo#..', '...#o#...', '....#....'], 3, 4); break;
-      case 'note': P(['....####', '....#oo#', '....#..#', '....#..#', '....#..#', '.###..##', '#ooo#.##', '#ooo#...', '.###....'], 4, 3); break;
-      case 'sparkle': P(['...#...', '...#...', '..#o#..', '##ooo##', '..#o#..', '...#...', '...#...'], 4, 4); break;
-      case 'question': P(['.####.', '#oooo#', '#o##o#', '...#o#', '..#o#.', '..#o#.', '...#..', '......', '..##..', '..##..'], 5, 3); break;
-      case 'zzz': P(['#####', '...#.', '..#..', '.#...', '#####', '.....', '..####', '....#.', '...#..', '..####'], 4, 3); break;
-      case 'tear': P(['..#..', '.#o#.', '#ooo#', '#ooo#', '.###.'], 6, 6); break;
-      case 'shock': P(['#.....#', '.#...#.', '.......', '##...##', '.......', '.#...#.', '#.....#'], 4, 4); break;
-      case 'ha': P(['#..#..##..', '#..#.#..#.', '####.####.', '#..#.#..#.', '#..#.#..#.'], 3, 5); break;
-      default: break;
-    }
-  });
-  return (MARKS[name] = url);
-}
+const frame = (style) => URLS.get(`f${style}`) || (URLS.set(`f${style}`, toURL(bubbleArt(style))), URLS.get(`f${style}`));
+const tail = (style) => URLS.get(`t${style}`) || (URLS.set(`t${style}`, toURL(bubbleTailArt(style))), URLS.get(`t${style}`));
 
 // emotion -> bubble look
 function moodOf(expr) {
@@ -132,7 +38,6 @@ function moodOf(expr) {
     case 'sleepy': return { style: 'think', marks: ['zzz'], anim: 'float' };
     case 'think': case 'dizzy': return { style: 'think', marks: ['question'], anim: 'float' };
     case 'happy': case 'sparkle': case 'wink': return { style: 'round', marks: ['sparkle'], anim: 'bounce' };
-    case 'determined': case 'smug': return { style: 'round', marks: [], anim: 'pop' };
     default: return { style: 'round', marks: [], anim: 'pop' };
   }
 }
@@ -147,12 +52,34 @@ function tokenize(text) {
   }
   return parts;
 }
+// The whole line is laid out up front with every letter hidden, then typing just
+// reveals letters: the bubble has its final size from the first frame, so it
+// never grows, slides or re-wraps words while the text types in.
+function layoutText(txt, parts) {
+  const out = [];
+  let word = null;
+  parts.forEach((p, i) => {
+    if (p.ch === ' ' || p.ch === '\n') {
+      txt.appendChild(p.ch === ' ' ? document.createTextNode(' ') : document.createElement('br'));
+      word = null;
+      out.push(null);
+      return;
+    }
+    if (!word) { word = el('span', 'tword'); txt.appendChild(word); }
+    const sp = el('span', `hid${p.b ? ' tb' : ''}${p.w ? ' tw' : ''}${p.s ? ' ts' : ''}${p.sm ? ' tsm' : ''}`);
+    sp.textContent = p.ch;
+    if (p.w || p.s) sp.style.animationDelay = `${(i % 8) * -0.1}s`;
+    word.appendChild(sp);
+    out.push(sp);
+  });
+  return out;
+}
 
 export class Bubbles {
   constructor(ui) {
     this.ui = ui;
     this.game = ui.game;
-    this.layer = el('div', 'bubble-layer');
+    this.layer = el('div', 'bubble-layer k-text');
     ui.root.appendChild(this.layer);
     this.active = null;
   }
@@ -179,27 +106,30 @@ export class Bubbles {
     const narr = !who && !opts.choices;
     if (narr) return this.narrate(text, opts);
     this.clear();
+    // the "E: Talk to ..." tag would sit under the reply bubbles
+    this.ui.prompt?.(null);
     const speaker = this.findSpeaker(who, opts);
     const mood = moodOf(opts.expr);
-    const b = el('div', `bubble b-${mood.style} anim-${mood.anim}`);
+    const b = el('div', `bubble b-${mood.style}`);
     b.style.borderImageSource = `url(${frame(mood.style)})`;
     const tl = el('div', 'b-tail');
     tl.style.backgroundImage = `url(${tail(mood.style)})`;
-    const nameEl = name ? el('div', 'b-name', name) : null;
+    const nameEl = name ? el('div', 'k-plate k-dark k-bold b-name', '') : null;
+    if (nameEl) nameEl.textContent = name;
     const txt = el('div', 'b-text');
     const next = el('div', 'b-next');
     b.appendChild(txt);
     b.appendChild(next);
     if (nameEl) b.appendChild(nameEl);
-    const marks = mood.marks.map((m, i) => {
-      const e = el('div', `b-mark m${i}`);
-      e.style.backgroundImage = `url(${mark(m)})`;
+    mood.marks.forEach((m, i) => {
+      const e = el('img', `b-mark m${i}`);
+      e.src = glyphURL(`mark_${m}`);
       b.appendChild(e);
-      return e;
     });
     const wrap = el('div', 'bubble-wrap');
-    wrap.appendChild(b);
-    wrap.appendChild(tl);
+    const anim = el('div', `bub-anim anim-${mood.anim}`);
+    anim.append(tl, b);
+    wrap.appendChild(anim);
     this.layer.appendChild(wrap);
     if (speaker && opts.expr) speaker.tempExpr?.(opts.expr, 30);
     const parts = tokenize(text);
@@ -208,19 +138,9 @@ export class Bubbles {
       let i = 0, acc = 0, done = false, sel = 0;
       const speed = opts.speed ?? 40;
       const items = [];
-      const A = (this.active = { wrap, b, tl, speaker, resolve: null, choiceEls: items });
-      let word = null;
-      const addChar = (p) => {
-        if (p.ch === ' ' || p.ch === '\n') {
-          txt.appendChild(p.ch === ' ' ? document.createTextNode(' ') : document.createElement('br'));
-          word = null;
-          return;
-        }
-        if (!word) { word = el('span', 'tword'); txt.appendChild(word); }
-        const sp = el('span', `${p.b ? 'tb' : ''}${p.w ? ' tw' : ''}${p.s ? ' ts' : ''}${p.sm ? ' tsm' : ''}`, p.ch.replace('<', '&lt;'));
-        if (p.w || p.s) sp.style.animationDelay = `${(i % 12) * -0.06}s`;
-        word.appendChild(sp);
-      };
+      const A = (this.active = { wrap, b, tl, speaker, resolve: null, choiceEls: items, hasName: !!nameEl });
+      const letters = layoutText(txt, parts);
+      const addChar = () => letters[i - 1]?.classList.remove('hid');
       const finish = () => {
         while (i < parts.length) addChar(parts[i++]);
         done = true;
@@ -230,7 +150,10 @@ export class Bubbles {
       };
       const setSel = (k) => {
         sel = (k + items.length) % items.length;
-        items.forEach((e, j) => e.classList.toggle('sel', j === sel));
+        items.forEach((e, j) => {
+          e.classList.toggle('sel', j === sel);
+          e.style.borderImageSource = `url(${frame(j === sel ? 'sel' : 'round')})`;
+        });
         sound.play('ui_hover');
       };
       const close = () => {
@@ -285,11 +208,11 @@ export class Bubbles {
     const box = el('div', 'reply-stack');
     choices.forEach((c, k) => {
       const e = el('div', `reply${k === 0 ? ' sel' : ''}`);
-      e.style.borderImageSource = `url(${frame('round')})`;
-      e.innerHTML = `<span class="hand"></span>${c}`;
+      e.style.borderImageSource = `url(${frame(k === 0 ? 'sel' : 'round')})`;
+      e.innerHTML = `<span class="hand"></span><span class="rt">${c}</span>`;
       e.addEventListener('pointerdown', (ev) => { ev.stopPropagation(); pick(k); });
       e.addEventListener('pointerenter', () => hover(k));
-      e.style.animationDelay = `${k * 0.07}s`;
+      e.style.animationDelay = `${k * 0.08}s`;
       box.appendChild(e);
       items.push(e);
     });
@@ -298,25 +221,30 @@ export class Bubbles {
     this.active.replySpeaker = this.findSpeaker('hank', {});
   }
 
-  // narration: a torn strip of paper with handwriting-ish text
+  // narration: a dark framed caption plate across the top
   narrate(text, opts) {
     this.clear();
-    const p = el('div', 'narr-paper');
+    const p = el('div', 'k-panel k-dark narr-plate');
     const txt = el('div', 'n-text');
     const next = el('div', 'b-next');
     p.appendChild(txt);
     p.appendChild(next);
     this.layer.appendChild(p);
+    const u = scale.u;
+    const fit = () => {
+      const w = Math.min(268, scale.cols - 16) * u;
+      p.style.width = `${w}px`;
+      p.style.left = `${snap((innerWidth - w) / 2)}px`;
+      const box = this.ui.root.classList.contains('letterbox') ? Math.ceil((innerHeight * 0.09) / u) * u : 0;
+      p.style.top = `${snap(box + 6 * u)}px`;
+    };
+    fit();
     const parts = tokenize(text);
     return new Promise((resolve) => {
       let i = 0, acc = 0, done = false;
-      this.active = { wrap: p, narr: true };
-      let word = null;
-      const add = (q) => {
-        if (q.ch === ' ') { txt.appendChild(document.createTextNode(' ')); word = null; return; }
-        if (!word) { word = el('span', 'tword'); txt.appendChild(word); }
-        word.appendChild(el('span', `${q.b ? 'tb' : ''}${q.w ? ' tw' : ''}${q.s ? ' ts' : ''}`, q.ch));
-      };
+      this.active = { wrap: p, narr: true, fit };
+      const letters = layoutText(txt, parts);
+      const add = () => letters[i - 1]?.classList.remove('hid');
       const close = () => {
         this.ui.dialogueTick = null;
         this.ui._dlgResolve = null;
@@ -358,11 +286,12 @@ export class Bubbles {
     this.active = null;
   }
 
-  // keep the bubble above the speaker's real head on screen
+  // keep the bubble above the speaker's real head on screen (whole device pixels only)
   place(A) {
-    if (!A || A.narr) return;
+    if (!A) return;
+    if (A.narr) { A.fit?.(); return; }
     const cam = this.game.camera;
-    const W = innerWidth, H = innerHeight;
+    const W = innerWidth, H = innerHeight, u = scale.u;
     const bw = A.b.offsetWidth, bh = A.b.offsetHeight;
     let sx = W / 2, sy = H * 0.72, onScreen = false;
     if (A.speaker?.headWorld) {
@@ -375,35 +304,38 @@ export class Bubbles {
         onScreen = true;
       }
     }
-    const m = 12;
-    // keep clear of the cutscene letterbox bars and leave room for the name tag
+    const m = 6 * u;
+    // keep clear of the cutscene letterbox bars and leave room for the name plate
     const box = this.ui.root.classList.contains('letterbox') ? H * 0.09 : 0;
-    const top = m + box + (A.b.querySelector('.b-name') ? 34 : 0);
-    const tailH = A.tl.offsetHeight || 30;
-    let bx = sx - bw * 0.42;
-    let by = sy - bh - tailH + 6;
+    const top = m + box + (A.hasName ? 16 * u : 0);
+    const tailBelow = (14 - BUBBLE_JOIN) * u; // how far the tail tip hangs below the bubble box
+    let bx = sx - bw * 0.3;
+    let by = sy - bh - tailBelow;
     bx = Math.max(m, Math.min(W - bw - m, bx));
-    by = Math.max(top, Math.min(H - bh - tailH - m - box, by));
-    A.wrap.style.transform = `translate(${Math.round(bx)}px, ${Math.round(by)}px)`;
-    const tx = Math.max(14, Math.min(bw - 50, sx - bx - 14));
-    A.tl.style.left = `${Math.round(tx)}px`;
-    A.tl.style.top = `${Math.round(bh - 6)}px`;
+    by = Math.max(top, Math.min(H - bh - tailBelow - m - box, by));
+    bx = snap(Math.round(bx / u) * u);
+    by = snap(Math.round(by / u) * u);
+    A.wrap.style.transform = `translate(${bx}px, ${by}px)`;
+    const tx = Math.max(10 * u, Math.min(bw - 26 * u, sx - bx - 2 * u));
+    A.tl.style.left = `${snap(Math.round(tx / u) * u)}px`;
+    A.tl.style.top = `${snap(bh - BUBBLE_JOIN * u)}px`;
     A.tl.style.display = onScreen ? '' : 'none';
     if (A.replies) {
       // reply bubbles stack near Hank (or bottom right)
-      let rx = W - A.replies.offsetWidth - 24, ry = H - A.replies.offsetHeight - 24;
+      const rw = A.replies.offsetWidth, rh = A.replies.offsetHeight;
+      let rx = W - rw - 12 * u, ry = H - rh - 12 * u;
       const h = A.replySpeaker;
       if (h?.headWorld && h !== A.speaker) {
         const v = h.headWorld().project(cam);
         if (v.z < 1 && Math.abs(v.x) < 1 && Math.abs(v.y) < 1) {
-          rx = (v.x * 0.5 + 0.5) * W + 30;
-          ry = (-v.y * 0.5 + 0.5) * H - A.replies.offsetHeight * 0.3;
+          rx = (v.x * 0.5 + 0.5) * W + 16 * u;
+          ry = (-v.y * 0.5 + 0.5) * H - rh * 0.3;
         }
       }
-      rx = Math.max(m, Math.min(W - A.replies.offsetWidth - m, rx));
-      ry = Math.max(by + bh + tailH + 6, Math.min(H - A.replies.offsetHeight - m, ry));
-      if (ry + A.replies.offsetHeight > H - m) ry = H - A.replies.offsetHeight - m;
-      A.replies.style.transform = `translate(${Math.round(rx)}px, ${Math.round(ry)}px)`;
+      rx = Math.max(m + 20 * u, Math.min(W - rw - m, rx));
+      ry = Math.max(by + bh + tailBelow + 4 * u, Math.min(H - rh - m, ry));
+      if (ry + rh > H - m) ry = H - rh - m;
+      A.replies.style.transform = `translate(${snap(Math.round(rx / u) * u)}px, ${snap(Math.round(ry / u) * u)}px)`;
     }
   }
 }

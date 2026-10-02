@@ -1,199 +1,277 @@
-// The HUD as physical things: Harold's brass pocket watch, a coin pouch, Nana's
-// hand-written order list pinned to the corner, a little compass whose needle
-// points at the next stop, and the bike's handlebar speedometer.
-import { iconURL } from '../art/icons.js';
-import { foodIconURL } from '../art/foodsprites.js';
+// The HUD as physical things, drawn as pixel art at the kit's integer scale:
+// Harold's brass pocket watch, the day plate, a coin pouch, a brass compass whose
+// needle points at the next stop, Nana's order note pinned to the corner and the
+// handlebar speedometer.
+import { iconURL, glyphURL, iconSmallURL } from '../art/icons.js';
 import { CHARACTERS } from '../art/characters.js';
+import { Pix } from '../art/pixel.js';
+import { el, esc, snapBox, onScale } from './kit.js';
 
-const el = (tag, cls, html) => {
-  const e = document.createElement(tag);
-  if (cls) e.className = cls;
-  if (html !== undefined) e.innerHTML = html;
-  return e;
-};
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const INK = 0x1e1418;
+// 6-tone ramps: outline, d2, d1, base, l1, hl
+const GOLD = [0x6e3a0e, 0xa8640e, 0xd08a18, 0xf0b42a, 0xffdc5a, 0xfff8c8];
+const BRASS = [0x5e3410, 0x8e5a1a, 0xb87e26, 0xd8a038, 0xf2cc6a, 0xfff0b0];
+const STEEL = [0x2e3440, 0x5e6674, 0x8a929e, 0xb4bcc8, 0xdfe4ea, 0xffffff];
+const LV = (() => { const l = [-0.55, -0.5, 0.67], m = Math.hypot(...l); return l.map((v) => v / m); })();
+const toneOf = (R, d) => { const v = (d + 0.35) / 1.4; if (d > 0.93) return R[5]; return R[1 + clamp(Math.floor(v * 4), 0, 3)]; };
 
-// ---------------------------------------------------------------- pixel canvases
-function pixCanvas(w, h) {
-  const c = document.createElement('canvas');
-  c.width = w;
-  c.height = h;
-  const g = c.getContext('2d');
-  const px = (x, y, col, ww = 1, hh = 1) => { g.fillStyle = col; g.fillRect(Math.round(x), Math.round(y), ww, hh); };
-  return { c, g, px };
+// a torus-shaded ring (bezels) and a gently domed disc (faces, glass)
+function ring(p, cx, cy, r0, r1, R) {
+  for (let y = Math.floor(cy - r1 - 1); y <= cy + r1 + 1; y++) for (let x = Math.floor(cx - r1 - 1); x <= cx + r1 + 1; x++) {
+    const dx = x + 0.5 - cx, dy = y + 0.5 - cy, d = Math.hypot(dx, dy);
+    if (d < r0 || d > r1) continue;
+    const t = ((d - r0) / (r1 - r0)) * 2 - 1;
+    const n = [(dx / d) * t, (dy / d) * t, Math.sqrt(Math.max(0, 1 - t * t))];
+    p.set(x, y, toneOf(R, n[0] * LV[0] + n[1] * LV[1] + n[2] * LV[2]));
+  }
 }
-function disc(px, cx, cy, r, col) {
-  for (let y = -r; y <= r; y++) for (let x = -r; x <= r; x++) if (x * x + y * y <= r * r + r * 0.6) px(cx + x, cy + y, col);
+function disc(p, cx, cy, r, cols, dome = 0.25) {
+  for (let y = Math.floor(cy - r - 1); y <= cy + r + 1; y++) for (let x = Math.floor(cx - r - 1); x <= cx + r + 1; x++) {
+    const dx = (x + 0.5 - cx) / r, dy = (y + 0.5 - cy) / r, q = dx * dx + dy * dy;
+    if (q > 1) continue;
+    const d = dx * LV[0] * dome + dy * LV[1] * dome + Math.sqrt(1 - q * dome) * LV[2];
+    const k = q > 0.82 ? 0 : d > 0.86 ? 2 : 1;
+    p.set(x, y, cols[k]);
+  }
 }
-function lineP(px, x0, y0, x1, y1, col, th = 1) {
-  const n = Math.ceil(Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0))) * 2 || 1;
-  for (let i = 0; i <= n; i++) px(x0 + ((x1 - x0) * i) / n - th / 2 + 0.5, y0 + ((y1 - y0) * i) / n - th / 2 + 0.5, col, th, th);
+function line(p, x0, y0, x1, y1, c, th = 1) {
+  const n = Math.ceil(Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0)) * 2) || 1;
+  for (let i = 0; i <= n; i++) {
+    const x = x0 + ((x1 - x0) * i) / n, y = y0 + ((y1 - y0) * i) / n;
+    if (th === 1) p.set(Math.floor(x), Math.floor(y), c);
+    else p.rect(Math.round(x - th / 2), Math.round(y - th / 2), th, th, c);
+  }
 }
-
-// Harold's pocket watch: 40x48 px
-class PocketWatch {
-  constructor() {
-    const P = pixCanvas(40, 48);
-    Object.assign(this, P);
+class PixCanvas {
+  constructor(w, h, cls) {
+    this.c = el('canvas', cls);
+    this.c.width = w;
+    this.c.height = h;
+    this.g = this.c.getContext('2d');
+    this.p = new Pix(w, h);
+    this.img = this.g.createImageData(w, h);
     this.key = '';
   }
+  flush() {
+    this.p.outline(INK);
+    this.img.data.set(this.p.data);
+    this.g.putImageData(this.img, 0, 0);
+  }
+}
+
+// ---------------------------------------------------------------- Harold's pocket watch 44x54
+export class PocketWatch extends PixCanvas {
+  constructor() { super(44, 54, 'hud-watch'); }
   draw(hour) {
     const mm = Math.floor((hour % 1) * 60);
     const key = `${Math.floor(hour)}:${Math.floor(mm / 2)}`;
     if (key === this.key) return;
     this.key = key;
-    const { g, px } = this;
-    g.clearRect(0, 0, 40, 48);
-    const cx = 20, cy = 27;
-    // bow ring & crown
-    for (let a = 0; a < 40; a++) {
-      const t = (a / 40) * Math.PI * 2;
-      px(cx + Math.cos(t) * 4.5, 4.5 + Math.sin(t) * 3.5, a < 20 ? '#f6d27a' : '#a8741e');
-    }
-    px(cx - 2, 7, '#c8902e', 4, 3);
-    px(cx - 1, 6, '#f6d27a', 2, 1);
-    // case: dark rim, gold, highlight
-    disc(px, cx, cy, 18, '#3a2410');
-    disc(px, cx, cy, 17, '#a8741e');
-    disc(px, cx, cy, 16, '#e8b44a');
-    for (let a = 0; a < 30; a++) { const t = Math.PI * (1.05 + (a / 30) * 0.5); px(cx + Math.cos(t) * 15.5, cy + Math.sin(t) * 15.5, '#fff0b8'); }
-    disc(px, cx, cy, 14, '#6a4418');
-    // face
+    const p = this.p;
+    p.data.fill(0);
+    const cx = 22, cy = 31;
+    // bow and knurled crown
+    ring(p, cx, 6, 2.2, 4.6, GOLD);
+    for (let x = 18; x < 26; x++) for (let y = 9; y < 12; y++) p.set(x, y, x % 2 ? GOLD[2] : GOLD[4]);
+    p.rect(19, 12, 6, 2, GOLD[2]);
+    // the case: polished outer ring, an engraved inner ring, dark bezel lip
+    ring(p, cx, cy, 15.5, 20.5, GOLD);
+    for (let k = 0; k < 24; k++) { const a = (k / 24) * Math.PI * 2; p.set(Math.floor(cx + Math.cos(a) * 18 ), Math.floor(cy + Math.sin(a) * 18), k % 2 ? GOLD[1] : GOLD[2]); }
+    ring(p, cx, cy, 14.5, 15.5, [GOLD[0], GOLD[0], GOLD[1], GOLD[1], GOLD[2], GOLD[2]]);
+    // the face
     const night = hour < 6.5 || hour > 19.6;
-    disc(px, cx, cy, 13, night ? '#d8d0bc' : '#fff6e0');
-    // ticks
-    for (let k = 0; k < 12; k++) {
-      const t = (k / 12) * Math.PI * 2 - Math.PI / 2;
-      const r0 = k % 3 === 0 ? 9.5 : 11, r1 = 12;
-      lineP(px, cx + Math.cos(t) * r0, cy + Math.sin(t) * r0, cx + Math.cos(t) * r1, cy + Math.sin(t) * r1, '#3a2418');
+    disc(p, cx, cy, 14.5, night ? [0xb8b0a0, 0xd8d0bc, 0xe8e0cc] : [0xe2d0ac, 0xfff2d6, 0xfffbea]);
+    // minute dots and hour bars
+    for (let k = 0; k < 60; k += 5) {
+      const a = (k / 60) * Math.PI * 2 - Math.PI / 2;
+      const big = k % 15 === 0;
+      line(p, cx + Math.cos(a) * (big ? 9.6 : 11.2), cy + Math.sin(a) * (big ? 9.6 : 11.2), cx + Math.cos(a) * 12.8, cy + Math.sin(a) * 12.8, big ? 0x2a1a14 : 0x7a6a5a);
     }
-    // little day/night window at the bottom
-    px(cx - 3, cy + 4, '#3a2418', 7, 5);
-    px(cx - 2, cy + 5, night ? '#1e2850' : '#6fa8e8', 5, 3);
-    if (night) { px(cx, cy + 5, '#f6f0c8', 2, 2); px(cx + 1, cy + 5, '#1e2850'); }
-    else px(cx - 1, cy + 5, '#ffd040', 3, 3);
-    // hands
+    // day/night window above six
+    p.rect(cx - 4, cy + 4, 9, 6, 0x3a2418);
+    p.rect(cx - 3, cy + 5, 7, 4, night ? 0x1e2850 : 0x6fb0f0);
+    if (night) { p.rect(cx + 1, cy + 5, 2, 2, 0xf6f0c8); p.set(cx + 2, cy + 5, 0x1e2850); p.set(cx - 2, cy + 7, 0xffffff); }
+    else { p.rect(cx - 1, cy + 6, 3, 3, 0xffd040); p.set(cx, cy + 6, 0xfff6b0); }
+    // hands: hour (2px, dark), minute (1px), red seconds pivot
     const h12 = (hour % 12) / 12, m60 = mm / 60;
     const ha = h12 * Math.PI * 2 - Math.PI / 2, ma = m60 * Math.PI * 2 - Math.PI / 2;
-    lineP(px, cx, cy, cx + Math.cos(ma) * 10.5, cy + Math.sin(ma) * 10.5, '#2a1a14', 1);
-    lineP(px, cx, cy, cx + Math.cos(ha) * 7, cy + Math.sin(ha) * 7, '#2a1a14', 2);
-    px(cx - 1, cy - 1, '#c8361f', 2, 2);
+    line(p, cx, cy, cx + Math.cos(ma) * 11.4, cy + Math.sin(ma) * 11.4, 0x2a1a14);
+    line(p, cx, cy, cx + Math.cos(ha) * 7.2, cy + Math.sin(ha) * 7.2, 0x2a1a14, 2);
+    p.rect(cx - 1, cy - 1, 2, 2, 0xc8361f);
+    // glass glint
+    for (const [x, y] of [[cx - 9, cy - 8], [cx - 8, cy - 9], [cx - 7, cy - 10], [cx - 10, cy - 6]]) p.set(x, y, 0xffffff);
+    this.flush();
   }
 }
 
-// a little cloth coin pouch: 26x26 px
-function pouchCanvas() {
-  const { c, px } = pixCanvas(26, 26);
-  const body = '#8a5a32', dark = '#5a3420', lite = '#b07a48';
-  for (let y = 9; y < 25; y++) {
-    const w = Math.round(9 + Math.sin(((y - 9) / 16) * Math.PI) * 3.5);
-    for (let x = -w; x <= w; x++) px(13 + x, y, Math.abs(x) === w || y === 24 ? dark : x < -w + 3 ? lite : body);
-  }
-  // cinched neck + tassel string
-  for (let x = 8; x <= 18; x++) px(x, 8, dark);
-  for (let x = 7; x <= 19; x++) px(x, 6 + (x % 2), x % 3 ? body : lite);
-  px(9, 9, '#c8361f', 8, 1);
-  px(19, 9, '#c8361f'); px(20, 10, '#c8361f'); px(20, 11, '#e8d070');
-  // coin peeking out
-  px(11, 3, '#a87a1e', 5, 4); px(12, 3, '#f6d27a', 3, 3);
-  return c.toDataURL();
-}
-
-// brass compass: 34x34; needle points at a world heading relative to the camera
-class Compass {
-  constructor() {
-    Object.assign(this, pixCanvas(34, 34));
-    this.key = '';
-  }
+// ---------------------------------------------------------------- brass compass 44x44
+export class Compass extends PixCanvas {
+  constructor() { super(44, 44, 'hud-compass-dial'); }
   draw(cardDeg, needleDeg) {
-    const key = `${Math.round(cardDeg / 4)}|${needleDeg == null ? 'x' : Math.round(needleDeg / 4)}`;
+    const key = `${Math.round(cardDeg / 3)}|${needleDeg == null ? 'x' : Math.round(needleDeg / 3)}`;
     if (key === this.key) return;
     this.key = key;
-    const { g, px } = this;
-    g.clearRect(0, 0, 34, 34);
-    const cx = 17, cy = 17;
-    disc(px, cx, cy, 16, '#3a2410');
-    disc(px, cx, cy, 15, '#c8902e');
-    disc(px, cx, cy, 13, '#f2e6c8');
-    // rotating card: N mark
-    const t = ((-cardDeg) * Math.PI) / 180 - Math.PI / 2;
-    for (let k = 0; k < 8; k++) {
-      const a = t + (k / 8) * Math.PI * 2;
-      const r0 = k % 2 ? 11 : 9;
-      lineP(px, cx + Math.cos(a) * r0, cy + Math.sin(a) * r0, cx + Math.cos(a) * 12.5, cy + Math.sin(a) * 12.5, k === 0 ? '#c8361f' : '#6a4a3a');
+    const p = this.p;
+    p.data.fill(0);
+    const cx = 22, cy = 22;
+    ring(p, cx, cy, 16, 21, BRASS);
+    for (let k = 0; k < 4; k++) { const a = (k / 4) * Math.PI * 2 - Math.PI / 2; p.rect(Math.round(cx + Math.cos(a) * 18.5) - 1, Math.round(cy + Math.sin(a) * 18.5) - 1, 2, 2, k === 0 ? 0xc8361f : BRASS[1]); }
+    ring(p, cx, cy, 15, 16, [BRASS[0], BRASS[0], BRASS[1], BRASS[1], BRASS[1], BRASS[2]]);
+    disc(p, cx, cy, 15, [0xd8c49a, 0xf4e6c4, 0xfcf4dc]);
+    // the rotating card: 16 ticks, a red N spike
+    const t0 = (-cardDeg * Math.PI) / 180 - Math.PI / 2;
+    for (let k = 0; k < 16; k++) {
+      const a = t0 + (k / 16) * Math.PI * 2;
+      const r0 = k % 4 === 0 ? 9.6 : k % 2 ? 12.4 : 11.2;
+      line(p, cx + Math.cos(a) * r0, cy + Math.sin(a) * r0, cx + Math.cos(a) * 13.6, cy + Math.sin(a) * 13.6, k === 0 ? 0xc8361f : 0x8a6a4a);
     }
-    // the N letter
-    const nx = cx + Math.cos(t) * 7.5, ny = cy + Math.sin(t) * 7.5;
-    px(nx - 1.5, ny - 1.5, '#c8361f', 1, 4); px(nx + 1.5, ny - 1.5, '#c8361f', 1, 4); px(nx - 0.5, ny - 0.5, '#c8361f'); px(nx + 0.5, ny + 0.5, '#c8361f');
-    // the needle points at the target
+    const nx = cx + Math.cos(t0) * 7, ny = cy + Math.sin(t0) * 7;
+    for (const [dx, dy] of [[-2, -2], [-2, -1], [-2, 0], [-2, 1], [-2, 2], [2, -2], [2, -1], [2, 0], [2, 1], [2, 2], [-1, -1], [0, 0], [1, 1]]) p.set(Math.round(nx + dx), Math.round(ny + dy), 0xc8361f);
+    // the needle: red tip at the target, steel tail
     if (needleDeg != null) {
       const a = (needleDeg * Math.PI) / 180 - Math.PI / 2;
-      lineP(px, cx - Math.cos(a) * 6, cy - Math.sin(a) * 6, cx, cy, '#3a4a6a', 2);
-      lineP(px, cx, cy, cx + Math.cos(a) * 11, cy + Math.sin(a) * 11, '#d8301e', 2);
+      const ca = Math.cos(a), sa = Math.sin(a), px = -sa, py = ca;
+      for (let s = -1.6; s <= 1.6; s += 0.5) {
+        line(p, cx + px * s, cy + py * s, cx + ca * (12.6 - Math.abs(s) * 4), cy + sa * (12.6 - Math.abs(s) * 4), s < 0 ? 0xf2603e : 0xb02818);
+        line(p, cx + px * s, cy + py * s, cx - ca * (8 - Math.abs(s) * 3), cy - sa * (8 - Math.abs(s) * 3), s < 0 ? STEEL[4] : STEEL[2]);
+      }
     }
-    disc(px, cx, cy, 1, '#f6d27a');
-    // glass glint
-    px(cx - 8, cy - 9, '#ffffff', 3, 1); px(cx - 9, cy - 8, '#ffffff', 1, 2);
+    p.rect(cx - 1, cy - 1, 3, 3, BRASS[3]);
+    p.set(cx - 1, cy - 1, BRASS[5]);
+    for (const [x, y] of [[cx - 9, cy - 8], [cx - 8, cy - 9], [cx - 10, cy - 6], [cx - 6, cy - 10]]) p.set(x, y, 0xffffff);
+    this.flush();
+  }
+}
+
+// ---------------------------------------------------------------- handlebar speedometer 72x72
+const DIG = ['111101101101111', '010110010010111', '111001111100111', '111001111001111', '101101111001001', '111100111001111', '111100111101111', '111001001001001', '111101111101111', '111101111001111'];
+function digit(p, x, y, d, c, sc = 2) {
+  const g = DIG[d % 10];
+  for (let r = 0; r < 5; r++) for (let k = 0; k < 3; k++) if (g[r * 3 + k] === '1') p.rect(x + k * sc, y + r * sc, sc, sc, c);
+}
+export class Gauge extends PixCanvas {
+  constructor() {
+    super(72, 72, 'hud-speedo');
+    this.canvas = this.c;
+    this.shiftFlash = 0;
+    this.lastGear = 1;
+  }
+  draw(bike, dt) {
+    const p = this.p;
+    p.data.fill(0);
+    const cx = 36, cy = 36;
+    const s = bike.stats || {};
+    const top = s.topSpeed || 10;
+    const k = clamp((bike.speed || 0) / (top * 1.2), 0, 1);
+    ring(p, cx, cy, 30.5, 35, GOLD);
+    disc(p, cx, cy, 30.5, [0x1e120e, 0x2e1c16, 0x3a2418], 0.1);
+    // speed arc: 24 chunky segments with gaps
+    for (let i = 0; i < 24; i++) {
+      const t = i / 23, on = t <= k + 1e-3;
+      const col = t < 0.55 ? [0x8ed056, 0x3a5a2a] : t < 0.8 ? [0xffd84a, 0x5a4a1e] : [0xf2603e, 0x5a2418];
+      const a0 = Math.PI * (0.78 + t * 1.44) - 0.045, a1 = a0 + 0.09;
+      for (let a = a0; a <= a1; a += 0.02) for (let r = 26.5; r <= 29.5; r += 0.5) p.set(Math.floor(cx + Math.cos(a) * r), Math.floor(cy + Math.sin(a) * r), on ? col[0] : col[1]);
+    }
+    // the wheel
+    ring(p, cx, cy, 18, 23, [0x141012, 0x221e20, 0x2e2a2c, 0x3a3438, 0x4e484c, 0x7a7478]);
+    ring(p, cx, cy, 16.5, 18, STEEL);
+    const ang = bike.wheelAngle || 0;
+    for (let i = 0; i < 8; i++) {
+      const a = ang + (i / 8) * Math.PI;
+      line(p, cx + Math.cos(a) * 16, cy + Math.sin(a) * 16, cx - Math.cos(a) * 16, cy - Math.sin(a) * 16, 0x9aa2ae);
+    }
+    // chainring with teeth, holding the gear number
+    const cr = bike.crank || 0;
+    for (let i = 0; i < 14; i++) {
+      const a = cr + (i / 14) * Math.PI * 2;
+      p.rect(Math.round(cx + Math.cos(a) * 11.4) - 1, Math.round(cy + Math.sin(a) * 11.4) - 1, 2, 2, GOLD[2]);
+    }
+    ring(p, cx, cy, 7.5, 10.6, GOLD);
+    disc(p, cx, cy, 7.5, [0x2a1810, 0x3a2418, 0x3a2418], 0);
+    const g = Math.max(1, bike.gear || 1);
+    if (g !== this.lastGear) { this.shiftFlash = 0.35; this.lastGear = g; }
+    this.shiftFlash = Math.max(0, this.shiftFlash - dt);
+    if (g >= 10) { digit(p, cx - 6, cy - 5, Math.floor(g / 10), 0xffdc5a); digit(p, cx + 1, cy - 5, g % 10, 0xffdc5a); }
+    else digit(p, cx - 3, cy - 5, g, this.shiftFlash > 0 ? 0xffffff : 0xffdc5a);
+    // gear pips along the bottom
+    const n = s.gears || 1;
+    if (n > 1 && n <= 12) {
+      const pw = Math.min(5, Math.floor(30 / n));
+      for (let i = 0; i < n; i++) p.rect(Math.round(cx - (n * pw) / 2 + i * pw), 61, Math.max(1, pw - 1), 3, i < g ? 0xffdc5a : 0x5a3a1e);
+    }
+    // km/h readout
+    const kmh = String(Math.round((bike.speed || 0) * 3.6));
+    const w = kmh.length * 4 - 1;
+    for (let i = 0; i < kmh.length; i++) digit(p, cx - Math.floor(w / 2) + i * 4, 52, +kmh[i], 0xfff4dc, 1);
+    this.flush();
   }
 }
 
 // ---------------------------------------------------------------- the HUD
 export function buildPaperHUD(ui) {
-  const h = el('div');
+  const h = el('div', 'k-hud k-text');
   h.id = 'hud';
-  h.classList.add('paper-hud');
   ui.hud = h;
-  // pocket watch + day tag + coin pouch (top-left)
-  const tl = el('div', 'ph-tl');
+  // pocket watch, day plate and coin pouch (top left)
+  const tl = el('div', 'hud-tl');
   ui.watch = new PocketWatch();
-  ui.watch.c.className = 'ph-watch';
   tl.appendChild(ui.watch.c);
-  const tag = el('div', 'ph-daytag', `<span class="d">Day 1</span><img class="wx">`);
-  tl.appendChild(tag);
-  const pouch = el('div', 'ph-pouch', `<img src="${pouchCanvas()}"><span class="m">$0</span>`);
-  tl.appendChild(pouch);
+  const col = el('div', 'hud-tlcol');
+  const day = el('div', 'k-plate k-dark hud-day', '<img class="k-g wx"><span class="d">Day 1</span>');
+  const money = el('div', 'hud-money', `<img class="pouch" src="${iconURL('pouch')}"><span class="k-plate k-dark k-bold m">$0</span>`);
+  col.append(day, money);
+  tl.appendChild(col);
   h.appendChild(tl);
-  ui.elDay = tag.querySelector('.d');
-  ui.elWx = tag.querySelector('.wx');
-  ui.elMoney = pouch.querySelector('.m');
-  ui.pouchEl = pouch;
+  ui.elDay = day.querySelector('.d');
+  ui.elWx = day.querySelector('.wx');
+  ui.elMoney = money.querySelector('.m');
+  ui.pouchEl = money;
   // compass (top centre)
-  const cw = el('div', 'ph-compass');
+  const cw = el('div', 'hud-compass');
   ui.compassP = new Compass();
   cw.appendChild(ui.compassP.c);
-  ui.compassLbl = el('div', 'ph-dist');
+  ui.compassLbl = el('div', 'k-plate k-dark hud-dist');
   cw.appendChild(ui.compassLbl);
   h.appendChild(cw);
+  // the compass is centred with 50%: nudge it onto whole device pixels
+  const resnap = () => requestAnimationFrame(() => snapBox(cw));
+  window.addEventListener('resize', resnap);
+  onScale(resnap);
+  resnap();
   // Nana's list (top right)
-  const note = el('div', 'ph-note');
-  note.innerHTML = `<div class="pin"></div><div class="ttl">Nana's list</div><div class="rows"></div><div class="obj"></div>`;
+  const note = el('div', 'k-paper hud-note');
+  note.innerHTML = '<i class="pin"></i><div class="ttl k-bold">Nana\'s list</div><div class="rows"></div><div class="obj"></div>';
   h.appendChild(note);
   ui.noteEl = note;
   ui.noteRows = note.querySelector('.rows');
   ui.objective = note.querySelector('.obj');
   ui.orderCards = new Map();
-  // handlebar speedometer (bottom-left) stays a little pixel gauge
-  const g = el('div', 'hud-gauge ph-gauge');
+  // handlebar speedometer (bottom left)
+  const g = el('div', 'hud-gauge');
   g.appendChild(ui.gauge.canvas);
-  ui.boosts = el('div', 'hud-boosts');
-  g.appendChild(ui.boosts);
   h.appendChild(g);
-  // prompt: a paper tag with an ink key
-  ui.promptEl = el('div', 'ph-prompt');
+  ui.gaugeEl = g;
+  // prompt: what E does right now
+  ui.promptEl = el('div', 'k-plate k-dark hud-prompt');
   h.appendChild(ui.promptEl);
   ui.root.appendChild(h);
 }
 
+const WX = { clear: 'sun', breezy: 'wind', misty: 'fog', overcast: 'cloud', rain: 'rain', snow: 'snow' };
 export function updatePaperHUD(ui, dt) {
   const g = ui.game;
   const st = g.state;
   if (!st || !g.bike) return;
-  const hr = g.world.atmosphere.hour;
+  const atm = g.world.atmosphere;
+  const hr = atm.hour;
   ui.watch.draw(hr);
   const day = `Day ${st.day}`;
   if (ui.elDay.textContent !== day) ui.elDay.textContent = day;
   const night = hr < 6.5 || hr > 19.6;
-  const wx = { clear: night ? 'star' : 'sun', breezy: 'leaf', misty: 'fog', overcast: 'fog', rain: 'rain', snow: 'snowflake' }[g.world.atmosphere.weatherTarget] || 'sun';
-  if (ui.elWx.dataset.i !== wx) { ui.elWx.src = iconURL(wx); ui.elWx.dataset.i = wx; }
+  let wx = WX[atm.weatherTarget] || 'sun';
+  if (wx === 'sun' && night) wx = 'moon';
+  if (ui.elWx.dataset.i !== wx) { ui.elWx.src = glyphURL(wx); ui.elWx.dataset.i = wx; }
   const money = `$${Math.floor(st.money)}`;
   if (ui.elMoney.textContent !== money) {
     if (ui.elMoney.textContent && ui.elMoney.textContent !== '$0') { ui.pouchEl.classList.remove('jingle'); void ui.pouchEl.offsetWidth; ui.pouchEl.classList.add('jingle'); }
@@ -201,28 +279,22 @@ export function updatePaperHUD(ui, dt) {
   }
   // the speedometer only matters on the bike
   const gaugeOn = !g.onFoot;
-  ui.gauge.canvas.parentElement.classList.toggle('away', !gaugeOn);
+  ui.gaugeEl.classList.toggle('away', !gaugeOn);
   if (gaugeOn) ui.gauge.draw(g.bike, dt);
-  const total = g.bike.stats.boostCharges;
-  if (ui.boosts.childElementCount !== total) {
-    ui.boosts.innerHTML = '';
-    for (let i = 0; i < total; i++) ui.boosts.appendChild(el('img')).src = iconURL('cola');
-  }
-  [...ui.boosts.children].forEach((img, i) => img.classList.toggle('used', i >= g.bike.boostCharges));
   updateNote(ui);
   updateCompassP(ui);
 }
 
-const SHORT = { birdie: 'Birdie', ingrid: 'Dr. Ingrid', doug: 'Doug', lou: 'Big Lou', ollie: 'Ollie', marie: 'Marie', grandma: 'Nana', pip: 'Pip & Pop', gus: 'Gus', agnes: 'Agnes' };
-const FOOD_OF = (o) => {
+const SHORT = { birdie: 'Birdie', ingrid: 'Dr. Ingrid', doug: 'Doug', lou: 'Big Lou', ollie: 'Ollie', marie: 'Marie', grandma: 'Nana', pip: 'Pip & Pop', gus: 'Gus', agnes: 'Agnes', mo: 'Mo' };
+const MUGS = new Set(['classic', 'maple', 'mint', 'pumpkin', 'cinnamon', 'mocha']);
+function mugOf(o) {
+  if (MUGS.has(o.cocoa)) return o.cocoa;
   const l = (o.label || '').toLowerCase();
-  if (l.includes('maple')) return 'cocoa_maple';
-  if (l.includes('mint')) return 'cocoa_mint';
-  if (l.includes('pumpkin')) return 'cocoa_pumpkin';
-  if (l.includes('cinnamon') || l.includes('spice')) return 'cocoa_cinnamon';
-  if (l.includes('mocha') || l.includes('lumberjack')) return 'cocoa_mocha';
-  return o.food || 'cocoa_classic';
-};
+  for (const k of MUGS) if (l.includes(k)) return k;
+  if (l.includes('spice')) return 'pumpkin';
+  if (l.includes('lumberjack')) return 'mocha';
+  return 'classic';
+}
 
 function updateNote(ui) {
   const g = ui.game;
@@ -235,17 +307,18 @@ function updateNote(ui) {
     if (!r) {
       r = el('div', 'nrow');
       const who = SHORT[o.customer] || CHARACTERS[o.customer]?.name?.split(' ')[0] || o.customer;
-      r.innerHTML = `<img class="fi" src="${foodIconURL(FOOD_OF(o))}"><span class="who">${who}</span><span class="steam"></span>${o.rush ? '<span class="rush">rush!</span>' : ''}`;
+      r.innerHTML = `<img class="k-g" src="${glyphURL(`mug_${mugOf(o)}`)}"><span class="who">${esc(who)}</span>${o.rush ? `<img class="k-g rush" src="${glyphURL('rush')}">` : ''}<span class="heat"><i></i></span>`;
       ui.noteRows.appendChild(r);
       ui.orderCards.set(o.id, r);
     }
-    const q = o.quality;
-    const steam = q > 70 ? 'sss' : q > 45 ? 'ss' : q > 22 ? 's' : 'cold';
-    const sEl = r.querySelector('.steam');
-    if (sEl.dataset.s !== steam) {
-      sEl.dataset.s = steam;
-      sEl.className = `steam s-${steam}`;
-      sEl.textContent = steam === 'cold' ? '*brr*' : '~'.repeat(steam.length);
+    // a little thermometer in whole art pixels, plus steam (or frost) by the cup
+    const q = clamp(o.quality, 0, 100);
+    const px = Math.round((q / 100) * 22);
+    const hEl = r.querySelector('.heat');
+    if (hEl.dataset.p !== String(px)) {
+      hEl.dataset.p = px;
+      hEl.firstChild.style.width = `calc(var(--u) * ${px})`;
+      hEl.className = `heat ${q > 60 ? '' : q > 30 ? 'warm' : 'cool'}`;
     }
     r.classList.toggle('done', o.state === 'delivered');
   }
@@ -255,10 +328,14 @@ function updateNote(ui) {
   if (ui._extraKey !== key) {
     ui._extraKey = key;
     ui.noteRows.querySelectorAll('.qrow').forEach((e) => e.remove());
-    for (const t of extra) ui.noteRows.appendChild(el('div', 'nrow qrow', `<span class="box"></span><span>${t}</span>`));
+    for (const t of extra) ui.noteRows.appendChild(el('div', 'nrow qrow', `<img class="k-g" src="${glyphURL('box')}"><span>${esc(t)}</span>`));
   }
-  ui.noteEl.classList.toggle('empty', !orders.length && !extra.length);
+  ui.noteEl.classList.toggle('empty', !orders.length && !extra.length && !ui.objective.textContent);
 }
+
+// a 16px picture for a compass target
+const SMALL = { cocoa: () => glyphURL('cocoa'), home: () => glyphURL('home'), star: () => glyphURL('star'), coin: () => glyphURL('coin') };
+const markIcon = (name) => (SMALL[name] ? SMALL[name]() : iconSmallURL(name));
 
 function updateCompassP(ui) {
   const g = ui.game;
@@ -273,14 +350,13 @@ function updateCompassP(ui) {
     if (!best || d < best.d) best = { ...m, d };
   }
   let needle = null;
-  if (best) {
-    const deg = (Math.atan2(best.x - p.x, -(best.z - p.z)) * 180) / Math.PI;
-    needle = deg - heading;
-  }
+  if (best) needle = (Math.atan2(best.x - p.x, -(best.z - p.z)) * 180) / Math.PI - heading;
   ui.compassP.draw(heading, needle);
-  const txt = best ? `${best.d < 1000 ? Math.round(best.d) + ' m' : (best.d / 1000).toFixed(1) + ' km'}` : '';
-  if (ui.compassLbl.dataset.t !== txt + (best?.icon || '')) {
-    ui.compassLbl.dataset.t = txt + (best?.icon || '');
-    ui.compassLbl.innerHTML = best ? `<img src="${iconURL(best.icon)}">${txt}` : '';
+  const txt = best ? (best.d < 1000 ? `${Math.round(best.d)} m` : `${(best.d / 1000).toFixed(1)} km`) : '';
+  const k = txt + (best?.icon || '');
+  if (ui.compassLbl.dataset.t !== k) {
+    ui.compassLbl.dataset.t = k;
+    ui.compassLbl.innerHTML = best ? `<img class="k-g" src="${markIcon(best.icon)}"><span>${txt}</span>` : '';
+    ui.compassLbl.classList.toggle('off', !best);
   }
 }
