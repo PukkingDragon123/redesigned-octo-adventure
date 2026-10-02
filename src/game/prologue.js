@@ -140,12 +140,12 @@ function lumberCamp(story) {
     await S.wait(1.4);
     await S.narrate('Autumn. Somewhere in the wilds of Canada...');
     await S.narrate('This is Hank. Hank was a lumberjack. A good one, mostly.');
-    await shotAt(H.pos, -1.4, 2.0, 1.55, H.pos, 1.35, 1.2, 40);
+    await shotAt(H.pos, 0.7, 2.0, 1.55, H.pos, 1.35, 1.2, 40);
     await S.say('hank', 'Hup! ...Hup! ...HUP!', { actor: H, expr: 'determined', name: 'Hank' });
     await shotAt(L.pos, 2.2, 1.6, 1.8, L.pos, 1.5, 1.0, 42);
     L.play('idle', 'happy');
     await S.say('lou', "Atta boy, Hank! That's the biggest maple on the whole ridge!", { actor: L, expr: 'happy' });
-    await shotAt(H.pos, -2.0, 1.4, 1.6, H.pos, 1.4, 1.0, 40);
+    await shotAt(H.pos, 1.0, 1.7, 1.45, H.pos, 1.4, 1.0, 38);
     await S.say('hank', "She's a stubborn one, Lou. Like my Aunt Bev. ...One more ought to do it.", { actor: H, expr: 'smug', name: 'Hank' });
     // the last swing, then the creak
     await S.wait(CHOP_CYCLE * 1.1);
@@ -182,8 +182,10 @@ function lumberCamp(story) {
     L.react('yay');
     S.sfx('crowd_cheer', { volume: 0.4 });
     await S.wait(1.0);
+    const toCam = off(H.pos, -0.4, 4);
+    H.faceTowards(toCam.x, toCam.z);
     H.play('flex', 'happy');
-    await shotAt(H.pos, -1.8, 1.2, 1.5, H.pos, 1.3, 0.8, 38);
+    await shotAt(H.pos, 0.2, 2.1, 1.5, H.pos, 1.3, 0.8, 38);
     await S.say('hank', "Ha! Still got it.", { actor: H, expr: 'happy', name: 'Hank' });
     L.play('cheer', 'laugh');
     await S.say('lou', "Legend! I'll go grab us some lunch. Back in ten — don't go anywhere!", { actor: L, expr: 'laugh' });
@@ -221,7 +223,7 @@ function lumberCamp(story) {
     }
     // Lou comes back with sandwiches
     L.visible = true;
-    const ent = at(-7, -6), stop = off(H.pos, 0.2, -1.6);
+    const ent = at(-7, -6), stop = off(H.pos, -1.3, -1.3);
     L.pos.set(ent.x, gy(ent.x, ent.z), ent.z);
     const back = L.walkTo([[stop.x, stop.z]], 2.0);
     await shotAt(H.pos, -1.5, 3.6, 1.9, off(H.pos, 0, -0.6), 0.8, 0.8, 46);
@@ -238,7 +240,7 @@ function lumberCamp(story) {
     // Dr. Ingrid examines him
     await S.fade(1, 0.5);
     A.hour = Math.max(A.hour, 18.4);
-    const ip = off(H.pos, 0.3, 0.85);
+    const ip = off(H.pos, 0.35, -0.85);
     const I = S.actor('ingrid', ip.x, ip.z, 0, 'kneel');
     I.faceTowards(H.pos.x, H.pos.z);
     I.yaw = I.targetYaw;
