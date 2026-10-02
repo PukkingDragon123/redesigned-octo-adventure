@@ -5,7 +5,7 @@
 import { clamp, rand, randi, pick, chance, env, glide } from './synth.js';
 import { owlCall } from './sfx2.js';
 
-const LEVEL = { forest: 0.55, village: 0.5, river: 0.5, wind: 0.55, rain: 0.5, fire: 0.6, night: 0.55 };
+const LEVEL = { forest: 0.85, village: 0.63, river: 0.5, wind: 0.69, rain: 0.5, fire: 0.5, night: 0.6 };
 const WET = { forest: 0.25, village: 0.3, river: 0.08, wind: 0.05, rain: 0.1, fire: 0.06, night: 0.3 };
 export const AMB_NAMES = Object.keys(LEVEL);
 
@@ -192,14 +192,16 @@ const RECIPES = {
       const pk = L.loop('pink'), lpd = L.bq('lowpass', 1500);
       L.chain(lpd, L.gain(0.5));
       L.p.am = [[480, 1.6], [1150, 2]].map(([f, q]) => { // murmuring voices: formant bands with syllabic AM
-        const a = L.gain(0.3);
-        L.chain(pk, L.bq('bandpass', f, q), a);
+        const b = L.bq('bandpass', f, q), a = L.gain(0.3);
+        pk.connect(b);
+        b.connect(a);
         a.connect(lpd);
         return a;
       });
       L.p.vo = [130, 205].map((f) => { // a touch of voiced pitch
-        const o = L.osc('sawtooth', f), a = L.gain(0);
-        L.chain(o, L.bq('bandpass', 650, 2.5), a);
+        const o = L.osc('sawtooth', f), b = L.bq('bandpass', 650, 2.5), a = L.gain(0);
+        o.connect(b);
+        b.connect(a);
         a.connect(lpd);
         return { o, a, f, base: f };
       });
@@ -342,9 +344,9 @@ const RECIPES = {
 
   night: {
     build(L, now) {
-      L.chain(L.loop('brown'), L.bq('lowpass', 180), L.gain(0.15));
+      L.chain(L.loop('brown'), L.bq('lowpass', 180), L.gain(0.25));
       L.p.crickets = [0, 1, 2].map(() => ({
-        f: rand(4200, 5200), pan: L.panner(rand(-0.75, 0.75)), iv: rand(0.55, 1.1), pulses: randi(2, 4), next: now + rand(0, 1), v: rand(0.012, 0.03),
+        f: rand(4200, 5200), pan: L.panner(rand(-0.75, 0.75)), iv: rand(0.55, 1.1), pulses: randi(2, 4), next: now + rand(0, 1), v: rand(0.03, 0.06),
       }));
       L.ev = { owl: now + rand(8, 20) };
     },
@@ -442,7 +444,7 @@ class Layer {
   chain(...nodes) {
     for (let i = 0; i < nodes.length - 1; i++) nodes[i].connect(nodes[i + 1]);
     const last = nodes[nodes.length - 1];
-    if (last instanceof GainNode) last.connect(this.bus);
+    if (last.gain && !last.frequency) last.connect(this.bus); // GainNode
     return last;
   }
   panner(x) {

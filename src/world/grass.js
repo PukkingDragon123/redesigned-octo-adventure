@@ -89,7 +89,7 @@ void main() {
   float R = uGridN * uSpacing * 0.5;
   float fade = 1.0 - smoothstep(R * 0.55, R * 0.97, dist);
   float keep = step(h3, mask.r);
-  float sc = keep * fade * (0.65 + 0.7 * h4) * (0.45 + 0.75 * mask.g);
+  float sc = keep * fade * (0.65 + 0.6 * h4) * (0.45 + 0.6 * mask.g);
   if (sc < 0.04) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
   float y = terrainHeight(xz);
   vec3 base = vec3(xz.x, y - 0.03, xz.y);

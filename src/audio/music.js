@@ -4,7 +4,7 @@
 // motion, bar-3 sequences of the bar-1 motif, cadences that resolve. A' reuses
 // A's first half and answers it on the tonic; phrases mutate between cycles.
 import {
-  rand, randi, pick, chance, pluck, strum, piano, pad, bass, kick, brush, shaker, wood,
+  rand, pick, chance, pluck, strum, piano, pad, bass, kick, brush, shaker, wood,
   bell, reed, fiddle, flute, chip, Theremin,
 } from './synth.js';
 
@@ -42,6 +42,15 @@ function nearestTone(def, x, r) {
     if (isTone(def, x - s * k, r)) return x - s * k;
   }
   return x;
+}
+/** The n-th chord tone above (dir=1) or below (dir=-1) degree x. */
+function nextTone(def, x, r, dir, n = 1) {
+  let d = x;
+  for (let i = 0; i < 9; i++) {
+    d += dir;
+    if (isTone(def, d, r) && --n <= 0) return d;
+  }
+  return nearestTone(def, x, r);
 }
 function tonicNear(x, lo, hi) {
   let best = 0, bd = 1e9;
@@ -84,15 +93,15 @@ function genPhrase(def, chords, base, lift = 0) {
       const len = rhythm[i], last = final && i === rhythm.length - 1;
       let deg;
       if (last) deg = mod(r, 7) === 0 ? tonicNear(prev, lo, hi) : nearestTone(def, prev, r);
-      else {
-        let cand;
-        if (pos % strong === 0 || len >= 4) cand = prev + dir * randi(0, 2);
-        else {
-          const x = Math.random();
-          cand = x < 0.66 ? prev + dir : x < 0.84 ? prev + 2 * dir : x < 0.94 ? prev - dir : prev;
-        }
+      else if (pos % strong === 0 || len >= 4) { // strong beat: move to a chord tone, rarely stay put
+        if (prev + dir * 2 > hi || prev + dir * 2 < lo) dir = -dir;
+        const x = Math.random();
+        deg = x < 0.14 ? nearestTone(def, prev, r) : nextTone(def, prev, r, dir, x < 0.9 ? 1 : 2);
+      } else { // weak beat: mostly stepwise passing/neighbour tones
+        const x = Math.random();
+        let cand = x < 0.66 ? prev + dir : x < 0.84 ? prev + 2 * dir : x < 0.94 ? prev - dir : prev;
         if (cand > hi) { cand = 2 * hi - cand; dir = -1; } else if (cand < lo) { cand = 2 * lo - cand; dir = 1; }
-        deg = pos % strong === 0 || len >= 4 ? nearestTone(def, cand, r) : cand;
+        deg = cand;
       }
       while (deg > hi + 2) deg -= 7;
       while (deg < lo - 2) deg += 7;
@@ -113,7 +122,7 @@ function genPhrase(def, chords, base, lift = 0) {
 
 const MOODS = {
   title: {
-    bpm: 92, meter: 3, root: 65, scale: MAJOR, verb: 0.36, mel: [4, 13], rest: 0.12,
+    gain: 1.5, bpm: 92, meter: 3, root: 65, scale: MAJOR, verb: 0.36, mel: [4, 13], rest: 0.12,
     prog: { A: [0, 5, 3, 4], A2: [0, 5, 4, 0], B: [3, 0, 1, 4] },
     arrange(P, s) {
       if (s.sib === 0) {
@@ -132,7 +141,7 @@ const MOODS = {
   },
 
   forest: {
-    bpm: 85, meter: 4, root: 62, scale: LYDIAN, verb: 0.32, mel: [4, 12], rest: 0.3, swing: 0.05,
+    gain: 1.75, bpm: 85, meter: 4, root: 62, scale: LYDIAN, verb: 0.32, mel: [4, 12], rest: 0.3, swing: 0.05,
     rhythms: R4_SLOW.concat([[2, 2, 4], [3, 1, 2, 2]]),
     prog: { A: [0, 1, 0, 1], A2: [0, 1, 4, 0], B: [5, 2, 1, 4] },
     arrange(P, s) {
@@ -146,7 +155,7 @@ const MOODS = {
   },
 
   delivery: {
-    bpm: 112, meter: 4, root: 67, scale: MAJOR, verb: 0.18, mel: [0, 9], rest: 0.08, swing: 0.07,
+    gain: 0.65, bpm: 112, meter: 4, root: 67, scale: MAJOR, verb: 0.18, mel: [0, 9], rest: 0.08, swing: 0.07,
     prog: { A: [0, 3, 0, 4], A2: [0, 3, 4, 0], B: [5, 3, 0, 4] },
     arrange(P, s) {
       const st = [1, 0, 1, -1, 0, -1, 1, -1][s.sib]; // D . D U . U D U
@@ -170,7 +179,7 @@ const MOODS = {
   },
 
   village: {
-    bpm: 100, meter: 4, root: 62, scale: MAJOR, verb: 0.24, mel: [2, 11], rest: 0.05, rhythms: R4_BUSY, vib: 9,
+    gain: 0.62, bpm: 100, meter: 4, root: 62, scale: MAJOR, verb: 0.24, mel: [2, 11], rest: 0.05, rhythms: R4_BUSY, vib: 9,
     prog: { A: [0, 0, 3, 4], A2: [0, 0, 4, 0], B: [3, 0, 5, 4] },
     arrange(P, s) {
       const r = P.root(s.deg, 38);
@@ -187,7 +196,7 @@ const MOODS = {
   },
 
   cabin: {
-    bpm: 70, meter: 4, root: 63, scale: MAJOR, verb: 0.3, mel: [3, 11], rest: 0.15, rhythms: R4_SLOW,
+    gain: 1.12, bpm: 70, meter: 4, root: 63, scale: MAJOR, verb: 0.3, mel: [3, 11], rest: 0.15, rhythms: R4_SLOW,
     prog: { A: [0, 3, 0, 4], A2: [0, 3, 4, 0], B: [5, 2, 3, 4] },
     arrange(P, s) {
       const r = P.root(s.deg, 39), t10 = P.root(s.deg + 2, r + 12);
@@ -202,7 +211,7 @@ const MOODS = {
   },
 
   night: {
-    bpm: 60, meter: 4, root: 62, scale: DORIAN, verb: 0.5, mel: [7, 14], rest: 0.35, rhythms: R4_SLOW, lift: 1,
+    gain: 1.0, bpm: 60, meter: 4, root: 62, scale: DORIAN, verb: 0.5, mel: [7, 14], rest: 0.35, rhythms: R4_SLOW, lift: 1,
     prog: { A: [0, 3, 0, 3], A2: [0, 3, 6, 0], B: [2, 6, 3, 4] },
     arrange(P, s) {
       if (s.sib === 0) {
@@ -216,7 +225,7 @@ const MOODS = {
   },
 
   spooky: {
-    bpm: 90, meter: 4, root: 62, scale: HMINOR, verb: 0.3, mel: [5, 12], rest: 0.15,
+    gain: 1.6, bpm: 90, meter: 4, root: 62, scale: HMINOR, verb: 0.3, mel: [5, 12], rest: 0.15,
     prog: { A: [0, 3, 4, 4], A2: [0, 3, 4, 0], B: [3, 0, 5, 4] },
     arrange(P, s) {
       const r = P.root(s.deg, 38);
@@ -232,7 +241,7 @@ const MOODS = {
   },
 
   rain: {
-    bpm: 72, meter: 4, root: 65, scale: MAJOR, verb: 0.34, mel: [4, 12], rest: 0.3, swing: 0.16, sevenths: true, rhythms: R4_SLOW,
+    gain: 0.63, bpm: 72, meter: 4, root: 65, scale: MAJOR, verb: 0.34, mel: [4, 12], rest: 0.3, swing: 0.16, sevenths: true, rhythms: R4_SLOW,
     prog: { A: [0, 5, 1, 4], A2: [0, 5, 4, 0], B: [3, 2, 1, 4] },
     arrange(P, s) {
       const v = P.voice(s.deg, 53, 4), r = P.root(s.deg, 36);

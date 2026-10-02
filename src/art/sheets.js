@@ -2,6 +2,9 @@
 import { CHARACTERS, poseFrame, drawRider, drawPart, FOOT_FRAME, RIDE_FRAME } from './characters.js';
 import { drawEmote, EMOTES } from './emotes.js';
 import { paintAnimals } from './animals.js';
+import { icon, ICON_NAMES } from './icons.js';
+import { shadeRegion } from './characters.js';
+import { Pix } from './pixel.js';
 
 const COMMON = {
   idle: [2, ['front', 'side', 'back']],
@@ -75,6 +78,20 @@ export function buildSheets(atlas) {
     }
   }
   for (const e of EMOTES) atlas.add(`emote:${e}`, 16, 16, (p, x, y) => drawEmote(p, x, y, e), 8, 16);
+  for (const n of ICON_NAMES) atlas.add(`icon:${n}`, 32, 32, (p, x, y) => p.blit(icon(n), x, y), 16, 32);
+  // breakfast (for the food-falls-through-Hank gag)
+  const food = {
+    pancakes: (q) => { for (let k = 0; k < 3; k++) { q.ellipse(6, 8 - k * 2, 5, 1.6, 0xd8a050); q.hline(2, 10, 9 - k * 2, 0xa86a28); } q.rect(5, 2, 3, 2, 0xf6e8a0); q.rect(4, 4, 5, 1, 0x8a4a14); },
+    egg: (q) => { q.ellipse(6, 6, 5, 3.6, 0xf8f4ec); q.circle(6, 6, 2, 0xf2c030); q.set(5, 5, 0xfff0a0); },
+    bacon: (q) => { for (let k = 0; k < 10; k++) { const y = 5 + Math.round(Math.sin(k * 0.9) * 1.5); q.rect(1 + k, y, 1, 3, k % 3 ? 0xc84a3a : 0xf0c0a0); } },
+    toast: (q) => { q.rect(2, 2, 8, 8, 0xd8a050); q.rect(3, 3, 6, 6, 0xf0d090); q.rect(5, 4, 3, 2, 0xf6e8a0); },
+  };
+  for (const [name, fn] of Object.entries(food)) atlas.add(`food:${name}`, 12, 12, (p, x, y) => {
+    const q = new Pix(12, 12);
+    fn(q);
+    shadeRegion(q, 0, 0, 12, 12);
+    p.blit(q, x, y);
+  }, 6, 6);
   paintAnimals(atlas);
   return performance.now() - t0;
 }

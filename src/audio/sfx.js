@@ -58,7 +58,7 @@ export function xylo(c, t, f, v) {
 }
 
 function honk(c, t, dur, f, f2, v) {
-  for (const det of [0, 11]) T(c, { t, dur, type: 'sawtooth', f, f2, det, v, a: 0.02, h: dur * 0.55, bp: 620, q: 2.2, sh: 2.4 });
+  for (const det of [0, 11]) T(c, { t, dur, type: 'sawtooth', f, f2, det, v, a: 0.02, h: dur * 0.55, bp: 620, q: 2.2 });
   T(c, { t, dur, type: 'sawtooth', f, f2, v: v * 0.5, a: 0.02, h: dur * 0.55, bp: 1650, q: 4 });
   T(c, { t, dur, type: 'square', f: f / 2, f2: f2 / 2, v: v * 0.4, a: 0.02, h: dur * 0.55, lp: 600 });
 }
@@ -219,8 +219,9 @@ export const SFX = {
   gear_down(c) { gear(c, 0.82); },
 
   splash(c) {
-    N(c, { dur: 0.5, bp: 1600, bp2: 500, q: 0.8, v: 0.45, a: 0.006 });
-    N(c, { dur: 0.25, buf: 'brown', lp: 500, v: 0.3 });
+    N(c, { dur: 0.65, h: 0.07, bp: 1700, bp2: 450, q: 0.8, v: 0.45, a: 0.006 });
+    N(c, { dur: 0.4, h: 0.03, hp: 3000, v: 0.16, a: 0.004 }); // spray
+    N(c, { dur: 0.3, buf: 'brown', lp: 500, v: 0.32 });
     for (let i = 0; i < 9; i++) {
       const f = rand(300, 900);
       T(c, { t: rand(0.03, 0.45), dur: rand(0.02, 0.05), f, f2: f * rand(1.5, 2.4), v: rand(0.03, 0.07) });

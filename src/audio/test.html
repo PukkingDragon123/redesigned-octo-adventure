@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Audio Audition</title>
+    <style>
+      :root {
+        --ink: #2a1a14;
+        --paper: #f6e7c8;
+        --paper-2: #ead2a4;
+        --wood-dark: #3e2214;
+        --gold: #f2c443;
+        --cream: #fff4dc;
+        --orange: #e2622a;
+        --teal: #2f6d68;
+        --bg: #1d1016;
+        --panel: #2c1a1e;
+        --line: #5a3a2e;
+        --dim: #c9a98a;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; background: var(--bg); color: var(--cream); }
+      body { font: 14px/1.45 ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace; padding-bottom: 32px; }
+      header {
+        position: sticky; top: 0; z-index: 2; display: flex; flex-wrap: wrap; align-items: center; gap: 12px;
+        padding: 12px 16px; background: #120a10; border-bottom: 3px solid var(--line);
+      }
+      h1 { margin: 0; font-size: 18px; letter-spacing: 1px; color: #ffb347; text-shadow: 2px 2px 0 #6b2414; }
+      h2 { margin: 0 0 10px; font-size: 14px; color: var(--gold); text-transform: uppercase; letter-spacing: 2px; }
+      main { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: 12px; padding: 12px 16px; }
+      .panel { background: var(--panel); border: 3px solid var(--line); box-shadow: 4px 4px 0 #0008; padding: 12px; min-width: 0; }
+      .wide { grid-column: 1 / -1; }
+      button {
+        font: inherit; color: var(--ink); background: var(--paper); border: 2px solid var(--wood-dark);
+        box-shadow: 2px 2px 0 var(--wood-dark); padding: 4px 9px; cursor: pointer;
+      }
+      button:hover { background: var(--paper-2); }
+      button:active { transform: translate(2px, 2px); box-shadow: none; }
+      button.on { background: var(--gold); }
+      button.big { font-size: 15px; padding: 6px 14px; background: var(--orange); color: var(--cream); }
+      .grid { display: flex; flex-wrap: wrap; gap: 6px; }
+      .row { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; margin-bottom: 10px; }
+      label { display: inline-flex; align-items: center; gap: 8px; color: var(--dim); }
+      label b { color: var(--cream); font-weight: normal; min-width: 3.5em; display: inline-block; }
+      input[type='range'] { width: 150px; accent-color: var(--orange); }
+      select { font: inherit; background: var(--paper); color: var(--ink); border: 2px solid var(--wood-dark); }
+      #state { color: var(--dim); }
+      #meter { border: 2px solid var(--line); background: #0c0608; image-rendering: pixelated; }
+      #line { margin-top: 10px; min-height: 2.8em; padding: 8px 10px; background: var(--paper); color: var(--ink); border: 2px solid var(--wood-dark); }
+      #line .who { color: #a03a1c; font-weight: bold; margin-right: 6px; }
+      .amb { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px; }
+      @media (max-width: 520px) { input[type='range'] { width: 110px; } }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>DELI-VERY-DEAD · audio audition</h1>
+      <button class="big" id="start">Start audio</button>
+      <button id="pause">Suspend</button>
+      <span id="state">not started</span>
+      <canvas id="meter" width="160" height="14" title="master peak"></canvas>
+      <span id="db"></span>
+    </header>
+    <main>
+      <section class="panel">
+        <h2>Mix</h2>
+        <div class="row" id="mix"></div>
+      </section>
+      <section class="panel">
+        <h2>Music</h2>
+        <div class="grid" id="moods"></div>
+      </section>
+      <section class="panel wide">
+        <h2>Sound effects</h2>
+        <div class="row" id="sfxOpts"></div>
+        <div class="grid" id="sfx"></div>
+      </section>
+      <section class="panel wide">
+        <h2>Voices</h2>
+        <div class="grid" id="voices"></div>
+        <div id="line">Pick a character to hear them talk.</div>
+      </section>
+      <section class="panel">
+        <h2>Bicycle</h2>
+        <div class="row" id="bike"></div>
+      </section>
+      <section class="panel">
+        <h2>Motorbike</h2>
+        <div class="row" id="motor"></div>
+      </section>
+      <section class="panel wide">
+        <h2>Ambience</h2>
+        <div class="amb" id="amb"></div>
+      </section>
+    </main>
+    <script type="module">
+      import { audio, SFX_NAMES, VOICE_NAMES, MOOD_NAMES, AMB_NAMES } from './audio.js';
+
+      window.audio = audio;
+      const $ = (id) => document.getElementById(id);
+      const el = (tag, props = {}, kids = []) => {
+        const e = Object.assign(document.createElement(tag), props);
+        for (const k of kids) e.append(k);
+        return e;
+      };
+      function slider(parent, name, min, max, step, value, onInput) {
+        const out = el('b', { textContent: value });
+        const input = el('input', { type: 'range', min, max, step, value });
+        input.addEventListener('input', () => {
+          out.textContent = input.value;
+          onInput(+input.value);
+        });
+        parent.append(el('label', {}, [name, input, out]));
+        return input;
+      }
+      function check(parent, name, value, onChange) {
+        const input = el('input', { type: 'checkbox', checked: value });
+        input.addEventListener('change', () => onChange(input.checked));
+        parent.append(el('label', {}, [input, name]));
+        return input;
+      }
+
+      // ---- start / meter
+      let analyser = null, buf = null;
+      function start() {
+        audio.init();
+        if (audio.ready && !analyser) {
+          analyser = audio.ctx.createAnalyser();
+          analyser.fftSize = 1024;
+          buf = new Float32Array(analyser.fftSize);
+          audio.comp.connect(analyser);
+        }
+        $('state').textContent = audio.ready ? audio.ctx.state : 'Web Audio unavailable';
+      }
+      $('start').onclick = start;
+      $('pause').onclick = () => {
+        if (!audio.ready) return;
+        if (audio.ctx.state === 'running') { audio.suspend(); $('pause').textContent = 'Resume'; }
+        else { audio.resume(); $('pause').textContent = 'Suspend'; }
+      };
+
+      // ---- mix
+      const mix = { master: 0.8, music: 0.5, sfx: 0.8 };
+      for (const k of Object.keys(mix)) slider($('mix'), k, 0, 1, 0.01, mix[k], (v) => audio.setVolumes({ [k]: v }));
+
+      // ---- music
+      const moodBtns = {};
+      for (const m of MOOD_NAMES) {
+        const b = el('button', { textContent: m });
+        b.onclick = () => {
+          start();
+          audio.setMusic(m);
+          for (const x of Object.values(moodBtns)) x.classList.remove('on');
+          b.classList.add('on');
+        };
+        moodBtns[m] = b;
+        $('moods').append(b);
+      }
+
+      // ---- sfx
+      const so = { pitch: 1, volume: 1, pan: 0 };
+      slider($('sfxOpts'), 'pitch', 0.5, 2, 0.01, 1, (v) => (so.pitch = v));
+      slider($('sfxOpts'), 'volume', 0, 1.5, 0.01, 1, (v) => (so.volume = v));
+      slider($('sfxOpts'), 'pan', -1, 1, 0.01, 0, (v) => (so.pan = v));
+      for (const n of SFX_NAMES) {
+        const b = el('button', { textContent: n });
+        b.onclick = () => { start(); audio.play(n, { ...so }); };
+        $('sfx').append(b);
+      }
+
+      // ---- voices
+      const LINES = {
+        hank: "Uh... hi. I'm only mostly dead. Cocoa delivery!",
+        grandma: 'Oh sweetie, you look peaky. Have a marshmallow.',
+        reaper: 'So sorry about the whole... dying thing. My bad.',
+        gus: "Boat's fine. Fish are fine. You're a bit green, bud.",
+        marie: 'Bonjour! Deux cocoas, extra whipped cream, merci!',
+        doug: 'Is that guy... dead? Neat. Got any cookies?',
+        birdie: 'Tweet tweet! Ooh, what a shiny bicycle bell!',
+        ingrid: 'The fog rolls in at four. Pedal fast, ja?',
+        lou: 'Moose on the road again. Honk twice, slow down.',
+        agnes: 'Back in my day we walked to our cocoa. Uphill.',
+        kid: 'WHOA! Your arm fell off! Do it again!',
+        cat: 'Mrrp. Mew. Mrrrow? Prrrt.',
+        narrator: 'Day three. The leaves are falling. So is Hank.',
+        ollie: 'Hey hey! The rocket boosters are in, eh!',
+      };
+      let typing = null;
+      function say(voice) {
+        start();
+        clearInterval(typing);
+        const text = LINES[voice] || '...';
+        let i = 0;
+        const line = $('line');
+        line.innerHTML = '';
+        line.append(el('span', { className: 'who', textContent: voice + ':' }), el('span'));
+        const span = line.lastChild;
+        typing = setInterval(() => {
+          const ch = text[i++];
+          if (ch === undefined) return clearInterval(typing);
+          span.textContent += ch;
+          if (/[a-z0-9]/i.test(ch)) audio.blip(voice);
+        }, 50);
+      }
+      for (const v of VOICE_NAMES) {
+        const b = el('button', { textContent: v });
+        b.onclick = () => say(v);
+        $('voices').append(b);
+      }
+
+      // ---- bike / motor
+      const bike = { on: false, speed: 6, cadence: 0.6, surface: 'road', grounded: true, drifting: false, freewheel: false };
+      check($('bike'), 'riding', false, (v) => { start(); bike.on = v; if (!v) audio.setBike({ speed: 0 }); });
+      slider($('bike'), 'speed', 0, 30, 0.1, bike.speed, (v) => (bike.speed = v));
+      slider($('bike'), 'cadence', 0, 1, 0.01, bike.cadence, (v) => (bike.cadence = v));
+      const surf = el('select');
+      for (const s of ['road', 'dirt', 'grass', 'wood', 'water', 'snow']) surf.append(el('option', { value: s, textContent: s }));
+      surf.onchange = () => (bike.surface = surf.value);
+      $('bike').append(el('label', {}, ['surface', surf]));
+      check($('bike'), 'grounded', true, (v) => (bike.grounded = v));
+      check($('bike'), 'drifting', false, (v) => (bike.drifting = v));
+      check($('bike'), 'freewheel', false, (v) => (bike.freewheel = v));
+
+      const motor = { active: false, rpm: 0.1, throttle: 0.2 };
+      check($('motor'), 'engine on', false, (v) => { start(); motor.active = v; if (v) audio.play('engine_start'); });
+      slider($('motor'), 'rpm', 0, 1, 0.01, motor.rpm, (v) => (motor.rpm = v));
+      slider($('motor'), 'throttle', 0, 1, 0.01, motor.throttle, (v) => (motor.throttle = v));
+
+      // ---- ambience
+      for (const a of AMB_NAMES) slider($('amb'), a, 0, 1, 0.01, 0, (v) => { start(); audio.setAmbience({ [a]: v }); });
+
+      // ---- frame loop
+      let last = performance.now();
+      const meter = $('meter').getContext('2d');
+      function frame(now) {
+        const dt = Math.min(0.1, (now - last) / 1000);
+        last = now;
+        if (bike.on) audio.setBike(bike);
+        audio.setMotor(motor);
+        audio.update(dt);
+        if (analyser) {
+          analyser.getFloatTimeDomainData(buf);
+          let pk = 0;
+          for (let i = 0; i < buf.length; i++) pk = Math.max(pk, Math.abs(buf[i]));
+          const db = pk > 0 ? 20 * Math.log10(pk) : -99;
+          const w = Math.max(0, Math.min(1, (db + 48) / 48)) * 160;
+          meter.fillStyle = '#0c0608';
+          meter.fillRect(0, 0, 160, 14);
+          meter.fillStyle = db > -3 ? '#e2622a' : db > -12 ? '#f2c443' : '#2f6d68';
+          meter.fillRect(0, 0, w, 14);
+          $('db').textContent = db.toFixed(1) + ' dBFS';
+          $('state').textContent = audio.ctx.state + ' · ' + audio.mood;
+        }
+        requestAnimationFrame(frame);
+      }
+      requestAnimationFrame(frame);
+    </script>
+  </body>
+</html>

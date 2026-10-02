@@ -9,7 +9,7 @@ const SURF = {
   road: { hiss: 0.55, hf: 900, hq: 0.5, hs: 70, cr: 0.06, cf: 2600, plank: 0 },
   dirt: { hiss: 0.4, hf: 650, hq: 0.6, hs: 40, cr: 0.75, cf: 1600, plank: 0 },
   grass: { hiss: 0.45, hf: 2600, hq: 0.8, hs: 60, cr: 0.18, cf: 4200, plank: 0 },
-  wood: { hiss: 0.35, hf: 420, hq: 0.9, hs: 20, cr: 0.3, cf: 1100, plank: 0.85 },
+  wood: { hiss: 0.5, hf: 420, hq: 0.9, hs: 20, cr: 0.45, cf: 1100, plank: 0.85 },
   water: { hiss: 0.7, hf: 1300, hq: 1.3, hs: 50, cr: 0.5, cf: 3200, plank: 0.3 },
   snow: { hiss: 0.3, hf: 1900, hq: 0.9, hs: 40, cr: 0.8, cf: 3600, plank: 0 },
 };
@@ -153,7 +153,7 @@ export class Bike {
   apply(now) {
     const q = this.p, n = this.n, S = SURF[q.surface] || SURF.road, sp = q.speed;
     const roll = Math.pow(clamp(sp / 9, 0, 1), 0.8) * (q.grounded ? 1 : 0);
-    glide(n.tyre.gain, roll * 0.16, now, q.grounded ? 0.06 : 0.04);
+    glide(n.tyre.gain, roll * 0.6, now, q.grounded ? 0.06 : 0.04);
     glide(n.hissG.gain, S.hiss, now, 0.12);
     glide(n.hissF.frequency, S.hf + sp * S.hs, now, 0.1);
     glide(n.hissF.Q, S.hq, now, 0.1);
@@ -164,17 +164,17 @@ export class Bike {
     glide(n.amDepth.gain, S.plank * 0.5, now, 0.1);
     glide(n.plankLfo.frequency, clamp(sp / 0.3, 1, 40), now, 0.05);
     const pedal = q.cadence * clamp(sp / 2, 0, 1);
-    glide(n.chainG.gain, pedal * 0.05, now, 0.08);
+    glide(n.chainG.gain, pedal * 0.12, now, 0.08);
     glide(n.crank.frequency, clamp(0.8 + sp * 0.22, 0.8, 3.2), now, 0.2);
     glide(n.whir.frequency, 45 + sp * 9, now, 0.1);
     const skid = q.drifting && q.grounded ? clamp(sp / 5, 0, 1) : 0;
-    glide(n.skidG.gain, skid * 0.2, now, skid ? 0.03 : 0.08);
+    glide(n.skidG.gain, skid * 0.4, now, skid ? 0.03 : 0.08);
     glide(n.skidF.frequency, S.cf * 0.55, now, 0.05);
     const w = Math.pow(clamp((sp - 1.5) / 26, 0, 1), 1.4);
-    glide(n.windG.gain, w * 0.26, now, 0.15);
+    glide(n.windG.gain, w * 0.39, now, 0.15);
     glide(n.windF.frequency, 250 + sp * 45, now, 0.15);
-    glide(n.airG.gain, w * w * 0.12, now, 0.15);
-    glide(n.rat.gain, 0.05 + clamp(sp / 10, 0, 1) * 0.03, now, 0.1);
+    glide(n.airG.gain, w * w * 0.18, now, 0.15);
+    glide(n.rat.gain, 0.12 + clamp(sp / 10, 0, 1) * 0.06, now, 0.1);
   }
 
   tick(t) {
@@ -206,7 +206,7 @@ export class Bike {
     f.frequency.value = f0 * 1.1;
     f.Q.value = 3;
     g.gain.setValueAtTime(0, t);
-    g.gain.linearRampToValueAtTime(0.02, t + 0.03);
+    g.gain.linearRampToValueAtTime(0.05, t + 0.03);
     g.gain.linearRampToValueAtTime(0, t + 0.15);
     wire(o, f, g, this.n.out);
     o.start(t);
@@ -241,7 +241,7 @@ export class Bike {
       }
       const rough = q.surface === 'dirt' || q.surface === 'wood' || q.surface === 'snow';
       if (rough && q.speed > 3 && now > this.nextRattle) {
-        this.rattle(now + 0.01, rand(0.015, 0.04));
+        this.rattle(now + 0.01, rand(0.04, 0.09));
         this.nextRattle = now + rand(0.08, 0.4) * (8 / Math.max(4, q.speed));
       }
     }
@@ -258,7 +258,12 @@ export class Bike {
 
 // ==================================================================== motor
 
-const pulseAt = (x, c, tau) => { const d = (x - c + 1) % 1; return Math.exp(-d / tau); };
+// Fourier series of a cycle holding a strong firing at 0 and a weaker one at
+// 0.5: each a sharp-onset exponential decay (tau = 2% of the cycle).
+function fireCoef(k) {
+  const a = 50, b = 2 * Math.PI * k, d = a * a + b * b, s = 1 + 0.55 * (k % 2 ? -1 : 1);
+  return [(2 * a * s) / d, (2 * b * s) / d];
+}
 
 export class Motor {
   constructor(sys) {
@@ -287,7 +292,7 @@ export class Motor {
   build() {
     const sys = this.sys, K = kitOf(sys), k = sys.kit, n = {};
     // one cycle = a strong and a weaker firing: lumpy old single-cylinder charm
-    const wave = k.wave('motor', (x) => pulseAt(x, 0, 0.02) + 0.55 * pulseAt(x, 0.5, 0.02), 200);
+    const wave = k.wave('motor', 200, fireCoef);
     n.fire = sys.ctx.createOscillator();
     n.fire.setPeriodicWave(wave);
     n.fire.frequency.value = 4.5;
@@ -327,7 +332,7 @@ export class Motor {
     glide(n.fire.frequency, (4.5 + this.rpm * 22) * this.jit, now, 0.06);
     glide(n.bodyLP.frequency, 300 + this.thr * 700 + this.rpm * 500, now, 0.08);
     glide(n.exBP.frequency, 600 + this.thr * 700 + this.rpm * 400, now, 0.08);
-    glide(n.out.gain, on ? 0.1 + this.thr * 0.08 + this.rpm * 0.05 : 0, now, on ? 0.08 : 0.25);
+    glide(n.out.gain, on ? 0.42 + this.thr * 0.3 + this.rpm * 0.2 : 0, now, on ? 0.08 : 0.25);
   }
 
   update(now) {

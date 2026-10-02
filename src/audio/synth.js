@@ -99,11 +99,13 @@ export function impulse(ctx, dur = 2.2) {
   for (let ch = 0; ch < 2; ch++) {
     const d = buf.getChannelData(ch);
     let lp = 0;
+    const k1 = Math.exp(-2.4 / sr), k2 = Math.exp(-3.2 / sr), span = len - pre;
+    let e1 = 1, e2 = 1;
     for (let i = pre; i < len; i++) {
-      const sec = (i - pre) / sr, x = (i - pre) / (len - pre);
-      const a = 0.07 + 0.6 * Math.exp(-sec * 2.4);
-      lp += a * (Math.random() * 2 - 1 - lp);
-      d[i] = lp * Math.exp(-sec * 3.2) * (1 - x);
+      lp += (0.07 + 0.6 * e1) * (Math.random() * 2 - 1 - lp); // brighter early, darker tail
+      d[i] = lp * e2 * (1 - (i - pre) / span);
+      e1 *= k1;
+      e2 *= k2;
     }
     for (let r = 0; r < 10; r++) {
       const at = pre + Math.floor(sr * rand(0.004, 0.075));
@@ -121,20 +123,30 @@ const TIMBRES = {
   harp: { len: 2.2, t60: 2.4, bright: 0.3, pos: 0.48, gain: 0.55 },
 };
 
-/** Per-AudioContext resource cache. */
+/** Per-AudioContext resource cache. Buffers other than white noise are built on first use (or by warm-up). */
 export class Kit {
   constructor(ctx) {
     this.ctx = ctx;
     this.sr = ctx.sampleRate;
     this.white = noiseBuffer(ctx, 2.5, 'white');
-    this.pink = noiseBuffer(ctx, 3.1, 'pink');
-    this.brown = noiseBuffer(ctx, 3.7, 'brown');
-    this.crackle = crackleBuffer(ctx, 3.3, 120, 0.004);
-    this.fizz = crackleBuffer(ctx, 2.1, 1300, 0.0011);
-    this.tick = tickBuffer(ctx);
+    this._b = {};
     this._ks = new Map();
     this._curves = new Map();
     this._waves = new Map();
+  }
+  get pink() { return this._b.pink || (this._b.pink = noiseBuffer(this.ctx, 3.1, 'pink')); }
+  get brown() { return this._b.brown || (this._b.brown = noiseBuffer(this.ctx, 3.7, 'brown')); }
+  get crackle() { return this._b.crackle || (this._b.crackle = crackleBuffer(this.ctx, 3.3, 120, 0.004)); }
+  get fizz() { return this._b.fizz || (this._b.fizz = crackleBuffer(this.ctx, 2.1, 1300, 0.0011)); }
+  get tick() { return this._b.tick || (this._b.tick = tickBuffer(this.ctx)); }
+
+  /** Small jobs for AudioSys to run a few per frame after init (no first-use hitches). */
+  warmJobs() {
+    const jobs = ['pink', 'brown', 'crackle', 'tick', 'fizz'].map((n) => () => this[n]);
+    jobs.push(() => this.pulse(0.25), () => this.pulse(0.125), () => this.pulse(0.5));
+    for (const m of [72, 76, 79, 84]) jobs.push(() => this.pluck(m, 'harp'));
+    for (const m of [36, 41, 43, 48, 55, 59, 60, 62, 64, 67, 71]) jobs.push(() => this.pluck(m, 'guitar'));
+    return jobs;
   }
 
   /** Cached tanh soft-saturation curve. */
@@ -150,30 +162,21 @@ export class Kit {
     return c;
   }
 
-  /** Cached PeriodicWave from a single-cycle shape function (x in 0..1). */
-  wave(key, shape, harmonics = 64) {
+  /** Cached PeriodicWave from Fourier coefficients: coef(k) -> [cos term, sin term]. */
+  wave(key, harmonics, coef) {
     let w = this._waves.get(key);
     if (w) return w;
-    const N = 2048, s = new Float32Array(N);
-    for (let i = 0; i < N; i++) s[i] = shape(i / N);
     const re = new Float32Array(harmonics + 1), im = new Float32Array(harmonics + 1);
-    for (let k = 1; k <= harmonics; k++) {
-      let a = 0, b = 0;
-      for (let i = 0; i < N; i++) {
-        const ph = (2 * Math.PI * k * i) / N;
-        a += s[i] * Math.cos(ph);
-        b += s[i] * Math.sin(ph);
-      }
-      re[k] = (2 * a) / N;
-      im[k] = (2 * b) / N;
-    }
+    for (let k = 1; k <= harmonics; k++) [re[k], im[k]] = coef(k);
     w = this.ctx.createPeriodicWave(re, im);
     this._waves.set(key, w);
     return w;
   }
 
+  /** Band-limited pulse wave with the given duty cycle (closed-form series). */
   pulse(duty = 0.25) {
-    return this.wave('pulse' + duty, (x) => (x < duty ? 1 : -1), 48);
+    const w = 2 * Math.PI * duty;
+    return this.wave('pulse' + duty, 48, (k) => [(2 * Math.sin(w * k)) / (Math.PI * k), (2 * (1 - Math.cos(w * k))) / (Math.PI * k)]);
   }
 
   /** Lazily rendered, LRU-cached Karplus-Strong pluck for a MIDI note. */
