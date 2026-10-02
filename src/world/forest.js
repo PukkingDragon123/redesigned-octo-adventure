@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import { SPECIES, SPECIES_LIST, CLUMP, ATLAS_N, buildFoliageAtlas, buildBarkAtlas } from '../art/foliage.js';
 import { pixTexture } from '../render/textures.js';
-import { worldUniforms, LIGHT_PARS_VERT, LIGHT_PARS_FRAG, NOISE_GLSL, WIND_GLSL } from '../render/shaderlib.js';
+import { worldUniforms, LIGHT_PARS_VERT, SHADOW_VERT, LIGHT_PARS_FRAG, NOISE_GLSL, WIND_GLSL } from '../render/shaderlib.js';
 import { RNG, Simplex } from '../core/noise.js';
 import { clamp, smoothstep } from '../core/math.js';
 import { SpatialHash } from '../core/spatial.js';
@@ -41,7 +41,6 @@ attribute vec2 iSize;
 attribute vec4 iInfo;   // species row, atlas cell, random, height factor
 attribute vec4 iNorm;   // pseudo normal xyz, upright
 uniform float uAtlasN;
-uniform vec3 uSunDir;
 varying vec2 vUv;
 varying vec3 vWorldPos;
 varying vec3 vNormal;
@@ -83,7 +82,7 @@ void main() {
   // look up shadows from a point nudged towards the sun by the clump radius, so a
   // clump never shadows itself (camera-facing vs light-facing quads intersect)
   worldPosition = vec4(wp + uSunDir * vBulge * 1.25, 1.0);
-  #include <shadowmap_vertex>
+  ${SHADOW_VERT}
 }
 `;
 
@@ -176,7 +175,7 @@ void main() {
   vec4 mvPosition = viewMatrix * worldPosition;
   vec3 transformedNormal = (viewMatrix * vec4(vNormal, 0.0)).xyz;
   gl_Position = projectionMatrix * mvPosition;
-  #include <shadowmap_vertex>
+  ${SHADOW_VERT}
 }
 `;
 
@@ -509,11 +508,11 @@ export class Forest {
       uniforms: folUniforms, vertexShader: FOL_VERT, fragmentShader: FOL_FRAG, lights: true, side: THREE.DoubleSide,
     });
     this.folDepth = new THREE.ShaderMaterial({
-      uniforms: folUniforms, vertexShader: FOL_VERT, fragmentShader: FOL_DEPTH_FRAG, side: THREE.DoubleSide,
+      uniforms: folUniforms, vertexShader: FOL_VERT, fragmentShader: FOL_DEPTH_FRAG, side: THREE.DoubleSide, defines: { DEPTH_PASS: '' },
     });
     const trunkUniforms = worldUniforms({ tBark: { value: bark } });
     this.trunkMat = new THREE.ShaderMaterial({ uniforms: trunkUniforms, vertexShader: TRUNK_VERT, fragmentShader: TRUNK_FRAG, lights: true });
-    this.trunkDepth = new THREE.ShaderMaterial({ uniforms: trunkUniforms, vertexShader: TRUNK_VERT, fragmentShader: TRUNK_DEPTH_FRAG });
+    this.trunkDepth = new THREE.ShaderMaterial({ uniforms: trunkUniforms, vertexShader: TRUNK_VERT, fragmentShader: TRUNK_DEPTH_FRAG, defines: { DEPTH_PASS: '' } });
 
     const quad = new THREE.PlaneGeometry(1, 1);
     const trunkGeos = { straight: trunkGeometry(false), forked: trunkGeometry(true) };

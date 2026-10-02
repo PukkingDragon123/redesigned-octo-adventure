@@ -1,6 +1,6 @@
 // Terrain rendering: chunked meshes + a pixel-art splat shader.
 import * as THREE from 'three';
-import { G, worldUniforms, LIGHT_PARS_VERT, LIGHT_PARS_FRAG, NOISE_GLSL } from '../render/shaderlib.js';
+import { G, worldUniforms, LIGHT_PARS_VERT, SHADOW_VERT, LIGHT_PARS_FRAG, NOISE_GLSL } from '../render/shaderlib.js';
 import { pixTexture, dataTexture } from '../render/textures.js';
 import { grassTex, dirtTex, litterTex, rockTex, sandTex, gravelTex } from '../art/groundtex.js';
 import { H_RES } from './terrain.js';
@@ -17,7 +17,7 @@ void main() {
   vec4 mvPosition = viewMatrix * worldPosition;
   vec3 transformedNormal = normalMatrix * normal;
   gl_Position = projectionMatrix * mvPosition;
-  #include <shadowmap_vertex>
+  ${SHADOW_VERT}
 }
 `;
 
@@ -114,6 +114,8 @@ export function createWorldTextures(terrain) {
   G.uHeightTex.value = heightTex;
   G.uSplatTex.value = splatTex;
   G.uWorldHalf.value = WORLD_HALF;
+  G.uHeightN.value = n;
+  G.uHRes.value = H_RES;
   return { heightTex, splatTex };
 }
 

@@ -1,6 +1,6 @@
 // Reflective pixel water for the cove, river and pond (all at sea level).
 import * as THREE from 'three';
-import { G, worldUniforms, LIGHT_PARS_VERT, LIGHT_PARS_FRAG, NOISE_GLSL } from '../render/shaderlib.js';
+import { worldUniforms, LIGHT_PARS_VERT, SHADOW_VERT, LIGHT_PARS_FRAG, NOISE_GLSL, HEIGHT_GLSL } from '../render/shaderlib.js';
 import { SKY } from '../render/sky.js';
 
 const VERT = /* glsl */ `
@@ -15,16 +15,15 @@ void main() {
   vec4 mvPosition = viewMatrix * worldPosition;
   vec3 transformedNormal = normalMatrix * normal;
   gl_Position = projectionMatrix * mvPosition;
-  #include <shadowmap_vertex>
+  ${SHADOW_VERT}
 }
 `;
 
 const FRAG = /* glsl */ `
 ${LIGHT_PARS_FRAG}
 ${NOISE_GLSL}
+${HEIGHT_GLSL}
 uniform sampler2D tRefl;
-uniform sampler2D uHeightTex;
-uniform float uWorldHalf;
 uniform vec3 uDeep;
 uniform vec3 uShallow;
 uniform vec3 uFoam;
@@ -41,7 +40,7 @@ void main() {
   // pixel-snapped sampling space: 8 px / metre
   vec2 q = floor(wp * 8.0) / 8.0;
   float t = uTime;
-  float terrH = texture2D(uHeightTex, (wp + uWorldHalf) / (2.0 * uWorldHalf)).r;
+  float terrH = terrainHeight(wp);
   float depth = max(0.0, -terrH);
 
   // ripples

@@ -20,6 +20,8 @@ export const G = {
   uHeightTex: { value: null },
   uSplatTex: { value: null },
   uWorldHalf: { value: 320 },
+  uHeightN: { value: 321 },
+  uHRes: { value: 2 },
   uClipY: { value: -1e5 }, // reflection pass: discard fragments below this
 };
 
@@ -32,6 +34,16 @@ export function worldUniforms(extra = {}) {
     ...extra,
   };
 }
+
+// Exact texel-centre lookup into the terrain heightmap texture
+export const HEIGHT_GLSL = /* glsl */ `
+uniform sampler2D uHeightTex;
+uniform float uWorldHalf;
+uniform float uHeightN;
+uniform float uHRes;
+vec2 heightUV(vec2 xz) { return ((xz + uWorldHalf) / uHRes + 0.5) / uHeightN; }
+float terrainHeight(vec2 xz) { return texture2D(uHeightTex, heightUV(xz)).r; }
+`;
 
 export const NOISE_GLSL = /* glsl */ `
 float hash12(vec2 p) {
@@ -73,12 +85,23 @@ vec3 windOffset(vec3 p, float h, float phase) {
 }
 `;
 
+// Depth (shadow-caster) variants compile with DEPTH_PASS so they never reference
+// three's light/shadow uniforms (which only lights:true materials get populated).
+export const SHADOW_VERT = /* glsl */ `
+#ifndef DEPTH_PASS
+#include <shadowmap_vertex>
+#endif
+`;
+
 export const LIGHT_PARS_VERT = /* glsl */ `
 #include <common>
+#ifndef DEPTH_PASS
 #include <shadowmap_pars_vertex>
+#endif
 uniform float uTime;
 uniform vec2 uWind;
 uniform float uWindStrength;
+uniform vec3 uSunDir;
 `;
 
 export const LIGHT_PARS_FRAG = /* glsl */ `

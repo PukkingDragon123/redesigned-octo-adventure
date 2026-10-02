@@ -2,6 +2,8 @@
 import * as THREE from 'three';
 import { Terrain, riverInfo } from './terrain.js';
 import { Forest } from './forest.js';
+import { Grass, buildGrassMask } from './grass.js';
+import * as L from './layout.js';
 import { createTerrainMaterial, createTerrainMeshes, createWorldTextures } from './terrainMesh.js';
 import { createSky, createMountains } from '../render/sky.js';
 import { createWater } from './water.js';
@@ -34,6 +36,15 @@ export class World {
     this.forest.place(riverInfo);
     this.scene.add(this.forest.buildMeshes());
     console.log('forest', JSON.stringify(this.forest.stats));
+
+    await step(0.45, 'growing the grass');
+    const blockers = L.BUILDINGS.map((b) => ({ x: b.x, z: b.z, w: b.w + (b.porch ? 3 : 0.5), d: b.d + (b.porch ? 3 : 0.5), yaw: b.facing || 0 }));
+    blockers.push({ x: L.POI.cabin.x + 8, z: L.POI.cabin.z + 8, w: 26, d: 26, yaw: 0, keep: 0.8, short: true });
+    blockers.push({ x: L.POI.plaza.x, z: L.POI.plaza.z, w: 24, d: 20, yaw: 0, keep: 0.6, short: true });
+    blockers.push({ x: L.POI.graveyard.x, z: L.POI.graveyard.z, w: 30, d: 30, yaw: 0, keep: 0.9, short: true });
+    this.grassMask = buildGrassMask(this.terrain, blockers);
+    this.grass = new Grass(this.grassMask, { gridN: this.grassGrid ?? 150, spacing: 0.42 });
+    this.scene.add(this.grass.mesh);
 
     await step(0.5, 'filling the cove');
     this.water = createWater(this.pipeline);
@@ -85,6 +96,7 @@ export class World {
     this.atmosphere.update(dt);
     this.sky.position.copy(camera.position);
     this.forest?.updateVisibility(camera.position);
+    this.grass?.update(camera.position);
     this.updateShadow(focus);
   }
 }
