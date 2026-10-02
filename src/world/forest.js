@@ -256,6 +256,7 @@ export class Forest {
       const h = T.heightAt(px, pz);
       if (h < 1.8 || !ok(px, pz, 2.6, 1)) continue;
       this.addTree('dead', px, h - 0.1, pz, rng.range(5.5, 8), rng);
+      this.trees[this.trees.length - 1].vseed = k % 3; // every third one has eyes in its hollow
     }
   }
 
