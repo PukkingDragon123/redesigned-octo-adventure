@@ -78,12 +78,29 @@ export class Interactables {
         g.sound.play('boing');
         g.quests?.event('bobble');
         break;
-      case 'cauldron':
+      case 'cauldron': {
         ch.react('gasp');
         g.sound.play('cauldron_bubble');
         g.effects.magic(s.x, g.walker.pos.y + 1.2, s.z, 24, [0.5, 1, 0.4]);
         g.quests?.event('cauldron');
+        // the brew gives Hank a witch's hat for a while (poof!)
+        if (!this.witchHat) {
+          const r = g.world.voxel.model('witchhat-small', () => g.world.voxelProps.witchHat({}));
+          const m = new THREE.Mesh(r.geometry, ch.mat);
+          m.position.y = ch.P.headH - 0.06;
+          m.rotation.z = 0.15;
+          m.scale.setScalar(0.8);
+          ch.headPiece.add(m);
+          this.witchHat = m;
+          g.sound.play('witch_cackle');
+          g.wait(30).then(() => {
+            ch.headPiece.remove(m);
+            this.witchHat = null;
+            g.effects.magic(g.playerPos.x, g.playerPos.y + 1.8, g.playerPos.z, 14, [0.7, 0.5, 1]);
+          });
+        }
         break;
+      }
       case 'tv': {
         const S = g.state;
         const lines = ['Good evening, Maple Cove!', `Day ${S.day}: ${g.world.atmosphere.weatherTarget} skies.`];
