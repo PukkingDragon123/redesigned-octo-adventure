@@ -392,8 +392,8 @@ function graveyard(ctx, B) {
   B.box([1.62, 0.15, -0.38], [0.24, 0.32, 0.03], { color: 0x8a8a92 }, [0.2, 0, 0], M);
   B.box([0, 0.55, -1.25], [0.85, 1.1, 0.2], { tile: 'gravestone', keepUV: true, color: 0xd0d0d4 }, [0.08, 0, 0], M);
   ctx.physics.addCircle({ x: toWorld(M, 0, 0, -1.25).x, z: toWorld(M, 0, 0, -1.25).z, r: 0.5, y0: y - 1, y1: y + 1.3, kind: 'grave' });
-  // gnarled dead tree with crows
-  const tx = g.x - 7, tz = g.z - 6, ty = terrain.heightAt(tx, tz);
+  // gnarled dead tree with crows (kept ~9 m from Hank's grave: the funeral is staged there)
+  const tx = g.x - 9, tz = g.z - 7.5, ty = terrain.heightAt(tx, tz);
   const Mt = buildingMatrix(tx, ty, tz, 0.4);
   B.tube([0, 0, 0], [0.3, 3.2, 0.1], 0.45, 0.28, { tile: 'logs', tileMeters: 2.5, color: 0x6a5a50 }, 6, Mt);
   const branch = (a, b2, r) => B.tube(a, b2, r, r * 0.6, { color: 0x4a3a32 }, 5, Mt);

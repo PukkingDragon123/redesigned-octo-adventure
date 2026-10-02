@@ -283,8 +283,9 @@ export class VoxelWorld {
     const g = P.graveyard;
     S('gargoyle', () => PR.gargoyle({}), g.x + 9, g.z + 9, -2.4);
     S('gargoyle', () => PR.gargoyle({}), g.x - 10, g.z + 7, 2.6);
-    S('coffin', () => PR.coffin({ open: true }), g.x + 4, g.z - 8, 0.5);
-    S('ghostpost', () => PR.ghostPost({}), g.x - 4, g.z - 9, 0.3);
+    // (nothing within ~8 m of Hank's grave: the funeral is staged there)
+    S('coffin', () => PR.coffin({ open: true }), g.x + 7, g.z - 9.5, 0.5);
+    S('ghostpost', () => PR.ghostPost({}), g.x - 6, g.z - 11, 0.3);
     for (let i = 0; i < 5; i++) S(`cross:${i % 2}`, () => PR.woodenCross({ seed: i % 2 }), g.x - 8 + i * 3.3, g.z + 11 - (i % 2) * 1.5, (i % 3) * 0.2 - 0.2);
     // homestead: Nana's porch decorated, a gnome with a tiny jack, flamingo in a witch hat
     const c = P.cabin;

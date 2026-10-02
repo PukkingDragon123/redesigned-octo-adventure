@@ -44,23 +44,32 @@ vec3 tex(sampler2D t, vec2 uv) { return texture2D(t, uv).rgb; }
 void main() {
   if (vWorldPos.y < uClipY) discard;
   vec3 n = normalize(vNormal);
-  // texel-snapped world position: 16 texels per metre, 64px tile = 4m
+  // texel-snapped world position: 32 texels per metre, 128 px tile = 4 m
   vec2 wp = vWorldPos.xz;
-  vec2 texel = floor(wp * 16.0);
+  vec2 texel = floor(wp * 32.0);
   vec2 uv = wp / 4.0;
+  // break up tiling: big wobbly regions use a rotated, offset copy of each texture
+  float region = vnoise(wp / 13.0 + 3.7) + (vnoise(wp / 3.1) - 0.5) * 0.18;
+  if (region > 0.5) uv = vec2(uv.y, -uv.x) + vec2(0.37, 0.61);
+  if (vnoise(wp / 17.0 - 5.1) > 0.55) uv = vec2(-uv.x, uv.y) + vec2(0.5, 0.25);
   vec2 suv = (wp + uWorldHalf) / (2.0 * uWorldHalf);
   vec4 sp = texture2D(uSplatTex, suv);
 
-  // coherent dither for crisp, organic material borders
-  float dn = vnoise(texel * 0.09) * 0.55 + hash12(texel) * 0.45;
+  // coherent noise for crisp, organic material borders: wobbly blob edges, not pixel static
+  vec2 tq = texel / 32.0;
+  float dn = vnoise(tq * 1.1) * 0.55 + vnoise(tq * 3.7 + 7.3) * 0.33 + hash12(floor(texel / 2.0)) * 0.12;
 
   float forest = smoothstep(0.1, 0.6, sp.a);
   vec3 col = mix(tex(tGrass, uv), tex(tGrass2, uv + 0.37), step(dn, forest));
-  // big patches of colour variation (golden vs green meadows)
+  // big patches of colour variation (golden vs green meadows), in a few soft steps
   float patchN = vnoise(wp / 38.0) * 0.7 + vnoise(wp / 11.0) * 0.3;
+  patchN = floor(patchN * 4.0 + 0.5) / 4.0;
   col *= mix(vec3(1.08, 0.98, 0.82), vec3(0.9, 1.0, 0.94), patchN);
 
-  if (sp.a > 0.25 + dn * 0.55) col = tex(tLitter, uv * 1.0 + 0.11);
+  // leaf litter in drifts under the trees, with a soft dark rim where it meets the grass
+  float lit0 = sp.a - (0.25 + dn * 0.55);
+  if (lit0 > 0.0) col = tex(tLitter, uv * 1.0 + 0.11);
+  else if (lit0 > -0.05) col *= 0.86;
   float wetSand = 0.0;
   if (sp.b > 0.2 + dn * 0.6) {
     col = tex(tSand, uv);
@@ -81,8 +90,13 @@ void main() {
   if (an.y > 0.75) ruv = uv;
   if (sp.g > 0.2 + dn * 0.6) col = tex(tRock, ruv);
 
+  // roads & paths: a crisp edge with a little wobble, a darker worn rim, lighter wheel-worn middle
   bool village = wp.x > uVillage.x && wp.x < uVillage.y && wp.y > uVillage.z && wp.y < uVillage.w;
-  if (sp.r > 0.18 + dn * 0.62) col = village ? tex(tGravel, uv) : tex(tDirt, uv);
+  float re = sp.r - (0.4 + (dn - 0.5) * 0.16);
+  if (re > 0.0) {
+    col = village ? tex(tGravel, uv) : tex(tDirt, uv);
+    col *= re < 0.09 ? 0.84 : (sp.r > 0.97 ? 1.04 : 1.0);
+  } else if (re > -0.06) col *= 0.88; // grass trodden flat along the verge
 
   // wet ground darkens + gets a sky sheen
   col *= mix(1.0, 0.62, uWet);

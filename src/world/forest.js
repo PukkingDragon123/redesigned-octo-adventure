@@ -415,6 +415,12 @@ export class Forest {
         const vm = villageMask(px, pz);
         let p = smoothstep(0.22, 0.72, forestNoise(px, pz)) * 0.8 + 0.1;
         p *= clearingFactor(px, pz) * vistaFactor(px, pz);
+        // clearings that want a thick wall of trees right around their edge
+        for (const c of L.CLEARINGS) {
+          if (!c.ring) continue;
+          const d = Math.hypot(px - c.x, pz - c.z) - c.r - c.soft;
+          if (d > 0 && d < c.ring) p = Math.max(p, 0.92);
+        }
         p *= 1 - smoothstep(52, 75, h); // treeline on the rim mountains
         // the unreachable rim needs fewer trees (it is mostly seen from afar)
         const edge = Math.min(px + L.WORLD_HALF, L.WORLD_HALF - pz, pz + L.WORLD_HALF);
