@@ -461,13 +461,13 @@ const GENERIC = {
   sugarshack: { lift: 0.3, H: (b) => 5.5 },
   gazebo: { lift: 0.05, H: () => 5.6, open: true },
   lifeguard: { lift: 0.0, H: () => 4.2, open: true },
-  rink: { lift: 0.08, H: () => 1.2, open: true },
+  rink: { lift: 0.06, H: () => 1.2, open: true, top: true },
 };
 function generic(ctx, B, b) {
   const { terrain, physics } = ctx;
   const g = GENERIC[b.kind];
   const fh = footprintHeights(terrain, b);
-  const y0 = (g.open ? fh.mn : fh.mx) + g.lift;
+  const y0 = (g.open && !g.top ? fh.mn : fh.mx) + g.lift;
   const M = buildingMatrix(b.x, y0, b.z, b.facing || 0);
   const H = g.H(b);
   // a recessed shopfront (the general store's porch) leaves its front strip walkable

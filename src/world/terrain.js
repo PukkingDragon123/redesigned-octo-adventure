@@ -477,7 +477,6 @@ export class Terrain {
       { x: -8, z: 58, r: 5 }, // picnic area
       { x: 133, z: 12, r: 16 }, // bike park
       { x: 104, z: 37, r: 5 }, // Gus's yard
-      { x: 250, z: -40, r: 8 }, // beach parking
     ];
     for (const y of yards) {
       const i0 = Math.max(0, Math.floor((y.x - y.r + HALF) / S_RES)), i1 = Math.min(sn - 1, Math.ceil((y.x + y.r + HALF) / S_RES));
