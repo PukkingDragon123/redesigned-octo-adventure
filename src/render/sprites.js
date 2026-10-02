@@ -203,3 +203,156 @@ export function pickView(facingYaw, pos, camPos) {
   // side: sprite faces right by default; flip if the character faces screen-left
   return { view: 'side', flip: rel > 0, rel };
 }
+
+// ---------------------------------------------------------------- instanced billboards
+// Many sprites from one atlas in one draw call (wildlife, flocks). Fill it each
+// frame: batch.begin(); batch.push(frame, x, y, z, opts) ...; batch.end().
+// Texture alpha: >= 0.8 lit pixel, 0.3..0.8 glowing pixel, below discarded.
+const BATCH_VERT = /* glsl */ `
+${LIGHT_PARS_VERT}
+attribute vec4 iPos;   // anchor xyz, roll
+attribute vec4 iRect;  // atlas uv rect
+attribute vec4 iSize;  // world w, h, anchor x, anchor y (0..1, y from top)
+attribute vec4 iMisc;  // flip, upright, emissive, fade
+attribute vec4 iTint;  // rgb tint, flash
+varying vec2 vUv;
+varying vec3 vWorldPos;
+varying vec3 vNormal;
+varying vec4 vTint;
+varying vec2 vMisc;
+void main() {
+  vec3 center = iPos.xyz;
+  vec3 fwd;
+  if (projectionMatrix[3][3] == 1.0) fwd = normalize(vec3(viewMatrix[0][2], viewMatrix[1][2], viewMatrix[2][2]));
+  else fwd = normalize(cameraPosition - center);
+  vec3 up0 = vec3(0.0, 1.0, 0.0);
+  vec3 f2 = normalize(vec3(fwd.x, 0.0, fwd.z) + vec3(0.0, 0.0, 1e-5));
+  vec3 right = normalize(cross(up0, f2));
+  vec3 tilt = normalize(mix(fwd, f2, iMisc.y));
+  vec3 up = normalize(cross(tilt, right));
+  vec2 q = vec2(position.x + 0.5 - iSize.z, position.y + 0.5 - (1.0 - iSize.w)) * iSize.xy;
+  float c = cos(iPos.w), s = sin(iPos.w);
+  q = vec2(q.x * c - q.y * s, q.x * s + q.y * c);
+  vec3 wp = center + right * q.x + up * q.y;
+  vWorldPos = wp;
+  vNormal = normalize(mix(tilt, up0, 0.35));
+  vec2 luv = vec2(position.x + 0.5, 0.5 - position.y);
+  if (iMisc.x > 0.5) luv.x = 1.0 - luv.x;
+  vUv = mix(iRect.xy, iRect.zw, luv);
+  vTint = iTint;
+  vMisc = iMisc.zw;
+  vec4 worldPosition = vec4(wp, 1.0);
+  vec4 mvPosition = viewMatrix * worldPosition;
+  vec3 transformedNormal = (viewMatrix * vec4(vNormal, 0.0)).xyz;
+  gl_Position = projectionMatrix * mvPosition;
+  worldPosition.xyz += uSunDir * 0.35;
+  ${SHADOW_VERT}
+}
+`;
+
+const BATCH_FRAG = /* glsl */ `
+${LIGHT_PARS_FRAG}
+${NOISE_GLSL}
+uniform sampler2D tAtlas;
+uniform float uTexel;
+varying vec2 vUv;
+varying vec3 vWorldPos;
+varying vec3 vNormal;
+varying vec4 vTint;
+varying vec2 vMisc;
+void main() {
+  vec4 tx = texture2D(tAtlas, vUv);
+  if (tx.a < 0.3) discard;
+  if (vWorldPos.y < uClipY) discard;
+  if (vMisc.y > 0.0 && bayer4(gl_FragCoord.xy) < vMisc.y) discard;
+  vec3 albedo = tx.rgb * vTint.rgb;
+  vec3 n = normalize(vNormal);
+  float shadow = getShadowMask();
+  float ndl = max(dot(n, uSunDir), 0.0) * 0.6 + 0.4;
+  vec3 light = hemiAmbient(n) * 1.15 + uSunColor * shadow * ndl * 0.75 + pointLightsAt(vWorldPos, n, 0.7);
+  vec3 col = albedo * light;
+  vec3 v = normalize(uCamPos - vWorldPos);
+  float back = pow(max(dot(-v, uSunDir), 0.0), 3.0) * shadow;
+  col += albedo * uSunColor * back * 0.35;
+  if (uNight > 0.05) {
+    vec2 t = vec2(uTexel, 0.0);
+    float e = step(texture2D(tAtlas, vUv + t.xy).a, 0.3) + step(texture2D(tAtlas, vUv - t.xy).a, 0.3)
+            + step(texture2D(tAtlas, vUv + t.yx).a, 0.3) + step(texture2D(tAtlas, vUv - t.yx).a, 0.3);
+    col += (albedo * 0.7 + 0.06) * vec3(0.42, 0.52, 0.95) * min(e, 1.0) * uNight;
+  }
+  // glowing pixels (eyes, wisps, firefly tails) and whole-sprite glow
+  float glow = max(step(tx.a, 0.8), vMisc.x);
+  col = mix(col, albedo * (1.25 + uNight * 0.9), glow);
+  col = mix(col, vec3(1.0, 0.98, 0.9) * 1.6, vTint.a);
+  gl_FragColor = vec4(col, 1.0);
+}
+`;
+
+const BATCH_DEPTH_FRAG = /* glsl */ `
+uniform sampler2D tAtlas;
+varying vec2 vUv;
+varying vec2 vMisc;
+void main() { if (texture2D(tAtlas, vUv).a < 0.3) discard; gl_FragColor = vec4(1.0); }
+`;
+
+export class SpriteBatch {
+  constructor(atlas, max = 256, { castShadow = true, upright = 0.85 } = {}) {
+    this.atlas = atlas;
+    this.max = max;
+    this.upright = upright;
+    const base = new THREE.PlaneGeometry(1, 1);
+    const g = new THREE.InstancedBufferGeometry();
+    g.index = base.index;
+    g.setAttribute('position', base.attributes.position);
+    g.setAttribute('uv', base.attributes.uv);
+    this.arrays = {};
+    for (const k of ['iPos', 'iRect', 'iSize', 'iMisc', 'iTint']) {
+      const a = new Float32Array(max * 4);
+      this.arrays[k] = a;
+      g.setAttribute(k, new THREE.InstancedBufferAttribute(a, 4).setUsage(THREE.DynamicDrawUsage));
+    }
+    g.instanceCount = 0;
+    g.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 1e6);
+    this.geo = g;
+    this.uniforms = worldUniforms({ tAtlas: { value: atlas.texture }, uTexel: { value: 1 / atlas.size } });
+    this.material = new THREE.ShaderMaterial({ uniforms: this.uniforms, vertexShader: BATCH_VERT, fragmentShader: BATCH_FRAG, lights: true, side: THREE.DoubleSide });
+    this.depth = new THREE.ShaderMaterial({ uniforms: this.uniforms, vertexShader: BATCH_VERT, fragmentShader: BATCH_DEPTH_FRAG, side: THREE.DoubleSide, defines: { DEPTH_PASS: '' } });
+    this.mesh = new THREE.Mesh(g, this.material);
+    this.mesh.customDepthMaterial = this.depth;
+    this.mesh.castShadow = castShadow;
+    this.mesh.receiveShadow = true;
+    this.mesh.frustumCulled = false;
+    this.mesh.layers.enable(2);
+    this.n = 0;
+  }
+  begin() {
+    this.n = 0;
+  }
+  // f: atlas frame (f.ppm = its pixels per metre); o: { flip, roll, sx, sy, upright, emissive, fade, tint:[r,g,b], flash }
+  push(f, x, y, z, o = {}) {
+    if (!f || this.n >= this.max) return false;
+    const i = this.n++ * 4;
+    const A = this.arrays;
+    const s = this.atlas.size;
+    const ppm = f.ppm || PPM;
+    A.iPos[i] = x; A.iPos[i + 1] = y; A.iPos[i + 2] = z; A.iPos[i + 3] = o.roll || 0;
+    A.iRect[i] = f.x / s; A.iRect[i + 1] = f.y / s; A.iRect[i + 2] = (f.x + f.w) / s; A.iRect[i + 3] = (f.y + f.h) / s;
+    const fl = !!o.flip;
+    A.iSize[i] = (f.w / ppm) * (o.sx ?? 1); A.iSize[i + 1] = (f.h / ppm) * (o.sy ?? o.sx ?? 1);
+    A.iSize[i + 2] = fl ? 1 - f.ax / f.w : f.ax / f.w; A.iSize[i + 3] = f.ay / f.h;
+    A.iMisc[i] = fl ? 1 : 0; A.iMisc[i + 1] = o.upright ?? this.upright; A.iMisc[i + 2] = o.emissive || 0; A.iMisc[i + 3] = o.fade || 0;
+    const t = o.tint;
+    A.iTint[i] = t ? t[0] : 1; A.iTint[i + 1] = t ? t[1] : 1; A.iTint[i + 2] = t ? t[2] : 1; A.iTint[i + 3] = o.flash || 0;
+    return true;
+  }
+  end() {
+    const n = this.n;
+    this.geo.instanceCount = n;
+    for (const k in this.arrays) {
+      const attr = this.geo.attributes[k];
+      attr.clearUpdateRanges();
+      attr.addUpdateRange(0, n * 4);
+      attr.needsUpdate = true;
+    }
+  }
+}

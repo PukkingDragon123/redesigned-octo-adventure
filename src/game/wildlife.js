@@ -6,6 +6,7 @@ import { angleDamp, clamp, damp } from '../core/math.js';
 import * as L from '../world/layout.js';
 import { P } from '../render/particles.js';
 import { VoxCritter, hasVoxelAnimal } from './voxanimals.js';
+import { Critters2D } from './critters2d.js';
 
 class Critter {
   constructor(game, kind, x, z, opt = {}) {
@@ -97,6 +98,9 @@ export class Wildlife {
       this.list.push(b);
     }
     // songbird flocks will be spawned around the player
+    // ...and the 2D pixel-art wildlife lives alongside the voxel animals
+    this.critters = new Critters2D(game);
+    game.critters = this.critters;
   }
 
   update(dt) {
@@ -123,6 +127,7 @@ export class Wildlife {
     this.updateGeese(dt, player);
     this.updateSquirrels(dt, player);
     this.updateSalmon(dt, player);
+    this.critters.update(dt);
   }
 
   deer(c, dt, d) {
