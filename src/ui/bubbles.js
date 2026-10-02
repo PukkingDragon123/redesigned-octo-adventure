@@ -52,20 +52,27 @@ function tokenize(text) {
   }
   return parts;
 }
-// one letter (or a space / line break) into a word span
-function addLetter(txt, state, p, i) {
-  if (p.ch === ' ' || p.ch === '\n') {
-    txt.appendChild(p.ch === ' ' ? document.createTextNode(' ') : document.createElement('br'));
-    state.word = null;
-    return;
-  }
-  if (!state.word) { state.word = el('span', 'tword'); txt.appendChild(state.word); }
-  const cls = `${p.b ? 'tb' : ''}${p.w ? ' tw' : ''}${p.s ? ' ts' : ''}${p.sm ? ' tsm' : ''}`;
-  if (!cls) { state.word.appendChild(document.createTextNode(p.ch)); return; }
-  const sp = el('span', cls);
-  sp.textContent = p.ch;
-  if (p.w || p.s) sp.style.animationDelay = `${(i % 8) * -0.1}s`;
-  state.word.appendChild(sp);
+// The whole line is laid out up front with every letter hidden, then typing just
+// reveals letters: the bubble has its final size from the first frame, so it
+// never grows, slides or re-wraps words while the text types in.
+function layoutText(txt, parts) {
+  const out = [];
+  let word = null;
+  parts.forEach((p, i) => {
+    if (p.ch === ' ' || p.ch === '\n') {
+      txt.appendChild(p.ch === ' ' ? document.createTextNode(' ') : document.createElement('br'));
+      word = null;
+      out.push(null);
+      return;
+    }
+    if (!word) { word = el('span', 'tword'); txt.appendChild(word); }
+    const sp = el('span', `hid${p.b ? ' tb' : ''}${p.w ? ' tw' : ''}${p.s ? ' ts' : ''}${p.sm ? ' tsm' : ''}`);
+    sp.textContent = p.ch;
+    if (p.w || p.s) sp.style.animationDelay = `${(i % 8) * -0.1}s`;
+    word.appendChild(sp);
+    out.push(sp);
+  });
+  return out;
 }
 
 export class Bubbles {
@@ -130,8 +137,8 @@ export class Bubbles {
       const speed = opts.speed ?? 40;
       const items = [];
       const A = (this.active = { wrap, b, tl, speaker, resolve: null, choiceEls: items, hasName: !!nameEl });
-      const st = { word: null };
-      const addChar = (p) => addLetter(txt, st, p, i);
+      const letters = layoutText(txt, parts);
+      const addChar = () => letters[i - 1]?.classList.remove('hid');
       const finish = () => {
         while (i < parts.length) addChar(parts[i++]);
         done = true;
@@ -234,8 +241,8 @@ export class Bubbles {
     return new Promise((resolve) => {
       let i = 0, acc = 0, done = false;
       this.active = { wrap: p, narr: true, fit };
-      const st = { word: null };
-      const add = (q) => addLetter(txt, st, q, i);
+      const letters = layoutText(txt, parts);
+      const add = () => letters[i - 1]?.classList.remove('hid');
       const close = () => {
         this.ui.dialogueTick = null;
         this.ui._dlgResolve = null;

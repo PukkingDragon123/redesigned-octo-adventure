@@ -130,15 +130,29 @@ const KIT_GLYPHS = ['box', 'boxOn', 'boxX', 'check', 'cross', 'hand', 'arrowR', 
 const URLS = {};
 export const kitURL = (name) => URLS[name] || (URLS[name] = url(KIT_IMAGES[name]()));
 
-let installed = false;
+// what the HUD needs on the first frame; everything else is painted in idle time
+// (or at once, the moment a menu opens: see kitReady)
+const FIRST = ['plate-leather', 'plate-dark', 'plate-parchment', 'paper-note', 'paper-news', 'key', 'tip', 'tip-tail', 'panel-dark', 'panel-leather', 'bar', 'btn', 'btn-hover', 'ribbon'];
+let installed = false, pending = [];
+const put = (name) => document.documentElement.style.setProperty(`--k-${name}`, `url(${kitURL(name)})`);
+export function kitReady() {
+  while (pending.length) put(pending.shift());
+}
 export function installKit({ offset } = {}) {
   if (offset !== undefined) scale.offset = offset | 0;
   applyScale();
   if (installed) return;
   installed = true;
   const r = document.documentElement.style;
-  for (const name of Object.keys(KIT_IMAGES)) r.setProperty(`--k-${name}`, `url(${kitURL(name)})`);
+  for (const name of FIRST) put(name);
   for (const g of KIT_GLYPHS) r.setProperty(`--g-${g}`, `url(${glyphURL(g)})`);
+  pending = Object.keys(KIT_IMAGES).filter((n) => !FIRST.includes(n));
+  const idle = window.requestIdleCallback || ((f) => setTimeout(() => f({ timeRemaining: () => 8 }), 16));
+  const work = (dl) => {
+    while (pending.length && dl.timeRemaining() > 2) put(pending.shift());
+    if (pending.length) idle(work);
+  };
+  idle(work);
   let raf = 0;
   const re = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(applyScale); };
   window.addEventListener('resize', re);

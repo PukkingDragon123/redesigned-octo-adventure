@@ -6,7 +6,10 @@ import { iconURL, glyphURL, ALL_ICON_NAMES, GLYPH_NAMES } from '../src/art/icons
 
 const q = new URLSearchParams(location.search);
 if (q.get('bg')) document.getElementById('bg').style.backgroundImage = `url(${q.get('bg')})`;
+const t0 = performance.now();
 K.installKit({ offset: +(q.get('ui') || 0) });
+K.kitReady();
+console.log(`kit installed in ${(performance.now() - t0).toFixed(1)} ms`);
 const root = document.getElementById('ui');
 const page = q.get('page') || 'kit';
 const { el } = K;

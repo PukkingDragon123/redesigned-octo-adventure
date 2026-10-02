@@ -318,16 +318,16 @@ function bike(c, { cx = 16, cy = 22, ang = 0, pivot = 'mid', wheel = 5.4, frame 
   const T = (x, y) => [ox + x * ca - y * sa, oy + x * sa + y * ca];
   const [rhx, rhy] = T(rx, ry), [fhx, fhy] = T(fx, fy);
   for (const [hx, hy] of [[rhx, rhy], [fhx, fhy]]) {
-    c.ring(hx, hy, wheel - 1.7, wheel, R.rubber);
+    c.ring(hx, hy, wheel - 2, wheel + 0.2, R.rubber);
     c.ring(hx, hy, wheel - 2.6, wheel - 1.7, R.silver, { spec: false });
     c.ball(hx, hy, 1.2, 1.2, R.silver);
   }
   // frame: rear hub -> seat -> bars, crank in the middle
   const mx = (rx + fx) / 2;
   const seat = T(mx - 2.2, -6.2), crank = T(mx - 0.6, 0.4), head = T(fx - 2.4, -6.8), bars = T(fx - 3.2, -9.2);
-  c.tube([[rhx, rhy], seat, head, [fhx, fhy]], 1.05, frame, { lo: -0.6 });
-  c.tube([[rhx, rhy], crank, head], 1.05, frame, { lo: -0.6 });
-  c.tube([seat, crank], 1.0, frame, { lo: -0.6 });
+  c.tube([[rhx, rhy], seat, head, [fhx, fhy]], 1.3, frame, { lo: -0.6 });
+  c.tube([[rhx, rhy], crank, head], 1.3, frame, { lo: -0.6 });
+  c.tube([seat, crank], 1.2, frame, { lo: -0.6 });
   const s2 = T(mx - 3.8, -7.4), s3 = T(mx - 0.2, -7.6);
   c.tube([s2, s3], 1.15, R.black);
   c.tube([head, bars, T(fx - 5.2, -9.6)], 0.9, R.silver);

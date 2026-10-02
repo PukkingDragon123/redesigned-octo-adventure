@@ -61,7 +61,7 @@ class PixCanvas {
 }
 
 // ---------------------------------------------------------------- Harold's pocket watch 44x54
-class PocketWatch extends PixCanvas {
+export class PocketWatch extends PixCanvas {
   constructor() { super(44, 54, 'hud-watch'); }
   draw(hour) {
     const mm = Math.floor((hour % 1) * 60);
@@ -106,7 +106,7 @@ class PocketWatch extends PixCanvas {
 }
 
 // ---------------------------------------------------------------- brass compass 44x44
-class Compass extends PixCanvas {
+export class Compass extends PixCanvas {
   constructor() { super(44, 44, 'hud-compass-dial'); }
   draw(cardDeg, needleDeg) {
     const key = `${Math.round(cardDeg / 3)}|${needleDeg == null ? 'x' : Math.round(needleDeg / 3)}`;

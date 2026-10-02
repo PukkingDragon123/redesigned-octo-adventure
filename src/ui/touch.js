@@ -239,7 +239,6 @@ export class TouchControls {
     this.root.addEventListener('pointerup', drop);
     this.root.addEventListener('pointercancel', drop);
 
-    this.paint();
     onScale(() => { this.rects = null; });
     window.addEventListener('resize', () => { this.rects = null; });
     window.addEventListener('touchstart', () => this.enable(true), { passive: true });
@@ -321,7 +320,7 @@ export class TouchControls {
     if (on === this.on) return;
     this.on = on;
     document.getElementById('ui').classList.toggle('touchmode', on);
-    if (on) input.lastDevice = 'touch';
+    if (on) { input.lastDevice = 'touch'; this.paint(); }
     this.rects = null;
   }
 

@@ -239,8 +239,6 @@
   overflow-x: hidden;
   color: var(--k-cream);
   image-rendering: pixelated;
-  scrollbar-width: thin;
-  scrollbar-color: #f0ae26 #1a0e0a;
   pointer-events: auto;
 }
 .k-list.k-parchment { border-image-source: var(--k-well-parchment); color: var(--k-ink2); }
@@ -405,3 +403,8 @@ img.k-g { background: none; }
 .k-row { display: flex; align-items: center; gap: calc(var(--u) * 4); }
 .k-stack { display: flex; flex-direction: column; gap: calc(var(--u) * 3); }
 .k-grid { display: grid; gap: calc(var(--u) * 2); }
+
+/* browsers without the pixel scrollbar pseudo-elements still get the colours */
+@supports not selector(::-webkit-scrollbar) {
+  .k-list, .m-body { scrollbar-width: thin; scrollbar-color: #f0ae26 #1a0e0a; }
+}

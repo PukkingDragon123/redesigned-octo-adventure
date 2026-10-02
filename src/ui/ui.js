@@ -6,7 +6,7 @@ import './paper.css';
 import './menus.css';
 import { Bubbles } from './bubbles.js';
 import { buildPaperHUD, updatePaperHUD, Gauge } from './paperhud.js';
-import { installKit, kButton, kPanel, el, snap, snapBox, scale } from './kit.js';
+import { installKit, kitReady, kButton, kPanel, el, snap, snapBox, scale } from './kit.js';
 import { iconURL, hasIcon } from '../art/icons.js';
 import { foodIconURL, FOOD_INFO } from '../art/foodsprites.js';
 import { portraitURL } from '../art/portraits.js';
@@ -294,6 +294,7 @@ export class UI {
   // A menu is { ov, items: [elements], sel, onBack, grid }; navigation handled here.
   // Items that have a nudge(dir) method (sliders, cycles, toggles) take left/right.
   openOverlay(contentEl, { onBack = null, items = null, grid = 0 } = {}) {
+    kitReady();
     const ov = el('div', 'overlay');
     ov.appendChild(contentEl);
     this.root.appendChild(ov);

@@ -27,6 +27,7 @@
 .b-text { white-space: normal; word-break: normal; overflow-wrap: break-word; }
 .tword { display: inline-block; white-space: nowrap; }
 .tword span { display: inline-block; }
+.tword .hid { visibility: hidden; }
 .tb { color: #a8321e; text-shadow: var(--u) 0 0 currentColor; margin-right: var(--u); }
 .tsm { color: #8a7e74; }
 .tw { animation: k-wave 0.8s steps(1) infinite; }
