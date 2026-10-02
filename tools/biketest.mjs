@@ -209,6 +209,12 @@ const verbose = process.argv.includes('-v');
   const r = run(kerb, () => C({ throttle: 1 }), { T: 9 });
   check('kerb gives a bump', ev(r, 'bump').length > 0, `${JSON.stringify(ev(r, 'bump')[0])}`);
 }
+// --- 10b. a low log across the road: hops the bike up and over, no crash
+{
+  const log = world({ solids: Array.from({ length: 13 }, (_, i) => ({ x: (i - 6) * 0.5, z: 30, r: 0.3, y0: -1, y1: 0.42, kind: 'log' })) });
+  const r = run(log, () => C({ throttle: 1 }), { T: 9 });
+  check("low log: bump over it, keep going", ev(r, "bump").some((e) => e.kind === "log") && !ev(r, "bail").length && r.b.pos.z > 32, `z=${r.b.pos.z.toFixed(1)} bumps=${JSON.stringify(ev(r, "bump"))} bonks=${JSON.stringify(ev(r, "bonk"))}`);
+}
 // --- 11. drift
 {
   const r = run(flat, (t) => C({ throttle: 1, steer: t > 5 ? 1 : 0, drift: t > 5 && t < 6.8 }), { T: 8 });

@@ -115,6 +115,7 @@ export class Bike {
     this.skidding = false;
     this.wobblePhase = 0;
     this.wobble = 0;
+    this.wobbleA = 0;
     this.shimmy = 0; // handlebar wobble for the model
     this.balance = 0; // wheelie/stoppie wobble for the model and rider
     this.dab = 0;
@@ -253,13 +254,15 @@ export class Bike {
       // handlebar chaos: wobbly when slow, on rough ground and after knocks
       this.wobblePhase += dt * (5 + sp * 0.5);
       const rough = surf.loose * 0.045 + 0.01;
-      const slow = sp < 1.8 && sp > 0.15 && this.dab < 0.5 ? (1.8 - sp) * 0.14 : 0;
+      const slow = sp < 1.8 && sp > 0.15 && this.dab < 0.5 ? (1.8 - sp) * 0.09 : 0;
       const chaos = slow + rough * clamp(sp / 8, 0, 1.4) + this.wobble;
       const w = (Math.sin(this.wobblePhase * 1.7) + Math.sin(this.wobblePhase * 2.9) * 0.5) * chaos;
       this.shimmy = w;
-      this.yawRate += w * dt * 40;
       this.wobble = Math.max(0, this.wobble - dt * 0.6);
-      this.yaw += this.yawRate * dt;
+      // the wobble swings the heading back and forth around where you're steering (no drift)
+      const wa = w * 0.3;
+      this.yaw += this.yawRate * dt + wa - this.wobbleA;
+      this.wobbleA = wa;
 
       // ---- foot dab when it gets too slow to balance
       const wantDab = sp < 0.85 && thr <= 0 && this.wheelie < 0.1 && this.stoppie < 0.1;
@@ -416,20 +419,22 @@ export class Bike {
       const low = hit.obj.y1 != null && hit.obj.y1 - prevY < 0.5 && hit.obj.kind !== 'boundary';
       if (vn < 0) {
         const impact = -vn;
-        if (low && this.grounded && impact > 1.5) {
-          // rocks, logs and kerbs: ride up and over with a jolt (smoother with the front wheel up)
-          this.grounded = false;
-          this.airTime = 0;
-          this.launchT = 0;
-          this.vel.y = Math.min(3.2, 1.2 + impact * 0.3);
-          this.vel.x *= this.wheelie > 0.2 ? 0.95 : 0.8;
-          this.vel.z *= this.wheelie > 0.2 ? 0.95 : 0.8;
-          this.pos.x -= hit.nx * hit.depth;
-          this.pos.z -= hit.nz * hit.depth;
-          this.beginAir(false);
-          if (this.wheelie < 0.2) this.wobble = Math.min(0.5, this.wobble + 0.25);
-          this.squash.value = 0.78;
-          this.emit('bump', { size: 0.3, kind: hit.obj.kind });
+        if (low) {
+          // rocks, logs and kerbs: bounce up and over with a jolt (smoother with the front wheel up)
+          if (this.grounded && impact > 1.5) {
+            const k = this.wheelie > 0.2 ? 0.15 : 0.35;
+            this.vel.x -= hit.nx * vn * k;
+            this.vel.z -= hit.nz * vn * k;
+            this.grounded = false;
+            this.airTime = 0;
+            this.launchT = 9;
+            this.pos.y += 0.03;
+            this.vel.y = Math.min(3.6, 1.6 + impact * 0.3);
+            this.beginAir(false);
+            if (this.wheelie < 0.2) this.wobble = Math.min(0.5, this.wobble + 0.25);
+            this.squash.value = 0.78;
+            this.emit('bump', { size: 0.3, kind: hit.obj.kind });
+          }
         } else {
           this.vel.x -= hit.nx * vn * 1.35;
           this.vel.z -= hit.nz * vn * 1.35;
