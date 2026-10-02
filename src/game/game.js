@@ -222,7 +222,14 @@ export class Game {
     this.story.nanaCalled = false;
     this.catEventActive = false;
     this.save();
-    this.story.morning(st.day).then(() => this.beginRide());
+    this.story.morning(st.day).then(async () => {
+      // straight to the board after breakfast, like on the first morning
+      this.mode = 'menu';
+      await new Promise((res) => this.menus.orderBoard(res));
+      if (!this.orders.carried().length) for (const o of this.orders.board().slice(0, this.bike.stats.capacity)) this.orders.pack(o);
+      this.orders.syncCups();
+      this.beginRide();
+    });
   }
 
   pickWeather(day) {

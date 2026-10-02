@@ -66,7 +66,8 @@ export class Menus {
     p.appendChild(ui.button('Controls', () => this.controls()));
     p.appendChild(ui.button('Save & Quit to Title', () => {
       g.save();
-      location.reload();
+      // back to a clean title screen (drops any debug parameters)
+      location.href = location.pathname;
     }));
     m = ui.openOverlay(p, { onBack: close });
     return m;
@@ -174,13 +175,25 @@ export class Menus {
       const sync = () => s.classList.toggle('taken', o.state === 'carried');
       sync();
       s.addEventListener('click', () => {
+        let packed = false;
         if (o.state === 'carried') O.unpack(o);
         else if (!O.pack(o)) {
           g.sound.play('ui_error');
           ui.toast(`Your bike only holds ${O.capacity()} cocoas. Upgrade in the garage!`, 'basket');
-        } else g.sound.play('cup');
+        } else {
+          g.sound.play('cup');
+          packed = true;
+        }
         sync();
         upd();
+        // after packing, hop to the next open slip, or to "Let's ride!" once the basket is full
+        if (packed && m) {
+          const full = O.carried().length >= O.capacity();
+          const next = slips.findIndex((e, k) => k > i && !e.classList.contains('taken'));
+          const later = next >= 0 ? next : slips.findIndex((e) => !e.classList.contains('taken'));
+          m.sel = full || later < 0 ? slips.length : later;
+          ui.highlight(m);
+        }
       });
       cork.appendChild(s);
       slips.push(s);
