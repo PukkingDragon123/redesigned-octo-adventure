@@ -151,7 +151,7 @@ export class Bike {
     this.events.push({ type, ...data });
   }
 
-  // c: { throttle, brake, steer, jump (held), drift, leanBack, leanFwd (0..1), assist }
+  // c: { throttle, brake, steer, jump (held), drift, leanBack, leanFwd (0..1), trick, assist }
   update(dt, c) {
     this.events.length = 0;
     this.t += dt;
@@ -374,8 +374,8 @@ export class Bike {
       this.yawRate = damp(this.yawRate, spinIn * 6.4, Math.abs(spinIn) > 0.1 ? 6 : 5.5, dt);
       this.yaw += this.yawRate * dt;
       this.airSpin += this.yawRate * dt;
-      // flips: lean back / forward
-      const flipIn = back - fwdL;
+      // flips: lean back / forward (not while the trick button is picking a pose)
+      const flipIn = c.trick ? 0 : back - fwdL;
       if (Math.abs(flipIn) > 0.05) this.airPitchVel = damp(this.airPitchVel, flipIn * 6.6, 5.5, dt);
       else {
         // no input: rotation bleeds off and the nose drifts towards the flight path

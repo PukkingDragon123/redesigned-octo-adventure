@@ -54,7 +54,7 @@ export class Tricks {
       // strike a pose: trick button + direction (picked the moment you press it)
       const trickBtn = c.trick ?? (input.down('drift') || input.touch?.trick);
       if (trickBtn && !this.active && !this.held && b.airTime > 0.18) {
-        const up = c.throttle > 0.5, down = c.brake > 0.5, st = c.steer || 0;
+        const up = c.throttle > 0.5 || c.leanFwd > 0.5, down = c.brake > 0.5 || c.leanBack > 0.5, st = c.steer || 0;
         this.start(up ? 'superman' : down ? 'nohander' : st < -0.5 ? 'cancan' : st > 0.5 ? 'nothin' : 'skull');
       }
       if (b.airTime > 0.18) this.held = !!trickBtn;
