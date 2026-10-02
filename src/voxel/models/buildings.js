@@ -2102,7 +2102,10 @@ function buildSawmill(spec, ctx) {
 }
 
 // ------------------------------------------------------------------ API
-const KINDS = { house: buildHouse, cabin: buildCabin, shed: buildGarage, garage: buildGarage, outhouse: buildOuthouse, chapel: buildChapel, lighthouse: buildLighthouse, sawmill: buildSawmill };
+const KINDS = {
+  house: buildHouse, cabin: buildCabin, shed: buildGarage, garage: buildGarage, outhouse: buildOuthouse, chapel: buildChapel, lighthouse: buildLighthouse, sawmill: buildSawmill,
+  shop: buildHouse, firehall: buildHouse, barn: buildGarage, sugarshack: buildCabin, gazebo: buildOuthouse, lifeguard: buildOuthouse,
+};
 
 export function buildVoxelBuilding(spec = {}) {
   const hw = spec.halloween !== false;

@@ -32,11 +32,37 @@ export function villageMask(x, z) {
   return 1 - smoothstep(-6, 14, sd);
 }
 
+// Beaches: local frame per beach (n = shore normal pointing out to sea, t = along the shore)
+const beaches = (L.BEACHES || []).map((b) => ({ ...b, nx: Math.cos(b.angle || 0), nz: Math.sin(b.angle || 0) }));
+// 0..1: how much (x,z) belongs to a beach (its smooth shoreline, sand and shallow sea)
+export function beachMask(x, z) {
+  let m = 0;
+  for (const b of beaches) {
+    const dx = x - b.x, dz = z - b.z;
+    const along = -dx * b.nz + dz * b.nx, across = dx * b.nx + dz * b.nz;
+    const ma = 1 - smoothstep(b.len * 0.4, b.len * 0.5 + 16, Math.abs(along));
+    const mc = 1 - smoothstep(70, 130, Math.abs(across));
+    m = Math.max(m, ma * mc);
+  }
+  return m;
+}
+export function beachWidth(x, z) {
+  let w = 30, best = -1;
+  for (const b of beaches) {
+    const d = Math.hypot(x - b.x, z - b.z);
+    if (best < 0 || d < best) { best = d; w = b.width ?? 30; }
+  }
+  return w;
+}
+
 export function seaSDF(x, z) {
   let d = 1e9;
   for (const s of L.SEA) d = Math.min(d, shapeSDF(s, x, z));
   const vm = villageMask(x, z);
-  d += (sx.noise(x / 40, z / 40) * 5 + sx.noise(x / 13, z / 13) * 1.5) * (1 - vm * 0.85);
+  const bm = beachMask(x, z);
+  d += (sx.noise(x / 40, z / 40) * 5 + sx.noise(x / 13, z / 13) * 1.5) * (1 - vm * 0.85) * (1 - bm * 0.85);
+  // headlands that always stay dry (the lighthouse point)
+  for (const s of L.LAND || []) d = Math.max(d, -shapeSDF(s, x, z) * 1.5);
   return d; // negative inside the sea
 }
 
@@ -69,6 +95,67 @@ export function riverInfo(x, z) {
   return { d: Math.max(0, best), w: bw, dirx: bdx, dirz: bdz };
 }
 
+// A road's centreline resampled every ~2 m: [{x, z, s (distance along), dx, dz (unit direction)}].
+// Roads flagged `smooth` follow a centripetal Catmull-Rom curve through their points.
+const _roadCache = new Map();
+export function roadSamples(road, step = 2) {
+  const key = road.id + ':' + step;
+  if (_roadCache.has(key)) return _roadCache.get(key);
+  const P = road.pts;
+  let dense = [];
+  if (road.smooth && P.length > 2) {
+    const ext = [[2 * P[0][0] - P[1][0], 2 * P[0][1] - P[1][1]], ...P, [2 * P[P.length - 1][0] - P[P.length - 2][0], 2 * P[P.length - 1][1] - P[P.length - 2][1]]];
+    for (let k = 1; k < ext.length - 2; k++) {
+      const p0 = ext[k - 1], p1 = ext[k], p2 = ext[k + 1], p3 = ext[k + 2];
+      const tj = (a, b) => Math.pow(Math.hypot(b[0] - a[0], b[1] - a[1]), 0.5) || 1e-4;
+      const t0 = 0, t1 = t0 + tj(p0, p1), t2 = t1 + tj(p1, p2), t3 = t2 + tj(p2, p3);
+      const len = Math.hypot(p2[0] - p1[0], p2[1] - p1[1]);
+      const nSub = Math.max(2, Math.ceil(len / 0.5));
+      for (let s = 0; s < nSub; s++) {
+        const t = t1 + ((t2 - t1) * s) / nSub;
+        const L1 = (a, b, ta, tb) => [((tb - t) * a[0] + (t - ta) * b[0]) / (tb - ta), ((tb - t) * a[1] + (t - ta) * b[1]) / (tb - ta)];
+        const A1 = L1(p0, p1, t0, t1), A2 = L1(p1, p2, t1, t2), A3 = L1(p2, p3, t2, t3);
+        const B1 = L1(A1, A2, t0, t2), B2 = L1(A2, A3, t1, t3);
+        dense.push(L1(B1, B2, t1, t2));
+      }
+    }
+    dense.push(P[P.length - 1]);
+  } else dense = P;
+  // even resampling
+  const out = [];
+  let acc = 0, next = 0;
+  for (let k = 0; k < dense.length - 1; k++) {
+    const [ax, az] = dense[k], [bx, bz] = dense[k + 1];
+    const len = Math.hypot(bx - ax, bz - az);
+    if (len < 1e-6) continue;
+    while (next <= acc + len) {
+      const t = (next - acc) / len;
+      out.push({ x: ax + (bx - ax) * t, z: az + (bz - az) * t, s: next, dx: (bx - ax) / len, dz: (bz - az) / len });
+      next += step;
+    }
+    acc += len;
+  }
+  const last = dense[dense.length - 1], pl = out[out.length - 1];
+  if (!pl || Math.hypot(pl.x - last[0], pl.z - last[1]) > 0.3) out.push({ x: last[0], z: last[1], s: acc, dx: pl?.dx ?? 1, dz: pl?.dz ?? 0 });
+  _roadCache.set(key, out);
+  return out;
+}
+
+// Nearest point on any road (optionally only ids in `only`): { d, x, z, dx, dz, road, s }
+export function nearestRoad(x, z, only = null) {
+  let best = { d: 1e9 };
+  for (const road of L.ROADS) {
+    if (only && !only.includes(road.id)) continue;
+    const S = roadSamples(road);
+    for (let k = 0; k < S.length; k++) {
+      const p = S[k];
+      const d = Math.hypot(p.x - x, p.z - z);
+      if (d < best.d) best = { d, x: p.x, z: p.z, dx: p.dx, dz: p.dz, road, s: p.s };
+    }
+  }
+  return best;
+}
+
 function rimHeight(x, z) {
   // mountains around the north, west and south edges keep the rider in
   const dn = z + HALF; // distance from north edge
@@ -87,10 +174,12 @@ export function baseHeight(x, z) {
   let h = 9;
   h += 8 * sx.fbm(x / 170, z / 170, 4);
   h += 3.2 * sx.fbm(x / 55 + 10, z / 55 - 4, 3);
-  h += 24 * gauss(Math.hypot(x - L.POI.lookout.x, z - L.POI.lookout.z), 40);
+  h += 17 * gauss(Math.hypot(x - L.POI.lookout.x, z - L.POI.lookout.z), 36);
   h += 7 * gauss(Math.hypot(x - L.POI.graveyard.x, z - L.POI.graveyard.z), 34);
-  // a big rolling ridge north of the main road for jumps & views
-  h += 9 * gauss(Math.hypot(x - 120, z + 60), 55);
+  // a rolling ridge behind the village (a backdrop for Main Street, views from the loop road)
+  h += 6 * gauss(Math.hypot(x - 150, z + 44), 46);
+  // the loop road rides along a gentle valley between the lookout and the ridge
+  h -= 6 * gauss(Math.hypot(x - 100, z + 84), 40);
   h += 6 * gauss(Math.hypot(x + 120, z + 150), 60);
   h += rimHeight(x, z);
   return h;
@@ -146,11 +235,46 @@ export class Terrain {
     const coast = smoothstep(0, 42, sd);
     if (sd >= 0) h = lerp(1.2, h, coast);
     else h = lerp(1.2, -7, smoothstep(0, 18, -sd));
+    // sandy beaches: a long gentle slope into the sea, dry sand, then low dunes
+    const bm = beachMask(x, z);
+    if (bm > 0) {
+      const W = beachWidth(x, z);
+      let hb;
+      if (sd < 0) hb = Math.max(-7, sd * 0.052 - 0.04 * sd * sd / 100);
+      else if (sd < W) hb = 0.05 + 1.9 * Math.pow(sd / W, 1.35);
+      else hb = 1.95 + (sd - W) * 0.1;
+      // dune hummocks along the back of the beach
+      const dune = smoothstep(W - 6, W + 2, sd) * (1 - smoothstep(W + 6, W + 20, sd));
+      hb += dune * (0.5 + 0.7 * (0.5 + 0.5 * sx2.noise(x / 9, z / 9)));
+      // gentle sand ripples
+      if (sd > -6 && sd < W) hb += 0.04 * sx.noise(x / 3.5, z / 3.5);
+      const back = 1 - smoothstep(W + 12, W + 54, sd);
+      h = lerp(h, hb, bm * back);
+    }
     // village shelf
     const vm = villageMask(x, z) * smoothstep(-1, 4, sd) * (1 - chan);
     if (vm > 0) {
-      const vh = L.VILLAGE_FLAT.h + (60 - z) * 0.018 + 0.25 * sx.noise(x / 18, z / 18);
+      const vh = L.VILLAGE_FLAT.h + (60 - z) * 0.018 + 0.1 * sx.noise(x / 18, z / 18);
       h = lerp(h, vh, vm);
+    }
+    // the bike park bowl & pump-track rollers
+    for (const bw of L.BOWLS || []) {
+      const d = Math.hypot(x - bw.x, z - bw.z);
+      if (d < bw.r * 1.35) {
+        const t = Math.min(1, d / bw.r);
+        h -= bw.depth * (0.5 + 0.5 * Math.cos(Math.PI * t));
+        h += 0.35 * Math.max(0, 1 - Math.abs(d - bw.r * 1.08) / (bw.r * 0.2)); // a little lip
+      }
+    }
+    for (const ro of L.ROLLERS || []) {
+      const [ax, az] = ro.a, [bx, bz] = ro.b;
+      const abx = bx - ax, abz = bz - az, len = Math.hypot(abx, abz);
+      const t = ((x - ax) * abx + (z - az) * abz) / (len * len);
+      if (t < 0 || t > 1) continue;
+      const off = Math.abs((x - ax) * abz - (z - az) * abx) / len;
+      if (off > 4) continue;
+      const s = t * len;
+      h += ro.h * 0.5 * (1 - Math.cos((2 * Math.PI * s) / ro.wave)) * (1 - smoothstep(2, 4, off)) * smoothstep(0, ro.wave * 0.5, Math.min(s, len - s));
     }
     // flats
     for (const f of L.FLATS) {
@@ -171,22 +295,7 @@ export class Terrain {
     const bestH = new Float32Array(n * n);
     this.roadProfiles = [];
     for (const road of L.ROADS) {
-      // resample polyline every 2m
-      const pts = road.pts;
-      const samples = [];
-      let acc = 0;
-      for (let k = 0; k < pts.length - 1; k++) {
-        const [ax, az] = pts[k], [bx, bz] = pts[k + 1];
-        const len = Math.hypot(bx - ax, bz - az);
-        const steps = Math.max(1, Math.ceil(len / 2));
-        for (let s = 0; s < steps; s++) {
-          const t = s / steps;
-          samples.push({ x: ax + (bx - ax) * t, z: az + (bz - az) * t, s: acc + len * t });
-        }
-        acc += len;
-      }
-      const last = pts[pts.length - 1];
-      samples.push({ x: last[0], z: last[1], s: acc });
+      const samples = roadSamples(road);
       // height profile from the natural terrain
       let prof = samples.map((p) => this.sampleGrid(H, p.x, p.z));
       const smooth = (arr, rad) => {
@@ -211,10 +320,37 @@ export class Terrain {
         if (db < 30) prof[i] = Math.max(prof[i], lerp(2.7, prof[i], smoothstep(10, 30, db)));
         prof[i] = Math.max(prof[i], 1.6);
       }
+      // ends that join an earlier road take that road's height (no steps at junctions)
+      const pin = (idx, dir) => {
+        const p = samples[idx];
+        let target = null, bestD = 1e9;
+        for (const o of this.roadProfiles) {
+          const lim = (o.road.flat ?? o.road.w) * 0.5 + 1.5;
+          for (let k = 0; k < o.samples.length; k++) {
+            const d = Math.hypot(o.samples[k].x - p.x, o.samples[k].z - p.z);
+            if (d < lim && d < bestD) { bestD = d; target = o.prof[k]; }
+          }
+        }
+        if (target === null) return false;
+        const delta = target - prof[idx];
+        for (let k = 0; k < 12 && idx + dir * k >= 0 && idx + dir * k < prof.length; k++) prof[idx + dir * k] += delta * (1 - smoothstep(0, 12, k));
+        return true;
+      };
+      const pinA = pin(0, 1), pinB = pin(prof.length - 1, -1);
+      // limit the gradient so roads stay rideable (pinned junction ends stay put)
+      if (road.grade) {
+        const g = road.grade * 2.0;
+        const last = prof.length - 1;
+        for (let it = 0; it < 10; it++) {
+          for (let i = 1; i <= last; i++) if (!(pinB && i === last)) prof[i] = clamp(prof[i], prof[i - 1] - g, prof[i - 1] + g);
+          for (let i = last - 1; i >= 0; i--) if (!(pinA && i === 0)) prof[i] = clamp(prof[i], prof[i + 1] - g, prof[i + 1] + g);
+        }
+      }
       this.roadProfiles.push({ road, samples, prof });
       // stamp
       const blend = road.type === 'trail' ? 4 : 6;
-      const hw = road.w * 0.5;
+      const hw = (road.flat ?? road.w) * 0.5;
+      const s0 = samples[0], sN = samples[samples.length - 1];
       for (let k = 0; k < samples.length - 1; k++) {
         const a = samples[k], b = samples[k + 1];
         const minx = Math.min(a.x, b.x) - hw - blend, maxx = Math.max(a.x, b.x) + hw + blend;
@@ -227,12 +363,14 @@ export class Terrain {
           const z = -HALF + j * H_RES;
           for (let i = i0; i <= i1; i++) {
             const x = -HALF + i * H_RES;
-            let t = ((x - a.x) * abx + (z - a.z) * abz) / l2;
-            t = clamp(t, 0, 1);
+            const t = clamp(((x - a.x) * abx + (z - a.z) * abz) / l2, 0, 1);
             const d = Math.hypot(x - (a.x + abx * t), z - (a.z + abz * t));
-            const w = 1 - smoothstep(hw, hw + blend, d);
+            let w = 1 - smoothstep(hw, hw + blend, d);
+            // square-ish road ends: a wide street doesn't spill a round flat past its ends
+            const over = Math.max(-((x - s0.x) * s0.dx + (z - s0.z) * s0.dz), (x - sN.x) * sN.dx + (z - sN.z) * sN.dz);
+            if (over > 0) w *= 1 - smoothstep(0, Math.min(blend, 3 + road.w * 0.3), over);
             const id = j * n + i;
-            if (w > best[id]) {
+            if (w > best[id] + 1e-4) {
               best[id] = w;
               bestH[id] = lerp(prof[k], prof[k + 1], t);
             }
@@ -251,6 +389,24 @@ export class Terrain {
       const ww = w * keep;
       H[id] = lerp(H[id], bestH[id], ww);
       this.roadW[id] = ww;
+    }
+    // soften junctions & seams: a few blur passes over the road surface only
+    const tmp = new Float32Array(n * n);
+    for (let it = 0; it < 3; it++) {
+      tmp.set(H);
+      for (let j = 1; j < n - 1; j++) for (let i = 1; i < n - 1; i++) {
+        const id = j * n + i;
+        const rw = this.roadW[id];
+        if (rw < 0.3) continue;
+        let s = 0, c = 0;
+        for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
+          const q = id + dj * n + di;
+          if (this.roadW[q] < 0.3) continue;
+          s += tmp[q];
+          c++;
+        }
+        H[id] = lerp(tmp[id], s / c, 0.6 * rw);
+      }
     }
   }
 
@@ -314,7 +470,14 @@ export class Terrain {
     // dirt yards
     const yards = [
       { x: -162, z: 76, r: 10 }, { x: -214, z: -40, r: 9 }, { x: -250, z: 150, r: 6 },
-      { x: 62, z: -118, r: 6 }, { x: 176, z: 52, r: 11 }, { x: 98, z: 128, r: 12 },
+      { x: 62, z: -118, r: 6 }, { x: 98, z: 128, r: 12 },
+      { x: 60, z: 76, r: 13 }, // farmyard
+      { x: 48, z: -38, r: 8 }, // sugar shack
+      { x: -62, z: -128, r: 7 }, // campground
+      { x: -8, z: 58, r: 5 }, // picnic area
+      { x: 133, z: 12, r: 16 }, // bike park
+      { x: 104, z: 37, r: 5 }, // Gus's yard
+      { x: 250, z: -40, r: 8 }, // beach parking
     ];
     for (const y of yards) {
       const i0 = Math.max(0, Math.floor((y.x - y.r + HALF) / S_RES)), i1 = Math.min(sn - 1, Math.ceil((y.x + y.r + HALF) / S_RES));
@@ -343,7 +506,13 @@ export class Terrain {
         const slope = Math.hypot(gx, gz);
         const road = R[id] / 255;
         const rock = smoothstep(0.62, 1.05, slope + sx.noise(x / 7, z / 7) * 0.15) * (1 - road);
-        const sand = (1 - smoothstep(0.9, 1.7, h + sx.noise(x / 5, z / 5) * 0.4)) * (1 - road);
+        let sand = 1 - smoothstep(0.9, 1.7, h + sx.noise(x / 5, z / 5) * 0.4);
+        const bm = beachMask(x, z);
+        if (bm > 0.02) {
+          const sd = seaSDF(x, z), bw = beachWidth(x, z);
+          sand = Math.max(sand, bm * (1 - smoothstep(bw + 6, bw + 16, sd + sx.noise(x / 6, z / 6) * 3)));
+        }
+        sand *= 1 - road;
         const fd = forestNoise(x, z);
         const litter = smoothstep(0.42, 0.75, fd + sx.noise(x / 6, z / 6) * 0.18) * (1 - road) * (1 - sand);
         S[id * 4] = R[id];

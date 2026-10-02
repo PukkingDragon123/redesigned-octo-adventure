@@ -329,19 +329,10 @@ function buildingBlocked(x, z, margin) {
 
 function clearingFactor(x, z) {
   let f = 1;
-  const clear = (px, pz, r, soft = 10) => {
-    const d = Math.hypot(x - px, z - pz);
-    f = Math.min(f, smoothstep(r, r + soft, d));
-  };
-  clear(L.POI.cabin.x, L.POI.cabin.z, 24, 14);
-  clear(L.POI.garage.x + 6, L.POI.garage.z, 9, 6); // room in front of Harold's garage
-  clear(L.POI.graveyard.x, L.POI.graveyard.z, 18, 8);
-  clear(L.POI.lookout.x, L.POI.lookout.z, 11, 8);
-  clear(L.POI.trapper.x, L.POI.trapper.z, 7, 6);
-  clear(L.POI.meadow1.x, L.POI.meadow1.z, L.POI.meadow1.r * 0.6, 14);
-  clear(L.POI.meadow2.x, L.POI.meadow2.z, L.POI.meadow2.r * 0.6, 12);
-  clear(L.POI.sawmill.x, L.POI.sawmill.z, 14, 6);
-  clear(L.POI.lighthouse.x, L.POI.lighthouse.z, 14, 6);
+  for (const c of L.CLEARINGS) {
+    const d = Math.hypot(x - c.x, z - c.z);
+    if (d < c.r + c.soft) f = Math.min(f, smoothstep(c.r, c.r + c.soft, d));
+  }
   return f;
 }
 
@@ -420,6 +411,7 @@ export class Forest {
         if (h < 1.6) continue;
         const sp = T.splatAt(px, pz);
         if (sp.rock > 0.55 && rng.chance(0.8)) continue;
+        if (sp.sand > 0.5) continue; // nothing grows on the beach
         const vm = villageMask(px, pz);
         let p = smoothstep(0.22, 0.72, forestNoise(px, pz)) * 0.8 + 0.1;
         p *= clearingFactor(px, pz) * vistaFactor(px, pz);
@@ -441,6 +433,8 @@ export class Forest {
         this.addTree(species, px, h - 0.15, pz, H, rng);
       }
     }
+    // trees planted on purpose (the big maple on the town green...)
+    for (const t of L.PLANTED || []) this.addTree(t.species, t.x, T.heightAt(t.x, t.z) - 0.15, t.z, t.H, rng);
     // undergrowth: bushes & ferns
     const ucell = 3.0 / Math.sqrt(this.density);
     for (let z = -half; z < half; z += ucell) {
@@ -454,6 +448,7 @@ export class Forest {
         p *= (0.4 + 0.6 * clearingFactor(px, pz)) * (0.3 + 0.7 * vistaFactor(px, pz));
         if (rng.next() > p) continue;
         if (this.roadNear(px, pz, 1.2)) continue;
+        if (T.splatAt(px, pz).sand > 0.5) continue;
         if (buildingBlocked(px, pz, 1.5)) continue;
         const river = riverInfo(px, pz);
         if (river.d < river.w * 0.5 + 1) continue;

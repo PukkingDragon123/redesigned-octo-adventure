@@ -11,6 +11,7 @@ import { meshVox } from '../voxel/mesh.js';
 import { voxMesh, sharedVoxelMaterial, createFlatMaterial } from '../render/voxelMaterial.js';
 import { PhysProps } from './physprops.js';
 import { Vox } from '../voxel/vox.js';
+import { nearestRoad } from './terrain.js';
 
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _s = new THREE.Vector3(1, 1, 1), _p = new THREE.Vector3();
 const UP = new THREE.Vector3(0, 1, 0);
@@ -252,22 +253,23 @@ export class VoxelWorld {
     this.spot(p.x + 5.5, p.z - 3, 2, 'Stir the cauldron', 'cauldron');
     S('witchhat', () => PR.witchHat({}), p.x + 6.3, p.z - 1.6, 0.3, 0, 1.2);
     S('broom', () => PR.broom({}), p.x + 4.4, p.z - 4.4, 0.9);
-    for (let i = 0; i < 4; i++) S(`candles:${i}`, () => PR.candleCluster({ seed: i, count: 3 + (i % 3) }), p.x + Math.cos(i * 1.6) * 3.6, p.z + Math.sin(i * 1.6) * 3.6, i);
+    for (let i = 0; i < 4; i++) S(`candles:${i}`, () => PR.candleCluster({ seed: i, count: 3 + (i % 3) }), p.x + Math.cos(i * 1.6 + 0.4) * 5.2, p.z + Math.sin(i * 1.6 + 0.4) * 5.2, i);
     S('scarecrow', () => PR.scarecrow({ crow: true }), p.x - 8, p.z + 2.5, 1.2);
     S('candybowl', () => PR.candyBowl({}), p.x + 1.2, p.z + 3.4, 0);
     S('catstatue', () => PR.blackCatStatue({}), p.x - 2.5, p.z + 3.8, 0.4);
     S('spider', () => PR.spider({}), p.x + 2.6, p.z - 3.8, 2.1);
-    // bowling pins for pumpkin bowling on the street
-    const lane = { x: 168, z: 64 };
+    // bowling pins for pumpkin bowling down the green's gravel path
+    const lane = L.BOWLING;
     for (const [i, j] of [[0, 0], [-1, 1], [1, 1], [-2, 2], [0, 2], [2, 2]]) {
       const x = lane.x + i * 0.32, z = lane.z - 6 - j * 0.38;
       physprops.add(this.model('pin', () => PR.bowlingPin({})), x, gy(x, z), z, { kind: 'pin', hp: 99, mass: 0.35, round: false, respawn: 25 });
     }
     S('lane-sign', () => PR.signpost({ arrows: [{ dir: 'front', color: 0xe8701e, len: 8 }] }), lane.x + 2.2, lane.z - 1, Math.PI);
-    // trick hoops for the bike (one by the ramps, one on the main road)
-    const hoops = [[-6, 30, 1.45], [60, 41, -1.2], [-120, 63, 2.0]];
+    // trick hoops for the bike, standing over the roads (turned to face along the road)
     this.hoops = [];
-    for (const [x, z, yaw] of hoops) {
+    for (const [x, z] of L.HOOPS) {
+      const rd = nearestRoad(x, z);
+      const yaw = Math.atan2(rd.dx, rd.dz); // the ring faces along the road
       const r = this.model('hoop', () => PR.trickHoop({ flames: true }));
       this.addStatic(r, x, gy(x, z) - 0.1, z, yaw);
       this.hoops.push({ x, z, yaw, y: gy(x, z), ring: r.meta.ring });
@@ -316,12 +318,12 @@ export class VoxelWorld {
     }
     // planting spots (side quest): dirt mounds waiting for saplings
     this.plantSpots = [];
-    for (const [x, z] of [[-150, 40], [-138, 50], [-128, 62], [80, 66], [64, 74], [-60, 46]]) {
+    for (const [x, z] of L.PLANT_SPOTS) {
       this.plantSpots.push({ x, z, y: gy(x, z), planted: false });
       S(`mound:${x % 2}`, () => PR.dirtMound({ stage: 'hole', seed: Math.abs(x) % 3 }), x + 0.7, z + 0.4, x * 0.3);
     }
     // more kickable pumpkins scattered along roads and porches
-    const extra = [[167.6, 63.2], [169.2, 63.6], [150, 58], [153, 57.5], [190, 58], [206, 58.5], [232, 58], [126, 62], [-160, 76], [-158, 77.5], [-176, 76], [-210, -26], [-206, -27]];
+    const extra = L.LOOSE_PUMPKINS;
     extra.forEach(([x, z], i) => {
       const jack = i % 2 === 0;
       const r = jack ? this.model(`jack:medium:${i % 6}`, () => PR.jackOLantern({ face: PR.JACK_FACES[i % PR.JACK_FACES.length], kind: 'medium', seed: i, hollow: false }))

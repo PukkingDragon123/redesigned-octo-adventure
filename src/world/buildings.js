@@ -452,6 +452,27 @@ function TILESIZE(name) {
 }
 export { TILESIZE };
 
+// Kinds that only exist as voxel models: just a floor height and a collision box here;
+// the voxel model adds its own porches/decks and extra solids from its meta (voxelWorld.js).
+const GENERIC = {
+  shop: { lift: 0.3, H: (b) => b.floors * 2.75 + 2.6 },
+  firehall: { lift: 0.2, H: (b) => 8.5 },
+  barn: { lift: 0.15, H: (b) => 9.5 },
+  sugarshack: { lift: 0.3, H: (b) => 5.5 },
+  gazebo: { lift: 0.45, H: () => 5.6, open: true },
+  lifeguard: { lift: 0.0, H: () => 4.2, open: true },
+};
+function generic(ctx, B, b) {
+  const { terrain, physics } = ctx;
+  const g = GENERIC[b.kind];
+  const fh = footprintHeights(terrain, b);
+  const y0 = (g.open ? fh.mn : fh.mx) + g.lift;
+  const M = buildingMatrix(b.x, y0, b.z, b.facing || 0);
+  const H = g.H(b);
+  if (!g.open) physics.addBox({ x: b.x, z: b.z, yaw: b.facing || 0, w: b.w + 0.2, l: b.d + 0.2, y0: y0 - 1, y1: y0 + H });
+  return { M, y0, H, generic: true };
+}
+
 export function buildBuildings(ctx, B, list = L.BUILDINGS) {
   const out = {};
   for (const b of list) {
@@ -462,6 +483,7 @@ export function buildBuildings(ctx, B, list = L.BUILDINGS) {
     else if (b.kind === 'chapel') r = chapel(ctx, B, b);
     else if (b.kind === 'lighthouse') r = lighthouse(ctx, B, b);
     else if (b.kind === 'sawmill') r = sawmill(ctx, B, b);
+    else if (GENERIC[b.kind]) r = generic(ctx, B, b);
     out[b.id] = r;
   }
   return out;
