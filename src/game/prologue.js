@@ -313,20 +313,20 @@ function funeral(story) {
     await S.wait(1.6);
     await S.narrate('The whole village came out to say goodbye.');
     S.sfx('funeral_bell', { volume: 0.7 });
-    await S.frame(Pa, [-1.4, 0.7, 2.2], 1.0, 40, 1.1);
+    await S.faceShot(Pa, { dist: 2.4, side: -0.9, dur: 1.0 });
     await S.say('ollie', 'Dearly beloved. We are gathered here to say farewell to Hank: lumberjack, neighbour... and champion napper.', { actor: Pa, expr: 'sad', name: 'Father Gilles' });
-    await S.frame(Lou, [1.2, 0.5, 2.2], 0.8, 40, 1.1);
+    await S.faceShot(Lou, { dist: 2.4, side: 0.8 });
     await S.say('lou', 'He could drop a pine in three swings... *sniff* ...and he always shared his pickles... *HONNNK*', { actor: Lou, expr: 'cry' });
     const G2 = who.gus;
-    await S.frame(G2, [1.4, 0.6, 2.2], 0.7, 40, 1.1);
+    await S.faceShot(G2, { dist: 2.2, side: 0.9, dur: 0.7 });
     await S.say('gus', 'He still owes me five bucks.', { actor: G2, expr: 'grumpy' });
     who.marie.react('angry');
     await S.say('marie', '*Gus!*', { actor: who.marie, expr: 'angry' });
     const kids = who.pip;
-    await S.frame(kids, [1.2, 0.3, 2.2], 0.7, 42, 0.7);
+    await S.faceShot(kids, { dist: 2.4, side: -0.7, dur: 0.7, fov: 44 });
     await S.say('pip', 'Can I have his axe?', { actor: kids, expr: 'happy' });
     await S.say('pip', 'Can I have his BEARD?', { actor: who.pop, expr: 'happy', name: 'Pop' });
-    await S.frame(N, [-1.2, 0.5, 2.0], 0.8, 40, 1.0);
+    await S.faceShot(N, { dist: 2.2, side: -0.7 });
     await S.say('grandma', "Children... Hush. He waved at my porch every single morning on his way into the woods. Every single morning.", { actor: N, expr: 'sad' });
     who.doug.react('nod');
     await S.say('doug', 'Hank. You were a credit to the forest.', { actor: who.doug, expr: 'sad' });
@@ -357,7 +357,7 @@ function funeral(story) {
     const bq = at(0.3, 0.4);
     S.prop(LORE.bouquet({ seed: 3 }), bq.x, bq.z, { yaw: GRAVE_YAW + 0.5, y: y0 + 0.28 });
     for (const a of Object.values(who)) if (a !== Lou) a.play('mourn');
-    await S.frame(Lou, [1.0, 0.4, 2.0], 1.0, 40, 1.0);
+    await S.faceShot(Lou, { dist: 2.2, side: 0.7, dur: 1.0 });
     Lou.play('mourn', 'cry');
     await S.say('lou', 'Sleep tight, buddy.', { actor: Lou, expr: 'cry' });
     S.sfx('funeral_bell', { volume: 0.8 });
@@ -463,7 +463,7 @@ function revival(story) {
       await S.wait(0.06);
     }
     R.bb.fade = 0;
-    await S.frame(R, [2.5, 0.6, 3.2], 1.2, 40, 1.1);
+    await S.faceShot(R, { dist: 2.8, side: 1.0, dur: 1.2 });
     await S.say('reaper', 'Right then. Next on the list...', { actor: R });
     await S.say('reaper', 'Hank. Lumberjack. Cause of departure... a *nap?*', { actor: R, expr: 'surprised' });
     R.play('facepalm');
@@ -489,7 +489,7 @@ function revival(story) {
     mound.visible = false;
     const H = S.actor('hankBuried', gr.x, gr.z, 0.6, 'crawl');
     H.yOffset = -0.9;
-    await S.frame(H, [1.8, 0.9, 2.6], 0.8, 42, 0.4);
+    await S.faceShot(H, { dist: 2.6, side: 0.9, up: 0.5, lookDown: 0.5, fov: 42 });
     for (let k = 0; k < 12; k++) {
       H.yOffset = -0.9 + (k / 12) * 0.9;
       if (k % 3 === 0) { S.sfx('dirt'); g.effects.dirtBurst(gr.x, gy + 0.1, gr.z, 6); }
@@ -500,12 +500,12 @@ function revival(story) {
     H.bounce(0.6);
     g.effects.frost(H.pos.x, H.pos.y, H.pos.z, 14);
     S.sfx('brrr');
-    await S.frame(H, [1.6, 1.1, 2.8], 0.6, 40, 1.1);
+    await S.faceShot(H, { dist: 2.4, side: 0.8, dur: 0.6 });
     await S.say('hankBuried', 'B-b-brrr... wh-why is it so c-c-cold? Did I sleep in?', { actor: H, expr: 'scared' });
     H.react('headpop');
     await S.say('hankBuried', 'And why... am I... *all bones?!*', { actor: H, expr: 'shock' });
     R.play('clipboard');
-    await S.frame(R, [2.2, 0.8, 3.0], 0.8, 42, 1.1);
+    await S.faceShot(R, { dist: 2.6, side: -0.9, fov: 42 });
     await S.say('reaper', 'Side effects may include: chills, rattling, a slight lack of skin, and being *technically dead.*', { actor: R, expr: 'sheepish' });
     R.play('float');
     await S.say('reaper', "But hey, you're up! Have a wonderful afterlife! Toodles!", { actor: R, expr: 'happy' });
@@ -518,7 +518,7 @@ function revival(story) {
     }
     R.visible = false;
     g.lightPool.removeDynamic(glow);
-    await S.frame(H, [1.5, 1.0, 2.4], 0.8, 40, 1.1);
+    await S.faceShot(H, { dist: 2.2, side: -0.8 });
     H.faceTowards(R.pos.x, R.pos.z);
     await S.say('hankBuried', '...Toodles?', { actor: H, expr: 'sad' });
     await S.fade(1, 0.8);
@@ -564,7 +564,7 @@ function nanaFindsHank(story) {
     await S.say('grandma', 'Goodness gracious!', { actor: N, expr: 'shock' });
     await S.say('grandma', "You're frozen to the bone, dear! Well. You ARE the bone, dear.", { actor: N, expr: 'sad' });
     await S.say('hankBuried', "I think I might be... dead? A little? I'm Hank. The lumberjack?", { actor: H, expr: 'sheepish' });
-    await S.frame(N, [-1.1, 0.5, 2.0], 0.8, 40, 1.0);
+    await S.faceShot(N, { dist: 2.2, side: -0.7 });
     await S.say('grandma', "Hank? *Our* Hank? From the funeral? Oh, you poor dear. I *knew* that snoring wasn't the wind.", { actor: N, expr: 'surprised' });
     await S.say('grandma', "Dead or not, nobody freezes on my watch. I was married to a hunter for fifty years. I've seen worse things come out of these woods.", { actor: N, expr: 'smug' });
     await S.say('grandma', "Come along now. There's a fire going, and I make a *famous* hot cocoa.", { actor: N, expr: 'happy' });

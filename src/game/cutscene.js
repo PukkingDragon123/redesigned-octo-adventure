@@ -92,6 +92,18 @@ export class Scene {
     const pos = new THREE.Vector3(t.x + offset[0] * k, t.y + 0.6 + (offset[1] - 0.6) * k * 0.8, t.z + offset[2] * k);
     return this.cam(pos, look, dur, fov);
   }
+  // a front-on shot of an actor's face, whichever way they're facing.
+  // side > 0 slides the lens to their left; dist is how far out in front.
+  faceShot(a, { dist = 2.3, side = 0.8, up = 0.12, dur = 0.8, fov = 40, lookDown = 0.22 } = {}) {
+    a.root?.updateMatrixWorld?.(true);
+    const yaw = a.targetYaw ?? a.yaw;
+    const fx = Math.sin(yaw), fz = Math.cos(yaw);
+    const rx = Math.cos(yaw), rz = -Math.sin(yaw);
+    const head = a.headWorld ? a.headWorld() : new THREE.Vector3(a.pos.x, a.pos.y + 1.4, a.pos.z);
+    const pos = new THREE.Vector3(a.pos.x + fx * dist + rx * side, head.y + up, a.pos.z + fz * dist + rz * side);
+    const look = new THREE.Vector3(head.x + rx * side * 0.2, head.y - lookDown, head.z + rz * side * 0.2);
+    return this.cam(pos, look, dur, fov);
+  }
   async say(who, text, opts = {}) {
     if (this.skip && !opts.choices) return undefined;
     if (this.skip && opts.choices) return 0;
