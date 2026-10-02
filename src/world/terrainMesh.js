@@ -56,7 +56,7 @@ void main() {
   vec3 col = mix(tex(tGrass, uv), tex(tGrass2, uv + 0.37), step(dn, forest));
   // big patches of colour variation (golden vs green meadows)
   float patchN = vnoise(wp / 38.0) * 0.7 + vnoise(wp / 11.0) * 0.3;
-  col *= mix(vec3(1.12, 1.0, 0.72), vec3(0.88, 1.0, 0.96), patchN);
+  col *= mix(vec3(1.08, 0.98, 0.82), vec3(0.9, 1.0, 0.94), patchN);
 
   if (sp.a > 0.25 + dn * 0.55) col = tex(tLitter, uv * 1.0 + 0.11);
   if (sp.b > 0.2 + dn * 0.6) col = tex(tSand, uv);

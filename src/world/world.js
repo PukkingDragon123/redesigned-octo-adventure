@@ -1,6 +1,7 @@
 // Assembles the static world: terrain, water, sky, mountains, lights.
 import * as THREE from 'three';
-import { Terrain } from './terrain.js';
+import { Terrain, riverInfo } from './terrain.js';
+import { Forest } from './forest.js';
 import { createTerrainMaterial, createTerrainMeshes, createWorldTextures } from './terrainMesh.js';
 import { createSky, createMountains } from '../render/sky.js';
 import { createWater } from './water.js';
@@ -28,7 +29,13 @@ export class World {
     this.terrainMeshes = createTerrainMeshes(this.terrain, this.terrainMat);
     this.scene.add(this.terrainMeshes);
 
-    await step(0.35, 'filling the cove');
+    await step(0.32, 'planting the forest');
+    this.forest = new Forest(this.terrain, { density: this.density ?? 1 });
+    this.forest.place(riverInfo);
+    this.scene.add(this.forest.buildMeshes());
+    console.log('forest', JSON.stringify(this.forest.stats));
+
+    await step(0.5, 'filling the cove');
     this.water = createWater(this.pipeline);
     this.scene.add(this.water);
     this.sky = createSky();
@@ -77,6 +84,7 @@ export class World {
     G.uTime.value += dt;
     this.atmosphere.update(dt);
     this.sky.position.copy(camera.position);
+    this.forest?.updateVisibility(camera.position);
     this.updateShadow(focus);
   }
 }

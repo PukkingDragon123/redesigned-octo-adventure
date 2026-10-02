@@ -106,50 +106,64 @@ function drawBroad(p, ox, oy, rng, { lobes = 6, leafDensity = 1, small = false }
   }
 }
 
-// Conifer tier: a drooping fan of needled branches, wide and short
+// Conifer tier: a wide, drooping "skirt" of needled boughs (lit on top, dark below)
 function drawTier(p, ox, oy, rng, { airy = false } = {}) {
   const cx = CELL / 2;
-  const top = 8, bottom = CELL - 6;
-  // main branches radiating down/out from the top centre
-  const branches = airy ? 9 : 13;
-  for (let b = 0; b < branches; b++) {
-    const t = b / (branches - 1);
-    const ang = -Math.PI * 0.5 + (t - 0.5) * Math.PI * 1.15; // spread
-    const len = rng.range(18, 30) * (0.6 + 0.4 * Math.sin(t * Math.PI));
-    const x0 = cx + rng.range(-2, 2), y0 = top + rng.range(0, 4);
-    const dx = Math.sin(ang + Math.PI / 2) * len, dy = Math.abs(Math.cos(ang + Math.PI / 2)) * len * 0.45 + len * 0.35;
-    const steps = Math.round(len);
-    for (let s = 0; s < steps; s++) {
-      const k = s / steps;
-      const x = x0 + dx * k, y = y0 + dy * k + k * k * 6; // droop
-      if (y > bottom) break;
-      // needles: short strokes hanging down from the branch
-      const nv = 0.62 - k * 0.15 + rng.range(-0.08, 0.08);
-      setV(p, ox + x, oy + y, nv);
-      const nn = airy ? 1 : 2;
-      for (let q = 0; q < nn; q++) {
-        const hx = x + rng.range(-1.5, 1.5);
-        const hl = rng.int(2, airy ? 3 : 5);
-        for (let h = 1; h <= hl; h++) {
-          if (rng.chance(airy ? 0.35 : 0.12)) continue;
-          setV(p, ox + hx + (h > 2 ? Math.sign(dx) : 0), oy + y + h, nv - h * 0.07 - 0.05);
-        }
-      }
+  const top = 6;
+  const halfW = airy ? 27 : 30;
+  const phase = rng.range(0, 6);
+  const boughs = airy ? 5 : 7;
+  for (let x = -halfW; x <= halfW; x++) {
+    const ax = Math.abs(x) / halfW;
+    const yt = top + Math.abs(x) * 0.62 + (airy ? rng.range(-1, 1) : 0);
+    let thick = 9 + (1 - ax) * 9 + ax * ax * 5;
+    // scalloped bough tips along the bottom edge
+    const sc = Math.abs(Math.sin((x / halfW) * boughs * 1.57 + phase));
+    thick -= sc * 4;
+    const yb = yt + thick;
+    for (let y = Math.floor(yt); y <= Math.ceil(yb); y++) {
+      if (y < 0 || y >= CELL) continue;
+      const k = (y - yt) / Math.max(1, thick); // 0 top surface .. 1 underside
+      if (airy && rng.chance(0.42)) continue;
+      if (!airy && k > 0.85 && rng.chance(0.4)) continue;
+      // bough striation: darker grooves between boughs
+      const groove = Math.abs(Math.sin((x / halfW) * boughs * 1.57 + phase + k * 0.8)) < 0.18 ? -0.16 : 0;
+      let v = 0.66 - k * 0.5 + groove + rng.range(-0.07, 0.07);
+      if (k < 0.12) v += 0.12; // sky-lit top edge
+      setV(p, ox + cx + x, oy + y, v);
+    }
+    // needle tufts poking out of the bottom edge, pointing outward & down
+    if (rng.chance(airy ? 0.5 : 0.65)) {
+      const dir = Math.sign(x) || 1;
+      const l = rng.int(2, airy ? 5 : 4);
+      for (let q = 1; q <= l; q++) setV(p, ox + cx + x + (q > 1 ? dir * Math.floor(q / 2) : 0), oy + yb + q, 0.3 - q * 0.04);
+    }
+    // tufts on the upper surface
+    if (rng.chance(0.3)) {
+      const dir = Math.sign(x) || 1;
+      setV(p, ox + cx + x + dir, oy + yt - 1, 0.78);
     }
   }
-  // fill underside shadow mass
+  // shadowed inner core under the apex (gaps between tiers read as dense, dark interior)
   if (!airy) {
-    for (let y = top + 10; y < bottom - 4; y++) {
-      const w = (y - top) * 0.75;
-      for (let x = Math.round(cx - w); x <= Math.round(cx + w); x++) {
-        if (p.alpha(ox + x, oy + y) > 0) continue;
-        if (rng.chance(0.55)) setV(p, ox + x, oy + y, 0.16 + rng.range(0, 0.08));
+    for (let x = -Math.round(halfW * 0.55); x <= Math.round(halfW * 0.55); x++) {
+      const ax = Math.abs(x) / (halfW * 0.55);
+      const y0 = top + Math.abs(x) * 0.62 + 12;
+      const y1 = y0 + (1 - ax) * 16;
+      for (let y = Math.floor(y0); y <= y1 && y < CELL; y++) {
+        if (p.alpha(ox + cx + x, oy + y) > 0) continue;
+        if (rng.chance(0.8)) setV(p, ox + cx + x, oy + y, 0.1 + rng.range(0, 0.1));
       }
     }
   }
-  // tip highlight
-  setV(p, ox + cx, oy + top - 1, 0.8);
-  setV(p, ox + cx, oy + top - 2, 0.7);
+  // drooping tip ends
+  for (const dir of [-1, 1]) {
+    for (let q = 0; q < 5; q++) setV(p, ox + cx + dir * (halfW + 1 + q * 0.6), oy + top + halfW * 0.62 + 8 + q, 0.38 - q * 0.04);
+  }
+  // little leader at the top
+  setV(p, ox + cx, oy + top - 1, 0.82);
+  setV(p, ox + cx, oy + top - 2, 0.74);
+  setV(p, ox + cx, oy + top - 3, 0.6);
 }
 
 function drawBush(p, ox, oy, rng) {
@@ -177,24 +191,27 @@ function drawBush(p, ox, oy, rng) {
 }
 
 function drawFern(p, ox, oy, rng) {
-  const cx = CELL / 2, base = CELL - 3;
-  const fronds = rng.int(6, 9);
+  const cx = CELL / 2, base = CELL - 2;
+  const fronds = rng.int(7, 10);
   for (let f = 0; f < fronds; f++) {
-    const ang = -Math.PI / 2 + rng.range(-1.2, 1.2);
-    const len = rng.range(18, 30);
-    let x = cx + rng.range(-3, 3), y = base;
-    const dx = Math.cos(ang), dy = Math.sin(ang);
+    const t = f / (fronds - 1);
+    const ang = -Math.PI / 2 + (t - 0.5) * 2.4 + rng.range(-0.15, 0.15);
+    const len = rng.range(24, 34) * (1 - Math.abs(t - 0.5) * 0.5);
+    let x = cx + rng.range(-2, 2), y = base;
+    let dx = Math.cos(ang), dy = Math.sin(ang);
     for (let s = 0; s < len; s++) {
       const k = s / len;
       x += dx;
-      y += dy + k * 0.9; // arch over
-      const v = 0.45 + k * 0.3 + rng.range(-0.05, 0.05);
+      y += dy;
+      dy += 0.035; // gentle arch under gravity
+      const v = 0.4 + k * 0.35 + rng.range(-0.05, 0.05);
       setV(p, ox + x, oy + y, v);
-      if (s % 2 === 0 && s > 2) {
-        const pl = Math.round((1 - k) * 4) + 1;
+      if (s % 2 === 0 && s > 1) {
+        const pl = Math.round((1 - k) * 4.5) + 1;
+        const nx = -dy, ny = dx;
         for (let q = 1; q <= pl; q++) {
-          setV(p, ox + x - dy * q * 0.8, oy + y + dx * q * 0.8 + q * 0.4, v - q * 0.06);
-          setV(p, ox + x + dy * q * 0.8, oy + y - dx * q * 0.8 + q * 0.4, v - q * 0.08);
+          setV(p, ox + x + nx * q * 0.9, oy + y + ny * q * 0.9 + q * 0.5, v - q * 0.05);
+          setV(p, ox + x - nx * q * 0.9, oy + y - ny * q * 0.9 + q * 0.5, v - q * 0.08);
         }
       }
     }

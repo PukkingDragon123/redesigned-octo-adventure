@@ -13,7 +13,7 @@ const KEYS = [
   { t: 9, zen: C(0x6f96cc), hor: C(0xecd8c0), glow: C(0xffc890), sun: [1.55, 1.3, 1.0], sky: C(0x8a98b8), gnd: C(0x4a3a2a), fog: C(0xc8c4c0), cl: C(0xfff0e0), cs: C(0xa0a0b8) },
   { t: 13, zen: C(0x6a9ad4), hor: C(0xdce2e4), glow: C(0xfff0d0), sun: [1.7, 1.58, 1.38], sky: C(0x96a6c4), gnd: C(0x4e4030), fog: C(0xc8d0d8), cl: C(0xffffff), cs: C(0xa8b0c4) },
   { t: 16, zen: C(0x8a8cc8), hor: C(0xf6d2b0), glow: C(0xffb878), sun: [1.75, 1.3, 0.85], sky: C(0x9a90b0), gnd: C(0x503a2a), fog: C(0xe0b8a8), cl: C(0xfff0d8), cs: C(0xa890b0) },
-  { t: 17.6, zen: C(0xa682bc), hor: C(0xffc6a4), glow: C(0xffa870), sun: [1.8, 1.05, 0.62], sky: C(0xa088ac), gnd: C(0x52342c), fog: C(0xf0b4a4), cl: C(0xffd8b8), cs: C(0x9a78a8) },
+  { t: 17.6, zen: C(0xa682bc), hor: C(0xffc6a4), glow: C(0xffa870), sun: [1.8, 1.05, 0.62], sky: C(0x9a8ca8), gnd: C(0x5a3c30), fog: C(0xf0b4a4), cl: C(0xffd8b8), cs: C(0x9a78a8) },
   { t: 18.8, zen: C(0x6e5aa2), hor: C(0xff9a7c), glow: C(0xff7040), sun: [1.5, 0.66, 0.38], sky: C(0x7a6494), gnd: C(0x40282a), fog: C(0xd88a8a), cl: C(0xffa888), cs: C(0x6a4a7a) },
   { t: 19.8, zen: C(0x2c2c64), hor: C(0xb05c72), glow: C(0xc04838), sun: [0.4, 0.2, 0.14], sky: C(0x40406c), gnd: C(0x221a22), fog: C(0x684866), cl: C(0x9a6880), cs: C(0x3a2c50) },
   { t: 21, zen: C(0x0a0e28), hor: C(0x24244a), glow: C(0x000000), sun: [0, 0, 0], sky: C(0x1e2448), gnd: C(0x0e0d16), fog: C(0x1e2040), cl: C(0x2e3050), cs: C(0x14162c) },
@@ -126,7 +126,9 @@ export class Atmosphere {
     lerpKey(h, 'sky', G.uSkyAmb.value);
     greyIt(G.uSkyAmb.value, grey * 0.6);
     G.uSkyAmb.value.multiplyScalar(lerp(1, 1.15, grey));
+    G.uSkyAmb.value.multiplyScalar(1.5);
     lerpKey(h, 'gnd', G.uGroundAmb.value);
+    G.uGroundAmb.value.multiplyScalar(1.6);
     G.uWet.value = W.wet;
     G.uSnow.value = this.snowCover;
     G.uWindStrength.value = W.wind;

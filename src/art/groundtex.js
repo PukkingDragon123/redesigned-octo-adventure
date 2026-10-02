@@ -69,11 +69,11 @@ export function grassTex(variant = 0) {
   p.wrap = true;
   const rng = new RNG(11 + variant);
   const pal = variant === 1
-    ? [0x3a421c, 0x4d5822, 0x66702a, 0x7f8430] // shady forest grass
-    : [0x4a5520, 0x5f6b26, 0x78802c, 0x928e34];
+    ? [0x3a3c1e, 0x4a4c22, 0x5e5e2a, 0x726e30] // shady forest grass
+    : [0x484a22, 0x5a5c27, 0x6e6c2c, 0x868034];
   bandFill(p, pal, 3 + variant, 1.2);
-  const tips = variant === 1 ? [0x8a8a34, 0x9c9638] : [0xb3a23c, 0xc9b446, 0xa59a38, 0xd8c35a];
-  const mids = variant === 1 ? [0x56602a, 0x66702c] : [0x6c7a2a, 0x7e8a30, 0x8d8f34];
+  const tips = variant === 1 ? [0x84783a, 0x948638] : [0xa8903e, 0xbca04a, 0x9c8a3a, 0xccb058];
+  const mids = variant === 1 ? [0x545628, 0x62622c] : [0x66682a, 0x76762e, 0x868234];
   for (let i = 0; i < 420; i++) {
     const x = rng.int(0, S - 1), y = rng.int(0, S - 1);
     const len = rng.int(2, 4);
@@ -97,11 +97,11 @@ export function dirtTex() {
   const p = new Pix(S, S);
   p.wrap = true;
   const rng = new RNG(21);
-  bandFill(p, [0x4e3220, 0x5f3e27, 0x704b2e, 0x825a37], 7, 1.1);
+  bandFill(p, [0x48342a, 0x584032, 0x684c3a, 0x7a5c46], 7, 1.1);
   // compacted lighter streaks
   for (let i = 0; i < 40; i++) {
     const x = rng.int(0, S), y = rng.int(0, S), l = rng.int(3, 9);
-    p.hline(x, x + l, y, rng.pick([0x8f6740, 0x86603a]));
+    p.hline(x, x + l, y, rng.pick([0x8a6a4c, 0x806246]));
   }
   for (let i = 0; i < 70; i++) pebble(p, rng, rng.int(0, S), rng.int(0, S), rng.pick([0x9a8c78, 0x8a7d6b, 0xa89b84, 0x6f6458]), rng.int(1, 2), rng.int(1, 2));
   for (let i = 0; i < 10; i++) {

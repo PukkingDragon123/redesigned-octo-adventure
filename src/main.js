@@ -24,6 +24,8 @@ function onResize() {
 window.addEventListener('resize', onResize);
 
 async function boot() {
+  if (params.has('px')) pipeline.pixelScale = parseInt(params.get('px'));
+  if (params.has('noshadow')) pipeline.renderer.shadowMap.enabled = false;
   await world.build();
   onResize();
   if (params.has('hour')) world.atmosphere.hour = parseFloat(params.get('hour'));
@@ -33,13 +35,15 @@ async function boot() {
   camera.lookAt(c[3], c[4], c[5]);
   document.getElementById('boot').classList.add('gone');
   let last = performance.now();
+  const maxFrames = params.has('frames') ? parseInt(params.get('frames')) : Infinity;
   const loop = (now) => {
-    const dt = Math.min(0.05, (now - last) / 1000);
+    const dt = maxFrames < Infinity ? 1 / 30 : Math.min(0.05, (now - last) / 1000);
     last = now;
     world.update(dt, camera, camera.position.clone().add(new THREE.Vector3(0, 0, -30).applyQuaternion(camera.quaternion)));
     pipeline.render(world.scene, camera);
     window.__frames = (window.__frames || 0) + 1;
-    requestAnimationFrame(loop);
+    if (window.__frames < maxFrames) requestAnimationFrame(loop);
+    else window.__done = true;
   };
   requestAnimationFrame(loop);
   window.__ready = true;
