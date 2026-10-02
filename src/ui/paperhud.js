@@ -5,7 +5,7 @@
 import { iconURL, glyphURL, iconSmallURL } from '../art/icons.js';
 import { CHARACTERS } from '../art/characters.js';
 import { Pix } from '../art/pixel.js';
-import { el, esc } from './kit.js';
+import { el, esc, snapBox, onScale } from './kit.js';
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const INK = 0x1e1418;
@@ -234,6 +234,11 @@ export function buildPaperHUD(ui) {
   ui.compassLbl = el('div', 'k-plate k-dark hud-dist');
   cw.appendChild(ui.compassLbl);
   h.appendChild(cw);
+  // the compass is centred with 50%: nudge it onto whole device pixels
+  const resnap = () => requestAnimationFrame(() => snapBox(cw));
+  window.addEventListener('resize', resnap);
+  onScale(resnap);
+  resnap();
   // Nana's list (top right)
   const note = el('div', 'k-paper hud-note');
   note.innerHTML = '<i class="pin"></i><div class="ttl k-bold">Nana\'s list</div><div class="rows"></div><div class="obj"></div>';

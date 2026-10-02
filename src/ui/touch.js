@@ -234,10 +234,12 @@ export class TouchControls {
       this.pointers.delete(e.pointerId);
       this.updateHeld();
     };
-    this.root.addEventListener('pointerdown', (e) => { this.root.setPointerCapture?.(e.pointerId); track(e); });
-    this.root.addEventListener('pointermove', (e) => this.pointers.has(e.pointerId) && track(e));
-    this.root.addEventListener('pointerup', drop);
-    this.root.addEventListener('pointercancel', drop);
+    // fingers start on a button, then are followed anywhere on the page (so lifting off
+    // to the side, or sliding onto the next button, always registers)
+    this.root.addEventListener('pointerdown', track);
+    window.addEventListener('pointermove', (e) => this.pointers.has(e.pointerId) && track(e), { passive: false });
+    window.addEventListener('pointerup', (e) => this.pointers.has(e.pointerId) && drop(e));
+    window.addEventListener('pointercancel', (e) => this.pointers.has(e.pointerId) && drop(e));
 
     onScale(() => { this.rects = null; });
     window.addEventListener('resize', () => { this.rects = null; });
