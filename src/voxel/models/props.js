@@ -2862,8 +2862,15 @@ export function railFence({ len = 3, seed = 1 } = {}) {
   }
   return finish(v, STD, { origin: [(L + 3) / 2, 0, 3], radius: 0.1 });
 }
-// picketFence({ len, color }) — white pickets with pointed tops
-export function picketFence({ len = 3, color = 0xf2ece0 } = {}) {
+// picketFence({ len, color, coarse }) — white pickets with pointed tops (coarse: 0.1 m voxels, for long runs)
+export function picketFence({ len = 3, color = 0xf2ece0, coarse = false } = {}) {
+  if (coarse) {
+    const L = Math.round(len / MID);
+    const v = new Vox(L + 1, 11, 2);
+    for (let x = 0; x <= L; x += 2) { v.fill(x, 0, 1, x, 8, 1, color); v.set(x, 9, 1, tone(color, -0.06)); }
+    for (const y of [2, 7]) v.fill(0, y, 0, L, y, 0, tone(color, -0.1));
+    return finish(v, MID, { origin: [(L + 1) / 2, 0, 1], radius: 0.1 });
+  }
   const L = Math.round(len / STD);
   const v = new Vox(L + 2, 22, 4);
   for (let x = 0; x <= L + 1; x += 3) { v.fill(x, 0, 2, x + 1, 17, 2, color); v.set(x, 18, 2, color); v.set(x + 1, 18, 2, tone(color, -0.1)); }
@@ -2941,7 +2948,7 @@ export function farmStand({ text = 'PUMPKINS 3$', seed = 1 } = {}) {
   const pre = [24, 0, 13];
   const res = finish(v, STD, { origin: pre, radius: 1.0 });
   res.meta.signs = [signPlane(pre, STD, [24, 28, 24.2], 34, 6, text, { bg: '#f2e6c8', fg: '#a83228' })];
-  v.fill(7, 25, 23, 41, 31, 23, 0); // (sign board itself is drawn by the plane on a voxel backing)
+  v.fill(7, 25, 23, 41, 31, 23, (x, y) => (x === 7 || x === 41 || y === 25 || y === 31 ? WOOD_D : 0xf2e6c8)); // backing board for the lettering
   return res;
 }
 
@@ -3022,6 +3029,54 @@ export function fishingBoat({ hull = 0x2e5a8a, seed = 1 } = {}) {
   v.ellipsoid(23, 12, 30, 1.5, 2.2, 1.5, (x, y) => ((y >> 1) % 2 ? 0xf2c23a : RED)); // fender buoy
   bevel(v, { top: 0.04, bottom: 0 });
   return finish(v, MID, { origin: [cx + 0.5, 6, L / 2], radius: 1.4, meta: { length: L * MID, beam: W * MID } });
+}
+
+// giantGoose() — a roadside giant: a 5 m Canada goose on a stone plinth, wings half open
+export function giantGoose() {
+  const v = new Vox(30, 54, 44);
+  const BLK = 0x262224, WHT = 0xf2ece0, BR = 0x8a7a64, BRD = 0x6e604e, BRL = 0xa8987e, BEAK = 0x2e2a2a;
+  rbox(v, 4, 0, 6, 25, 6, 37, 1, (x, y, z) => (y === 6 ? STONE_L : (x + z + y) % 7 === 0 ? STONE_D : STONE), 0);
+  // legs & feet
+  for (const x of [11, 18]) { v.fill(x, 7, 20, x + 1, 14, 21, BLK); v.fill(x - 1, 7, 22, x + 2, 7, 25, BLK); }
+  // body: a fat teardrop, pale belly, darker back, white tail band
+  v.ellipsoid(15, 22, 20, 8.5, 8, 13, (x, y, z) => (y < 18 ? (z < 10 ? WHT : BRL) : z < 9 ? WHT : y > 26 ? BRD : (x + y) % 5 === 0 ? BRD : BR));
+  // wings: raised a little, with feather rows
+  for (const s2 of [-1, 1]) for (let k = 0; k < 12; k++) {
+    const x = 15 + s2 * (7 + k * 0.5), y0 = 22 + Math.round(k * 0.6);
+    v.fill(Math.round(x), y0, 10 + k, Math.round(x) + s2, y0 + 6 - Math.round(k * 0.3), 30 - Math.round(k * 0.4), (xx, y, z) => ((z + y) % 4 === 0 ? BRD : BR));
+  }
+  // neck, head, white chinstrap, beak
+  for (let k = 0; k <= 14; k++) { const z = 30 + Math.round(k * 0.35), y = 26 + k; v.ellipsoid(15, y, z, 2.6, 1.2, 2.6, BLK); }
+  v.ellipsoid(15, 42, 35, 3.6, 3, 4.6, BLK);
+  for (const s2 of [-1, 1]) v.fill(15 + s2 * 3, 39, 32, 15 + s2 * 3, 42, 36, WHT);
+  v.fill(13, 39, 33, 17, 39, 36, WHT);
+  v.ellipsoid(15, 41.5, 40, 1.8, 1.2, 2.6, BEAK);
+  for (const s2 of [-1, 1]) v.set(15 + s2 * 3, 43, 37, 0xf2e8c0 | EMIT);
+  bevel(v, { top: 0.05, bottom: -0.05 });
+  return finish(v, MID, { origin: [15, 0, 22], radius: 1.4 });
+}
+
+// clothesline({ seed }) — two T-posts and a line of laundry (plaid shirts, a toque, socks)
+export function clothesline({ seed = 1 } = {}) {
+  const L = 80, v = new Vox(L, 46, 8);
+  const R = rng(seed * 29 + 3);
+  for (const x of [1, L - 3]) { v.fill(x, 0, 3, x + 1, 42, 4, GREYWOOD); v.fill(x - 3, 41, 3, x + 4, 42, 4, GREYWOOD_D); }
+  for (let x = 2; x < L - 2; x++) v.set(x, 41 - Math.round(Math.sin((x / L) * Math.PI) * 2), 3, 0xe8e0d0);
+  const cloth = [[0xc8382e, 0x2a2420], [0x2e5a8a, 0x1e3a5a], [0xe8b830, 0xc89020], [0x3a7a5a, 0x2a5a40], [0xf2ece0, 0xc8c0b0]];
+  let x = 6;
+  while (x < L - 14) {
+    const [a, b2] = cloth[Math.floor(R() * cloth.length)];
+    const w = 8 + Math.floor(R() * 5), h = 10 + Math.floor(R() * 6), top = 39 - Math.round(Math.sin((x / L) * Math.PI) * 2);
+    const plaid = R() < 0.6;
+    for (let i = 0; i < w; i++) for (let j = 0; j < h; j++) {
+      const sleeve = j < 4 || (i > 1 && i < w - 2);
+      if (!sleeve) continue;
+      v.set(x + i, top - j, 3, plaid && ((i >> 1) + (j >> 1)) % 2 ? b2 : a);
+    }
+    v.set(x + 1, top + 1, 3, WOOD_L); v.set(x + w - 2, top + 1, 3, WOOD_L);
+    x += w + 3 + Math.floor(R() * 3);
+  }
+  return finish(v, STD, { origin: [L / 2, 0, 4], radius: 0.2 });
 }
 
 // hockeyNet() — red pipe frame, white mesh
@@ -3194,4 +3249,7 @@ export const PREVIEW = {
   rowboat: () => rowboat({}),
   fishing_boat: () => fishingBoat({}),
   hockey_net: () => hockeyNet(),
+  giant_goose: () => giantGoose(),
+  clothesline: () => clothesline({}),
+  picket_coarse: () => picketFence({ coarse: true }),
 };

@@ -43,6 +43,7 @@ export const POI = {
   bikePark: { x: 132, z: 10, r: 18, name: 'Bike Park' },
   pumpkinStand: { x: 44, z: 46 },
   damBridge: { x: -38, z: -141 },
+  restStop: { x: 180, z: -107, r: 9, name: 'Rest Area' },
   // the prologue's lumber camp: a flat clearing ringed by dense autumn forest, just east of the grave road
   lumberCamp: { x: -181, z: 16, r: 12 },
 };
@@ -144,6 +145,7 @@ export const FLATS = [
   { x: 100, z: 36, r: 9, h: null }, // Gus's yard
   { x: 90, z: 46, r: 30, h: 5.2 }, // the road dips gently down into the village
   { x: -181, z: 16, r: 16, h: null }, // the lumber camp clearing
+  { x: 180, z: -107, r: 11, h: null }, // the rest area on the loop road
 ];
 // Smooth hollows pressed into the ground (the bike park bowl): r radius, depth metres
 export const BOWLS = [
@@ -283,6 +285,7 @@ export const CLEARINGS = [
   { x: 100, z: 34, r: 9, soft: 5 }, // Gus
   { x: -62, z: 22, r: 9, soft: 5 }, { x: 6, z: 2, r: 8, soft: 5 }, { x: 112, z: -82, r: 9, soft: 5 }, // houses along the roads
   { x: 250, z: -46, r: 10, soft: 6 }, // fish & chips
+  { x: 180, z: -107, r: 9, soft: 5 }, // rest area & the giant goose
   { x: -181, z: 16, r: 12, soft: 2.5, ring: 10 }, // lumber camp: open inside, thick forest right at its edge
 ];
 // Trees planted on purpose (the big maple on the green, maples lining the green)
@@ -344,6 +347,7 @@ export const PLACES = [
   { x: 186, z: 112, name: 'Harbour' },
   { x: 130, z: -6, name: 'Bike Park' },
   { x: -8, z: 70, name: 'Picnic' },
+  { x: 180, z: -96, name: 'Giant Goose' },
 ];
 
 // Where the bike spawns / parks at home

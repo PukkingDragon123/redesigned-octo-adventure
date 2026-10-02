@@ -40,6 +40,58 @@ export function dressPlaces(vw, physprops) {
   lookout(vw, { S, box, gy });
   signposts(vw, { S, post, gy });
   roadside(vw, { S, post, box, gy });
+  yards(vw, { S, post, box, gy });
+  restStop(vw, { S, post, box, bench, gy });
+}
+
+// ---------------------------------------------------------------- back yards over the harbour
+function yards(vw, { S, post, box, gy }) {
+  const shore = L.BOARDWALK[0].a[1] - 7.4;
+  const fenceRun = (ax, az, bx, bz) => {
+    const len = Math.hypot(bx - ax, bz - az), n = Math.max(1, Math.round(len / 3));
+    const yaw = -Math.atan2(bz - az, bx - ax);
+    for (let k = 0; k < n; k++) {
+      const t = (k + 0.5) / n, x = ax + (bx - ax) * t, z = az + (bz - az) * t;
+      S('picket:c', () => PR.picketFence({ len: 3, coarse: true }), x, z, yaw);
+      box(x, z, yaw + Math.PI / 2, 0.15, len / n, 1.0, 'fence');
+    }
+  };
+  const ids = ['kids', 'agnes', 'birdie', 'house5', 'house6', 'house7'];
+  ids.forEach((id, i) => {
+    const b = L.BUILDINGS.find((q) => q.id === id);
+    const back = b.z + b.d / 2 + 0.6, xl = b.x - b.w / 2 - 1.4, xr = b.x + b.w / 2 + 1.4;
+    fenceRun(xl, shore, xr, shore); // along the shore, with a gate gap in the middle
+    fenceRun(xl, back + 1, xl, shore);
+    if (i === ids.length - 1 || L.BUILDINGS.find((q) => q.id === ids[i + 1]).x - b.x > b.w + 4) fenceRun(xr, back + 1, xr, shore);
+    // Muskoka chairs looking out over the harbour, a garden, laundry on the line
+    for (const dx of [-1.1, 1.1]) S(`muskoka:${(i + (dx > 0 ? 1 : 0)) % 5}`, () => PR.muskokaChair({ color: [0xc8382e, 0x2f8a86, 0xe8b830, 0x3a5aa8, 0x5a9a48][(i + (dx > 0 ? 1 : 0)) % 5] }), b.x + dx + 1.5, shore - 2.4, 0.05 * dx);
+    if (i % 2 === 0) S(`clothes:${i % 3}`, () => PR.clothesline({ seed: i }), b.x - 1, back + 4.5, 0.08);
+    else { S(`vines:${i % 3}`, () => PR.pumpkinVines({ seed: i }), b.x - 2.5, back + 4.5, i); S(`pp:medium:${i % 4}`, () => PR.pumpkin({ kind: 'medium', seed: i % 4 + 50 }), b.x - 2.2, back + 4.2, i); }
+  });
+  // the countryside houses get a picket fence along their front yard
+  for (const id of ['houseRiver', 'farmhouse']) {
+    const b = L.BUILDINGS.find((q) => q.id === id);
+    const f = b.facing || 0, c = Math.cos(f), s2 = Math.sin(f);
+    const ex = b.d / 2 + 5.5, hw = b.w / 2 + 2;
+    const P = (lx, lz) => [b.x + lx * c + lz * s2, b.z - lx * s2 + lz * c];
+    const [ax, az] = P(-hw, ex), [bx, bz] = P(-1.4, ex), [cx, cz] = P(1.4, ex), [dx, dz] = P(hw, ex);
+    fenceRun(ax, az, bx, bz);
+    fenceRun(cx, cz, dx, dz);
+  }
+}
+
+// ---------------------------------------------------------------- the rest area & the giant goose
+function restStop(vw, { S, post, box, bench, gy }) {
+  const r = L.POI.restStop;
+  // the goose looks out at the road (north of the pull-off)
+  S('giantgoose', () => PR.giantGoose(), r.x + 1, r.z + 2, Math.PI - 0.2);
+  box(r.x + 1, r.z + 2, Math.PI - 0.2, 2.4, 3.4, 4.5, 'statue');
+  S('picnic:rest', () => PR.picnicTable({ cloth: false }), r.x - 4.5, r.z + 4, 0.5);
+  box(r.x - 4.5, r.z + 4, 0.5, 1.9, 1.7, 0.8, 'table');
+  bench(r.x + 5, r.z + 6, -0.6, 'green');
+  S('bin', () => PR.litterBin(), r.x - 2, r.z + 7.5, 0); post(r.x - 2, r.z + 7.5, 0.32, 1.1);
+  S('welcome:rest', () => PR.welcomeSign({ text: 'HALTE ROUTIERE REST AREA' }), r.x - 5, r.z - 5, Math.PI + 0.25);
+  box(r.x - 5, r.z - 5, Math.PI + 0.25, 3.2, 0.4, 2.2);
 }
 
 // ---------------------------------------------------------------- Main Street
