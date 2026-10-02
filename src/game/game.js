@@ -25,6 +25,7 @@ import { Menus } from './menus.js';
 import { UI } from '../ui/ui.js';
 import { sound } from './sound.js';
 import { TouchControls } from '../ui/touch.js';
+import { TitleScreen } from '../ui/title.js';
 import { computeStats } from './upgrades.js';
 import { newState, saveGame, loadGame, loadSettings, saveSettings } from './state.js';
 import { riverInfo, forestNoise } from '../world/terrain.js';
@@ -188,15 +189,14 @@ export class Game {
   showTitle() {
     this.mode = 'title';
     this.ui.showHUD(false);
-    this.world.atmosphere.hour = 17.5;
-    this.world.atmosphere.setWeather('breezy', true);
-    this.setBikeVisible(false);
     this.titleT = 0;
     sound.music('title');
-    this.menus.title({
-      onContinue: () => this.continueGame(),
-      onNew: () => this.startNewGame(),
+    this.title = new TitleScreen(this);
+    this.title.show({
+      onContinue: () => { this.title = null; this.continueGame(); },
+      onNew: () => { this.title = null; this.startNewGame(); },
       onSettings: () => this.menus.settings(),
+      onControls: () => this.menus.controls(),
     });
   }
 
@@ -632,7 +632,7 @@ export class Game {
     this.tricks.update(dt);
     this.bikeModel.update(dt, this.bike, c.steer);
     G.uPlayer.value.copy(this.playerPos);
-    if (this.mode === 'title') this.titleCamera(dt);
+    if (this.mode === 'title') this.title ? this.title.update(dt) : this.titleCamera(dt);
     else {
       this.chase.walk = this.onFoot;
       this.chase.update(dt, this.onFoot ? this.walker : this.bike, this.mode === 'ride' && !busy ? input.look() : { x: 0, y: 0 });
