@@ -47,8 +47,13 @@ export class Villagers {
     return this.actors[id];
   }
 
+  // story scenes hide a villager while a scripted double stands in for them
   setVisible(id, v) {
-    if (this.actors[id]) this.actors[id].visible = v;
+    const a = this.actors[id];
+    if (!a) return;
+    a.hiddenByStory = !v;
+    a.visible = v;
+    a.mesh.visible = v;
   }
 
   update(dt) {
@@ -68,7 +73,7 @@ export class Villagers {
         continue;
       }
       // go indoors late at night (Nana stays up for Hank)
-      a.visible = !night || id === 'grandma' || id === 'doug';
+      a.visible = !a.hiddenByStory && (!night || id === 'grandma' || id === 'doug');
       // patrols
       if (a.patrol && !a.path && d > 6) {
         a.patrolWait = (a.patrolWait || 0) - dt;

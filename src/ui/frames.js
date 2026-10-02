@@ -28,8 +28,8 @@ export function frameURL(style = 'wood') {
     order: { outer: 0x3a2a1e, rim: 0xe8d8b0, rimHi: 0xfff4d8, rimDk: 0xc8b488, fill: 0xfdf4dc, fillDk: 0xf2e6c4, gold: 0xc8361f, goldDk: 0x8a2214 },
   }[style];
   p.rect(0, 0, S, S, P.fill);
-  // parchment speckle
-  for (let k = 0; k < 18; k++) p.set(8 + ((k * 7) % 8), 8 + ((k * 5) % 8), P.fillDk);
+  // a few parchment flecks; the centre tile repeats at pixel scale (border-image-repeat: round)
+  for (const [a, b] of [[1, 2], [5, 5], [6, 1]]) p.set(8 + a, 8 + b, P.fillDk);
   // frame bands
   p.rect(0, 0, S, 1, P.outer); p.rect(0, S - 1, S, 1, P.outer); p.rect(0, 0, 1, S, P.outer); p.rect(S - 1, 0, 1, S, P.outer);
   p.rect(1, 1, S - 2, 5, P.rim); p.rect(1, S - 6, S - 2, 5, P.rim); p.rect(1, 1, 5, S - 2, P.rim); p.rect(S - 6, 1, 5, S - 2, P.rim);

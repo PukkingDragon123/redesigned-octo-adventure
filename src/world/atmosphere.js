@@ -7,7 +7,7 @@ import { clamp, lerp, smoothstep } from '../core/math.js';
 const C = (hex) => new THREE.Color(hex);
 // keyframes by hour
 const KEYS = [
-  { t: 0, zen: C(0x070a1e), hor: C(0x1a1d38), glow: C(0x000000), sun: [0, 0, 0], sky: C(0x1a2244), gnd: C(0x0c0c16), fog: C(0x1a1e36), cl: C(0x2a2e4a), cs: C(0x121528) },
+  { t: 0, zen: C(0x080c24), hor: C(0x1e2442), glow: C(0x000000), sun: [0, 0, 0], sky: C(0x2e3c6e), gnd: C(0x161a2a), fog: C(0x222a4a), cl: C(0x2e3452), cs: C(0x14182e) },
   { t: 5.5, zen: C(0x101634), hor: C(0x3a3456), glow: C(0x301830), sun: [0, 0, 0], sky: C(0x262c50), gnd: C(0x141218), fog: C(0x2e2c48), cl: C(0x4a4466), cs: C(0x221f38) },
   { t: 7, zen: C(0x5a6aa8), hor: C(0xf4a688), glow: C(0xff7a48), sun: [1.2, 0.62, 0.42], sky: C(0x6a6c98), gnd: C(0x40302a), fog: C(0xc49090), cl: C(0xffc0a0), cs: C(0x806080) },
   { t: 9, zen: C(0x6f96cc), hor: C(0xecd8c0), glow: C(0xffc890), sun: [1.55, 1.3, 1.0], sky: C(0x8a98b8), gnd: C(0x4a3a2a), fog: C(0xc8c4c0), cl: C(0xfff0e0), cs: C(0xa0a0b8) },
@@ -16,8 +16,8 @@ const KEYS = [
   { t: 17.6, zen: C(0xa682bc), hor: C(0xffc6a4), glow: C(0xffa870), sun: [1.8, 1.05, 0.62], sky: C(0x9a8ca8), gnd: C(0x5a3c30), fog: C(0xf0b4a4), cl: C(0xffd8b8), cs: C(0x9a78a8) },
   { t: 18.8, zen: C(0x6e5aa2), hor: C(0xff9a7c), glow: C(0xff7040), sun: [1.5, 0.66, 0.38], sky: C(0x7a6494), gnd: C(0x40282a), fog: C(0xd88a8a), cl: C(0xffa888), cs: C(0x6a4a7a) },
   { t: 19.8, zen: C(0x262c66), hor: C(0x9a5a7a), glow: C(0xa04040), sun: [0.34, 0.2, 0.18], sky: C(0x3a4a7c), gnd: C(0x1e1a26), fog: C(0x4e4a78), cl: C(0x8a6a90), cs: C(0x30305a) },
-  { t: 21, zen: C(0x0a0e28), hor: C(0x24244a), glow: C(0x000000), sun: [0, 0, 0], sky: C(0x1e2448), gnd: C(0x0e0d16), fog: C(0x1e2040), cl: C(0x2e3050), cs: C(0x14162c) },
-  { t: 24, zen: C(0x070a1e), hor: C(0x1a1d38), glow: C(0x000000), sun: [0, 0, 0], sky: C(0x1a2244), gnd: C(0x0c0c16), fog: C(0x1a1e36), cl: C(0x2a2e4a), cs: C(0x121528) },
+  { t: 21, zen: C(0x0a0f2c), hor: C(0x262a50), glow: C(0x000000), sun: [0, 0, 0], sky: C(0x2e3a6c), gnd: C(0x161a28), fog: C(0x242a4c), cl: C(0x323656), cs: C(0x161a32) },
+  { t: 24, zen: C(0x080c24), hor: C(0x1e2442), glow: C(0x000000), sun: [0, 0, 0], sky: C(0x2e3c6e), gnd: C(0x161a2a), fog: C(0x222a4a), cl: C(0x2e3452), cs: C(0x14182e) },
 ];
 
 const tmp = new THREE.Color();
@@ -122,7 +122,7 @@ export class Atmosphere {
     G.uSunDir.value.normalize();
     const sc = lerpKey(h, 'sun', G.uSunColor.value);
     sc.multiplyScalar(W.sun);
-    if (useMoon) G.uSunColor.value.setRGB(0.16, 0.2, 0.36).multiplyScalar(lerp(1, 0.4, W.cloud));
+    if (useMoon) G.uSunColor.value.setRGB(0.3, 0.38, 0.62).multiplyScalar(lerp(1, 0.45, W.cloud));
     lerpKey(h, 'sky', G.uSkyAmb.value);
     greyIt(G.uSkyAmb.value, grey * 0.6);
     G.uSkyAmb.value.multiplyScalar(lerp(1, 1.15, grey));

@@ -167,7 +167,7 @@ export class Menus {
       s.style.setProperty('--rot', `${((i * 37) % 7) - 3}deg`);
       const name = CHARACTERS[o.customer]?.name || o.customer;
       s.innerHTML = `<div class="who"><img src="${portraitURL(o.customer, 'happy')}">${name}</div>
-        <div class="what">☕ ${o.label}${o.rush ? ' · <b style="color:#c8361f">RUSH</b>' : ''}</div>
+        <div class="what"><img class="ico" src="${iconURL('cocoa')}">${o.label}${o.rush ? ' · <b style="color:#c8361f">RUSH</b>' : ''}</div>
         <div class="what"><i>“${o.note}”</i></div><div class="pay">$${o.price}+ tips</div>`;
       const sync = () => s.classList.toggle('taken', o.state === 'carried');
       sync();
@@ -205,10 +205,12 @@ export class Menus {
     p.appendChild(el('h2', '', "Harold's Garage"));
     const money = el('p', '');
     p.appendChild(money);
+    const split = el('div', 'split');
+    p.appendChild(split);
     const grid = el('div', 'slots');
-    p.appendChild(grid);
+    split.appendChild(grid);
     const detail = frameStyle(el('div', 'panel detail'), 'paper');
-    p.appendChild(detail);
+    split.appendChild(detail);
     const slots = [];
     const render = () => {
       money.innerHTML = `Savings: <b>$${Math.floor(st.money)}</b> — tools, oil and a lot of duct tape.`;
@@ -278,10 +280,12 @@ export class Menus {
     p.appendChild(el('h2', '', "Harold's Keepsakes"));
     const n = Object.keys(st.keepsakes).length;
     p.appendChild(el('p', '', `${n} / ${KEEPSAKES.length} found. Bring them home — Nana has a story for each one.`));
+    const split = el('div', 'split');
+    p.appendChild(split);
     const grid = el('div', 'slots');
-    p.appendChild(grid);
+    split.appendChild(grid);
     const detail = frameStyle(el('div', 'panel detail'), 'paper');
-    p.appendChild(detail);
+    split.appendChild(detail);
     const slots = KEEPSAKES.map((k) => {
       const s = el('div', 'slot');
       const have = st.keepsakes[k.id];

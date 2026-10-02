@@ -90,9 +90,25 @@ export class Game {
     const auto = this.params.get('auto');
     this.auto = auto ? auto.split(',').map(Number) : null;
     const start = this.params.get('start');
-    if (start === 'ride' || this.auto || this.params.has('spawn')) this.debugRide();
+    if (this.params.has('scene')) this.debugScene(this.params.get('scene'));
+    else if (start === 'ride' || this.auto || this.params.has('spawn')) this.debugRide();
     else if (start === 'intro') this.startNewGame();
     else this.showTitle();
+  }
+
+  // test entry: jump straight into one story beat (?scene=cabinNight|morning|garageReveal|villagePanic|catRescue|ending)
+  async debugScene(name) {
+    this.debugRide();
+    if (name === 'villagePanic') {
+      this.state.flags.village1 = false;
+      this.villagers.scaredOfHank = true;
+    }
+    if (name === 'catRescue') this.state.cat = false;
+    const fn = this.story[name];
+    if (!fn) return;
+    if (name === 'morning') await this.story.morning(this.state.day);
+    else await fn.call(this.story);
+    if (this.mode === 'cutscene') this.beginRide();
   }
 
   debugRide() {
@@ -551,6 +567,7 @@ export class Game {
     this.effects.update(dt, this.camera);
     this.wildlife.update(dt);
     this.villagers.update(dt);
+    this.currentScene?.update(dt);
     this.keepsakes.update(dt);
     this.story.update(dt);
     this.updateLamp();

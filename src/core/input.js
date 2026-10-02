@@ -40,6 +40,7 @@ const PAD = {
 class Input {
   constructor() {
     this.keys = new Set();
+    this.tapped = new Set(); // keys pressed since the last update (so quick taps on slow frames still count)
     this.prev = new Set();
     this.now = new Set();
     this.pad = null;
@@ -53,10 +54,14 @@ class Input {
       if (e.code === 'Space' && e.target === document.body) e.preventDefault();
       if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
       this.keys.add(e.code);
+      this.tapped.add(e.code);
       this.lastDevice = 'keyboard';
     });
     window.addEventListener('keyup', (e) => this.keys.delete(e.code));
-    window.addEventListener('blur', () => this.keys.clear());
+    window.addEventListener('blur', () => {
+      this.keys.clear();
+      this.tapped.clear();
+    });
     window.addEventListener('mousemove', (e) => {
       if (this.mouse.down) {
         this.mouse.dx += e.movementX;
@@ -74,8 +79,9 @@ class Input {
     this.prev = this.now;
     this.now = new Set();
     for (const [action, codes] of Object.entries(BINDINGS)) {
-      if (codes.some((c) => this.keys.has(c))) this.now.add(action);
+      if (codes.some((c) => this.keys.has(c) || this.tapped.has(c))) this.now.add(action);
     }
+    this.tapped.clear();
     // gamepad
     const pads = typeof navigator !== 'undefined' && navigator.getGamepads ? navigator.getGamepads() : [];
     this.pad = null;

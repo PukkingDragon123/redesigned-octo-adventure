@@ -9,7 +9,27 @@ export class Scene {
   constructor(game) {
     this.g = game;
     this.temp = [];
+    this.actors = [];
+    this.emotes = [];
     this.skip = false;
+  }
+  update(dt) {
+    const cam = this.g.camera.position;
+    for (const a of this.actors) a.update(dt, cam);
+    // a soft moonlight fill from the lens at night, so faces stay readable
+    const night = this.g.world.atmosphere.sunDir.y < -0.05;
+    if (night && !this.fill) this.fill = this.g.lightPool.addDynamic({ pos: cam.clone(), color: [0.42, 0.46, 0.62], radius: 10, intensity: 1 });
+    if (!night && this.fill) {
+      this.g.lightPool.removeDynamic(this.fill);
+      this.fill = null;
+    }
+    if (this.fill) this.fill.pos.set(cam.x, cam.y + 0.8, cam.z);
+    for (const e of this.emotes) {
+      e.t += dt;
+      const pop = e.t < 0.25 ? 1 + Math.sin((e.t / 0.25) * Math.PI) * 0.4 : 1;
+      e.b.setScale(pop, pop);
+      e.b.mesh.position.y = e.y + Math.sin(e.t * 3) * 0.05;
+    }
   }
   get ui() {
     return this.g.ui;
@@ -28,11 +48,14 @@ export class Scene {
     else c.move(v3(pos), v3(look), dur, fov);
     return this.wait(dur);
   }
-  // camera framing helper: look at an actor from an offset
+  // camera framing helper: look at an actor from an offset. Offsets are scaled up so
+  // sprites stay around 2x pixel size; closer than that and the pixel art turns to mush.
   frame(target, offset = [3, 1.6, 4], dur = 0, fov = 45, lookUp = 1.0) {
     const t = target.isVector3 ? target : target.pos;
-    const look = new THREE.Vector3(t.x, t.y + lookUp, t.z);
-    const pos = new THREE.Vector3(t.x + offset[0], t.y + offset[1], t.z + offset[2]);
+    const k = 1.85;
+    // aim a little low so the subject sits in the upper part of the frame, clear of the dialogue box
+    const look = new THREE.Vector3(t.x, t.y + lookUp * 0.9 - 0.6, t.z);
+    const pos = new THREE.Vector3(t.x + offset[0] * k, t.y + 0.6 + (offset[1] - 0.6) * k * 0.8, t.z + offset[2] * k);
     return this.cam(pos, look, dur, fov);
   }
   async say(who, text, opts = {}) {
@@ -49,15 +72,21 @@ export class Scene {
     const a = new Actor(this.g, char, { x, z, yaw, anim });
     a.scripted = true;
     this.temp.push(a);
+    this.actors.push(a);
     return a;
   }
   emote(name, pos, seconds = 2) {
     const b = new Billboard(this.g.atlas, `emote:${name}`, { castShadow: false, lit: 0.3 });
     b.mesh.position.copy(pos);
     this.g.scene.add(b.mesh);
-    const obj = { b, until: this.g.time + seconds };
-    this.temp.push({ remove: () => this.g.scene.remove(b.mesh) });
-    this.g.wait(seconds).then(() => this.g.scene.remove(b.mesh));
+    const obj = { b, t: 0, y: pos.y };
+    this.emotes.push(obj);
+    const gone = () => {
+      this.g.scene.remove(b.mesh);
+      this.emotes = this.emotes.filter((e) => e !== obj);
+    };
+    this.temp.push({ remove: gone });
+    this.g.wait(seconds).then(gone);
     return obj;
   }
   sfx(name, opts) {
@@ -67,7 +96,11 @@ export class Scene {
     this.g.sound.music(m);
   }
   cleanup() {
+    if (this.fill) this.g.lightPool.removeDynamic(this.fill);
+    this.fill = null;
     for (const a of this.temp) a.remove();
     this.temp = [];
+    this.actors = [];
+    this.emotes = [];
   }
 }

@@ -102,6 +102,7 @@ uniform vec3 uTint;
 uniform float uFlash;
 uniform float uFade;
 uniform float uLit;
+uniform float uTexel;
 varying vec2 vUv;
 varying vec3 vWorldPos;
 varying vec3 vNormal;
@@ -120,6 +121,14 @@ void main() {
   vec3 v = normalize(uCamPos - vWorldPos);
   float back = pow(max(dot(-v, uSunDir), 0.0), 3.0) * shadow;
   col += albedo * uSunColor * back * 0.35;
+  // moonlit rim: at night the silhouette's edge pixels catch a cool light,
+  // so dark hair and robes still read against a dark forest
+  if (uNight > 0.05) {
+    vec2 t = vec2(uTexel, 0.0);
+    float e = step(texture2D(tAtlas, vUv + t.xy).a, 0.5) + step(texture2D(tAtlas, vUv - t.xy).a, 0.5)
+            + step(texture2D(tAtlas, vUv + t.yx).a, 0.5) + step(texture2D(tAtlas, vUv - t.yx).a, 0.5);
+    col += (albedo * 0.7 + 0.06) * vec3(0.42, 0.52, 0.95) * min(e, 1.0) * uNight * uLit;
+  }
   col = mix(col, vec3(1.0, 0.98, 0.9) * 1.6, uFlash);
   gl_FragColor = vec4(col, 1.0);
 }
@@ -149,6 +158,7 @@ export class Billboard {
       uFlash: { value: 0 },
       uFade: { value: 0 },
       uLit: { value: lit },
+      uTexel: { value: 1 / atlas.size },
     });
     this.material = new THREE.ShaderMaterial({ uniforms: this.uniforms, vertexShader: VERT, fragmentShader: FRAG, lights: true, side: THREE.DoubleSide });
     this.depth = new THREE.ShaderMaterial({ uniforms: this.uniforms, vertexShader: VERT, fragmentShader: DEPTH_FRAG, side: THREE.DoubleSide, defines: { DEPTH_PASS: '' } });

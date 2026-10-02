@@ -92,8 +92,8 @@ export class ChaseCamera {
     if (bike.crash > 0) want = this.yaw;
     this.yaw = instant ? want : angleDamp(this.yaw, want, bike.grounded ? 3.2 : 1.6, dt);
     const yaw = this.yaw + this.orbitYaw;
-    const dist = (4.3 + clamp(speed, 0, 25) * 0.09) * this.distScale;
-    const hgt = 1.75 + clamp(speed, 0, 25) * 0.025 + this.orbitPitch * 3;
+    const dist = (5.1 + clamp(speed, 0, 25) * 0.085) * this.distScale;
+    const hgt = 1.95 + clamp(speed, 0, 25) * 0.025 + this.orbitPitch * 3;
     const target = _t.copy(bike.pos);
     target.y += 1.15;
     // look ahead in the direction of travel

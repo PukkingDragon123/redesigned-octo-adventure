@@ -106,7 +106,7 @@ function windowAt(B, M, x, y, z, face, { tile = 'window', w = 1.0, h = 1.25, shu
 function doorAt(B, M, x, y, z, face, color, { canopy = true } = {}) {
   const rot = { front: 0, back: Math.PI, right: Math.PI / 2, left: -Math.PI / 2 }[face];
   const MM = M.clone().multiply(buildingMatrix(x, y, z, rot));
-  B.box([0, 1.05, 0.04], [1.1, 2.1, 0.08], { tile: 'door', keepUV: true, color }, null, MM);
+  B.box([0, 1.05, 0.04], [1.1, 2.1, 0.08], { tile: 'door', keepUV: true, color, emissive: 1 }, null, MM);
   B.box([0, 2.2, 0.06], [1.35, 0.12, 0.12], { color: TRIM }, null, MM);
   for (const sx of [-1, 1]) B.box([sx * 0.62, 1.05, 0.06], [0.12, 2.2, 0.1], { color: TRIM }, null, MM);
   if (canopy) {
@@ -271,8 +271,9 @@ function cabin(ctx, B, b) {
     // sign hanging from the porch beam
     if (b.id === 'nana') {
       const t = TILESIZE("sign:NANA'S COCOA");
-      B.box([0, 2.25, d / 2 + pd - 0.05], [(t.w / 25.6) * 1.2, (t.h / 25.6) * 1.2, 0.06], { tile: "sign:NANA'S COCOA", keepUV: true }, null, M);
-      for (const sx of [-0.9, 0.9]) B.tube([sx, 2.42, d / 2 + pd - 0.05], [sx, 2.62, d / 2 + pd - 0.1], 0.015, 0.015, { color: 0x2a2a2a }, 3, M);
+      // hung low enough that the sloped porch roof doesn't clip the lettering
+      B.box([0, 1.92, d / 2 + pd - 0.05], [(t.w / 25.6) * 1.45, (t.h / 25.6) * 1.45, 0.06], { tile: "sign:NANA'S COCOA", keepUV: true }, null, M);
+      for (const sx of [-1.6, 1.6]) B.tube([sx, 2.28, d / 2 + pd - 0.05], [sx, 2.5, d / 2 + pd - 0.1], 0.015, 0.015, { color: 0x2a2a2a }, 3, M);
       // rocking chair, quilt, pumpkins, lantern
       rockingChair(B, M, -w / 3, 0, d / 2 + 1.1);
       B.box([w / 3, 0.45, d / 2 + 0.5], [1.6, 0.08, 0.5], { color: 0x8a5a30 }, null, M);
@@ -439,11 +440,12 @@ export function rockingChair(B, M, x, y, z) {
   }
 }
 
-import { TILES } from '../render/builder.js';
+import { TILES, TILE_DENSITY } from '../render/builder.js';
 function TILESIZE(name) {
   const t = TILES[name];
   if (!t) return { w: 32, h: 16 };
-  return { w: Math.round(t[2] * 1024), h: Math.round(-t[3] * 1024) };
+  const k = TILE_DENSITY[name] || 1;
+  return { w: Math.round((t[2] * 1024) / k), h: Math.round((-t[3] * 1024) / k) };
 }
 export { TILESIZE };
 

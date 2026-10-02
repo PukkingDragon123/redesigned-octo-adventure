@@ -91,19 +91,29 @@ export class Story {
     return this.scene(async (S) => {
       const A = g.world.atmosphere;
       g.setBikeVisible(false);
-      A.hour = 23.6;
-      A.setWeather('misty', true);
-      A.cold = 0.6;
       g.pipeline.post.uFade.value = 1;
-      S.music('spooky');
-      const gr = POI.grave;
-      const gy = g.physics.groundAt(gr.x, gr.z).h;
-      await S.cam(V(gr.x + 4, gy + 1.4, gr.z + 6), V(gr.x, gy + 0.3, gr.z), 0, 45);
-      await S.wait(0.6);
+      // storybook opening: drifting over the forest at golden hour
+      A.hour = 17.9;
+      A.setWeather('breezy', true);
+      A.cold = 0;
+      S.music('title');
+      await S.cam(V(-10, 34, 46), V(-110, 16, 30), 0, 50);
+      S.cam(V(-55, 26, 38), V(-150, 14, 30), 24, 50);
+      S.fade(0, 2.5);
+      await S.wait(1.2);
       await S.narrate('Autumn. Somewhere in the wilds of Canada...');
       await S.narrate('Hank was a lumberjack. A good one, mostly. He had just one tiny flaw.');
       await S.narrate('Hank could sleep. Anywhere. Any time. For a ~very, very~ long time.');
       await S.narrate('One afternoon he lay down in the leaves for a quick nap... and nobody could wake him up.');
+      await S.fade(1, 1.2);
+      // ...that night, at the old cemetery
+      A.hour = 23.6;
+      A.setWeather('misty', true);
+      A.cold = 0.6;
+      S.music('spooky');
+      const gr = POI.grave;
+      const gy = g.physics.groundAt(gr.x, gr.z).h;
+      await S.cam(V(gr.x + 4, gy + 1.4, gr.z + 6), V(gr.x, gy + 0.3, gr.z), 0, 45);
       await S.narrate('The village held a lovely funeral. Everyone cried. Hank snored.');
       await S.fade(0, 2.2);
       // snoring from under the dirt
@@ -117,6 +127,10 @@ export class Story {
       R.groundSnap = true;
       R.floatY = 0.25;
       R.bb.fade = 1;
+      // an eerie violet glow travels with him, so the black robe reads against the night
+      const glow = g.lightPool.addDynamic({ pos: R.pos.clone().add(V(0.6, 1.6, 0.8)), color: [0.55, 0.45, 1.0], radius: 7, intensity: 1.3 });
+      S.temp.push({ remove: () => g.lightPool.removeDynamic(glow) });
+      R.faceTowards(gr.x + 6.5, gr.z + 4.8);
       S.sfx('reaper');
       g.effects.magic(R.pos.x, R.pos.y + 1, R.pos.z, 18, [0.5, 0.4, 0.8]);
       for (let k = 0; k <= 10; k++) {
@@ -175,29 +189,39 @@ export class Story {
         await S.wait(0.05);
       }
       R.visible = false;
+      g.lightPool.removeDynamic(glow);
       await S.frame(H, [1.5, 1.0, 2.4], 0.8, 40, 1.1);
       H.faceTowards(R.pos.x, R.pos.z);
       await S.say('hankBuried', '...Toodles?', { actor: H, expr: 'sad' });
-      // wandering in the cold
+      // out through the cemetery gate and down the dark trail
+      await S.fade(1, 0.8);
       S.music('night');
-      H.walkTo([[gr.x + 3, gr.z + 6], [gr.x + 6, gr.z + 11]], 0.9, 'walk+shiver');
-      await S.cam(V(gr.x + 10, gy + 3, gr.z + 16), V(gr.x + 5, gy + 1, gr.z + 9), 3.5, 48);
-      H.play('shiver', 'sad');
+      const T = (x, z, up = 0) => V(x, g.physics.groundAt(x, z).h + up, z);
+      H.pos.copy(T(-210.4, -25.2));
+      H.walkTo([[-208.4, -19.5], [-206.6, -13.6]], 0.85, 'walk+shiver');
+      await S.cam(T(-203.2, -8.6, 2.3), T(-208.0, -18.5, 0.7), 0, 46);
+      S.fade(0, 1.2);
       await S.narrate('Cold. So very cold. Hank stumbled through the dark woods for what felt like hours...');
-      // a warm lantern bobbing through the trees
-      const N = S.actor('grandma', gr.x + 14, gr.z + 24, Math.PI + 0.5, 'walk+lantern');
+      // a warm lantern bobbing up the trail
+      const N = S.actor('grandma', -199.8, 6.5, Math.PI + 0.36, 'walk+lantern');
       const lamp = g.lightPool.addDynamic({ pos: N.pos.clone(), color: [1.0, 0.7, 0.35], radius: 9, intensity: 1.4 });
-      N.onTick = () => lamp.pos.set(N.pos.x + 0.3, N.pos.y + 1.0, N.pos.z);
+      N.onTick = () => {
+        lamp.pos.set(N.pos.x + 0.3, N.pos.y + 1.0, N.pos.z);
+        // the lantern itself glows
+        g.effects.ps.spawn({ x: N.pos.x + 0.3, y: N.pos.y + 0.75, z: N.pos.z, life: 0.12, size: 0.55, sprite: P.glow, color: [1, 0.72, 0.35], emissive: 1, alpha: 0.5 });
+      };
       this.followers = [N];
-      const meet = V(gr.x + 7.2, 0, gr.z + 12.6);
-      const walk = N.walkTo([[meet.x, meet.z]], 1.1, 'walk+lantern');
-      await S.cam(V(gr.x + 12, gy + 2.2, gr.z + 8), V(gr.x + 9, gy + 1.2, gr.z + 15), 2, 45);
+      const walk = N.walkTo([[-202.6, -2.0], [-205.3, -9.4]], 1.15, 'walk+lantern');
+      await S.cam(T(-208.2, -17.6, 2.0), T(-203.6, -4.0, 1.0), 2.0, 44);
       await S.say('grandma', 'Hello? Is someone out there? I heard the most dreadful racket from the cemetery!', { actor: N, expr: 'surprised' });
       await walk;
+      if (H.path) { H.path = null; H.pos.copy(T(-206.6, -13.6)); }
       N.play('lantern');
       N.faceTowards(H.pos.x, H.pos.z);
       H.faceTowards(N.pos.x, N.pos.z);
-      await S.cam(V(H.pos.x + 3.5, H.pos.y + 1.5, H.pos.z - 1.0), V((H.pos.x + N.pos.x) / 2, H.pos.y + 1.1, (H.pos.z + N.pos.z) / 2), 1.2, 42);
+      // two-shot along the trail, over Hank's shoulder
+      const mid = H.pos.clone().lerp(N.pos, 0.5);
+      await S.cam(V(mid.x - 0.34 * 6.4 + 0.94 * 1.4, mid.y + 3.1, mid.z - 0.94 * 6.4 - 0.34 * 1.4), V(mid.x, mid.y + 0.45, mid.z), 1.2, 42);
       N.jump(2.5);
       await S.say('grandma', 'Goodness gracious!', { actor: N, expr: 'shock' });
       await S.say('grandma', "You're frozen to the bone, dear! And a touch... green.", { actor: N, expr: 'sad' });
@@ -224,12 +248,15 @@ export class Story {
       S.music('cabin');
       const fire = g.world.ctx.fires[0];
       const fx = fire.x, fz = fire.z;
-      const H = S.actor('hankBuried', fx + Math.cos(2.4) * 2.0, fz + Math.sin(2.4) * 2.0, 0, 'shiver');
+      // both on the cabin side of the fire, so the glowing windows sit behind them
+      const H = S.actor('hankBuried', fx + Math.cos(4.0) * 2.0, fz + Math.sin(4.0) * 2.0, 0.6, 'shiver');
       H.faceTowards(fx, fz);
-      const N = S.actor('grandma', fx + Math.cos(0.5) * 2.2, fz + Math.sin(0.5) * 2.2, 0, 'idle');
+      const N = S.actor('grandma', fx + Math.cos(5.3) * 2.1, fz + Math.sin(5.3) * 2.1, -0.6, 'idle');
       N.faceTowards(fx, fz);
+      H.yaw = H.targetYaw;
+      N.yaw = N.targetYaw;
       const fy = g.physics.groundAt(fx, fz).h;
-      await S.cam(V(fx + 1.5, fy + 1.8, fz - 5.2), V(fx, fy + 0.9, fz + 0.5), 0, 45);
+      await S.cam(V(fx + 0.6, fy + 1.7, fz + 5.0), V(fx - 0.1, fy + 0.9, fz - 1.4), 0, 45);
       await S.fade(0, 1.6);
       await S.say('grandma', 'There we are. Sit close, dear. Get that fire into you.', { actor: N, expr: 'happy' });
       await S.say('grandma', 'Here — these were my Harold\'s. His good sweater, and his lucky toque.', { actor: N, expr: 'neutral' });
@@ -244,7 +271,7 @@ export class Story {
       H.play('idle', 'happy');
       g.setOutfit('hank');
       N.play('idle');
-      await S.frame(H, [1.4, 0.9, -2.4], 0.6, 38, 1.0);
+      await S.frame(H, [0.9, 0.7, 2.6], 0.6, 38, 1.0);
       await S.say('hank', 'Oh... oh, that\'s *cozy.*', { actor: H, expr: 'happy' });
       await S.say('grandma', "Harold was a hunter. A terrible one. Fifty years and he never hit a single thing. Too soft-hearted.", { actor: N, expr: 'laugh' });
       N.play('offer');
@@ -282,39 +309,51 @@ export class Story {
       A.cold = 0;
       g.setBikeVisible(true);
       g.parkBike();
+      g.rider.visible = false;
       S.music('cabin');
       g.ui.banner(`DAY ${day}`, weatherLine(g.state.weather, day), 2800);
       S.sfx('day_start');
       const b = BREAKFAST[day];
-      const tx = -166.4, tz = 61.4;
+      // breakfast in the yard, with the porch and Nana's sign behind
+      const tx = -165.2, tz = 68.2;
       const ty = g.physics.groundAt(tx, tz).h;
       const table = this.table || (this.table = makeTable(g, tx, ty, tz));
       table.visible = true;
       g.villagers.setVisible('grandma', false);
       const H = S.actor('hank', tx - 0.85, tz, Math.PI / 2, 'sit');
-      const N = S.actor('grandma', tx + 1.2, tz + 1.0, -2.2, 'idle');
+      const N = S.actor('grandma', tx + 0.25, tz + 1.05, Math.PI, 'idle');
+      H.yaw = H.targetYaw;
+      N.yaw = N.targetYaw;
       let cat = null;
       if (g.state.cat) {
         cat = new Billboard(g.atlas, 'cat:sit:side:0', { castShadow: true });
-        cat.mesh.position.set(tx - 0.2, ty, tz - 1.0);
+        cat.mesh.position.set(tx + 0.1, ty, tz - 0.95);
         g.scene.add(cat.mesh);
         S.temp.push({ remove: () => g.scene.remove(cat.mesh) });
       }
-      await S.cam(V(tx + 0.4, ty + 1.5, tz - 4.6), V(tx, ty + 0.8, tz), 0, 42);
+      await S.cam(V(tx + 7.0, ty + 2.5, tz + 1.5), V(tx - 0.7, ty + 0.5, tz + 0.2), 0, 40);
       await S.fade(0, 1.2);
       if (b) {
         for (const [who, text, expr] of b.lines) await S.say(who, text, { expr, actor: who === 'hank' ? H : N });
+        // close on Hank for the big bite...
+        const wide = [g.chase.pos.clone(), g.chase.look.clone()];
+        await S.cam(V(tx + 2.7, ty + 1.65, tz - 2.4), V(tx - 0.85, ty + 0.8, tz), 0.5, 40);
         H.play('eat');
-        await S.wait(0.5);
-        // the food falls straight through Hank
+        await S.wait(0.8);
+        // ...and the food falls straight through him
         S.sfx('food_fall');
+        const toCam = g.camera.position.clone().sub(H.pos).setY(0).normalize().multiplyScalar(0.3);
         for (let k = 0; k < 3; k++) {
-          this.drop(`food:${b.food}`, V(H.pos.x + 0.08, ty + 1.15 - k * 0.05, H.pos.z), V((Math.random() - 0.5) * 0.4, -0.2, (Math.random() - 0.5) * 0.4));
-          await S.wait(0.25);
+          this.drop(`food:${b.food}`, V(H.pos.x + toCam.x, ty + 1.2 - k * 0.06, H.pos.z + toCam.z), V((Math.random() - 0.5) * 0.5, -0.4, (Math.random() - 0.5) * 0.5), 1.2);
+          await S.wait(0.22);
         }
+        await S.wait(0.5);
         S.sfx('plate');
-        await S.wait(1.0);
         H.play('sit', 'sheepish');
+        H.showEmote('sweat', 2.2);
+        N.showEmote('question', 2.2);
+        await S.wait(1.2);
+        await S.cam(wide[0], wide[1], 0.6, 40);
         if (cat && day >= 3) {
           cat.setFrame('cat:walk:side:0');
           S.sfx('purr');
@@ -370,7 +409,7 @@ export class Story {
       this.flag('bike', true);
     }).then(() => {
       g.ui.toast('<span class="key">W</span> pedal · <span class="key">A</span><span class="key">D</span> steer · <span class="key">Space</span> hop · <span class="key">Shift</span> drift', null, 7000);
-      g.ui.toast('Follow the cocoa cups on the compass ☕', 'cocoa', 6000);
+      g.ui.toast('Follow the cocoa cups on the compass', 'cocoa', 6000);
     });
   }
 
@@ -694,12 +733,13 @@ export class Story {
   }
 
   // ---------------------------------------------------------------- world triggers
-  drop(frame, pos, vel) {
+  drop(frame, pos, vel, scale = 1) {
     const g = this.g;
     const b = new Billboard(g.atlas, frame, { castShadow: true, upright: 0.7 });
     b.mesh.position.copy(pos);
+    b.setScale(scale, scale);
     g.scene.add(b.mesh);
-    this.debris.push({ b, vel: vel.clone(), spin: (Math.random() - 0.5) * 12 });
+    this.debris.push({ b, vel: vel.clone(), spin: (Math.random() - 0.5) * 12, landed: false });
   }
 
   update(dt) {
@@ -712,6 +752,11 @@ export class Story {
       const h = g.physics.groundAt(p.x, p.z, p.y + 0.5).h;
       if (p.y < h) {
         p.y = h;
+        if (!d.landed) {
+          d.landed = true;
+          g.sound.play('squish', { volume: 0.5, pitch: 1.3 + Math.random() * 0.3 });
+          g.effects.ps.burst(5, (k, r) => ({ x: p.x, y: h + 0.05, z: p.z, vx: r.range(-0.8, 0.8), vy: r.range(0.3, 0.9), vz: r.range(-0.8, 0.8), life: 0.6, size: 0.18, size1: 0.35, sprite: P.dust, color: [0.8, 0.72, 0.6], drag: 2, alpha: 0.8 }));
+        }
         d.vel.y = Math.abs(d.vel.y) * 0.3;
         d.vel.x *= 0.5;
         d.vel.z *= 0.5;

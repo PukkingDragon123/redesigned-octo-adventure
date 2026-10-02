@@ -44,10 +44,12 @@ export class Orders {
     const rng = new RNG(1000 + day * 77);
     const n = forced ? forced.length : Math.min(7, 2 + Math.floor(day * 0.75));
     const ids = forced || shuffle(Object.keys(CUSTOMERS), rng).slice(0, n);
-    this.list = ids.map((cid) => {
+    // deal cocoas from a shuffled deck so a board never reads "mocha, mocha, mocha"
+    const deck = shuffle(COCOAS, rng);
+    this.list = ids.map((cid, i) => {
       const c = CUSTOMERS[cid];
       const dist = Math.hypot(c.x - POI.cabin.x, c.z - POI.cabin.z);
-      const cocoa = cid === 'gus' && day === 1 ? COCOAS[0] : cid === 'marie' && day === 1 ? COCOAS[1] : rng.pick(COCOAS);
+      const cocoa = cid === 'gus' && day === 1 ? COCOAS[0] : cid === 'marie' && day === 1 ? COCOAS[1] : deck[i % deck.length];
       const distBonus = Math.round(dist / 60);
       const rush = day > 2 && rng.chance(0.2);
       return {

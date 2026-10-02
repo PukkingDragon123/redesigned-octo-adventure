@@ -4,7 +4,7 @@
 import { Pix, shade, mix } from './pixel.js';
 
 export const SKINS = {
-  zombie: { base: 0xa6b89c, sh: 0x7c9480, dk: 0x56705e, hi: 0xc8d8bc, cheek: 0x96a88e, lip: 0x6a7a68 },
+  zombie: { base: 0xa4c49a, sh: 0x7a9c7a, dk: 0x52725a, hi: 0xcae2bc, cheek: 0x9ab48c, lip: 0x66806a },
   fair: { base: 0xf2c8a2, sh: 0xd89c7a, dk: 0xa86c52, hi: 0xffe2c6, cheek: 0xf0a090, lip: 0xc0605a },
   rosy: { base: 0xf4c4a8, sh: 0xdc9a80, dk: 0xac6a58, hi: 0xffe4d0, cheek: 0xf28a82, lip: 0xc05a58 },
   tan: { base: 0xd8a274, sh: 0xb47a4c, dk: 0x7c5032, hi: 0xf0c496, cheek: 0xe08c70, lip: 0xa0503c },
@@ -19,7 +19,7 @@ const WHITE = 0xfaf6ee;
 export const CHARACTERS = {
   hank: {
     name: 'Hank', skin: 'zombie', build: 'big',
-    hair: { style: 'messy', color: 0x2c2430 }, beard: { style: 'full', color: 0x2c2430 },
+    hair: { style: 'messy', color: 0x4a3226 }, beard: { style: 'full', color: 0x4a3226 },
     eyes: 'undead', bandage: true,
     hat: { type: 'toque', color: 0xc8361f, band: 0xeadfc4, pom: 0xf6efe0 },
     top: { type: 'sweater', color: 0xe2d4b4, accent: 0x2f6e6a, accent2: 0xc8361f },
@@ -27,7 +27,7 @@ export const CHARACTERS = {
   },
   hankBuried: {
     name: 'Hank', skin: 'zombie', build: 'big',
-    hair: { style: 'messy', color: 0x2c2430 }, beard: { style: 'full', color: 0x2c2430 },
+    hair: { style: 'messy', color: 0x4a3226 }, beard: { style: 'full', color: 0x4a3226 },
     eyes: 'undead', bandage: false, dirt: true,
     hat: null,
     top: { type: 'plaid', color: 0xa8321e, accent: 0x2a1616, suspenders: 0x3a2a20 },
@@ -42,9 +42,9 @@ export const CHARACTERS = {
   },
   reaper: {
     name: 'The Grim Reaper', skin: 'skull', build: 'tall',
-    hood: 0x24202c, eyes: 'skull',
-    top: { type: 'robe', color: 0x2a2632, accent: 0x3e3848 },
-    legs: { type: 'robe', color: 0x2a2632 }, boots: 0x2a2632,
+    hood: 0x2e2a3e, eyes: 'skull',
+    top: { type: 'robe', color: 0x38324c, accent: 0x564e6e },
+    legs: { type: 'robe', color: 0x38324c }, boots: 0x38324c,
   },
   gus: {
     name: 'Gus', skin: 'tan', build: 'normal',

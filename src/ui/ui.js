@@ -110,6 +110,8 @@ export class UI {
     this.dialogue = this.buildDialogue();
     this.toasts = el('div', 'toasts');
     this.root.appendChild(this.toasts);
+    this.skipHint = el('div', 'skiphint', `<span class="key">Esc</span> skip`);
+    this.root.appendChild(this.skipHint);
     this.overlay = null;
     this.menuStack = [];
     this.prompted = null;
@@ -236,8 +238,18 @@ export class UI {
       return vis;
     };
     for (const t of this.compassTicks) place(t.deg, t.e);
-    const marks = g.compassMarkers ? g.compassMarkers() : [];
+    const marks = (g.compassMarkers ? g.compassMarkers() : []).map((m) => {
+      const dx = m.x - g.bike.pos.x, dz = m.z - g.bike.pos.z;
+      return { ...m, d: Math.hypot(dx, dz), deg: (Math.atan2(dx, -dz) * 180) / Math.PI };
+    });
+    marks.sort((a, b) => a.d - b.d);
     const seen = new Set();
+    const placed = [];
+    if (!(this._uAt > g.time - 2)) {
+      this._u = parseFloat(getComputedStyle(this.root).getPropertyValue('--u')) || 3;
+      this._uAt = g.time;
+    }
+    const u = this._u;
     for (const m of marks) {
       seen.add(m.id);
       let e = this.compassMarks.get(m.id);
@@ -246,9 +258,20 @@ export class UI {
         this.compass.appendChild(e);
         this.compassMarks.set(m.id, e);
       }
-      const dx = m.x - g.bike.pos.x, dz = m.z - g.bike.pos.z;
-      const deg = (Math.atan2(dx, -dz) * 180) / Math.PI;
-      if (place(deg, e)) e.querySelector('span').textContent = `${Math.round(Math.hypot(dx, dz))}m`;
+      if (!place(m.deg, e)) continue;
+      // nearer markers win: farther ones that would overlap step aside and drop their label
+      let x = parseFloat(e.style.left);
+      let crowded = false;
+      for (const px of placed) {
+        if (Math.abs(x - px) < u * 16) crowded = true;
+        if (Math.abs(x - px) < u * 7) x = px + (x >= px ? u * 7 : -u * 7);
+      }
+      e.style.left = `${x}px`;
+      placed.push(x);
+      const span = e.querySelector('span');
+      span.textContent = `${Math.round(m.d)}m`;
+      span.style.visibility = crowded ? 'hidden' : '';
+      e.style.zIndex = String(10 - placed.length);
     }
     for (const [id, e] of this.compassMarks) if (!seen.has(id)) { e.remove(); this.compassMarks.delete(id); }
   }
@@ -330,7 +353,7 @@ export class UI {
     d.appendChild(box);
     this.root.appendChild(d);
     d.addEventListener('pointerdown', () => (this._dlgClick = true));
-    return { root: d, portrait: box.querySelector('.dlg-portrait'), name: box.querySelector('.dlg-name'), text: box.querySelector('.dlg-text'), choices: box.querySelector('.dlg-choices'), next: box.querySelector('.dlg-next') };
+    return { root: d, box, portrait: box.querySelector('.dlg-portrait'), name: box.querySelector('.dlg-name'), text: box.querySelector('.dlg-text'), choices: box.querySelector('.dlg-choices'), next: box.querySelector('.dlg-next') };
   }
 
   // say('grandma', 'Hello *dear*!', { expr: 'happy', choices: ['Yes', 'No'] }) -> Promise<choiceIndex|undefined>
@@ -339,6 +362,12 @@ export class UI {
     const spec = who ? CHARACTERS[who] : null;
     const name = opts.name ?? (who === 'cat' ? 'Poutine' : spec?.name ?? '');
     D.root.classList.add('on');
+    // narration gets a dark storybook caption instead of the parchment speech box
+    const narr = !who && !opts.choices;
+    if (D.box.classList.contains('narr') !== narr) {
+      D.box.classList.toggle('narr', narr);
+      frameStyle(D.box, narr ? 'dark' : 'wood');
+    }
     D.portrait.classList.toggle('empty', !who);
     if (who) D.portrait.style.backgroundImage = `url(${portraitURL(who === 'hankBuried' ? 'hankBuried' : who, opts.expr || 'neutral')})`;
     D.name.textContent = name;
@@ -394,10 +423,13 @@ export class UI {
       };
       const close = () => {
         this.dialogueTick = null;
+        this._dlgResolve = null;
         sound.play('ui_click');
         if (!opts.keepOpen) D.root.classList.remove('on');
         resolve(opts.choices ? sel : undefined);
       };
+      // hideDialogue() (e.g. skipping a cutscene) settles the line with its default answer
+      this._dlgResolve = () => resolve(opts.choices ? 0 : undefined);
       this._dlgClick = false;
       this.dialogueTick = (dt) => {
         const confirm = input.pressed('confirm') || this._dlgClick;
@@ -434,6 +466,9 @@ export class UI {
   hideDialogue() {
     this.dialogue.root.classList.remove('on');
     this.dialogueTick = null;
+    const r = this._dlgResolve;
+    this._dlgResolve = null;
+    r?.();
   }
 
   // ---------------------------------------------------------------- menus

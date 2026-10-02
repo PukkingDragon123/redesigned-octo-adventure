@@ -10,6 +10,8 @@ const _up = new THREE.Vector3(0, 1, 0);
 
 // atlas tile registry: name -> [u0, v0, du, dv] (filled by art/atlas.js)
 export const TILES = { white: [0, 0, 1 / 64, 1 / 64] };
+// texels per logical sprite pixel for tiles painted at 2x (signs), so their mip 1 is the crisp 1x art
+export const TILE_DENSITY = {};
 
 export function linearColor(hex) {
   const c = new THREE.Color(hex); // converts sRGB hex -> linear working space

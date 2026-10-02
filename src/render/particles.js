@@ -225,10 +225,11 @@ void main() {
   vec4 mv = modelViewMatrix * vec4(position, 1.0);
   gl_Position = projectionMatrix * mv;
   float px = aData.x * uScale / max(0.1, -mv.z);
-  gl_PointSize = clamp(floor(px + 0.5), 1.0, 96.0);
+  gl_PointSize = clamp(floor(px + 0.5), 1.0, 64.0);
   vColor = aColor;
   vSprite = aData.y;
-  vAlpha = aData.z;
+  // fade out right in front of the lens so stray leaves don't blot the screen
+  vAlpha = aData.z * smoothstep(0.9, 2.6, -mv.z);
   vPhase = aData.w;
   vLight = 1.0;
 }

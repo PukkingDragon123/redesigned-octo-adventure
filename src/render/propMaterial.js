@@ -53,9 +53,26 @@ void main() {
   albedo *= mix(1.0, 0.72, uWet * step(0.3, n.y));
   float shadow = getShadowMask();
   vec3 col = shadeWorld(albedo, n, vWorldPos, shadow, 1.0);
-  // warm windows & lamps glow (more at night)
   float em = vColor.a;
-  col += albedo * em * (0.6 + uNight * 2.2) * uEmissiveBoost;
+  if (tx.a < 0.9) {
+    // glass (atlas alpha ~200): dark panes with a sky sheen by day,
+    // lamp-light behind the curtains at night on lit windows (emissive 1)
+    vec3 v = normalize(uCamPos - vWorldPos);
+    float fres = pow(1.0 - clamp(abs(dot(n, v)), 0.0, 1.0), 3.0);
+    vec3 dayCol = col * 0.6 + uSkyAmb * (0.12 + fres * 0.6);
+    float wid = hash12(floor(vWorldPos.xz * 0.6) + floor(vWorldPos.y * 0.4));
+    vec3 warm = mix(vec3(1.0, 0.6, 0.26), vec3(1.0, 0.78, 0.46), wid);
+    float flick = 0.94 + 0.06 * sin(uTime * (1.7 + wid * 2.0) + wid * 6.28);
+    // curtains (saturated pixels) tint the light; bare panes glow plain warm
+    float sat = max(tx.r, max(tx.g, tx.b)) - min(tx.r, min(tx.g, tx.b));
+    vec3 lamp = mix(warm * (0.8 + 0.4 * tx.rgb), warm * (tx.rgb * 1.3 + 0.12), smoothstep(0.12, 0.35, sat));
+    lamp *= flick * (0.8 + uNight * 1.2) * uEmissiveBoost;
+    float on = clamp(em, 0.0, 1.0) * clamp(uNight * 1.4 + 0.06, 0.0, 1.0);
+    col = mix(dayCol, lamp, on);
+  } else if (em > 1.2) {
+    // lamps, bulbs, the lighthouse lens
+    col += albedo * em * (0.6 + uNight * 2.2) * uEmissiveBoost;
+  }
   gl_FragColor = vec4(col, 1.0);
 }
 `;

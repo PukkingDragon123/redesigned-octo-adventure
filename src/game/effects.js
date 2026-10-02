@@ -90,13 +90,14 @@ export class Effects {
         ps.spawn({ x: s.x + rng.range(-0.15, 0.15), y: s.y, z: s.z + rng.range(-0.15, 0.15), vx: rng.range(-0.1, 0.1), vy: rng.range(0.7, 1.1), vz: rng.range(-0.1, 0.1), life: rng.range(5, 7.5), size: 0.5, size1: 2.4, sprite: P.smoke, color: [0.82, 0.8, 0.84], drag: 0.25, wind: 0.6, alpha: 0.75, fadeIn: 0.4 });
       }
     }
-    this.acc.fire += dt * 14;
+    this.acc.fire += dt * 30;
     while (this.acc.fire > 1) {
       this.acc.fire -= 1;
       for (const f of this.fires) {
         if (f.distanceToSquared(cam.position) > 80 * 80) continue;
         const kind = rng.next();
-        if (kind < 0.55) ps.spawn({ x: f.x + rng.range(-0.25, 0.25), y: f.y, z: f.z + rng.range(-0.25, 0.25), vy: rng.range(0.6, 1.2), life: rng.range(0.4, 0.7), size: rng.range(0.35, 0.55), size1: 0.1, sprite: P.flame, color: [1, 0.9, 0.7], emissive: 1, drag: 1 });
+        if (kind < 0.08) ps.spawn({ x: f.x, y: f.y + 0.25, z: f.z, life: 0.35, size: 1.5, size1: 1.2, sprite: P.glow, color: [1, 0.55, 0.2], emissive: 1, alpha: 0.35 });
+        else if (kind < 0.62) ps.spawn({ x: f.x + rng.range(-0.3, 0.3), y: f.y, z: f.z + rng.range(-0.3, 0.3), vy: rng.range(0.7, 1.3), life: rng.range(0.45, 0.8), size: rng.range(0.4, 0.75), size1: 0.1, sprite: P.flame, color: [1, 0.9, 0.7], emissive: 1, drag: 1 });
         else if (kind < 0.85) ps.spawn({ x: f.x, y: f.y + 0.2, z: f.z, vx: rng.range(-0.5, 0.5), vy: rng.range(1.5, 3), vz: rng.range(-0.5, 0.5), life: rng.range(0.8, 1.6), size: 0.06, sprite: P.ember, color: [1, 0.7, 0.3], emissive: 1, drag: 0.8, wind: 0.5, blink: 12 });
         else ps.spawn({ x: f.x, y: f.y + 0.6, z: f.z, vy: 0.8, life: 3, size: 0.3, size1: 1.2, sprite: P.smoke, color: [0.6, 0.58, 0.6], drag: 0.3, wind: 0.5, alpha: 0.6 });
       }

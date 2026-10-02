@@ -1,7 +1,7 @@
 // World texture atlas for buildings & props. Tiles register into builder.TILES.
 // Alpha: 255 = solid, ~200 = glass (glows warm at night on window quads), 0 = cut-out.
 import { Pix, RNG, shade, mix } from './pixel.js';
-import { TILES } from '../render/builder.js';
+import { TILES, TILE_DENSITY } from '../render/builder.js';
 import { drawText, textWidth } from './font.js';
 import { LEAF_COLORS } from './groundtex.js';
 
@@ -37,8 +37,9 @@ class TileAtlas {
     paint(this.pix, x, y, w, h, this.rng);
     // v is flipped so face-bottom (v=0) samples the tile's bottom row
     TILES[name] = [x / SIZE, (y + h) / SIZE, w / SIZE, -h / SIZE];
-    this.x += w;
-    this.rowH = Math.max(this.rowH, h);
+    // keep tiles on even texels so 2x-painted tiles downsample cleanly into mip 1
+    this.x += w + (w & 1);
+    this.rowH = Math.max(this.rowH, h + (h & 1));
   }
 }
 
@@ -313,15 +314,15 @@ function flagCanada(p, x, y, w, h) {
   p.poly(leaf.map(([a, b]) => [cx + a * (h / 22), cy + b * (h / 22)]), red);
 }
 
-function signBoard(p, x, y, w, h, text, { bg = 0x5a3a22, fg = 0xf6e7c8, border = 0x3a2414 } = {}) {
+function signBoard(p, x, y, w, h, text, { bg = 0x5a3a22, fg = 0xf6e7c8, border = 0x3a2414 } = {}, s = 1) {
   p.rect(x, y, w, h, bg);
-  p.rect(x, y, w, 1, border);
-  p.rect(x, y + h - 1, w, 1, border);
-  p.rect(x, y, 1, h, border);
-  p.rect(x + w - 1, y, 1, h, border);
-  p.hline(x + 1, x + w - 2, y + 1, shade(bg, 0.15));
-  const tw = textWidth(text);
-  drawText(p, x + Math.floor((w - tw) / 2), y + Math.floor((h - 7) / 2), text, fg, 1, 1, shade(bg, -0.4));
+  p.rect(x, y, w, s, border);
+  p.rect(x, y + h - s, w, s, border);
+  p.rect(x, y, s, h, border);
+  p.rect(x + w - s, y, s, h, border);
+  p.rect(x + s, y + s, w - 2 * s, s, shade(bg, 0.15));
+  const tw = textWidth(text, s);
+  drawText(p, x + Math.floor((w - tw) / 2 / s) * s, y + Math.floor((h - 7 * s) / 2 / s) * s, text, fg, s, 1, shade(bg, -0.4));
 }
 
 function stained(p, x, y, w, h, rng) {
@@ -464,8 +465,10 @@ export function buildWorldAtlas() {
     'GARAGE': { bg: 0x6b3d22, fg: 0xf6e7c8 },
   };
   for (const [text, opt] of Object.entries(signs)) {
+    // painted at 2x: up close the letters stay crisp, and at a distance mip 1 is exactly the 1x lettering
     const w = textWidth(text) + 8;
-    A.add(`sign:${text}`, w, 13, (p, x, y, ww, hh) => signBoard(p, x, y, ww, hh, text, opt));
+    A.add(`sign:${text}`, w * 2, 26, (p, x, y, ww, hh) => signBoard(p, x, y, ww, hh, text, opt, 2));
+    TILE_DENSITY[`sign:${text}`] = 2;
   }
   built = { pix: A.pix, size: SIZE };
   return built;
