@@ -727,8 +727,9 @@ function owlSculpt(pose) {
         put(x - 1, y - 1, 0xfffbe8, true);
       }, { tol: 0.04 });
   }
-  // talons on the branch
+  // talons gripping a short branch
   for (const sd of [-1, 1]) S.ell([0.04, 0.012, sd * 0.04], [0.025, 0.012, 0.018], 'beak');
+  S.tube([[-0.05, -0.02, -0.24], [0.0, -0.012, 0.0], [0.03, -0.022, 0.26]], [0.035, 0.03, 0.022], 'hoof', { group: 9 });
   return S;
 }
 
@@ -945,10 +946,10 @@ export function* paintCrittersGen(atlas, kinds = Object.keys(CRITTERS)) {
           const r = renderSculpt(S, { yaw: v.yaw, pitch: A.pitch ?? K.pitch }, A.ppm ?? K.ppm, { contour: K.contour, clipY: A.clipY });
           const f = atlas.add(`${kind}:${name}:${view}:${i}`, r.w, r.h, (pix, x, y) => blitFrame(pix, x, y, r), r.ax, r.ay);
           f.ppm = r.ppm;
+          yield kind;
         }
       }
     }
-    yield kind;
   }
 }
 export function paintCritters(atlas, kinds) {
