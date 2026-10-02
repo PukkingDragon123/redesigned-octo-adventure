@@ -124,15 +124,33 @@ export class VoxelWorld {
       const ls = (meta.lights || []).slice().sort((a, b2) => (a.kind === 'porch' ? -1 : 0) - (b2.kind === 'porch' ? -1 : 0)).slice(0, 3);
       for (const l of ls) this.lights.push({ pos: new THREE.Vector3(l.x, l.y, l.z).applyMatrix4(M), color: l.color, radius: Math.min(9, l.radius || 6), kind: l.kind === 'beacon' ? 'beacon' : 'lamp' });
       at.voxel = { mesh, meta, M };
+      // voxel-only kinds bring their own walkable decks, posts and extra solids
+      if (at.generic) {
+        const PH = this.world.physics;
+        const wp = (x, yy, z) => new THREE.Vector3(x, yy, z).applyMatrix4(M);
+        for (const d of meta.porch || []) {
+          const c = wp((d.x0 + d.x1) / 2, d.y, (d.z0 + d.z1) / 2);
+          PH.addPlatform({ x: c.x, z: c.z, yaw, w: d.x1 - d.x0, l: d.z1 - d.z0, y0: c.y, surface: 'wood', kind: 'deck' });
+        }
+        for (const q of meta.posts || []) {
+          const c = wp(q.x, 0, q.z);
+          PH.addCircle({ x: c.x, z: c.z, r: q.r ?? 0.15, y0: y - 1, y1: y + 6, kind: 'post' });
+        }
+        for (const q of meta.solids || []) {
+          if (!q.collide) continue;
+          const c = wp((q.x0 + q.x1) / 2, 0, (q.z0 + q.z1) / 2);
+          PH.addBox({ x: c.x, z: c.z, yaw, w: q.x1 - q.x0, l: q.z1 - q.z0, y0: y + q.y0 - 0.5, y1: y + q.y1, kind: 'wall' });
+        }
+      }
     }
   }
 
-  // hand-lettered sign text planes
+  // hand-lettered sign text planes (painted at 64 px per metre so the lettering stays crisp at HD)
   sign(s, M, b) {
     const text = s.text || b.sign || '';
     if (!text) return;
-    const PPM = 24; // texture pixels per metre (≈ voxel scale)
-    const W = Math.max(8, Math.round(s.w * PPM)), H = Math.max(6, Math.round(s.h * PPM));
+    const PPM = 64;
+    const W = Math.max(16, Math.round(s.w * PPM)), H = Math.max(12, Math.round(s.h * PPM));
     const c = document.createElement('canvas');
     c.width = W;
     c.height = H;
@@ -141,23 +159,48 @@ export class VoxelWorld {
     const chalk = s.kind === 'chalk';
     const bg = chalk ? '#2a3a32' : toCss(s.bg ?? 0xf2e6c8);
     const fg = chalk ? '#f2efe2' : toCss(s.fg ?? 0x3a2418);
-    g.fillStyle = bg;
-    g.fillRect(0, 0, W, H);
-    const lines = chalk ? text.split(/\s*\n\s*|(?<=JOUR)\s/) : [text];
-    let size = 16;
-    g.font = `${size}px BoldPixels`;
-    const widest = () => Math.max(...lines.map((l) => g.measureText(l).width));
-    while ((widest() > W - 4 || size * lines.length > H - 2) && size > 8) {
-      size -= size > 12 ? 4 : 2;
+    const draw = () => {
+      g.fillStyle = bg;
+      g.fillRect(0, 0, W, H);
+      // a thin painted pinstripe just inside the board edge
+      if (!chalk && H >= 24) {
+        g.fillStyle = fg;
+        g.globalAlpha = 0.5;
+        g.fillRect(3, 3, W - 6, 2); g.fillRect(3, H - 5, W - 6, 2); g.fillRect(3, 3, 2, H - 6); g.fillRect(W - 5, 3, 2, H - 6);
+        g.globalAlpha = 1;
+      }
+      // fit: one line if it fits, else two lines on a tall enough board
+      let lines = chalk ? text.split(/\s*\n\s*|(?<=JOUR)\s/) : [text];
+      const fits = (ls, size) => {
+        g.font = `${size}px BoldPixels`;
+        return Math.max(...ls.map((l) => g.measureText(l).width)) <= W - 12 && size * ls.length * 1.05 <= H - 8;
+      };
+      const sizes = [56, 48, 40, 32, 28, 24, 20, 16, 12, 10, 8];
+      let size = sizes.find((z) => fits(lines, z)) ?? 8;
+      if (!chalk && lines.length === 1 && text.includes(' ')) {
+        const words = text.split(' ');
+        const mid = Math.ceil(words.length / 2);
+        const two = [words.slice(0, mid).join(' '), words.slice(mid).join(' ')];
+        const size2 = sizes.find((z) => fits(two, z)) ?? 8;
+        if (size2 > size * 1.3) { lines = two; size = size2; }
+      }
       g.font = `${size}px BoldPixels`;
-    }
-    g.fillStyle = fg;
-    g.textBaseline = 'middle';
-    g.textAlign = 'center';
-    lines.forEach((l, i) => g.fillText(l, Math.round(W / 2), Math.round(H / 2 + (i - (lines.length - 1) / 2) * size)));
+      g.textBaseline = 'middle';
+      g.textAlign = 'center';
+      const lh = size * 1.05;
+      lines.forEach((l, i) => {
+        const x = Math.round(W / 2), y = Math.round(H / 2 + (i - (lines.length - 1) / 2) * lh);
+        g.fillStyle = 'rgba(0, 0, 0, 0.28)';
+        g.fillText(l, x + Math.max(1, Math.round(size / 16)), y + Math.max(1, Math.round(size / 16)));
+        g.fillStyle = fg;
+        g.fillText(l, x, y);
+      });
+    };
+    draw();
     const tex = new THREE.CanvasTexture(c);
-    tex.magFilter = tex.minFilter = THREE.NearestFilter;
-    tex.generateMipmaps = false;
+    tex.magFilter = THREE.NearestFilter;
+    tex.minFilter = THREE.LinearMipmapLinearFilter;
+    tex.generateMipmaps = true;
     tex.colorSpace = THREE.SRGBColorSpace;
     const mat = createFlatMaterial(tex);
     const plane = new THREE.Mesh(new THREE.PlaneGeometry(s.w, s.h), mat);
@@ -168,13 +211,10 @@ export class VoxelWorld {
     plane.lookAt(pos.clone().add(nw));
     plane.receiveShadow = true;
     this.scene.add(plane);
+    (this.signPlanes ||= []).push(plane);
     // fonts may arrive after the first draw
     document.fonts?.load?.('16px BoldPixels').then(() => {
-      g.fillStyle = bg;
-      g.fillRect(0, 0, W, H);
-      g.font = `${size}px BoldPixels`;
-      g.fillStyle = fg;
-      lines.forEach((l, i) => g.fillText(l, Math.round(W / 2), Math.round(H / 2 + (i - (lines.length - 1) / 2) * size)));
+      draw();
       tex.needsUpdate = true;
     });
   }
@@ -388,6 +428,7 @@ export function drawTV(tv, info) {
 }
 
 function toCss(c) {
+  if (typeof c === 'string') return c; // models hand over '#rrggbb' already
   return `#${(c & 0xffffff).toString(16).padStart(6, '0')}`;
 }
 function hashStr(s) {

@@ -182,7 +182,7 @@ export const BUILDINGS = [
   N(142, 10, 9, { id: 'postoffice', kind: 'shop', floors: 2, color: 'white', roof: 'dark', sign: 'POSTES CANADA POST', shop: 'post' }),
   N(156.5, 11, 9, { id: 'donuts', kind: 'shop', floors: 1, color: 'pink', roof: 'dark', sign: 'DOUBLE-DOUBLE DONUTS', shop: 'donuts' }),
   N(215, 11, 9, { id: 'cafe', kind: 'shop', floors: 2, color: 'red', roof: 'dark', sign: 'CAFE ERABLE', shop: 'cafe', owner: 'marie' }),
-  N(230.5, 14, 10, { id: 'store', kind: 'shop', floors: 2, color: 'green', roof: 'dark', sign: 'MOOSE & GOOSE', shop: 'store' }),
+  N(230.5, 14, 10, { id: 'store', kind: 'shop', floors: 2, color: 'green', roof: 'dark', sign: 'MOOSE & GOOSE', shop: 'store', recess: 3 }),
   N(246.5, 10, 9, { id: 'clinic', kind: 'house', floors: 2, color: 'yellow', roof: 'dark', sign: 'CLINIQUE CLINIC', owner: 'ingrid' }),
   N(260.5, 10, 9, { id: 'inn', kind: 'house', floors: 2, color: 'blue', roof: 'dark', sign: 'AUBERGE INN', porch: true }),
   // ---- Main Street, south side (doors face north onto the street; back yards look over the harbour)
@@ -231,7 +231,7 @@ const at = (id, dist, side = 0) => frontOf(id, dist, side);
 // Customers (NPC id -> where they stand to receive cocoa)
 export const CUSTOMERS = {
   gus: { name: 'Gus', ...at('gus', 2.6, 1.5), house: 'gus' },
-  marie: { name: 'Marie-Claude', ...at('cafe', 1.4, 2.6), house: 'cafe' },
+  marie: { name: 'Marie-Claude', ...at('cafe', 1.4, -1.2), house: 'cafe' },
   birdie: { name: 'Captain Birdie', ...at('birdie', 2.2), house: 'birdie' },
   agnes: { name: 'Agnes', ...at('agnes', 2.4, -1.5), house: 'agnes' },
   doug: { name: 'Constable Doug', ...at('doug', 1.6, 2.5), house: 'doug' },
@@ -241,7 +241,7 @@ export const CUSTOMERS = {
   lou_lh: { name: 'Old Ollie', ...at('lighthouseHut', 2.4), house: 'lighthouseHut' },
 };
 // Mo minds the counter on the general store's front porch
-export const MO_SPOT = { ...at('store', -0.6, -2.4), yaw: 0 };
+export const MO_SPOT = { ...at('store', -2.35, -1.4), yaw: 0 };
 // Doug walks a beat along the Main Street sidewalk
 export const DOUG_BEAT = [{ x: 132, z: MS_S - 1.3 }, { x: 160, z: MS_S - 1.3 }, { x: 162, z: MS_N + 1.3 }, { x: 134, z: MS_N + 1.3 }];
 

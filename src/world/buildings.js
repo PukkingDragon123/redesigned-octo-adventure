@@ -459,7 +459,7 @@ const GENERIC = {
   firehall: { lift: 0.2, H: (b) => 8.5 },
   barn: { lift: 0.15, H: (b) => 9.5 },
   sugarshack: { lift: 0.3, H: (b) => 5.5 },
-  gazebo: { lift: 0.45, H: () => 5.6, open: true },
+  gazebo: { lift: 0.05, H: () => 5.6, open: true },
   lifeguard: { lift: 0.0, H: () => 4.2, open: true },
 };
 function generic(ctx, B, b) {
@@ -469,7 +469,10 @@ function generic(ctx, B, b) {
   const y0 = (g.open ? fh.mn : fh.mx) + g.lift;
   const M = buildingMatrix(b.x, y0, b.z, b.facing || 0);
   const H = g.H(b);
-  if (!g.open) physics.addBox({ x: b.x, z: b.z, yaw: b.facing || 0, w: b.w + 0.2, l: b.d + 0.2, y0: y0 - 1, y1: y0 + H });
+  // a recessed shopfront (the general store's porch) leaves its front strip walkable
+  const rec = b.recess || 0, f = b.facing || 0;
+  const cx = b.x - Math.sin(f) * rec / 2, cz = b.z - Math.cos(f) * rec / 2;
+  if (!g.open) physics.addBox({ x: cx, z: cz, yaw: f, w: b.w + 0.2, l: b.d - rec + 0.2, y0: y0 - 1, y1: y0 + H });
   return { M, y0, H, generic: true };
 }
 

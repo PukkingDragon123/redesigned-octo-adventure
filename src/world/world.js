@@ -72,6 +72,10 @@ export class World {
     blockers.push({ x: L.POI.pumpkinPatch.x, z: L.POI.pumpkinPatch.z, w: 26, d: 26, yaw: 0, keep: 0.35, short: true });
     blockers.push({ x: L.POI.campground.x, z: L.POI.campground.z, w: 22, d: 22, yaw: 0, keep: 0.6, short: true });
     blockers.push({ x: L.POI.picnic.x, z: L.POI.picnic.z, w: 16, d: 16, yaw: 0, keep: 0.7, short: true });
+    // cutscene stages: short, sparse grass so low cameras see the actors (lumber camp, Hank's grave)
+    const lc = L.POI.lumberCamp;
+    if (lc) blockers.push({ x: lc.x, z: lc.z, w: lc.r * 2 + 4, d: lc.r * 2 + 4, yaw: Math.PI / 4, keep: 0.4, short: true });
+    blockers.push({ x: L.POI.grave.x, z: L.POI.grave.z, w: 20, d: 20, yaw: Math.PI / 4, keep: 0.4, short: true });
     blockers.push({ x: L.POI.graveyard.x, z: L.POI.graveyard.z, w: 30, d: 30, yaw: 0, keep: 0.9, short: true });
     blockers.push({ x: L.POI.catLog.x, z: L.POI.catLog.z - 0.8, w: 8, d: 8, yaw: 0, keep: 0.5, short: true });
     blockers.push({ x: L.POI.garage.x + 6, z: L.POI.garage.z, w: 12, d: 10, yaw: 0, keep: 0.7, short: true });
