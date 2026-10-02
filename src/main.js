@@ -58,7 +58,7 @@ async function boot() {
     }
   }
   const loop = (now) => {
-    const dt = maxFrames < Infinity ? 1 / 30 : Math.min(0.05, (now - last) / 1000);
+    const dt = maxFrames < Infinity ? parseFloat(params.get('step') || '0') || 1 / 30 : Math.min(0.05, (now - last) / 1000);
     last = now;
     if (game) game.update(dt);
     const focus = game ? game.focus() : camera.position.clone().add(new THREE.Vector3(0, 0, -30).applyQuaternion(camera.quaternion));

@@ -4,7 +4,16 @@ import './paper.css';
 import { Bubbles } from './bubbles.js';
 import { buildPaperHUD, updatePaperHUD } from './paperhud.js';
 import { frameURL, slotURL } from './frames.js';
-import { iconURL } from '../art/icons.js';
+import { iconURL, ICON_NAMES } from '../art/icons.js';
+import { foodIconURL, FOOD_INFO } from '../art/foodsprites.js';
+
+// a pixel icon by name: the UI set first, then the food sprites
+const ICON_ALIAS = { candy: 'candy_corn', pumpkin: 'pumpkin', camera: 'cocoa_takeaway' };
+function anyIcon(name) {
+  if (ICON_NAMES.includes(name)) return iconURL(name);
+  const f = FOOD_INFO[name] ? name : ICON_ALIAS[name];
+  return f ? foodIconURL(f) : iconURL(name);
+}
 import { portraitURL } from '../art/portraits.js';
 import { CHARACTERS } from '../art/characters.js';
 import { input } from '../core/input.js';
@@ -162,7 +171,7 @@ export class UI {
   toast(text, icon = null, ms = 3200) {
     const t = el('div', 'toast paper-note');
     t.style.setProperty('--rot', `${(Math.random() * 4 - 2).toFixed(1)}deg`);
-    t.innerHTML = `${icon ? `<img src="${iconURL(icon)}">` : ''}<span>${text}</span>`;
+    t.innerHTML = `${icon ? `<img src="${anyIcon(icon)}">` : ''}<span>${text}</span>`;
     this.toasts.appendChild(t);
     setTimeout(() => {
       t.classList.add('out');
