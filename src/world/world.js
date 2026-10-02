@@ -54,6 +54,8 @@ export class World {
     blockers.push({ x: L.POI.cabin.x + 8, z: L.POI.cabin.z + 8, w: 26, d: 26, yaw: 0, keep: 0.8, short: true });
     blockers.push({ x: L.POI.plaza.x, z: L.POI.plaza.z, w: 24, d: 20, yaw: 0, keep: 0.6, short: true });
     blockers.push({ x: L.POI.graveyard.x, z: L.POI.graveyard.z, w: 30, d: 30, yaw: 0, keep: 0.9, short: true });
+    blockers.push({ x: L.POI.catLog.x, z: L.POI.catLog.z - 0.8, w: 8, d: 8, yaw: 0, keep: 0.5, short: true });
+    blockers.push({ x: L.POI.garage.x + 6, z: L.POI.garage.z, w: 12, d: 10, yaw: 0, keep: 0.7, short: true });
     this.grassMask = buildGrassMask(this.terrain, blockers);
     this.grass = new Grass(this.grassMask, { gridN: this.grassGrid ?? 150, spacing: 0.42 });
     this.scene.add(this.grass.mesh);
@@ -83,7 +85,7 @@ export class World {
 
   buildTown() {
     const atlas = buildWorldAtlas();
-    this.worldAtlasTex = pixTexture(atlas.pix, { repeat: false, mips: false });
+    this.worldAtlasTex = pixTexture(atlas.pix, { repeat: false, mips: true });
     this.propMat = createPropMaterial(this.worldAtlasTex);
     const ctx = {
       terrain: this.terrain, physics: this.physics,

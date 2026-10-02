@@ -54,7 +54,7 @@ export class Scene {
     const t = target.isVector3 ? target : target.pos;
     const k = 1.85;
     // aim a little low so the subject sits in the upper part of the frame, clear of the dialogue box
-    const look = new THREE.Vector3(t.x, t.y + lookUp * 0.9 - 0.6, t.z);
+    const look = new THREE.Vector3(t.x, t.y + lookUp * 0.9 - 0.4, t.z);
     const pos = new THREE.Vector3(t.x + offset[0] * k, t.y + 0.6 + (offset[1] - 0.6) * k * 0.8, t.z + offset[2] * k);
     return this.cam(pos, look, dur, fov);
   }

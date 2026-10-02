@@ -305,7 +305,7 @@ export class Story {
     const g = this.g;
     return this.scene(async (S) => {
       const A = g.world.atmosphere;
-      A.hour = 7.6;
+      A.hour = 8.2;
       A.cold = 0;
       g.setBikeVisible(true);
       g.parkBike();
@@ -527,20 +527,23 @@ export class Story {
       const cy = g.physics.groundAt(c.x, c.z).h;
       g.bike.vel.set(0, 0, 0);
       g.rider.visible = false;
-      const bp = g.bike.pos.clone();
-      const H = S.actor('hank', bp.x + (c.x - bp.x) * 0.3, bp.z + (c.z - bp.z) * 0.3, 0, 'idle');
+      const H = S.actor('hank', c.x + 1.1, c.z + 2.2, 0, 'idle');
       H.faceTowards(c.x, c.z);
+      H.yaw = H.targetYaw;
       const cat = new Billboard(g.atlas, 'cat:scared:side:0', { castShadow: true });
       cat.mesh.position.set(c.x + 0.4, cy, c.z);
       g.scene.add(cat.mesh);
       S.temp.push({ remove: () => g.scene.remove(cat.mesh) });
-      await S.cam(V(c.x - 2.5, cy + 1.2, c.z - 3.2), V(c.x, cy + 0.4, c.z), 0, 42);
+      await S.cam(V(c.x + 3.0, cy + 1.8, c.z + 4.6), V(c.x - 0.3, cy + 0.35, c.z - 0.9), 0, 42);
       S.sfx('meow_sad');
       await S.wait(0.8);
       await S.say('hank', 'Hey there, little buddy. You lost too?', { actor: H, expr: 'neutral' });
       S.sfx('meow', { pitch: 0.8 });
       S.emote('anger', V(c.x + 0.4, cy + 0.8, c.z), 1.6);
-      cat.flash = 0.4;
+      cat.flash = 0.45;
+      g.tween(cat.uniforms.uFlash, 'value', 0, 0.35);
+      cat.mesh.position.y += 0.15;
+      g.tween(cat.mesh.position, 'y', cy, 0.25);
       await S.say('cat', 'HSSSSSSS!', { expr: 'scared' });
       await S.say('hank', 'Yeah... I get that a lot.', { actor: H, expr: 'sheepish' });
       H.play('offer', 'happy');
@@ -557,7 +560,8 @@ export class Story {
         await S.wait(0.07);
       }
       cat.setFrame('cat:sit:front:2');
-      await S.frame(H, [1.6, 0.8, -2.2], 0.5, 38, 0.6);
+      H.faceTowards(c.x + 3.6, c.z + 5.4);
+      await S.cam(V(c.x + 4.7, cy + 2.3, c.z + 7.0), V(c.x + 0.7, cy + 0.6, c.z + 1.4), 0.5, 40);
       await S.say('hank', "You don't mind that I'm a little bit dead?", { actor: H, expr: 'surprised' });
       await S.say('cat', 'Mrrp.', { expr: 'happy' });
       await S.say('hank', "Then I'll call you... *Poutine.*", { actor: H, expr: 'happy' });
@@ -589,7 +593,7 @@ export class Story {
     g.sound.play('delivered');
     setTimeout(() => g.sound.play('cash'), 300);
     g.ui.toast(`+$${r.pay}${r.tip ? ` <b>(+$${r.tip} tip!)</b>` : ''} · ${Math.round(r.quality)}% hot`, 'coin');
-    g.ui.tag(`d${o.id}`, r.quality > 55 ? '♥' : '❄', actor.pos.clone().setY(actor.pos.y + 2.4), 1600);
+    g.ui.tag(`d${o.id}`, r.quality > 55 ? 'Toasty!' : 'Brr...', actor.pos.clone().setY(actor.pos.y + 2.4), 1600);
     g.mode = 'menu';
     await g.ui.say(o.customer, line, { expr: r.quality > 55 ? 'happy' : 'sad' });
     g.mode = 'ride';
@@ -717,7 +721,7 @@ export class Story {
       g.effects.confetti(H.pos.x, H.pos.y + 2, H.pos.z, 60);
       S.sfx('upgrade');
       await S.cam(V(-136, y + 6, 86), V(-147, y + 1, 95), 3, 50);
-      g.ui.banner('THE END', '...of the beginning. Keep delivering! ♥', 6000);
+      g.ui.banner('THE END', '...of the beginning. Keep delivering!', 6000);
       await S.wait(5);
       g.villagers.setVisible('grandma', true);
       g.rider.visible = true;

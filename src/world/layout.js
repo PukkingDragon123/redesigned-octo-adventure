@@ -21,7 +21,7 @@ export const POI = {
   pond: { x: -38, z: -150 },
   meadow1: { x: -95, z: -55, r: 28 },
   meadow2: { x: 70, z: 70, r: 24 },
-  catLog: { x: -88, z: 47 },
+  catLog: { x: -87.5, z: 42.6 }, // where Poutine waits, in front of a hollow log just off the road
 };
 
 // The sea & the cove (union of ellipses). Values: cx, cz, rx, rz

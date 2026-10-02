@@ -209,7 +209,7 @@ export class Game {
   newDay() {
     const st = this.state;
     st.day++;
-    st.hour = 7.6;
+    st.hour = 8.2;
     const s = st.stats;
     s.dayEarned = s.dayTips = s.dayDeliveries = s.dayCrashes = 0;
     s.dayAir = 0;
@@ -346,14 +346,15 @@ export class Game {
         drift: drift > 0 && Math.sin(t * 0.7) > 0.5, boostPressed: false,
       };
     }
+    const swallowed = this.ui.inputSwallowed();
     return {
       throttle: input.throttle(),
       brake: input.brake(),
       steer: input.steer(),
-      jump: input.down('jump'),
-      jumpPressed: input.pressed('jump'),
+      jump: input.down('jump') && !swallowed,
+      jumpPressed: input.pressed('jump') && !swallowed,
       drift: input.down('drift'),
-      boostPressed: input.pressed('boost'),
+      boostPressed: input.pressed('boost') && !swallowed,
     };
   }
 
@@ -378,7 +379,7 @@ export class Game {
     }
     if (!action && this.catEventActive && near(L.POI.catLog.x, L.POI.catLog.z, 7) && slow) action = { text: 'Investigate the meowing', fn: () => this.story.catRescue() };
     ui.prompt(action ? action.text : null);
-    if (action && input.pressed('interact')) {
+    if (action && input.pressed('interact') && !ui.inputSwallowed()) {
       ui.prompt(null);
       action.fn();
     }
@@ -522,9 +523,10 @@ export class Game {
     const busy = this.ui.dialogueTick || this.ui.menuStack.length;
     if (this.mode === 'ride' && !busy) {
       this.world.atmosphere.hour += (dt * GAME_MIN_PER_SEC) / 60;
-      if (input.pressed('pause')) this.openMenu(() => this.menus.pause());
-      else if (input.pressed('map')) this.openMenu(() => this.wrapClose(this.menus.map()));
-      else if (input.pressed('keepsakes')) this.openMenu(() => this.wrapClose(this.menus.keepsakes()));
+      const free = !this.ui.inputSwallowed();
+      if (free && input.pressed('pause')) this.openMenu(() => this.menus.pause());
+      else if (free && input.pressed('map')) this.openMenu(() => this.wrapClose(this.menus.map()));
+      else if (free && input.pressed('keepsakes')) this.openMenu(() => this.wrapClose(this.menus.keepsakes()));
       if (input.pressed('bell')) {
         sound.play(this.bike.stats.bellType || 'bell');
         this.villagers.onBell();
@@ -535,7 +537,8 @@ export class Game {
       this.currentScene.skip = true;
       this.ui.hideDialogue();
     }
-    if (this.mode === 'menu' && !busy) this.mode = this.prevMode && this.prevMode !== 'menu' ? this.prevMode : 'ride';
+    // (re-check: an interaction above may have just opened a talk or a menu)
+    if (this.mode === 'menu' && !(this.ui.dialogueTick || this.ui.menuStack.length)) this.mode = this.prevMode && this.prevMode !== 'menu' ? this.prevMode : 'ride';
     if (this.mode !== 'ride') this.ui.prompt(null);
 
     const c = this.controls();

@@ -98,7 +98,7 @@
   font-size: calc(var(--u) * 5);
 }
 
-.toasts { position: absolute; right: calc(var(--u) * 6); bottom: calc(var(--u) * 26); display: flex; flex-direction: column; gap: calc(var(--u) * 2); align-items: flex-end; }
+.toasts { position: absolute; right: calc(var(--u) * 6); bottom: calc(var(--u) * 78); display: flex; flex-direction: column; gap: calc(var(--u) * 2); align-items: flex-end; }
 .toast {
   display: flex; align-items: center; gap: calc(var(--u) * 3);
   padding: 0 calc(var(--u) * 3);
@@ -207,7 +207,12 @@
 .split .slots { margin: 0; }
 .split .detail { margin-top: 0; width: calc(var(--u) * 92); flex: none; align-self: stretch; }
 @media (max-width: 760px) { .split { flex-direction: column; align-items: center; } .split .detail { width: auto; align-self: stretch; } }
-.slot .owned { position: absolute; top: calc(var(--u) * -8); right: calc(var(--u) * -8); font-size: calc(var(--u) * 5); color: #6ad050; }
+/* installed / given badge: a little pixel tick (glyph-free, so no font fallback) */
+.slot .owned { position: absolute; top: calc(var(--u) * -9); right: calc(var(--u) * -9); width: calc(var(--u) * 9); height: calc(var(--u) * 9); font-size: 0; }
+.slot .owned:not(:empty) { background: #3e8a4a; box-shadow: 0 0 0 var(--u) #1e3a22; }
+.slot .owned.given:not(:empty) { background: #c8361f; box-shadow: 0 0 0 var(--u) #5a1410; }
+.slot .owned:not(:empty)::after { content: ''; position: absolute; left: calc(var(--u) * 3.2); top: calc(var(--u) * 0.8); width: calc(var(--u) * 2); height: calc(var(--u) * 4.4);
+  border: solid #fff4dc; border-width: 0 calc(var(--u) * 1.2) calc(var(--u) * 1.2) 0; transform: rotate(45deg); }
 .detail { min-height: calc(var(--u) * 30); padding: calc(var(--u) * 2) calc(var(--u) * 3); margin-top: calc(var(--u) * 5); }
 .detail b { color: #8a2214; font-size: calc(var(--u) * 6); }
 
@@ -219,7 +224,7 @@
 .slip::before { content: ''; position: absolute; left: 50%; top: calc(var(--u) * -9); width: calc(var(--u) * 5); height: calc(var(--u) * 5); background: #c8361f; border: var(--u) solid #6a1410; border-radius: 50%; transform: translateX(-50%); }
 .slip.sel { transform: rotate(0deg) scale(1.06); }
 .slip.taken { filter: sepia(0.4) brightness(0.92); }
-.slip.taken::after { content: '✔ PACKED'; position: absolute; right: calc(var(--u) * -2); bottom: calc(var(--u) * -4); color: #2f6e52; font-weight: 700; font-size: calc(var(--u) * 5); transform: rotate(-12deg); }
+.slip.taken::after { content: 'PACKED'; position: absolute; right: calc(var(--u) * -2); bottom: calc(var(--u) * -4); color: #2f6e52; font-weight: 700; font-size: calc(var(--u) * 5); transform: rotate(-12deg); }
 .slip .who { display: flex; align-items: center; gap: calc(var(--u) * 2); font-weight: 700; font-size: calc(var(--u) * 5.5); }
 .slip .who img { width: calc(var(--u) * 16); height: calc(var(--u) * 16); background: #2a1a14; }
 .slip .what { font-size: calc(var(--u) * 4.6); margin-top: calc(var(--u) * 1); }
@@ -228,7 +233,10 @@
 
 /* parchment map */
 .mapwrap { position: relative; }
-.mapwrap canvas { display: block; width: min(calc(var(--u) * 200), 80vh); height: auto; image-rendering: pixelated; }
+.mapwrap canvas { display: block; width: min(calc(var(--u) * 200), 66vh, 86vw); height: auto; image-rendering: pixelated; }
+.mapwrap .lbl { position: absolute; transform: translate(-50%, -50%); font-size: calc(var(--u) * 4); color: #5a3418; white-space: nowrap; pointer-events: none;
+  text-shadow: calc(var(--u) * 0.5) 0 0 #f6e8c8, calc(var(--u) * -0.5) 0 0 #f6e8c8, 0 calc(var(--u) * 0.5) 0 #f6e8c8, 0 calc(var(--u) * -0.5) 0 #f6e8c8; }
+.mapwrap .lbl.big { font-size: calc(var(--u) * 5.5); color: #8a2214; font-weight: 700; }
 .mapwrap .pin { position: absolute; transform: translate(-50%, -50%); width: calc(var(--u) * 10); height: calc(var(--u) * 10); }
 .mapwrap .pin.me { animation: bob 0.8s infinite; }
 

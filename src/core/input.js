@@ -54,7 +54,7 @@ class Input {
       if (e.code === 'Space' && e.target === document.body) e.preventDefault();
       if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
       this.keys.add(e.code);
-      this.tapped.add(e.code);
+      if (!e.repeat) this.tapped.add(e.code);
       this.lastDevice = 'keyboard';
     });
     window.addEventListener('keyup', (e) => this.keys.delete(e.code));
@@ -78,8 +78,11 @@ class Input {
   update() {
     this.prev = this.now;
     this.now = new Set();
+    // a fresh keydown always counts as a press, even if the key looked held last frame
+    this.fresh = new Set();
     for (const [action, codes] of Object.entries(BINDINGS)) {
       if (codes.some((c) => this.keys.has(c) || this.tapped.has(c))) this.now.add(action);
+      if (codes.some((c) => this.tapped.has(c))) this.fresh.add(action);
     }
     this.tapped.clear();
     // gamepad
@@ -111,7 +114,8 @@ class Input {
     return this.now.has(action);
   }
   pressed(action) {
-    return this.now.has(action) && !this.prev.has(action);
+    if (!this.enabled) return false;
+    return this.fresh?.has(action) || (this.now.has(action) && !this.prev.has(action));
   }
   released(action) {
     return !this.now.has(action) && this.prev.has(action);

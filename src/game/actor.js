@@ -158,7 +158,8 @@ export class Actor {
     this.squash.update(dt);
     const view = this.lockView ? { view: this.lockView, flip: false } : pickView(this.yaw, this.pos, camPos);
     const res = this.frameFor(view.view);
-    if (res) this.bb.setFrame(res.fr, view.view === 'side' ? view.flip : false);
+    // a back view that falls back to a side frame still has to face the right way
+    if (res) this.bb.setFrame(res.fr, res.usedView === 'side' ? (view.view === 'side' ? view.flip : (view.rel ?? 0) > 0) : false);
     const walkBob = this.anim.startsWith('walk') ? Math.abs(Math.sin(this.t * 8 * Math.PI / 2)) * 0.04 : 0;
     this.mesh.position.set(this.pos.x, this.pos.y + this.hop + walkBob + this.yOffset + this.floatY, this.pos.z);
     const sq = this.squash.value;

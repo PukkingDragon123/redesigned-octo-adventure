@@ -334,6 +334,7 @@ function clearingFactor(x, z) {
     f = Math.min(f, smoothstep(r, r + soft, d));
   };
   clear(L.POI.cabin.x, L.POI.cabin.z, 24, 14);
+  clear(L.POI.garage.x + 6, L.POI.garage.z, 9, 6); // room in front of Harold's garage
   clear(L.POI.graveyard.x, L.POI.graveyard.z, 18, 8);
   clear(L.POI.lookout.x, L.POI.lookout.z, 11, 8);
   clear(L.POI.trapper.x, L.POI.trapper.z, 7, 6);

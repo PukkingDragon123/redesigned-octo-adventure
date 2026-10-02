@@ -1,11 +1,12 @@
 // Helpers to turn Pix images into three.js textures.
 import * as THREE from 'three';
 
-export function pixTexture(pix, { repeat = true, mips = true, srgb = true, nearest = true } = {}) {
+// smoothMin: crisp nearest texels up close, trilinear when minified (kills moire on siding & shingles)
+export function pixTexture(pix, { repeat = true, mips = true, srgb = true, nearest = true, smoothMin = false } = {}) {
   const tex = new THREE.DataTexture(new Uint8Array(pix.data.buffer.slice(0)), pix.w, pix.h, THREE.RGBAFormat, THREE.UnsignedByteType);
   tex.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace;
   tex.magFilter = nearest ? THREE.NearestFilter : THREE.LinearFilter;
-  tex.minFilter = mips ? (nearest ? THREE.NearestMipmapLinearFilter : THREE.LinearMipmapLinearFilter) : nearest ? THREE.NearestFilter : THREE.LinearFilter;
+  tex.minFilter = mips ? (nearest && !smoothMin ? THREE.NearestMipmapLinearFilter : THREE.LinearMipmapLinearFilter) : nearest ? THREE.NearestFilter : THREE.LinearFilter;
   tex.generateMipmaps = mips;
   tex.wrapS = tex.wrapT = repeat ? THREE.RepeatWrapping : THREE.ClampToEdgeWrapping;
   tex.flipY = false;

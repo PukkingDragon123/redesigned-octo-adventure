@@ -424,6 +424,7 @@ export class UI {
       const close = () => {
         this.dialogueTick = null;
         this._dlgResolve = null;
+        this.swallowInput();
         sound.play('ui_click');
         if (!opts.keepOpen) D.root.classList.remove('on');
         resolve(opts.choices ? sel : undefined);
@@ -463,6 +464,14 @@ export class UI {
       if (opts.instant) finishTyping();
     });
   }
+  // the key press that closes a line or a menu shouldn't also hop the bike or re-open a talk
+  swallowInput(seconds = 0.25) {
+    this.swallowUntil = (this.game.time || 0) + seconds;
+  }
+  inputSwallowed() {
+    return (this.game.time || 0) < (this.swallowUntil || 0);
+  }
+
   hideDialogue() {
     this.dialogue.root.classList.remove('on');
     this.dialogueTick = null;
@@ -487,6 +496,7 @@ export class UI {
     if (!m) return;
     m.ov.remove();
     this.menuStack = this.menuStack.filter((x) => x !== m);
+    this.swallowInput();
     sound.play('ui_close');
   }
   refreshItems(m, selector = '.btn:not(:disabled), .slot, .slip') {

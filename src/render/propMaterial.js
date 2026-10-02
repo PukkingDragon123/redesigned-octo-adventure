@@ -40,7 +40,8 @@ void main() {
   if (vWorldPos.y < uClipY) discard;
   vec2 f = fract(vUv);
   vec2 auv = vTile.xy + clamp(f, 0.002, 0.998) * vTile.zw;
-  vec4 tx = texture2D(tAtlas, auv);
+  // mip level from the unwrapped uv, so tile repeats don't pick a tiny mip along every seam
+  vec4 tx = textureGrad(tAtlas, auv, dFdx(vUv) * vTile.zw, dFdy(vUv) * vTile.zw);
   if (tx.a < 0.5) discard;
   vec3 albedo = tx.rgb * vColor.rgb;
   vec3 n = normalize(vNormal);
@@ -83,7 +84,7 @@ varying vec4 vTile;
 varying vec2 vUv;
 void main() {
   vec2 auv = vTile.xy + clamp(fract(vUv), 0.002, 0.998) * vTile.zw;
-  if (texture2D(tAtlas, auv).a < 0.5) discard;
+  if (textureLod(tAtlas, auv, 0.0).a < 0.5) discard;
   gl_FragColor = vec4(1.0);
 }
 `;

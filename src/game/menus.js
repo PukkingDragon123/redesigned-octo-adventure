@@ -225,7 +225,7 @@ export class Menus {
         const locked = u.req && !st.upgrades[u.req];
         s.classList.toggle('locked', !!locked);
         s.querySelector('.price').textContent = owned ? '' : `$${u.price}`;
-        s.querySelector('.owned').textContent = owned ? '✔' : '';
+        s.querySelector('.owned').textContent = owned ? 'owned' : '';
       };
       const show = () => {
         const c = canBuy(u, st);
@@ -291,7 +291,7 @@ export class Menus {
       const have = st.keepsakes[k.id];
       s.classList.toggle('locked', !have);
       s.style.borderImageSource = `url(${slotURL(false)})`;
-      s.innerHTML = `<img src="${iconURL(KEEPSAKE_ICON[k.id])}"><span class="owned">${have === 'given' ? '♥' : ''}</span>`;
+      s.innerHTML = `<img src="${iconURL(KEEPSAKE_ICON[k.id])}"><span class="owned given">${have === 'given' ? 'given' : ''}</span>`;
       s.addEventListener('focus-item', () => {
         detail.innerHTML = have ? `<b>${k.name}</b><p>${k.note}</p>${have === 'found' ? '<p style="color:#8a2214">Bring it home to Nana!</p>' : ''}` : `<b>???</b><p>Somewhere out in the wilds... Harold always did wander.</p>`;
       });
@@ -327,6 +327,21 @@ export class Menus {
       e.style.top = `${((z + WORLD_HALF) / (WORLD_HALF * 2)) * 100}%`;
       wrap.appendChild(e);
     };
+    const label = (x, z, text, cls = '') => {
+      const e = el('div', `lbl ${cls}`, text);
+      e.style.left = `${((x + WORLD_HALF) / (WORLD_HALF * 2)) * 100}%`;
+      e.style.top = `${((z + WORLD_HALF) / (WORLD_HALF * 2)) * 100}%`;
+      wrap.appendChild(e);
+    };
+    label(POI.plaza.x, POI.plaza.z - 22, 'Maple Cove', 'big');
+    label(POI.cabin.x, POI.cabin.z + 14, "Nana's");
+    label(POI.graveyard.x, POI.graveyard.z - 14, 'Old Pine Cemetery');
+    label(POI.lookout.x, POI.lookout.z - 12, 'Sunset Lookout');
+    label(POI.lighthouse.x - 8, POI.lighthouse.z - 14, 'Lighthouse');
+    label(POI.sawmill.x, POI.sawmill.z + 12, 'Sawmill');
+    label(POI.pond.x, POI.pond.z - 12, 'Beaver Pond');
+    label(POI.trapper.x, POI.trapper.z + 12, "Trapper's Hut");
+    label(POI.bridge.x + 18, POI.bridge.z + 12, 'Covered Bridge');
     pin(POI.cabin.x, POI.cabin.z, 'home');
     for (const o of g.orders.carried()) { const c2 = CUSTOMERS[o.spot]; pin(c2.x, c2.z, 'cocoa'); }
     for (const k of KEEPSAKES) if (g.state.keepsakes[k.id]) pin(k.x, k.z, KEEPSAKE_ICON[k.id]);
