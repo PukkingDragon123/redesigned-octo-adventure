@@ -313,7 +313,7 @@ export class Terrain {
     }
     // dirt yards
     const yards = [
-      { x: -162, z: 78, r: 16 }, { x: -214, z: -40, r: 9 }, { x: -250, z: 150, r: 6 },
+      { x: -162, z: 76, r: 10 }, { x: -214, z: -40, r: 9 }, { x: -250, z: 150, r: 6 },
       { x: 62, z: -118, r: 6 }, { x: 176, z: 52, r: 11 }, { x: 98, z: 128, r: 12 },
     ];
     for (const y of yards) {

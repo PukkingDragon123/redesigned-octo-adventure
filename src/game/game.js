@@ -33,6 +33,7 @@ export class Game {
     this.atlas.finalize();
     console.log(`sprites: ${this.atlas.frames.size} frames in ${ms.toFixed(0)}ms`);
     this.physics = W.physics || new PhysicsWorld(W.terrain, W.forest.colliders);
+    this.lightPool = W.lightPool;
     W.physics = this.physics;
     this.bike = new Bike(this.physics);
     this.bikeModel = new BikeModel();

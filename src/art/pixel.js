@@ -54,6 +54,16 @@ export class Pix {
       d[i + 3] = Math.max(d[i + 3], a);
     }
   }
+  // raw write (no blending) - used for alpha-coded pixels like glass
+  put(x, y, c, a = 255) {
+    const i = this.idx(x, y);
+    if (i < 0) return;
+    const d = this.data;
+    d[i] = (c >> 16) & 255;
+    d[i + 1] = (c >> 8) & 255;
+    d[i + 2] = c & 255;
+    d[i + 3] = a;
+  }
   get(x, y) {
     const i = this.idx(x, y);
     if (i < 0) return null;

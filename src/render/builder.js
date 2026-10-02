@@ -103,6 +103,29 @@ export class Builder {
     return this.add(geo, _m.clone(), opts);
   }
 
+  // Planar convex polygon (fan-triangulated) with UVs in metres projected on its plane.
+  // Points are [x,y,z] in local space; uAxis optional [x,y,z] direction for texture u.
+  poly(points, opts = {}, parentMatrix = null, uAxis = null) {
+    const P = points.map((p) => new THREE.Vector3(...p));
+    const n = new THREE.Vector3().subVectors(P[1], P[0]).cross(new THREE.Vector3().subVectors(P[2], P[0])).normalize();
+    const U = uAxis ? new THREE.Vector3(...uAxis).normalize() : new THREE.Vector3().subVectors(P[1], P[0]).normalize();
+    const V = new THREE.Vector3().crossVectors(n, U).normalize();
+    const tm = opts.tileMeters || 2.5;
+    const pos = [], nor = [], uv = [], idx = [];
+    for (const p of P) {
+      pos.push(p.x, p.y, p.z);
+      nor.push(n.x, n.y, n.z);
+      uv.push(p.dot(U) / tm, p.dot(V) / (opts.tileMetersV || tm));
+    }
+    for (let i = 1; i < P.length - 1; i++) idx.push(0, i, i + 1);
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+    g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+    g.setIndex(idx);
+    return this.add(g, parentMatrix ? parentMatrix.clone() : new THREE.Matrix4(), opts);
+  }
+
   build() {
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.Float32BufferAttribute(this.pos, 3));

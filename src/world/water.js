@@ -72,20 +72,26 @@ void main() {
   // reflection
   vec3 refl;
   vec4 rc = vRefl;
-  rc.xy += nrm * 0.045 * rc.w * (0.4 + dk);
+  // fine, mostly-horizontal ripples keep reflections calm & mirror-like
+  float r3 = vnoise(q * vec2(0.9, 3.2) + vec2(t * 0.5, 0.0)) - 0.5;
+  vec2 rdist = vec2(nrm.x * 0.35 + r3, nrm.y * 0.25) * 0.011;
+  rc.xy += rdist * rc.w * (0.5 + dk * 0.8);
   if (uReflOn > 0.5) refl = texture2DProj(tRefl, rc).rgb;
   else refl = mix(uHorizon, uZenith, 0.4);
-  vec3 col = mix(body, refl, clamp(fres * 0.92 + 0.12, 0.0, 0.92));
+  // reflections are tinted by the dark green water (like a calm BC cove)
+  refl *= mix(vec3(0.62, 0.74, 0.7), vec3(0.85), fres);
+  vec3 col = mix(body, refl, clamp(fres * 0.85 + 0.2, 0.0, 0.85));
 
   // sun glitter (pixel sparkles)
   vec3 h = normalize(v + uSunDir);
   float spec = pow(max(dot(n, h), 0.0), 220.0);
-  float spark = step(0.55, spec) * step(0.5, hash12(q * 8.0 + floor(t * 6.0)));
-  col += uSunColor * (spec * 1.5 + spark * 2.5) * shadow;
+  float distFade = 1.0 - smoothstep(40.0, 160.0, length(uCamPos - vWorldPos));
+  float spark = step(0.55, spec) * step(0.5, hash12(q * 8.0 + floor(t * 6.0))) * distFade;
+  col += uSunColor * (spec * 1.2 + spark * 2.5) * shadow;
 
   // shoreline foam
   float foamN = vnoise(q * 1.8 + vec2(t * 0.6, -t * 0.4));
-  float foam = step(depth, 0.18 + foamN * 0.22 + 0.06 * sin(t * 1.5 + wp.x * 0.3));
+  float foam = step(depth, 0.05 + foamN * 0.1 + 0.035 * sin(t * 1.5 + wp.x * 0.3));
   col = mix(col, uFoam * (hemiAmbient(vec3(0, 1, 0)) + uSunColor * shadow * 0.8), foam * 0.85);
 
   col += pointLightsAt(vWorldPos, vec3(0.0, 1.0, 0.0), 0.3) * 0.25;
@@ -99,8 +105,8 @@ export function createWater(pipeline) {
   const uniforms = worldUniforms({
     tRefl: pipeline.reflUniforms.tRefl,
     uReflMatrix: pipeline.reflUniforms.uReflMatrix,
-    uDeep: { value: new THREE.Color(0x0b1e1c) },
-    uShallow: { value: new THREE.Color(0x2c5a52) },
+    uDeep: { value: new THREE.Color(0x07201c) },
+    uShallow: { value: new THREE.Color(0x24504a) },
     uFoam: { value: new THREE.Color(0xd8e8e0) },
     uHorizon: SKY.uHorizon,
     uZenith: SKY.uZenith,

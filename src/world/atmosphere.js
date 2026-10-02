@@ -15,7 +15,7 @@ const KEYS = [
   { t: 16, zen: C(0x8a8cc8), hor: C(0xf6d2b0), glow: C(0xffb878), sun: [1.75, 1.3, 0.85], sky: C(0x9a90b0), gnd: C(0x503a2a), fog: C(0xe0b8a8), cl: C(0xfff0d8), cs: C(0xa890b0) },
   { t: 17.6, zen: C(0xa682bc), hor: C(0xffc6a4), glow: C(0xffa870), sun: [1.8, 1.05, 0.62], sky: C(0x9a8ca8), gnd: C(0x5a3c30), fog: C(0xf0b4a4), cl: C(0xffd8b8), cs: C(0x9a78a8) },
   { t: 18.8, zen: C(0x6e5aa2), hor: C(0xff9a7c), glow: C(0xff7040), sun: [1.5, 0.66, 0.38], sky: C(0x7a6494), gnd: C(0x40282a), fog: C(0xd88a8a), cl: C(0xffa888), cs: C(0x6a4a7a) },
-  { t: 19.8, zen: C(0x2c2c64), hor: C(0xb05c72), glow: C(0xc04838), sun: [0.4, 0.2, 0.14], sky: C(0x40406c), gnd: C(0x221a22), fog: C(0x684866), cl: C(0x9a6880), cs: C(0x3a2c50) },
+  { t: 19.8, zen: C(0x262c66), hor: C(0x9a5a7a), glow: C(0xa04040), sun: [0.34, 0.2, 0.18], sky: C(0x3a4a7c), gnd: C(0x1e1a26), fog: C(0x4e4a78), cl: C(0x8a6a90), cs: C(0x30305a) },
   { t: 21, zen: C(0x0a0e28), hor: C(0x24244a), glow: C(0x000000), sun: [0, 0, 0], sky: C(0x1e2448), gnd: C(0x0e0d16), fog: C(0x1e2040), cl: C(0x2e3050), cs: C(0x14162c) },
   { t: 24, zen: C(0x070a1e), hor: C(0x1a1d38), glow: C(0x000000), sun: [0, 0, 0], sky: C(0x1a2244), gnd: C(0x0c0c16), fog: C(0x1a1e36), cl: C(0x2a2e4a), cs: C(0x121528) },
 ];

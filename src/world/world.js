@@ -4,6 +4,14 @@ import { Terrain, riverInfo } from './terrain.js';
 import { Forest } from './forest.js';
 import { Grass, buildGrassMask } from './grass.js';
 import * as L from './layout.js';
+import { PhysicsWorld } from './collide.js';
+import { buildWorldAtlas } from '../art/atlas.js';
+import { pixTexture } from '../render/textures.js';
+import { Builder } from '../render/builder.js';
+import { createPropMaterial, propMesh } from '../render/propMaterial.js';
+import { buildBuildings } from './buildings.js';
+import { buildProps, boatGeometry } from './props.js';
+import { LightPool } from './lights.js';
 import { createTerrainMaterial, createTerrainMeshes, createWorldTextures } from './terrainMesh.js';
 import { createSky, createMountains } from '../render/sky.js';
 import { createWater } from './water.js';
@@ -37,6 +45,10 @@ export class World {
     this.scene.add(this.forest.buildMeshes());
     console.log('forest', JSON.stringify(this.forest.stats));
 
+    await step(0.4, 'raising the village');
+    this.physics = new PhysicsWorld(this.terrain, this.forest.colliders);
+    this.buildTown();
+
     await step(0.45, 'growing the grass');
     const blockers = L.BUILDINGS.map((b) => ({ x: b.x, z: b.z, w: b.w + (b.porch ? 3 : 0.5), d: b.d + (b.porch ? 3 : 0.5), yaw: b.facing || 0 }));
     blockers.push({ x: L.POI.cabin.x + 8, z: L.POI.cabin.z + 8, w: 26, d: 26, yaw: 0, keep: 0.8, short: true });
@@ -69,6 +81,84 @@ export class World {
     this.atmosphere = new Atmosphere(this.pipeline, sun);
   }
 
+  buildTown() {
+    const atlas = buildWorldAtlas();
+    this.worldAtlasTex = pixTexture(atlas.pix, { repeat: false, mips: false });
+    this.propMat = createPropMaterial(this.worldAtlasTex);
+    const ctx = {
+      terrain: this.terrain, physics: this.physics,
+      lights: [], smoke: [], boats: [], fires: [], flags: [], perches: [],
+    };
+    this.ctx = ctx;
+    const areas = { village: new Builder(), home: new Builder(), grave: new Builder(), misc: new Builder() };
+    // buildings grouped by area for frustum culling
+    const byArea = (x, z) => (x > 90 ? 'village' : x < -140 && z > 0 ? 'home' : x < -180 ? 'grave' : 'misc');
+    const groups = {};
+    for (const b of L.BUILDINGS) (groups[byArea(b.x, b.z)] ||= []).push(b);
+    this.buildings = {};
+    for (const [area, list] of Object.entries(groups)) Object.assign(this.buildings, buildBuildings(ctx, areas[area], list));
+    buildProps(ctx, areas);
+    this.townMeshes = [];
+    for (const [name, B] of Object.entries(areas)) {
+      if (!B.count) continue;
+      const m = propMesh(B.build(), this.propMat);
+      m.name = `town:${name}`;
+      m.matrixAutoUpdate = false;
+      this.scene.add(m);
+      this.townMeshes.push(m);
+    }
+    // boats bob on the water as separate meshes
+    this.boats = ctx.boats.map((bt, i) => {
+      const B = new Builder();
+      boatGeometry(B, bt.kind, bt.hull);
+      const m = propMesh(B.build(), this.propMat);
+      m.position.set(bt.x, 0, bt.z);
+      m.rotation.y = bt.yaw;
+      m.userData = { ...bt, phase: i * 1.7 };
+      this.scene.add(m);
+      if (bt.kind !== 'canoe') this.physics.addBox({ x: bt.x, z: bt.z, yaw: bt.yaw, w: bt.kind === 'fishing' ? 2.3 : 1.4, l: bt.kind === 'fishing' ? 6.5 : 3.2, y0: -2, y1: 2.5, kind: 'boat' });
+      return m;
+    });
+    // flags
+    this.flags = ctx.flags.map((f) => {
+      const g = new THREE.PlaneGeometry(f.w, f.h, 8, 3);
+      g.translate(f.w / 2, 0, 0);
+      const B = new Builder();
+      B.add(g, new THREE.Matrix4(), { tile: 'flag' });
+      B.add(g.clone().rotateY(Math.PI), new THREE.Matrix4(), { tile: 'flag' });
+      const geo = B.build();
+      const m = propMesh(geo, this.propMat, { cast: true });
+      m.position.copy(f.pos);
+      m.userData.base = Float32Array.from(geo.attributes.position.array);
+      this.scene.add(m);
+      return m;
+    });
+    this.lightPool = new LightPool(ctx.lights);
+  }
+
+  updateTown(dt) {
+    const t = G.uTime.value;
+    for (const b of this.boats || []) {
+      const ph = b.userData.phase;
+      b.position.y = Math.sin(t * 1.1 + ph) * 0.06 - 0.02;
+      b.rotation.z = Math.sin(t * 0.9 + ph) * 0.035;
+      b.rotation.x = Math.sin(t * 0.7 + ph * 1.3) * 0.02;
+    }
+    for (const f of this.flags || []) {
+      const pos = f.geometry.attributes.position;
+      const base = f.userData.base;
+      const wind = 0.6 + G.uWindStrength.value;
+      for (let i = 0; i < pos.count; i++) {
+        const x = base[i * 3];
+        const k = x / 1.8;
+        pos.setZ(i, base[i * 3 + 2] + Math.sin(t * 6 * wind - x * 3) * 0.12 * k * wind);
+        pos.setY(i, base[i * 3 + 1] - k * k * 0.12 / wind);
+      }
+      pos.needsUpdate = true;
+      f.rotation.y = Math.atan2(-G.uWind.value.y, G.uWind.value.x);
+    }
+  }
+
   // keep the shadow frustum centred on the action, snapped to texels to avoid shimmer
   updateShadow(focus) {
     const sun = this.sun;
@@ -98,5 +188,7 @@ export class World {
     this.forest?.updateVisibility(camera.position);
     this.grass?.update(camera.position);
     this.updateShadow(focus);
+    this.updateTown(dt);
+    this.lightPool?.update(dt, focus, G.uNight.value);
   }
 }
