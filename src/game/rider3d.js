@@ -117,6 +117,12 @@ export class VoxelRider {
     ch.broken.auto = false;
     this.reassembled = false;
     this.crashed = true;
+    // a comic-book sound effect stamped over the wreck
+    const words = ['BONK!', 'CRACK!', 'OOF!', 'RATTLE RATTLE!', 'KER-SPLAT!', 'CLATTER!'];
+    const p = bike.pos.clone();
+    p.y += 1.6;
+    this.game.ui?.tag('crashword', words[Math.floor(Math.random() * words.length)], p, 1100, 'trick-bail');
+    this.game.chase?.shake(0.8);
   }
 
   update(dt, bike, model, camPos) {

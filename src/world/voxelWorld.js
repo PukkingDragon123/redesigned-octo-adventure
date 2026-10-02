@@ -321,7 +321,7 @@ export class VoxelWorld {
       S(`mound:${x % 2}`, () => PR.dirtMound({ stage: 'hole', seed: Math.abs(x) % 3 }), x + 0.7, z + 0.4, x * 0.3);
     }
     // more kickable pumpkins scattered along roads and porches
-    const extra = [[150, 58], [153, 57.5], [190, 58], [206, 58.5], [232, 58], [126, 62], [-160, 76], [-158, 77.5], [-176, 76], [-210, -26], [-206, -27]];
+    const extra = [[167.6, 63.2], [169.2, 63.6], [150, 58], [153, 57.5], [190, 58], [206, 58.5], [232, 58], [126, 62], [-160, 76], [-158, 77.5], [-176, 76], [-210, -26], [-206, -27]];
     extra.forEach(([x, z], i) => {
       const jack = i % 2 === 0;
       const r = jack ? this.model(`jack:medium:${i % 6}`, () => PR.jackOLantern({ face: PR.JACK_FACES[i % PR.JACK_FACES.length], kind: 'medium', seed: i, hollow: false }))
