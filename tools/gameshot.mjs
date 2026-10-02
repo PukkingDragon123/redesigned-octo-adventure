@@ -9,7 +9,7 @@ const page = await browser.newPage({ viewport: { width: +w, height: +h }, hasTou
 const logs = [];
 page.on('console', (m) => { if (!m.text().includes('[vite]')) logs.push(`[${m.type()}] ${m.text()}`); });
 page.on('pageerror', (e) => logs.push(`[pageerror] ${e.message}\n${e.stack?.split('\n').slice(0, 4).join('\n')}`));
-await page.goto(q.startsWith("file:") || q.startsWith("http") ? q : `http://localhost:5173/${q}`);
+await page.goto(q.startsWith("file:") || q.startsWith("http") ? q : `http://localhost:${process.env.PORT || 5173}/${q}`);
 try { await page.waitForFunction(() => window.__ready === true, null, { timeout: 300000 }); } catch { logs.push('TIMEOUT ready'); }
 for (const step of (process.env.STEPS || '').split(';;').filter(Boolean)) {
   try { const r = await page.evaluate(step); if (r !== undefined) logs.push('=> ' + JSON.stringify(r).slice(0, 400)); } catch (e) { logs.push('STEP ERR ' + e.message); }
