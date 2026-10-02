@@ -42,6 +42,36 @@ export class PhysicsWorld {
     return c;
   }
 
+  // First hit (0..1) of the segment a->b against buildings (big 'wall' boxes), padded.
+  // Used to keep the chase camera out of walls.
+  segmentHit(ax, ay, az, bx, by, bz, pad = 0.35) {
+    const mx = (ax + bx) / 2, mz = (az + bz) / 2;
+    const r = Math.hypot(bx - ax, bz - az) / 2 + pad;
+    let best = 1;
+    this.solids.query(mx, mz, r, (o) => {
+      if (o.type !== 'box' || o.kind !== 'wall' || o.hw * o.hl < 1.5) return;
+      const [lax, laz] = this.toLocal(o, ax, az);
+      const [lbx, lbz] = this.toLocal(o, bx, bz);
+      let t0 = 0, t1 = 1;
+      const axes = [[lax, lbx - lax, o.hw + pad], [laz, lbz - laz, o.hl + pad]];
+      for (const [p0, d, h] of axes) {
+        if (Math.abs(d) < 1e-9) {
+          if (Math.abs(p0) > h) return;
+          continue;
+        }
+        let ta = (-h - p0) / d, tb = (h - p0) / d;
+        if (ta > tb) [ta, tb] = [tb, ta];
+        t0 = Math.max(t0, ta);
+        t1 = Math.min(t1, tb);
+        if (t0 > t1) return;
+      }
+      const y = ay + (by - ay) * t0;
+      if (y < o.y0 || y > o.y1) return;
+      if (t0 < best) best = t0;
+    });
+    return best;
+  }
+
   toLocal(p, x, z) {
     const dx = x - p.x, dz = z - p.z;
     // inverse of rotation.y = yaw : local x = dx*c - dz*s, local z = dx*s + dz*c

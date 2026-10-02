@@ -103,6 +103,9 @@ export class ChaseCamera {
     // keep above ground
     const gh = this.ph.groundAt(desired.x, desired.z, desired.y).h;
     desired.y = Math.max(desired.y, gh + 0.9);
+    // ...and out of buildings: slide in along the boom when a wall is in the way
+    const hit = this.ph.segmentHit(target.x, target.y, target.z, desired.x, desired.y, desired.z);
+    if (hit < 1) desired.lerpVectors(target, desired, Math.max(0.2, hit - 0.05));
     if (instant) {
       this.pos.copy(desired);
       this.look.copy(target);
@@ -117,6 +120,9 @@ export class ChaseCamera {
     }
     const gh2 = this.ph.groundAt(this.pos.x, this.pos.z, this.pos.y).h;
     this.pos.y = Math.max(this.pos.y, gh2 + 0.7);
+    // the damped position can lag into a wall too
+    const hit2 = this.ph.segmentHit(this.look.x, this.look.y, this.look.z, this.pos.x, this.pos.y, this.pos.z);
+    if (hit2 < 1) this.pos.lerpVectors(this.look, this.pos, Math.max(0.2, hit2 - 0.05));
     const fovT = 55 + clamp(speed - 4, 0, 22) * 0.75 + (bike.boostTime > 0 ? 8 : 0);
     this.fov = instant ? fovT : damp(this.fov, fovT, 3, dt);
     this.roll = damp(this.roll, bike.lean * 0.12, 4, dt);

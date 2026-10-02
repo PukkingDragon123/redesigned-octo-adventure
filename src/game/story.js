@@ -82,6 +82,11 @@ export class Story {
       for (const d of this.debris) g.scene.remove(d.b.mesh);
       this.debris = [];
       if (g.mode === 'cutscene') g.mode = prev === 'title' || prev === 'boot' ? 'cutscene' : prev;
+      // back on the road: the chase camera glides back behind Hank and the HUD returns
+      if (g.mode === 'ride') {
+        g.chase.release();
+        g.ui.showHUD(true);
+      }
     }
   }
 
@@ -392,13 +397,14 @@ export class Story {
     const g = this.g;
     return this.scene(async (S) => {
       g.setBikeVisible(true);
-      g.parkBike(-146.5, 94, Math.PI / 2);
+      // parked a few metres out from the doors, so the chase camera has room behind her
+      g.parkBike(-144.3, 94, Math.PI / 2);
       g.rider.visible = false;
-      const H = S.actor('hank', -147.5, 96.2, Math.PI, 'idle');
-      const N = S.actor('grandma', -145, 97.3, -2.4, 'idle');
+      const H = S.actor('hank', -145.3, 96.2, Math.PI, 'idle');
+      const N = S.actor('grandma', -142.8, 97.3, -2.4, 'idle');
       g.villagers.setVisible('grandma', false);
       const y = g.bike.pos.y;
-      await S.cam(V(-141.5, y + 1.6, 91.5), V(-147, y + 0.8, 94.5), 0, 45);
+      await S.cam(V(-139.3, y + 1.6, 91.5), V(-144.8, y + 0.8, 94.5), 0, 45);
       await S.say('grandma', "Ta-da! Harold's old roadster. He called her *Bessie.*", { actor: N, expr: 'happy' });
       await S.say('hank', "She's... beautiful.", { actor: H, expr: 'happy' });
       await S.say('grandma', 'She\'s held together with hope and duct tape. Harold always said: "just pedal, and don\'t think about it."', { actor: N, expr: 'laugh' });
@@ -688,15 +694,15 @@ export class Story {
   async ending() {
     const g = this.g;
     await this.scene(async (S) => {
-      g.parkBike(-146.5, 94, Math.PI / 2);
+      g.parkBike(-144.3, 94, Math.PI / 2);
       g.rider.visible = false;
-      const H = S.actor('hank', -147.2, 96.6, Math.PI, 'idle');
-      const N = S.actor('grandma', -145, 97.6, -2.4, 'idle');
+      const H = S.actor('hank', -145.0, 96.6, Math.PI, 'idle');
+      const N = S.actor('grandma', -142.8, 97.6, -2.4, 'idle');
       g.villagers.setVisible('grandma', false);
       const y = g.bike.pos.y;
-      await S.cam(V(-141, y + 1.8, 91), V(-146.5, y + 0.9, 95), 0, 46);
+      await S.cam(V(-138.8, y + 1.8, 91), V(-144.3, y + 0.9, 95), 0, 46);
       await S.say('grandma', "Look at her. Harold's motorbike, purring like a kitten. He'd be so proud of you, dear.", { actor: N, expr: 'cry' });
-      const R = S.actor('reaper', -143.5, 92.5, -0.8, 'float');
+      const R = S.actor('reaper', -141.3, 92.5, -0.8, 'float');
       R.floatY = 0.25;
       S.sfx('reaper');
       g.effects.magic(R.pos.x, R.pos.y + 1, R.pos.z, 20, [0.5, 0.4, 0.8]);
@@ -720,7 +726,7 @@ export class Story {
       await S.say('reaper', 'But put me down for a cup every Friday. Extra hot.', { actor: R, expr: 'laugh' });
       g.effects.confetti(H.pos.x, H.pos.y + 2, H.pos.z, 60);
       S.sfx('upgrade');
-      await S.cam(V(-136, y + 6, 86), V(-147, y + 1, 95), 3, 50);
+      await S.cam(V(-133.8, y + 6, 86), V(-144.8, y + 1, 95), 3, 50);
       g.ui.banner('THE END', '...of the beginning. Keep delivering!', 6000);
       await S.wait(5);
       g.villagers.setVisible('grandma', true);
