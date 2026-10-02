@@ -14,6 +14,7 @@ import { Walker } from './walker.js';
 import { Interactables } from './interact.js';
 import { Tricks } from './tricks.js';
 import { Quests } from './quests.js';
+import { drawTV } from '../world/voxelWorld.js';
 import { Effects } from './effects.js';
 import { Wildlife } from './wildlife.js';
 import { Villagers } from './npcs.js';
@@ -635,6 +636,15 @@ export class Game {
     this.rider.update(dt, this.bike, this.bikeModel, this.camera.position);
     this.emotes.update(dt);
     this.interact.update(dt);
+    // the porch TV ticks over twice a second
+    const tv = this.world.voxel?.tv;
+    if (tv && (this._tvT = (this._tvT || 0) + dt) > 0.5 && Math.hypot(this.playerPos.x - tv.x, this.playerPos.z - tv.z) < 40) {
+      this._tvT = 0;
+      const hr = this.world.atmosphere.hour;
+      const hh = Math.floor(hr), mm = Math.floor((hr - hh) * 60);
+      const helpers = Object.values(this.villagers.actors).filter((a) => this.quests.offersFor(a.char).length).map((a) => `${this.villagerName(a.char)} needs a hand`);
+      drawTV(tv, { time: `${((hh + 11) % 12) + 1}:${String(mm).padStart(2, '0')}`, weather: this.world.atmosphere.weatherTarget, news: [...helpers, ...(this.orders.board().length ? ['Fresh orders on Nana\'s board'] : [])] });
+    }
     this.quests.update(dt);
     if (this.mode === 'ride') this.quests.updateHints(this.villagers);
     this.effects.ps.setViewport(this.pipeline.h, this.camera.fov);

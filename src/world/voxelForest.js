@@ -41,7 +41,8 @@ export class VoxelForest {
         const r0 = buildTree(sp, { seed, lod: 0 });
         const r1 = buildTree(sp, { seed, lod: 1 });
         const g0 = meshVox(r0.vox, { size: r0.size, origin: r0.origin, greedy: true });
-        const g1 = meshVox(r1.vox, { size: r1.size, origin: r1.origin, greedy: true });
+        // light trees keep their detailed model further out (their LOD1 reads as grey posts)
+        const g1 = g0.userData.faces < 950 ? g0 : meshVox(r1.vox, { size: r1.size, origin: r1.origin, greedy: true });
         mat0.uniforms.uSwayY0.value = r0.meta.swayY0 ?? 1;
         this.models.set(`${sp}:${seed}`, { sp, seed, g0, g1, meta: r0.meta, mat0, mat1 });
       }
@@ -75,7 +76,7 @@ export class VoxelForest {
       near.customDepthMaterial = M.mat0.userData.depth;
       near.frustumCulled = false;
       near.count = 0;
-      const far = new THREE.InstancedMesh(M.g1, M.mat1, cap);
+      const far = new THREE.InstancedMesh(M.g1, M.g1 === M.g0 ? M.mat0 : M.mat1, cap);
       far.castShadow = false;
       far.receiveShadow = true;
       far.frustumCulled = false;

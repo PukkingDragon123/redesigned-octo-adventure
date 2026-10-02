@@ -2,7 +2,7 @@
 import { el, frameStyle } from '../ui/ui.js';
 import { frameURL, slotURL } from '../ui/frames.js';
 import { iconURL } from '../art/icons.js';
-import { portraitURL } from '../art/portraits.js';
+import { charSnapshot } from '../ui/snapshots.js';
 import { CHARACTERS } from '../art/characters.js';
 import { UPGRADES, canBuy } from './upgrades.js';
 import { KEEPSAKES, POI, CUSTOMERS, WORLD_HALF, BUILDINGS } from '../world/layout.js';
@@ -64,15 +64,16 @@ export class Menus {
     left.innerHTML = `<div class="jdate">Day ${st.day} · $${Math.floor(st.money)} · ${st.stats.deliveries} cocoas delivered${st.candy ? ` · ${st.candy} candies` : ''}</div><h3>Favours & errands</h3>`;
     const Q = st.quests || {};
     const lines = [];
+    const snap = (who) => (who ? `<img class="jsnap" src="${charSnapshot(g, who, 'happy', 64)}">` : '');
     for (const [id, def] of Object.entries(QUESTS)) {
       const q = Q[id];
-      if (q?.state === 'active') lines.push(`<div class="jq">☐ ${def.title}</div>`);
-      else if (q?.state === 'done') lines.push(`<div class="jq done">☑ ${def.title}</div>`);
+      if (q?.state === 'active') lines.push(`<div class="jq">${snap(def.giver)}☐ ${def.title}</div>`);
+      else if (q?.state === 'done') lines.push(`<div class="jq done">${snap(def.giver)}☑ ${def.title}</div>`);
     }
     for (const L of LOST) {
       const q = Q[`lost_${L.id}`];
-      if (q?.state === 'active') lines.push(`<div class="jq">☐ ${q.found ? 'Return' : 'Find'} the ${L.name}</div>`);
-      else if (q?.state === 'done') lines.push(`<div class="jq done">☑ Found the ${L.name}</div>`);
+      if (q?.state === 'active') lines.push(`<div class="jq">${snap(L.owner)}☐ ${q.found ? 'Return' : 'Find'} the ${L.name}</div>`);
+      else if (q?.state === 'done') lines.push(`<div class="jq done">${snap(L.owner)}☑ Found the ${L.name}</div>`);
     }
     left.innerHTML += lines.length ? lines.join('') : '<p class="hint">Nothing yet. Stop and chat with folks around town — someone always needs a hand. Or a skeleton.</p>';
     if (st.photos && Object.keys(st.photos).length) {
@@ -306,7 +307,7 @@ export class Menus {
       s.style.borderImageSource = `url(${frameURL('order')})`;
       s.style.setProperty('--rot', `${((i * 37) % 7) - 3}deg`);
       const name = CHARACTERS[o.customer]?.name || o.customer;
-      s.innerHTML = `<div class="who"><img src="${portraitURL(o.customer, 'happy')}">${name}</div>
+      s.innerHTML = `<div class="who"><img class="snap" src="${charSnapshot(g, o.customer, 'happy')}">${name}</div>
         <div class="what"><img class="ico" src="${iconURL('cocoa')}">${o.label}${o.rush ? ' · <b style="color:#c8361f">RUSH</b>' : ''}</div>
         <div class="what"><i>“${o.note}”</i></div><div class="pay">$${o.price}+ tips</div>`;
       const sync = () => s.classList.toggle('taken', o.state === 'carried');

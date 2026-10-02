@@ -84,6 +84,17 @@ export class Interactables {
         g.effects.magic(s.x, g.walker.pos.y + 1.2, s.z, 24, [0.5, 1, 0.4]);
         g.quests?.event('cauldron');
         break;
+      case 'tv': {
+        const S = g.state;
+        const lines = ['Good evening, Maple Cove!', `Day ${S.day}: ${g.world.atmosphere.weatherTarget} skies.`];
+        const news = g.quests?.noteLines?.() || [];
+        g.mode = 'menu';
+        (async () => {
+          await g.ui.say(null, `*MCTV* — ${lines.join(' ')} ${news.length ? 'In town tonight: ' + news.join('; ') + '.' : 'Word is somebody always needs a hand: stop and chat!'}`, { name: '' });
+          g.mode = 'ride';
+        })();
+        break;
+      }
       case 'carve':
         g.openMenu(() => g.menus.carve((face) => {
           g.resumeFromMenu();

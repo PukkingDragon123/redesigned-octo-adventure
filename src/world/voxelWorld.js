@@ -10,6 +10,7 @@ import * as PR from '../voxel/models/props.js';
 import { meshVox } from '../voxel/mesh.js';
 import { voxMesh, sharedVoxelMaterial, createFlatMaterial } from '../render/voxelMaterial.js';
 import { PhysProps } from './physprops.js';
+import { Vox } from '../voxel/vox.js';
 
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _s = new THREE.Vector3(1, 1, 1), _p = new THREE.Vector3();
 const UP = new THREE.Vector3(0, 1, 0);
@@ -294,10 +295,29 @@ export class VoxelWorld {
     S('carvepumpkin', () => PR.pumpkin({ kind: 'medium', seed: 77 }), -166.2, 63.4, 0, 0.8, 0.8);
     this.spot(-166.2, 63.4, 1.8, 'Carve a pumpkin', 'carve');
     this.world.physics.addCircle({ x: c.x - 14, z: c.z + 12, r: 1.1, kind: 'post' });
+    // Nana's TV on the porch (news, weather and who needs a hand)
+    {
+      const x = -166.4, z = 69.4, yaw = -Math.PI / 2 + 0.5;
+      const r = this.model('tv', tvVox);
+      this.addStatic(r, x, gy(x, z), z, yaw);
+      const c = document.createElement('canvas');
+      c.width = 80; c.height = 48;
+      const tex = new THREE.CanvasTexture(c);
+      tex.magFilter = tex.minFilter = THREE.NearestFilter;
+      tex.generateMipmaps = false;
+      tex.colorSpace = THREE.SRGBColorSpace;
+      const plane = new THREE.Mesh(new THREE.PlaneGeometry(0.45, 0.4), createFlatMaterial(tex));
+      plane.position.set(x, gy(x, z) + 0.6, z).add(new THREE.Vector3(0.025, 0, 0.32).applyAxisAngle(UP, yaw));
+      plane.rotation.y = yaw;
+      this.scene.add(plane);
+      this.tv = { c, g: c.getContext('2d'), tex, t: 0, x, z };
+      this.spot(x + Math.sin(yaw) * 1.2, z + Math.cos(yaw) * 1.2, 1.4, 'Watch Maple Cove TV', 'tv');
+    }
     // planting spots (side quest): dirt mounds waiting for saplings
     this.plantSpots = [];
     for (const [x, z] of [[-150, 40], [-138, 50], [-128, 62], [80, 66], [64, 74], [-60, 46]]) {
       this.plantSpots.push({ x, z, y: gy(x, z), planted: false });
+      S(`mound:${x % 2}`, () => PR.dirtMound({ stage: 'hole', seed: Math.abs(x) % 3 }), x + 0.7, z + 0.4, x * 0.3);
     }
     // more kickable pumpkins scattered along roads and porches
     const extra = [[150, 58], [153, 57.5], [190, 58], [206, 58.5], [232, 58], [126, 62], [-160, 76], [-158, 77.5], [-176, 76], [-210, -26], [-206, -27]];
@@ -308,6 +328,59 @@ export class VoxelWorld {
       physprops.add(r, x, gy(x, z), z, { yaw: i * 1.3, kind: jack ? 'jack' : 'pumpkin', hp: 3, mass: 1.2, lights: jack });
     });
   }
+}
+
+// Nana's old TV on the porch: Maple Cove TV with the weather and town news
+function tvVox() {
+  const v = new Vox(18, 22, 14);
+  const wood = 0x7a4a2a, dark = 0x4a2a18;
+  v.fill(1, 6, 1, 16, 18, 12, (x, y, z) => (y === 18 || x === 1 || x === 16 ? dark : wood));
+  v.fill(3, 8, 12, 12, 16, 12, 0x1e1a1e); // screen bezel (the picture is a separate plane)
+  v.fill(14, 13, 13, 14, 14, 13, 0xd8c8a0); v.fill(14, 10, 13, 14, 11, 13, 0xd8c8a0); // knobs
+  for (const [x, z] of [[2, 2], [15, 2], [2, 11], [15, 11]]) v.fill(x, 0, z, x, 5, z, dark); // legs
+  v.line(8, 19, 6, 4, 21, 5, 0x9aa0a8); v.line(9, 19, 6, 13, 21, 5, 0x9aa0a8); // rabbit ears
+  return { vox: v, size: 0.05, origin: [9, 0, 7] };
+}
+
+// redraw the TV picture (called by the game about twice a second)
+export function drawTV(tv, info) {
+  const { g, c } = tv;
+  tv.t++;
+  g.imageSmoothingEnabled = false;
+  // glow alpha (~0.5) marks the picture as emissive in the flat material
+  g.globalAlpha = 1;
+  g.fillStyle = 'rgb(30, 60, 90)';
+  g.fillRect(0, 0, c.width, c.height);
+  g.fillStyle = 'rgb(255, 240, 200)';
+  g.font = '8px BoldPixels';
+  g.fillText('MCTV', 3, 9);
+  g.fillStyle = 'rgb(255, 120, 60)';
+  g.fillRect(30, 3, 3, 3);
+  g.fillStyle = 'rgb(255, 250, 230)';
+  g.font = '12px Monogram';
+  g.fillText(info.time || '', 40, 10);
+  // weather doodle
+  const w = info.weather || 'clear';
+  g.fillStyle = w === 'rain' || w === 'overcast' || w === 'misty' ? 'rgb(220, 230, 240)' : 'rgb(255, 210, 60)';
+  if (w === 'clear' || w === 'breezy') { g.beginPath(); g.arc(14, 24, 6, 0, Math.PI * 2); g.fill(); }
+  else { g.fillRect(6, 20, 16, 6); g.fillRect(9, 17, 9, 4); if (w === 'rain') { g.fillStyle = 'rgb(120, 180, 255)'; for (let k = 0; k < 4; k++) g.fillRect(8 + k * 4, 28 + ((tv.t + k) % 3), 1, 3); } }
+  g.fillStyle = 'rgb(255, 250, 230)';
+  g.fillText(String(w).toUpperCase(), 28, 28);
+  // scrolling news ticker
+  const news = (info.news || []).join('   ·   ') || 'Have a spooky-cozy day, Maple Cove!';
+  g.fillStyle = 'rgb(20, 20, 30)';
+  g.fillRect(0, 36, c.width, 12);
+  g.fillStyle = 'rgb(255, 220, 120)';
+  const wpx = g.measureText(news).width + 40;
+  g.fillText(news, c.width - ((tv.t * 4) % (wpx + c.width)), 46);
+  // scanlines
+  g.fillStyle = 'rgb(0, 0, 0)';
+  for (let y = (tv.t % 2); y < 36; y += 4) g.fillRect(0, y, c.width, 1);
+  // the whole picture glows: mark every pixel as emissive paint (alpha ~0.5)
+  const id = g.getImageData(0, 0, c.width, c.height);
+  for (let i = 3; i < id.data.length; i += 4) id.data[i] = 128;
+  g.putImageData(id, 0, 0);
+  tv.tex.needsUpdate = true;
 }
 
 function toCss(c) {

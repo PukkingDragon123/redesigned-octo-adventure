@@ -399,3 +399,6 @@
 .steamy::before, .steamy::after { content: ''; position: absolute; left: 42%; top: calc(var(--u) * -2); width: calc(var(--u) * 1.5); height: calc(var(--u) * 5); background: rgba(255, 255, 255, 0.85); box-shadow: calc(var(--u) * 1.5) calc(var(--u) * -3) 0 rgba(255, 255, 255, 0.7); animation: wisp 1.6s ease-in infinite; }
 .steamy::after { left: 58%; animation-delay: -0.8s; }
 @keyframes wisp { 0% { transform: translateY(calc(var(--u) * 4)) scaleY(0.4); opacity: 0; } 30% { opacity: 1; } 100% { transform: translate(calc(var(--u) * 2), calc(var(--u) * -6)) scaleY(1.2); opacity: 0; } }
+.slip .who img.snap { width: calc(var(--u) * 20) !important; height: calc(var(--u) * 20) !important; background: linear-gradient(180deg, #cfe0f0, #f2e6c8); border: 3px solid #fffaf0; box-shadow: 1px 2px 0 rgba(0, 0, 0, 0.25); transform: rotate(-4deg); image-rendering: pixelated; }
+.jq { display: flex; align-items: center; gap: calc(var(--u) * 2); }
+.jq .jsnap { width: calc(var(--u) * 13); height: calc(var(--u) * 13); background: linear-gradient(180deg, #cfe0f0, #f2e6c8); border: 2px solid #fffaf0; box-shadow: 1px 1px 0 rgba(0, 0, 0, 0.25); transform: rotate(-5deg); image-rendering: pixelated; flex: none; }
