@@ -150,8 +150,10 @@ export class UI {
       const vis = v.z < 1 && Math.abs(v.x) < 1.1 && Math.abs(v.y) < 1.1;
       t.e.style.display = vis ? '' : 'none';
       if (!vis) continue;
-      const x = (v.x * 0.5 + 0.5) * window.innerWidth, y = (-v.y * 0.5 + 0.5) * window.innerHeight;
-      t.e.style.transform = `translate(${snap(x - t.e.offsetWidth / 2)}px, ${snap(y - t.e.offsetHeight)}px)`;
+      const W = window.innerWidth, w = t.e.offsetWidth;
+      const x = (v.x * 0.5 + 0.5) * W, y = (-v.y * 0.5 + 0.5) * window.innerHeight;
+      const left = Math.max(4, Math.min(W - w - 4, x - w / 2));
+      t.e.style.transform = `translate(${snap(left)}px, ${snap(Math.max(4, y - t.e.offsetHeight))}px)`;
     }
   }
 

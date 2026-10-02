@@ -947,6 +947,7 @@ const GLYPHS = {
   fog(c) { for (let k = 0; k < 3; k++) c.tube([[2 + (k % 2) * 2, 4.4 + k * 3.8], [13 + (k % 2), 4.4 + k * 3.8]], 1.2, R.cloud); },
   wind(c) { c.tube([[1.6, 6], [11, 6], [13, 4.4], [11.4, 2.6]], 0.8, R.cloud, { spec: false }); c.tube([[1.6, 10], [13, 10], [14.4, 12], [12.6, 13.6]], 0.8, R.cloud, { spec: false }); c.pillow(mapleLeaf(6, 13, 2.6), R.orange, { rad: 0.6 }); },
   rush(c) { c.pillow(inPoly([[9.6, 1], [3, 9], [7.4, 9], [5.6, 15], [13, 6.4], [8.4, 6.4], [11, 1]]), R.yellow, { rad: 1 }); },
+  size(c) { c.face(rrect(1, 6, 9, 14, 0.5), R.cream, { t: 4, line: true }); c.face(rrect(5, 2, 15, 12, 0.5), R.gold, { t: 3, line: true }); c.face(rrect(7, 4, 13, 10, 0), R.gold, { t: 4 }); },
   target(c) { c.ring(8, 8, 4.6, 6.8, R.red); c.ring(8, 8, 2.4, 4.6, R.white); c.ball(8, 8, 2.4, 2.4, R.red); },
   // mood marks that pop around speech bubbles
   mark_anger(c) { for (const [a, b] of [[[3, 3], [6.4, 6.4]], [[13, 3], [9.6, 6.4]], [[3, 13], [6.4, 9.6]], [[13, 13], [9.6, 9.6]]]) c.tube([a, [a[0] + (b[0] - a[0]) * 0.4, b[1]], b], 1.3, R.red); },

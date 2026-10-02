@@ -120,16 +120,16 @@ function knobArt() {
 
 // [id, label, action, icon, face, size, right, bottom, mode]
 const BUTTONS = [
-  ['pedal', 'PEDAL', 'pedal', 't_pedal', 'green', 48, 8, 10, 'ride'],
-  ['brake', 'BRAKE', 'brake', 't_brake', 'red', 40, 62, 8, 'ride'],
-  ['back', 'WHEELIE', 'leanBack', 't_back', 'gold', 36, 14, 70, 'ride'],
-  ['fwd', 'STOPPIE', 'leanFwd', 't_fwd', 'gold', 36, 64, 62, 'ride'],
-  ['jump', 'HOP', 'jump', 't_hop', 'blue', 40, 112, 18, 'ride'],
-  ['trick', 'DRIFT', 'drift', 't_trick', 'purple', 36, 112, 72, 'ride'],
-  ['bell', '', 'bell', 't_bell', 'cream', 28, 6, 120, 'ride'],
-  ['fjump', 'JUMP', 'jump', 't_hop', 'blue', 46, 10, 12, 'foot'],
-  ['kick', 'KICK', 'boost', 't_kick', 'red', 40, 66, 10, 'foot'],
-  ['photo', 'SNAP', 'camera', 't_photo', 'cream', 36, 22, 72, 'foot'],
+  ['pedal', 'PEDAL', 'pedal', 't_pedal', 'green', 48, 8, 16, 'ride'],
+  ['brake', 'BRAKE', 'brake', 't_brake', 'red', 40, 62, 14, 'ride'],
+  ['back', 'WHEELIE', 'leanBack', 't_back', 'gold', 36, 14, 78, 'ride'],
+  ['fwd', 'STOPPIE', 'leanFwd', 't_fwd', 'gold', 36, 64, 70, 'ride'],
+  ['jump', 'HOP', 'jump', 't_hop', 'blue', 40, 112, 24, 'ride'],
+  ['trick', 'DRIFT', 'drift', 't_trick', 'purple', 36, 112, 80, 'ride'],
+  ['bell', '', 'bell', 't_bell', 'cream', 28, 8, 128, 'ride'],
+  ['fjump', 'JUMP', 'jump', 't_hop', 'blue', 46, 10, 18, 'foot'],
+  ['kick', 'KICK', 'boost', 't_kick', 'red', 40, 66, 16, 'foot'],
+  ['photo', 'SNAP', 'camera', 't_photo', 'cream', 36, 22, 80, 'foot'],
 ];
 
 export class TouchControls {

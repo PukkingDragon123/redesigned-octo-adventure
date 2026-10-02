@@ -177,12 +177,12 @@ export class Menus {
     let m;
     const close = () => ui.closeOverlay(m);
     const { p, body } = this.sheet("Nana's Recipe Book", { kind: 'parchment', cls: 'recipes', onClose: close });
-    const names = { classic: 'Classic Cocoa', maple: 'Maple Marshmallow', cinnamon: 'Cinnamon Fire', mint: 'Peppermint Swirl', pumpkin: 'Pumpkin Spice', mocha: 'Lumberjack Mocha' };
+    const names = { classic: 'Classic Cocoa', maple: 'Maple Mallow', cinnamon: 'Cinnamon Fire', mint: 'Peppermint', pumpkin: 'Pumpkin Spice', mocha: 'Lumberjack' };
     const grid = el('div', 'rgrid');
     for (const [id, ing] of Object.entries(RECIPES)) {
       const can = ing.every((k) => (pantry[k] || 0) > 0);
       const card = el('div', `k-paper rcard${can ? '' : ' short'}`);
-      card.innerHTML = `<img class="big" src="${foodIconURL('cocoa_' + id)}"><div class="rn k-bold">${names[id] || id}</div><div class="ri">${ing.map((k) => `<div class="${(pantry[k] || 0) > 0 ? 'ok' : 'out'}"><img class="k-g" src="${glyphURL((pantry[k] || 0) > 0 ? 'check' : 'cross')}"><span>${esc(FOOD_INFO[k]?.label || k)}</span><b>${pantry[k] || 0}</b></div>`).join('')}</div>`;
+      card.innerHTML = `<img class="big" src="${foodIconURL('cocoa_' + id)}"><div class="rtext"><div class="rn k-bold">${names[id] || id}</div><div class="ri">${ing.map((k) => `<div class="${(pantry[k] || 0) > 0 ? 'ok' : 'out'}"><img class="k-g" src="${glyphURL((pantry[k] || 0) > 0 ? 'check' : 'cross')}"><span>${esc(SHORT_FOOD[k] || FOOD_INFO[k]?.label || k)}</span><b>${pantry[k] || 0}</b></div>`).join('')}</div></div>`;
       grid.appendChild(card);
     }
     body.appendChild(grid);
@@ -224,7 +224,7 @@ export class Menus {
     };
     for (const k of SHOP) {
       const info = FOOD_INFO[k] || { label: k, price: 3 };
-      const e = el('button', 'k-plate k-parchment shopitem pick', `<img class="fi" src="${foodIconURL(k)}"><span class="nm">${esc(info.label)}</span><span class="pr"><b>$${info.price}</b></span><span class="k-count qty"></span>`);
+      const e = el('button', 'k-plate k-parchment shopitem pick', `<img class="fi" src="${foodIconURL(k)}"><span class="nm">${esc(SHOP_NAME[k] || info.label)}</span><span class="pr"><b>$${info.price}</b></span><span class="k-count qty"></span>`);
       e.sync = () => { const q = e.querySelector('.qty'); q.textContent = cart[k] ? `${cart[k]}` : ''; q.style.visibility = cart[k] ? '' : 'hidden'; e.classList.toggle('taken', !!cart[k]); };
       e.addEventListener('click', () => {
         if (total() + info.price > st.money) { g.sound.play('ui_error'); ui.toast("Mo: 'That's a little more than you've got, Hank!'", 'coin', 1800); return; }
@@ -244,6 +244,7 @@ export class Menus {
     render();
     g.sound.play('shop_bell');
     m = ui.openOverlay(p, { onBack: () => done(false), items: [...items, pay, leave], grid: shopCols() });
+    autoGrid(m, items);
     return m;
   }
 
@@ -298,7 +299,7 @@ export class Menus {
     if ((window.devicePixelRatio || 1) >= 1.5) { res.unshift(0.5); resL.unshift('Ultra'); }
     row('Resolution', cycle('pixel', res, resL), glyphURL('eye'));
     row('Graphics', cycle('quality', ['low', 'medium', 'high'], ['Low', 'Medium', 'High']), glyphURL('gear'));
-    row('Interface size', cycle('uiSize', [-1, 0, 1, 2], ['Small', 'Normal', 'Big', 'Huge'], (v) => { setUIScaleOffset(v); requestAnimationFrame(() => snapBox(p)); }), glyphURL('hand'));
+    row('Interface size', cycle('uiSize', [-1, 0, 1, 2], ['Small', 'Normal', 'Big', 'Huge'], (v) => { setUIScaleOffset(v); requestAnimationFrame(() => snapBox(p)); }), glyphURL('size'));
     row('Master volume', slider('master', 0, 1, 0.05), glyphURL('speaker'));
     row('Music', slider('music', 0, 1, 0.05), glyphURL('note'));
     row('Sound effects', slider('sfx', 0, 1, 0.05), glyphURL('bones'));
@@ -359,6 +360,8 @@ export class Menus {
     const { p, body } = this.sheet("Nana's Order Board", { kind: 'wood', cls: 'board', onClose: done });
     const info = el('div', 'boardbar');
     body.appendChild(info);
+    const quote = el('div', 'boardquote');
+    body.appendChild(quote);
     const cork = el('div', 'k-panel k-cork cork');
     body.appendChild(cork);
     const slips = [];
@@ -367,11 +370,11 @@ export class Menus {
       const s = el('button', 'k-paper slip pick');
       const name = CHARACTERS[o.customer]?.name || o.customer;
       const mug = mugOf(o);
-      s.innerHTML = `<i class="tack"></i><div class="who"><span class="pola"><img src="${charSnapshot(g, o.customer, 'happy', 32)}"></span><span class="nm k-bold">${esc(name)}</span></div>
+      s.innerHTML = `<i class="tack"></i><div class="who"><span class="pola"><img src="${charSnapshot(g, o.customer, 'happy', 32)}"></span><span class="nm k-bold">${esc(SHORT_NAME[o.customer] || name.split(' ')[0])}</span></div>
         <div class="what"><img class="k-g" src="${glyphURL(`mug_${mug}`)}"><span>${esc(o.label)}</span></div>
-        <div class="note">“${esc(o.note)}”</div>
-        <div class="pay"><img class="k-g" src="${glyphURL('coin')}"><b>$${o.price}</b><span>+ tips</span>${o.rush ? `<span class="rush"><img class="k-g" src="${glyphURL('rush')}">RUSH</span>` : ''}</div>
+        <div class="pay"><img class="k-g" src="${glyphURL('coin')}"><b>$${o.price}</b>${o.rush ? `<span class="rush"><img class="k-g" src="${glyphURL('rush')}">RUSH</span>` : '<span>+ tips</span>'}</div>
         <span class="packed k-bold">PACKED</span>`;
+      s.addEventListener('focus-item', () => { quote.innerHTML = `<b>${esc(name)}:</b> “${esc(o.note)}”`; });
       const sync = () => s.classList.toggle('taken', o.state === 'carried');
       sync();
       s.addEventListener('click', () => {
@@ -413,6 +416,7 @@ export class Menus {
     const go = ui.button("Let's ride!", done, { small: 'cocoa is poured when you leave', face: 'green' });
     body.appendChild(el('div', 'm-foot')).appendChild(go);
     m = ui.openOverlay(p, { onBack: done, items: [...slips, go], grid: boardCols() });
+    autoGrid(m, slips);
     return m;
   }
 
@@ -469,7 +473,7 @@ export class Menus {
     const close = () => ui.closeOverlay(m);
     const { p, body } = this.sheet("Harold's Keepsakes", { cls: 'keeps', onClose: close });
     const n = Object.keys(st.keepsakes).length;
-    body.appendChild(el('div', 'boardbar', `<span><b>${n} / ${KEEPSAKES.length}</b> found. Bring them home: Nana has a story for each one.</span>`));
+    body.appendChild(el('p', 'keepbar', `<b>${n} / ${KEEPSAKES.length}</b> found. Bring them home: Nana has a story for each one.`));
     const split = el('div', 'split');
     body.appendChild(split);
     const grid = el('div', 'slots');
@@ -491,6 +495,7 @@ export class Menus {
     const back = ui.button('Close', close);
     body.appendChild(el('div', 'm-foot')).appendChild(back);
     m = ui.openOverlay(p, { onBack: close, items: [...slots, back], grid: 4 });
+    autoGrid(m, slots);
     return m;
   }
 
@@ -558,8 +563,10 @@ export class Menus {
       const u = scale.u;
       for (const e of labels) {
         const w = Math.round(e.offsetWidth / u), h = Math.round(e.offsetHeight / u);
-        e.style.left = `${(Math.round(+e.dataset.x - w / 2) + 3) * u}px`;
-        e.style.top = `${(Math.round(+e.dataset.y - h / 2) + 3) * u}px`;
+        const lx = Math.max(1, Math.min(N - w - 1, Math.round(+e.dataset.x - w / 2)));
+        const ly = Math.max(1, Math.min(N - h - 1, Math.round(+e.dataset.y - h / 2)));
+        e.style.left = `${(lx + 3) * u}px`;
+        e.style.top = `${(ly + 3) * u}px`;
         e.style.visibility = 'visible';
       }
     });
@@ -606,6 +613,19 @@ function snapRibbon(rb) {
   rb.style.left = `${Math.round((hw - w) / 2) * u}px`;
   rb.style.transform = 'none';
 }
+// arrow-key grids follow the real column count once the grid is laid out
+function autoGrid(m, items) {
+  requestAnimationFrame(() => {
+    if (!items.length) return;
+    const top = items[0].offsetTop;
+    const n = items.filter((e) => e.offsetTop === top).length;
+    if (n > 0) m.grid = n;
+  });
+}
+const SHORT_NAME = { birdie: 'Birdie', ingrid: 'Dr. Ingrid', doug: 'Doug', lou: 'Big Lou', ollie: 'Ollie', marie: 'Marie', grandma: 'Nana', pip: 'Pip & Pop', gus: 'Gus', agnes: 'Agnes', mo: 'Mo' };
+// short pantry names that fit a recipe card; shop names with soft hyphens for two lines
+const SHORT_FOOD = { milk_bottle: 'Milk', cocoa_powder: 'Cocoa', sugar: 'Sugar', marshmallows: 'Mallows', maple_syrup: 'Syrup', cinnamon: 'Cinnamon', mint: 'Mint', cream: 'Cream', pumpkin: 'Pumpkin', nutmeg: 'Nutmeg', coffee_beans: 'Coffee', dark_chocolate: 'Chocolate' };
+const SHOP_NAME = { milk_bottle: 'Milk', marshmallows: 'Marsh­mallows', dark_chocolate: 'Dark Choco­late', cinnamon: 'Cinna­mon', mint: 'Fresh Mint' };
 const fmtNum = (v) => (Math.abs(v - Math.round(v)) < 0.01 ? String(Math.round(v)) : v.toFixed(1));
 const shopCols = () => (scale.cols < 330 ? 3 : scale.cols < 420 ? 4 : 6);
 const boardCols = () => (scale.cols < 330 ? 2 : 3);

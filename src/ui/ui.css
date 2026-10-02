@@ -177,12 +177,16 @@
 .touchmode .hud-gauge.away { transform: translateY(calc(var(--u) * 200)); }
 .touchmode .hud-speedo { width: calc(var(--u) * 72); height: calc(var(--u) * 72); }
 .touchmode .hud-prompt { display: none !important; }
-.touchmode .toasts { left: calc(var(--u) * 3 + var(--safe-l)); right: auto; top: calc(var(--u) * 62 + var(--safe-t)); bottom: auto; align-items: flex-start; }
+.touchmode .toasts { left: 0; right: 0; top: calc(var(--u) * 72 + var(--safe-t)); bottom: auto; align-items: center; }
 .touchmode .toast { max-width: calc(var(--u) * 150); }
+.touchmode .hud-note .obj { display: none; }
 /* phones held upright: compass under the top row */
 .k-portrait .hud-compass { top: calc(var(--u) * 58 + var(--safe-t)); }
 .k-portrait .hud-note { width: calc(var(--u) * 92); }
-.k-portrait .touchmode .toasts, .k-portrait.touchmode .toasts { top: calc(var(--u) * 110 + var(--safe-t)); }
+.k-portrait .touchmode .toasts { top: calc(var(--u) * 126 + var(--safe-t)); }
+.k-portrait .tbtn.tsq { top: calc(var(--u) * 74 + var(--safe-t)); }
+.k-portrait .t-map { left: calc(var(--u) * 6 + var(--safe-l)); }
+.k-portrait .t-pause { left: calc(var(--u) * 40 + var(--safe-l)); }
 
 /* ---------------------------------------------------------------- touch controls */
 #touch { position: absolute; inset: 0; pointer-events: none; display: none; z-index: 2; }
@@ -204,7 +208,7 @@
 .tbtn.tsq { --sz: 28; top: calc(var(--u) * 10 + var(--safe-t)); }
 .t-map { left: calc(50% - var(--u) * 64); }
 .t-pause { left: calc(50% + var(--u) * 36); }
-.t-talk { position: absolute; right: calc(var(--u) * 50 + var(--safe-r)); bottom: calc(var(--u) * 116 + var(--safe-b)); display: none; align-items: center; gap: calc(var(--u) * 3); height: calc(var(--u) * 24); padding: 0 calc(var(--u) * 4) 0 calc(var(--u) * 1); pointer-events: auto; touch-action: none; white-space: nowrap; }
+.t-talk { position: absolute; left: 0; right: 0; margin: 0 auto; width: max-content; bottom: calc(var(--u) * 10 + var(--safe-b)); display: none; align-items: center; gap: calc(var(--u) * 3); height: calc(var(--u) * 24); padding: 0 calc(var(--u) * 4) 0 calc(var(--u) * 1); pointer-events: auto; touch-action: none; white-space: nowrap; }
 .t-talk.lit { display: flex; animation: k-hop 0.8s steps(1) infinite; }
 .t-talk.down { border-image-source: var(--k-plate-leather); }
-.k-portrait .t-talk { bottom: calc(var(--u) * 150 + var(--safe-b)); right: calc(var(--u) * 8 + var(--safe-r)); }
+.k-portrait .t-talk { bottom: calc(var(--u) * 150 + var(--safe-b)); }
