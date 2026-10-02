@@ -57,7 +57,7 @@ export class Tricks {
         const up = c.throttle > 0.5, down = c.brake > 0.5, st = c.steer || 0;
         this.start(up ? 'superman' : down ? 'nohander' : st < -0.5 ? 'cancan' : st > 0.5 ? 'nothin' : 'skull');
       }
-      this.held = !!trickBtn;
+      if (b.airTime > 0.18) this.held = !!trickBtn;
       if (this.active) {
         this.active.t += dt;
         if (!trickBtn && this.active.t > 0.35) this.finishPose();

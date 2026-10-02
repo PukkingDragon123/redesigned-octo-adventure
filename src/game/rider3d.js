@@ -28,6 +28,8 @@ export class VoxelRider {
     this.mounted = true;
     this.windmill = 0;
     this.cheer = 0;
+    this.st = 'pedal';
+    this.poseFn = (c, t, T) => this.bikePose(c, t, T);
     this.make(charId);
   }
 
@@ -161,69 +163,66 @@ export class VoxelRider {
   }
 
   // extra pose on top of vchar's ride pose, from what the bike is doing
-  bikePose(b, st) {
-    const self = this;
-    const trick = this.game.tricks?.poseFn;
-    return (c, t, T) => {
-      const th = b.wheelie, ts = b.stoppie;
-      if (st === 'wheelie' || st === 'manual') {
-        const k = clamp(th / 0.7, 0, 1.4);
-        // the bike tilts up under him; he hangs back a little but his body stays fairly upright
-        T.lean = 0.3 + th * 0.85 - k * 0.32;
-        T.bodyZ -= 0.05 * k;
-        T.headX -= 0.28 * k;
-        T.tilt += b.balance * 4;
-        if (st === 'manual') { T.bodyY += 0.03; T.lean -= 0.08; }
-      } else if (st === 'stoppie' || st === 'nose') {
-        const k = clamp(ts / 0.7, 0, 1.4);
-        T.lean = 0.45 + k * 0.4 - ts * 0.4;
-        T.bodyY += 0.07 * k;
-        T.bodyZ += 0.04 * k;
-        T.headX -= 0.25;
-        T.tilt += b.balance * 4;
-      } else if (st === 'crouch') {
-        T.bodyY -= 0.08;
-        T.lean += 0.32;
-        T.headX -= 0.18;
-        T.sq = 0.9;
-      } else if (st === 'pop') {
-        T.bodyY += 0.07;
-        T.lean -= 0.12;
-        T.sq = 1.08;
-        T.headX -= 0.25;
-      } else if (st === 'flip') {
-        // tucked tight
-        T.lean += 0.5;
-        T.bodyY -= 0.05;
-        T.headX += 0.35;
-        T.sq = 0.94;
-      } else if (st === 'dab') {
-        const s = b.dabSide > 0 ? 'R' : 'L';
-        leg(T, s, 0.25, 0.5, 0.2);
-        T.tilt += b.dabSide * 0.1;
-        T.lean += 0.08;
-      } else if (st === 'slip') {
-        leg(T, 'R', 0.2 + S(t * 22) * 0.9, 0.35, 0.5);
-        T.headX -= 0.2;
-        T.lean -= 0.1;
-      }
-      // airborne spins: look into the spin, body twists after
-      if (!b.grounded) {
-        T.twist -= clamp(b.yawRate * 0.05, -0.35, 0.35);
-        T.headY += clamp(b.yawRate * 0.08, -0.6, 0.6);
-      }
-      // slow wobble: arms and body sway as he fights for balance
-      if (b.grounded && b.speed < 1.8 && b.speed > 0.2 && st !== 'dab') T.tilt += S(t * 9) * 0.07 * (1.8 - b.speed);
-      // sketchy landing: arms windmill for a moment
-      if (self.windmill > 0) {
-        const w = self.windmill;
-        arm(T, 'L', S(t * 19) * 2.2, 1.4, 0.3);
-        arm(T, 'R', S(t * 19 + 2.5) * 2.2, 1.4, 0.3);
-        T.tilt += S(t * 13) * 0.12 * w;
-      }
-      if (self.cheer > 0) { arm(T, 'L', 0.3, 2.6, 0.25); T.headX -= 0.15; }
-      trick?.(c, t, T);
-    };
+  bikePose(c, t, T) {
+    const self = this, b = this.game.bike, st = this.st;
+    const th = b.wheelie, ts = b.stoppie;
+    if (st === 'wheelie' || st === 'manual') {
+      const k = clamp(th / 0.7, 0, 1.4);
+      // the bike tilts up under him; he hangs back a little but his body stays fairly upright
+      T.lean = 0.3 + th * 0.85 - k * 0.32;
+      T.bodyZ -= 0.05 * k;
+      T.headX -= 0.28 * k;
+      T.tilt += b.balance * 4;
+      if (st === 'manual') { T.bodyY += 0.03; T.lean -= 0.08; }
+    } else if (st === 'stoppie' || st === 'nose') {
+      const k = clamp(ts / 0.7, 0, 1.4);
+      T.lean = 0.45 + k * 0.4 - ts * 0.4;
+      T.bodyY += 0.07 * k;
+      T.bodyZ += 0.04 * k;
+      T.headX -= 0.25;
+      T.tilt += b.balance * 4;
+    } else if (st === 'crouch') {
+      T.bodyY -= 0.08;
+      T.lean += 0.32;
+      T.headX -= 0.18;
+      T.sq = 0.9;
+    } else if (st === 'pop') {
+      T.bodyY += 0.07;
+      T.lean -= 0.12;
+      T.sq = 1.08;
+      T.headX -= 0.25;
+    } else if (st === 'flip') {
+      // tucked tight
+      T.lean += 0.5;
+      T.bodyY -= 0.05;
+      T.headX += 0.35;
+      T.sq = 0.94;
+    } else if (st === 'dab') {
+      const s = b.dabSide > 0 ? 'R' : 'L';
+      leg(T, s, 0.25, 0.5, 0.2);
+      T.tilt += b.dabSide * 0.1;
+      T.lean += 0.08;
+    } else if (st === 'slip') {
+      leg(T, 'R', 0.2 + S(t * 22) * 0.9, 0.35, 0.5);
+      T.headX -= 0.2;
+      T.lean -= 0.1;
+    }
+    // airborne spins: look into the spin, body twists after
+    if (!b.grounded) {
+      T.twist -= clamp(b.yawRate * 0.05, -0.35, 0.35);
+      T.headY += clamp(b.yawRate * 0.08, -0.6, 0.6);
+    }
+    // slow wobble: arms and body sway as he fights for balance
+    if (b.grounded && b.speed < 1.8 && b.speed > 0.2 && st !== 'dab') T.tilt += S(t * 9) * 0.07 * (1.8 - b.speed);
+    // sketchy landing: arms windmill for a moment
+    if (self.windmill > 0) {
+      const w = self.windmill;
+      arm(T, 'L', S(t * 19) * 2.2, 1.4, 0.3);
+      arm(T, 'R', S(t * 19 + 2.5) * 2.2, 1.4, 0.3);
+      T.tilt += S(t * 13) * 0.12 * w;
+    }
+    if (self.cheer > 0) { arm(T, 'L', 0.3, 2.6, 0.25); T.headX -= 0.15; }
+    this.game.tricks?.poseFn?.(c, t, T);
   }
 
   onBikeEvent(e) {
@@ -235,7 +234,10 @@ export class VoxelRider {
       case 'pedalSlip': ch.tempExpr('shock', 0.6); break;
       case 'wheelieStart': ch.tempExpr('determined', 0.6); break;
       case 'stoppieStart': ch.tempExpr('surprised', 0.6); break;
-      case 'jump': if (e.perfect) ch.tempExpr('sparkle', 0.6); break;
+      case 'jump': ch.kick('sq', e.perfect ? 1.3 : 1.18); if (e.perfect) ch.tempExpr('sparkle', 0.6); break;
+      case 'land': ch.kick('sq', clamp(1 - e.impact * 0.045, 0.62, 0.92)); break;
+      case 'bump': if (!e.rough || e.size > 0.06) ch.kick('sq', 0.88); break;
+      case 'frontSlam': case 'rearSlam': ch.kick('sq', 0.8); break;
       case 'dab': ch.tempExpr('sheepish', 0.7); break;
     }
   }
@@ -286,7 +288,8 @@ export class VoxelRider {
       ch.rideStyle = base;
       ch.rideCrank = bike.crank;
       ch.rideLean = bike.lean;
-      ch.trickPose = this.bikePose(bike, st);
+      this.st = st;
+      ch.trickPose = this.poseFn;
       const R = ch.ride;
       if (R) {
         const tr = this.game.tricks;

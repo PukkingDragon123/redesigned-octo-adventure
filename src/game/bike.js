@@ -594,8 +594,8 @@ export class Bike {
     if (this.stoppie <= 0.001 && (this.fwdSpeed > 0.6 || this.wheelie > 0)) {
       let th = this.wheelie, om = this.wheelieVel;
       // pedal-power wheelie, or a manual (weight shift only) with enough speed
-      const L = back * (pedalling ? 12.5 : sp > 2.5 ? 9.8 : 0) * (1 - th / 1.6);
-      let tau = L - 9 * Math.sin(WB_POINT - th) + (pedalling && th > 0.05 ? 2 : 0);
+      const L = back * (pedalling ? 10.5 : sp > 2.5 ? 9.4 : 0) * (1 - th / 1.6);
+      let tau = L - 9 * Math.sin(WB_POINT - th) + (pedalling && th > 0.05 ? 0.8 : 0);
       if (th > 0.02) {
         // a gentle hand near the balance point (stronger with assists), wobble that grows the longer you hold it
         const zone = Math.abs(th - WB_POINT) < 0.2 ? (assist ? 9 : 3) : assist ? 4 : 0;
@@ -604,7 +604,7 @@ export class Bike {
         tau -= c.brake * 15; // tap the back brake to stop a loop-out
         tau -= fwdL * 8;
       }
-      om += (tau - 3 * om) * dt;
+      om += (tau - 3.6 * om) * dt;
       th += om * dt;
       if (th <= 0) {
         if (this.wheelie > 0.02 && om < -2.4) {
