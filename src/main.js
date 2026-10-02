@@ -3,15 +3,14 @@ import * as THREE from 'three';
 import { Pipeline } from './render/pipeline.js';
 import { World } from './world/world.js';
 import { Game } from './game/game.js';
+import { Loader3D } from './boot/loader3d.js';
 
 const params = new URLSearchParams(location.search);
 const canvas = document.getElementById('game');
 const pipeline = new Pipeline(canvas);
-const bootFill = document.getElementById('bootFill');
+const loader = new Loader3D(pipeline);
 
-const world = new World(pipeline, (p) => {
-  bootFill.style.width = `${Math.round(p * 100)}%`;
-});
+const world = new World(pipeline, (p, label) => loader.progress(p, label));
 
 const camera = new THREE.PerspectiveCamera(55, 1, 0.1, 2400);
 camera.layers.enable(1);
@@ -27,8 +26,21 @@ window.addEventListener('resize', onResize);
 let game = null;
 
 async function boot() {
-  if (params.has('px')) pipeline.pixelScale = parseFloat(params.get('px'));
+  if (params.has('px')) pipeline.setPixelScale(parseFloat(params.get('px')));
   if (params.has('noshadow')) pipeline.renderer.shadowMap.enabled = false;
+  const testRun = params.has('frames');
+  if (params.has('loaderonly')) {
+    // test hook: just the loading scene, with fake progress
+    loader.start();
+    window.__ready = true;
+    let p = 0;
+    setInterval(() => loader.progress((p = Math.min(1, p + 0.01))), 100);
+    setTimeout(() => (window.__done = true), parseFloat(params.get('loaderonly') || '6') * 1000);
+    return;
+  }
+  if (!testRun || params.has('loader')) loader.start();
+  // let the loading scene draw a few frames before the heavy world build starts
+  await new Promise((r) => setTimeout(r, testRun ? 0 : 120));
   await world.build();
   onResize();
   if (params.has('hour')) world.atmosphere.hour = parseFloat(params.get('hour'));
@@ -42,11 +54,8 @@ async function boot() {
     camera.position.set(c[0], c[1], c[2]);
     camera.lookAt(c[3], c[4], c[5]);
   }
-  const bootEl = document.getElementById('boot');
-  if (params.has('frames')) bootEl.style.display = 'none';
-  bootEl.classList.add('gone');
-  clearInterval(window.__bootTips);
-  setTimeout(() => (bootEl.style.display = 'none'), 900);
+  document.getElementById('boot')?.remove();
+  await loader.finish(testRun);
   let last = performance.now();
   const maxFrames = params.has('frames') ? parseInt(params.get('frames')) : Infinity;
   // deterministic warm-up for tests: simulate N seconds before the first frame
@@ -83,5 +92,8 @@ window.__step = (n = 1, dt = 1 / 30) => {
 };
 boot().catch((e) => {
   console.error(e);
-  document.querySelector('.boot-sub').textContent = 'Error: ' + e.message;
+  const box = document.createElement('div');
+  box.style.cssText = 'position:fixed;left:16px;bottom:16px;z-index:200;color:#fff4e0;background:#1e1418;padding:8px 12px;font:16px monospace';
+  box.textContent = 'Error: ' + e.message;
+  document.body.appendChild(box);
 });
