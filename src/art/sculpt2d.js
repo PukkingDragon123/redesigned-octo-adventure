@@ -153,106 +153,18 @@ export function renderSculpt(S, view, ppm, opts = {}) {
   const gy0 = Math.floor(-y1 * ppm) - pad, gy1 = Math.ceil(-y0 * ppm) + pad;
   const W = gx1 - gx0, H = gy1 - gy0;
   const N = W * H;
-  const depth = new Float32Array(N).fill(-1e9);
+  const SC = scratch(N);
+  const depth = SC.depth.subarray(0, N).fill(-1e9);
   const MI = matIndex(S.mats);
-  const mat = new Int16Array(N).fill(-1);
-  const nrm = new Float32Array(N * 3);
-  const grp = new Int32Array(N).fill(-1);
-  const lineOk = new Uint8Array(N);
-  const hh = [0, 0, 0];
-  const ZF = 50; // rays start this far in front
+  const mat = SC.mat.subarray(0, N).fill(-1);
+  const nrm = SC.nrm.subarray(0, N * 3);
+  const grp = SC.grp.subarray(0, N).fill(-1);
+  const lineOk = SC.lineOk.subarray(0, N).fill(0);
+  const RC = { depth, mat, nrm, grp, lineOk, W, H, gx0, gy0, ppm, V, clip: opts.clipY !== undefined, clipY: opts.clipY ?? 0, MI };
   for (const p of P) {
-    const px0 = Math.max(0, Math.floor(p.bx0 * ppm) - gx0), px1 = Math.min(W - 1, Math.ceil(p.bx1 * ppm) - gx0);
-    const py0 = Math.max(0, Math.floor(-p.by1 * ppm) - gy0), py1 = Math.min(H - 1, Math.ceil(-p.by0 * ppm) - gy0);
-    if (p.cone) {
-      // round cone (iq): ro = (X, Y, ZF), rd = (0, 0, -1)
-      const pa = p.a, pb = p.b, ra = p.ra, rb = p.rb;
-      const bax = pb[0] - pa[0], bay = pb[1] - pa[1], baz = pb[2] - pa[2];
-      const rr = ra - rb;
-      const m0 = bax * bax + bay * bay + baz * baz;
-      const m2 = -baz;
-      const d2 = m0 - rr * rr;
-      const k2 = d2 - m2 * m2;
-      for (let py = py0; py <= py1; py++) {
-        const Y = -(py + gy0 + 0.5) / ppm;
-        for (let px = px0; px <= px1; px++) {
-          const X = (px + gx0 + 0.5) / ppm;
-          const oax = X - pa[0], oay = Y - pa[1], oaz = ZF - pa[2];
-          const obx = X - pb[0], oby = Y - pb[1], obz = ZF - pb[2];
-          const m1 = bax * oax + bay * oay + baz * oaz;
-          const m3 = -oaz;
-          const m5 = oax * oax + oay * oay + oaz * oaz;
-          const m6 = -obz;
-          const m7 = obx * obx + oby * oby + obz * obz;
-          const k1 = d2 * m3 - m1 * m2 + m2 * rr * ra;
-          const k0 = d2 * m5 - m1 * m1 + m1 * rr * ra * 2 - m0 * ra * ra;
-          let t = -1, nx = 0, ny = 0, nz = 0, u = 0;
-          const h = k1 * k1 - k0 * k2;
-          if (h >= 0 && k2 > 1e-12) {
-            const tb = (-Math.sqrt(h) - k1) / k2;
-            const y = m1 - ra * rr + tb * m2;
-            if (y > 0 && y < d2) {
-              t = tb;
-              nx = d2 * oax - bax * y; ny = d2 * oay - bay * y; nz = d2 * (oaz - tb) - baz * y;
-              u = y / d2;
-            }
-          }
-          if (t < 0) {
-            const h1 = m3 * m3 - m5 + ra * ra, h2 = m6 * m6 - m7 + rb * rb;
-            if (h1 > 0) { t = -m3 - Math.sqrt(h1); nx = oax; ny = oay; nz = oaz - t; u = 0; }
-            if (h2 > 0) {
-              const t2 = -m6 - Math.sqrt(h2);
-              if (t < 0 || t2 < t) { t = t2; nx = obx; ny = oby; nz = obz - t2; u = 1; }
-            }
-          }
-          if (t < 0) continue;
-          const z = ZF - t;
-          const i = py * W + px;
-          if (z <= depth[i]) continue;
-          const nl = Math.hypot(nx, ny, nz) || 1;
-          nx /= nl; ny /= nl; nz /= nl;
-          hh[0] = nx; hh[1] = ny; hh[2] = nz;
-          const m = typeof p.mat === 'function' ? p.mat(hh, p, p.t0 + (p.t1 - p.t0) * u) : p.mat;
-          if (!m) continue;
-          depth[i] = z; mat[i] = MI.get(m) ?? badMat(m); grp[i] = p.group; lineOk[i] = p.line ? 1 : 0;
-          nrm[i * 3] = nx; nrm[i * 3 + 1] = ny; nrm[i * 3 + 2] = nz;
-        }
-      }
-      continue;
-    }
-    const B = p.B, r = p.r, d = p.d, a = p.a;
-    for (let py = py0; py <= py1; py++) {
-      const Y = -(py + gy0 + 0.5) / ppm;
-      for (let px = px0; px <= px1; px++) {
-        const X = (px + gx0 + 0.5) / ppm;
-        const ex = X - p.c[0], ey = Y - p.c[1], ez = -p.c[2];
-        // local unit-sphere coords of the ray origin (z = 0 plane)
-        const qx = (B[0] * ex + B[3] * ey + B[6] * ez) / r[0];
-        const qy = (B[1] * ex + B[4] * ey + B[7] * ez) / r[1];
-        const qz = (B[2] * ex + B[5] * ey + B[8] * ez) / r[2];
-        const b = 2 * (qx * d[0] + qy * d[1] + qz * d[2]);
-        const cc = qx * qx + qy * qy + qz * qz - 1;
-        const disc = b * b - 4 * a * cc;
-        if (disc < 0) continue;
-        const t = (-b - Math.sqrt(disc)) / (2 * a);
-        const z = -t;
-        const i = py * W + px;
-        if (z <= depth[i]) continue;
-        const hx = qx + t * d[0], hy = qy + t * d[1], hz = qz + t * d[2];
-        hh[0] = hx; hh[1] = hy; hh[2] = hz;
-        const m = typeof p.mat === 'function' ? p.mat(hh, p, p.t) : p.mat;
-        if (!m) continue;
-        depth[i] = z;
-        mat[i] = MI.get(m) ?? badMat(m);
-        grp[i] = p.group;
-        lineOk[i] = p.line ? 1 : 0;
-        // normal = B * (h / r)
-        const lx = hx / r[0], ly = hy / r[1], lz = hz / r[2];
-        let nx = B[0] * lx + B[1] * ly + B[2] * lz, ny = B[3] * lx + B[4] * ly + B[5] * lz, nz = B[6] * lx + B[7] * ly + B[8] * lz;
-        const nl = Math.hypot(nx, ny, nz) || 1;
-        nrm[i * 3] = nx / nl; nrm[i * 3 + 1] = ny / nl; nrm[i * 3 + 2] = nz / nl;
-      }
-    }
+    p.mi = typeof p.mat === 'function' ? -1 : MI.get(p.mat) ?? badMat(p.mat);
+    if (p.cone) rasterCone(p, RC);
+    else rasterEll(p, RC);
   }
   // clean up lone pixels and pinholes
   for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) {
@@ -266,8 +178,8 @@ export function renderSculpt(S, view, ppm, opts = {}) {
     }
   }
   // banded shading
-  const col = new Int32Array(N).fill(-1);
-  const band = new Int8Array(N);
+  const col = SC.col.subarray(0, N).fill(-1);
+  const band = SC.band.subarray(0, N).fill(0);
   const SP = MI.specs;
   const L = opts.light || LIGHT;
   for (let i = 0; i < N; i++) {
@@ -295,7 +207,7 @@ export function renderSculpt(S, view, ppm, opts = {}) {
     }
   }
   // painted details
-  const glowMask = new Uint8Array(N);
+  const glowMask = SC.glowMask.subarray(0, N).fill(0);
   const DEC = MI.decal;
   const put = (x, y, c, glow = false) => {
     x = Math.round(x); y = Math.round(y);
@@ -316,8 +228,9 @@ export function renderSculpt(S, view, ppm, opts = {}) {
     dc.fn(put, ix, iy, view, { W, H, mat, depth, band, col, ppm, z: p[2] });
   }
   // outer outline (colour of the nearest neighbouring part)
-  const out = new Int32Array(col);
-  const outGlow = new Uint8Array(N);
+  const out = SC.out.subarray(0, N);
+  out.set(col);
+  const outGlow = SC.outGlow.subarray(0, N).fill(0);
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
     const i = y * W + x;
     if (mat[i] >= 0) continue;
@@ -348,6 +261,120 @@ export function renderSculpt(S, view, ppm, opts = {}) {
     if (glowMask[i] || outGlow[i] || (m >= 0 && m !== DEC && SP[m].glow)) glow[y * w + x] = 1;
   }
   return { w, h, ax: -gx0 - cx0, ay: -gy0 - cy0, rgba, glow, ppm };
+}
+
+// rasterise one primitive into the frame buffers (kept small so it optimises early)
+const HH = [0, 0, 0];
+const ZF = 50; // rays start this far in front
+function rasterCone(p, RC) {
+  const { depth, mat, nrm, grp, lineOk, W, H, gx0, gy0, ppm, V, clip, clipY, MI } = RC;
+  const hh = HH;
+  const px0 = Math.max(0, Math.floor(p.bx0 * ppm) - gx0), px1 = Math.min(W - 1, Math.ceil(p.bx1 * ppm) - gx0);
+  const py0 = Math.max(0, Math.floor(-p.by1 * ppm) - gy0), py1 = Math.min(H - 1, Math.ceil(-p.by0 * ppm) - gy0);
+  const fn = typeof p.mat === 'function' ? p.mat : null, mi = p.mi, line = p.line ? 1 : 0, group = p.group;
+  // round cone (iq): ro = (X, Y, ZF), rd = (0, 0, -1)
+  const pa = p.a, pb = p.b, ra = p.ra, rb = p.rb;
+  const bax = pb[0] - pa[0], bay = pb[1] - pa[1], baz = pb[2] - pa[2];
+  const rr = ra - rb;
+  const m0 = bax * bax + bay * bay + baz * baz;
+  const m2 = -baz;
+  const d2 = m0 - rr * rr;
+  const k2 = d2 - m2 * m2;
+  for (let py = py0; py <= py1; py++) {
+    const Y = -(py + gy0 + 0.5) / ppm;
+    for (let px = px0; px <= px1; px++) {
+      const X = (px + gx0 + 0.5) / ppm;
+      const oax = X - pa[0], oay = Y - pa[1], oaz = ZF - pa[2];
+      const obx = X - pb[0], oby = Y - pb[1], obz = ZF - pb[2];
+      const m1 = bax * oax + bay * oay + baz * oaz;
+      const m3 = -oaz;
+      const m5 = oax * oax + oay * oay + oaz * oaz;
+      const m6 = -obz;
+      const m7 = obx * obx + oby * oby + obz * obz;
+      const k1 = d2 * m3 - m1 * m2 + m2 * rr * ra;
+      const k0 = d2 * m5 - m1 * m1 + m1 * rr * ra * 2 - m0 * ra * ra;
+      let t = -1, nx = 0, ny = 0, nz = 0, u = 0;
+      const h = k1 * k1 - k0 * k2;
+      if (h >= 0 && k2 > 1e-12) {
+        const tb = (-Math.sqrt(h) - k1) / k2;
+        const y = m1 - ra * rr + tb * m2;
+        if (y > 0 && y < d2) {
+          t = tb;
+          nx = d2 * oax - bax * y; ny = d2 * oay - bay * y; nz = d2 * (oaz - tb) - baz * y;
+          u = y / d2;
+        }
+      }
+      if (t < 0) {
+        const h1 = m3 * m3 - m5 + ra * ra, h2 = m6 * m6 - m7 + rb * rb;
+        if (h1 > 0) { t = -m3 - Math.sqrt(h1); nx = oax; ny = oay; nz = oaz - t; u = 0; }
+        if (h2 > 0) {
+          const t2 = -m6 - Math.sqrt(h2);
+          if (t < 0 || t2 < t) { t = t2; nx = obx; ny = oby; nz = obz - t2; u = 1; }
+        }
+      }
+      if (t < 0) continue;
+      const z = ZF - t;
+      const i = py * W + px;
+      if (z <= depth[i]) continue;
+      if (clip && V[1] * X + V[4] * Y + V[7] * z < clipY) continue;
+      const nl = Math.hypot(nx, ny, nz) || 1;
+      nx /= nl; ny /= nl; nz /= nl;
+      hh[0] = nx; hh[1] = ny; hh[2] = nz;
+      let k = mi;
+      if (fn) { const m = fn(hh, p, p.t0 + (p.t1 - p.t0) * u); if (!m) continue; k = MI.get(m) ?? badMat(m); }
+      depth[i] = z; mat[i] = k; grp[i] = group; lineOk[i] = line;
+      nrm[i * 3] = nx; nrm[i * 3 + 1] = ny; nrm[i * 3 + 2] = nz;
+    }
+  }
+}
+function rasterEll(p, RC) {
+  const { depth, mat, nrm, grp, lineOk, W, H, gx0, gy0, ppm, V, clip, clipY, MI } = RC;
+  const hh = HH;
+  const px0 = Math.max(0, Math.floor(p.bx0 * ppm) - gx0), px1 = Math.min(W - 1, Math.ceil(p.bx1 * ppm) - gx0);
+  const py0 = Math.max(0, Math.floor(-p.by1 * ppm) - gy0), py1 = Math.min(H - 1, Math.ceil(-p.by0 * ppm) - gy0);
+  const fn = typeof p.mat === 'function' ? p.mat : null, mi = p.mi, line = p.line ? 1 : 0, group = p.group;
+  const B = p.B, r = p.r, d = p.d, a = p.a;
+  for (let py = py0; py <= py1; py++) {
+    const Y = -(py + gy0 + 0.5) / ppm;
+    for (let px = px0; px <= px1; px++) {
+      const X = (px + gx0 + 0.5) / ppm;
+      const ex = X - p.c[0], ey = Y - p.c[1], ez = -p.c[2];
+      // local unit-sphere coords of the ray origin (z = 0 plane)
+      const qx = (B[0] * ex + B[3] * ey + B[6] * ez) / r[0];
+      const qy = (B[1] * ex + B[4] * ey + B[7] * ez) / r[1];
+      const qz = (B[2] * ex + B[5] * ey + B[8] * ez) / r[2];
+      const b = 2 * (qx * d[0] + qy * d[1] + qz * d[2]);
+      const cc = qx * qx + qy * qy + qz * qz - 1;
+      const disc = b * b - 4 * a * cc;
+      if (disc < 0) continue;
+      const t = (-b - Math.sqrt(disc)) / (2 * a);
+      const z = -t;
+      const i = py * W + px;
+      if (z <= depth[i]) continue;
+      if (clip && V[1] * X + V[4] * Y + V[7] * z < clipY) continue;
+      const hx = qx + t * d[0], hy = qy + t * d[1], hz = qz + t * d[2];
+      hh[0] = hx; hh[1] = hy; hh[2] = hz;
+      let k = mi;
+      if (fn) { const m = fn(hh, p, p.t); if (!m) continue; k = MI.get(m) ?? badMat(m); }
+      depth[i] = z; mat[i] = k; grp[i] = group; lineOk[i] = line;
+      // normal = B * (h / r)
+      const lx = hx / r[0], ly = hy / r[1], lz = hz / r[2];
+      let nx = B[0] * lx + B[1] * ly + B[2] * lz, ny = B[3] * lx + B[4] * ly + B[5] * lz, nz = B[6] * lx + B[7] * ly + B[8] * lz;
+      const nl = Math.hypot(nx, ny, nz) || 1;
+      nrm[i * 3] = nx / nl; nrm[i * 3 + 1] = ny / nl; nrm[i * 3 + 2] = nz / nl;
+    }
+  }
+}
+
+// scratch buffers reused across frames (painting hundreds of frames would
+// otherwise churn the garbage collector)
+let SCR = { n: 0 };
+function scratch(N) {
+  if (SCR.n < N) {
+    const n = Math.max(N, SCR.n * 2, 4096);
+    SCR = { n, depth: new Float32Array(n), mat: new Int16Array(n), nrm: new Float32Array(n * 3), grp: new Int32Array(n), lineOk: new Uint8Array(n), col: new Int32Array(n), band: new Int8Array(n), glowMask: new Uint8Array(n), out: new Int32Array(n), outGlow: new Uint8Array(n) };
+  }
+  return SCR;
 }
 
 // material table -> index map (cached per table)

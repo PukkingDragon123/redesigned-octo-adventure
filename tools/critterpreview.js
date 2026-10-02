@@ -10,6 +10,8 @@ const scale = +(q.get('scale') || 2);
 if (q.get('bg')) document.body.style.background = '#' + q.get('bg');
 const atlas = new SpriteAtlas(2048);
 const ms = paintCritters(atlas, q.has('atlas') ? Object.keys(CRITTERS) : kinds);
+// glowing pixels are stored at alpha 160; show them opaque here
+for (let i = 3; i < atlas.pix.data.length; i += 4) if (atlas.pix.data[i]) atlas.pix.data[i] = 255;
 const src = atlas.pix.toCanvas();
 const cv = document.getElementById('c');
 const ctx = cv.getContext('2d');
@@ -35,15 +37,16 @@ if (q.has('atlas')) {
   const play = q.has('play');
   const groups = play ? rows.filter((r) => r.i === 0) : rows;
   const tableW = (cellW * scale + pad) * views.length + 110;
-  const perCol = Math.max(1, Math.floor((window.innerHeight - 20) / (cellH * scale + pad)));
-  const nCols = Math.ceil(groups.length / perCol);
-  cv.width = tableW * nCols;
-  cv.height = Math.min(groups.length, perCol) * (cellH * scale + pad) + 20;
+  // groups flow left to right, then down the page
+  const perRow = Math.max(1, Math.floor(window.innerWidth / tableW));
+  const nRows = Math.ceil(groups.length / perRow);
+  cv.width = tableW * perRow;
+  cv.height = nRows * (cellH * scale + pad) + 20;
   const draw = (t) => {
     ctx.clearRect(0, 0, cv.width, cv.height);
     ctx.imageSmoothingEnabled = false;
     groups.forEach((r, n) => {
-      const col = Math.floor(n / perCol), row = n % perCol;
+      const col = n % perRow, row = Math.floor(n / perRow);
       const ox = col * tableW, oy = 18 + row * (cellH * scale + pad);
       const fi = play ? Math.floor(t * (r.anim === 'run' || r.anim.startsWith('fly') ? 10 : 5)) % r.A.n : r.i;
       ctx.fillStyle = '#fff';
