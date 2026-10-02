@@ -106,6 +106,8 @@ export class Bubbles {
     const narr = !who && !opts.choices;
     if (narr) return this.narrate(text, opts);
     this.clear();
+    // the "E: Talk to ..." tag would sit under the reply bubbles
+    this.ui.prompt?.(null);
     const speaker = this.findSpeaker(who, opts);
     const mood = moodOf(opts.expr);
     const b = el('div', `bubble b-${mood.style}`);
