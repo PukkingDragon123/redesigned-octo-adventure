@@ -50,6 +50,7 @@ const R = {
   white: ramp(0xf6f2ea, { ol: 0x5a5470, d2: 0xc0bccc, d1: 0xdcd8e2, l1: 0xfcfaf6, hl: 0xffffff }),
   snow: ramp(0xe6f2fc, { ol: 0x40507a, d2: 0xa4b8d8, d1: 0xc8d8ee, hl: 0xffffff }),
   cloud: ramp(0xd8dce8, { ol: 0x4a4e66, d2: 0x9aa0b8, d1: 0xbcc2d4, l1: 0xeef0f6, hl: 0xffffff }),
+  steam: ramp(0xf4f4f8, { ol: 0xa8a4b8, d2: 0xd0ccda, d1: 0xe4e2ea, l1: 0xffffff, hl: 0xffffff }),
   fire: ramp(0xff9a2a, { ol: 0x8a2a10, d2: 0xd0401a, d1: 0xf06a1e, l1: 0xffd050, hl: 0xfff8c0 }),
   steel: ramp(0x9aa4b4, { ol: 0x2e3440, hl: 0xffffff }),
   rubber: ramp(0x3a3438, { ol: 0x141012, d2: 0x221e20, d1: 0x2e2a2c, l1: 0x4e484c, hl: 0x7a7478 }),
@@ -70,8 +71,8 @@ const inPoly = (pts) => (x, y) => {
   }
   return c;
 };
-const or = (...fs) => (x, y) => fs.some((f) => f(x, y));
-const and = (...fs) => (x, y) => fs.every((f) => f(x, y));
+const or = (...fs) => (x, y) => { for (let i = 0; i < fs.length; i++) if (fs[i](x, y)) return true; return false; };
+const and = (...fs) => (x, y) => { for (let i = 0; i < fs.length; i++) if (!fs[i](x, y)) return false; return true; };
 const not = (f) => (x, y) => !f(x, y);
 const star = (cx, cy, r0, r1, n = 5, a0 = -Math.PI / 2) => {
   const pts = [];
@@ -96,6 +97,13 @@ const mapleLeaf = (cx, cy, r) => {
 };
 
 // ---------------------------------------------------------------- the painter
+const N4 = [[1, 0], [-1, 0], [0, 1], [0, -1]], N4B = [[0, -1], [-1, 0], [1, 0], [0, 1]];
+const SCRATCH = new Map();
+function scratch(S) {
+  let b = SCRATCH.get(S);
+  if (!b) SCRATCH.set(S, (b = { M: new Uint8Array(S * S), N: new Float32Array(S * S * 3), UV: new Float32Array(S * S * 2), pre: new Uint8Array(S * S) }));
+  return b;
+}
 class Ico {
   constructor(S = 32, design = 32) {
     this.S = S;
@@ -119,7 +127,8 @@ class Ico {
   paint(Rm, cover, o = {}) {
     const S = this.S, k = this.k;
     this.n++;
-    const M = new Uint8Array(S * S), N = new Float32Array(S * S * 3), UV = new Float32Array(S * S * 2);
+    const B = scratch(S), M = B.M, N = B.N, UV = B.UV, pre = B.pre;
+    M.fill(0);
     cover((x, y, nx, ny, nz, u = 0, v = 0) => {
       x = Math.floor(x); y = Math.floor(y);
       if (x < 0 || y < 0 || x >= S || y >= S) return;
@@ -132,7 +141,6 @@ class Ico {
       UV[i * 2] = u; UV[i * 2 + 1] = v;
     });
     const lo = o.lo ?? -0.35, hi = o.hi ?? 1.05, sp = o.spec ?? 0.95;
-    const pre = new Uint8Array(S * S);
     for (let i = 0; i < S * S; i++) pre[i] = this.p.data[i * 4 + 3] > 0 ? 1 : 0;
     for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
       const i = y * S + x;
@@ -147,8 +155,8 @@ class Ico {
       }
       // an inner line where this part sits on top of an earlier one
       if (o.line !== false && o.line !== undefined) {
-        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-          const X = x + dx, Y = y + dy;
+        for (let q = 0; q < 4; q++) {
+          const X = x + N4[q][0], Y = y + N4[q][1];
           if (X < 0 || Y < 0 || X >= S || Y >= S) continue;
           const j = Y * S + X;
           if (!M[j] && pre[j]) { t = o.line === true ? 0 : o.line; break; }
@@ -233,20 +241,23 @@ class Ico {
     let rmax = 0;
     for (let q = 0; q <= 20; q++) rmax = Math.max(rmax, rf(q / 20));
     const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
+    const ya = Math.floor((Math.min(...ys) - rmax) * k) - 1, yb = Math.ceil((Math.max(...ys) + rmax) * k);
+    const xa = Math.floor((Math.min(...xs) - rmax) * k) - 1, xb = Math.ceil((Math.max(...xs) + rmax) * k);
     return this.paint(Rm, (add) => {
-      for (let y = Math.floor((Math.min(...ys) - rmax) * k) - 1; y <= Math.ceil((Math.max(...ys) + rmax) * k); y++)
-        for (let x = Math.floor((Math.min(...xs) - rmax) * k) - 1; x <= Math.ceil((Math.max(...xs) + rmax) * k); x++) {
+      for (let y = ya; y <= yb; y++)
+        for (let x = xa; x <= xb; x++) {
           const X = (x + 0.5) / k, Y = (y + 0.5) / k;
-          let best = null;
-          for (const s of segs) {
+          let bd = 1e9, bex = 0, bey = 0, bt = 0;
+          for (let j = 0; j < segs.length; j++) {
+            const s = segs[j];
             const tt = clamp((X - s.ax) * s.dx + (Y - s.ay) * s.dy, 0, s.l);
             const qx = s.ax + s.dx * tt, qy = s.ay + s.dy * tt, dd = Math.hypot(X - qx, Y - qy);
-            if (!best || dd < best.dd) best = { dd, ex: X - qx, ey: Y - qy, t: (s.t0 + tt) / tot };
+            if (dd < bd) { bd = dd; bex = X - qx; bey = Y - qy; bt = (s.t0 + tt) / tot; }
           }
-          const rr = rf(best.t);
-          if (best.dd > rr) continue;
-          const w = best.dd / rr;
-          add(x, y, best.ex / rr, best.ey / rr, Math.sqrt(Math.max(0, 1 - w * w)), best.t, w);
+          const rr = rf(bt);
+          if (bd > rr) continue;
+          const w = bd / rr;
+          add(x, y, bex / rr, bey / rr, Math.sqrt(Math.max(0, 1 - w * w)), bt, w);
         }
     }, o);
   }
@@ -286,7 +297,7 @@ class Ico {
     for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
       if (A(x, y)) continue;
       let c = -1;
-      for (const [dx, dy] of [[0, -1], [-1, 0], [1, 0], [0, 1]]) if (A(x + dx, y + dy)) { c = this.ol[(y + dy) * S + x + dx]; break; }
+      for (let q = 0; q < 4; q++) { const dx = N4B[q][0], dy = N4B[q][1]; if (A(x + dx, y + dy)) { c = this.ol[(y + dy) * S + x + dx]; break; } }
       if (c < 0) continue;
       this.p.set(x, y, mixc(c, INK, o.ink ?? 0.55));
     }
@@ -767,6 +778,55 @@ const ICONS = {
     c.dots([[16, 15], [18, 15]], 0x5e4c3e);
     boom(c, 26, 7, 4.6, 2, R.yellow, 6);
   },
+  // the Skill Book's moves (names match game.skills)
+  skill_wheelie(c) { ICONS.wheelie(c); },
+  skill_manual(c) {
+    streaks(c, [[1, 14, 5], [2, 18, 6], [1, 22, 4]]);
+    bike(c, { cx: 14, cy: 25, ang: -0.5, pivot: 'rear' });
+    c.ball(7, 29.4, 3.6, 1.2, R.cloud, { t: 3 });
+  },
+  skill_hop(c) { ICONS.hop(c); },
+  skill_cadence(c) {
+    ICONS.pedal(c);
+    c.tube([[24, 30], [24, 22], [29.4, 20.6], [29.4, 28]], 0.7, R.black);
+    c.ball(22.8, 30, 1.8, 1.4, R.black); c.ball(28.2, 28.2, 1.8, 1.4, R.black);
+  },
+  skill_drift(c) { ICONS.drift(c); },
+  skill_stoppie(c) { ICONS.stoppie(c); },
+  skill_nose(c) {
+    bike(c, { cx: 19, cy: 25, ang: 0.5, pivot: 'front' });
+    streaks(c, [[1, 16, 6], [2, 20, 7], [1, 24, 5]]);
+    puff(c, 25, 29, 0.6, R.cloud);
+  },
+  skill_spin(c) { ICONS.spin(c); },
+  skill_backflip(c) {
+    arcArrow(c, 16, 16, 13.4, Math.PI * 0.25, -Math.PI * 1.35, R.yellow, 1.2);
+    bike(c, { cx: 16, cy: 18, ang: -2.2, wheel: 4.6 });
+  },
+  skill_frontflip(c) {
+    arcArrow(c, 16, 16, 13.4, Math.PI * 0.75, Math.PI * 2.35, R.yellow, 1.2);
+    bike(c, { cx: 16, cy: 18, ang: 0.9, wheel: 4.6 });
+  },
+  skill_drop(c) {
+    c.pillow(rrect(0, 15, 12, 31, 0.6), R.timber, { rad: 1, tex: (x, y, t) => (Math.floor(y) % 4 === 0 ? Math.max(1, t - 2) : t) });
+    for (let k = 0; k < 5; k++) c.dot(11 + k * 2.4, 13 + k * k * 0.5, 0xfff6e2);
+    bike(c, { cx: 23, cy: 24, ang: -0.45, pivot: 'rear', wheel: 4.6 });
+    c.face(rrect(12, 30, 31, 31, 0), R.darkwood, { t: 2 });
+  },
+  skill_perfect(c) {
+    ICONS.landing(c);
+    c.pillow(inPoly(starPts(5, 6, 4, 1.6, 4)), R.yellow, { rad: 0.6 });
+    c.pillow(inPoly(starPts(27, 5, 3.4, 1.4, 4)), R.yellow, { rad: 0.6 });
+  },
+  skill_longjump(c) {
+    c.pillow(inPoly([[0, 31], [0, 24], [8, 27], [9, 31]]), R.moss, { rad: 1 });
+    c.pillow(inPoly([[23, 31], [24, 27], [32, 25], [32, 31]]), R.moss, { rad: 1 });
+    for (let x = 4; x < 29; x += 3) c.dot(x, 22, 0xffd84a);
+    c.poly([[29, 20], [31.6, 22], [29, 24]], R.yellow, { t: 4 });
+    bike(c, { cx: 16, cy: 12, ang: -0.1, wheel: 4.8 });
+  },
+  skill_combo(c) { ICONS.combo(c); },
+  skill_tricks(c) { ICONS.trick(c); },
   medal(c) {
     c.poly([[9, 2], [15, 2], [18, 13], [12, 13]], R.red, { rad: 1 });
     c.poly([[23, 2], [17, 2], [14, 13], [20, 13]], R.blue, { rad: 1, line: true });
@@ -842,9 +902,9 @@ const GLYPHS = {
   arrowL(c) { c.pillow(inPoly([[12, 2], [3, 8], [12, 14]]), R.gold, { rad: 1.2 }); },
   arrowU(c) { c.pillow(inPoly([[2, 12], [8, 3], [14, 12]]), R.gold, { rad: 1.2 }); },
   arrowD(c) { c.pillow(inPoly([[2, 4], [8, 13], [14, 4]]), R.gold, { rad: 1.2 }); },
-  steam3(c) { for (const [x, ph] of [[4, 0], [8, 1.4], [12, 2.6]]) c.tube(Array.from({ length: 6 }, (_, k) => [x + Math.sin(k * 1.1 + ph) * 1.2, 14 - k * 2.4]), 0.9, R.white, { spec: false }); },
-  steam2(c) { for (const [x, ph] of [[5.4, 0], [10.6, 1.4]]) c.tube(Array.from({ length: 5 }, (_, k) => [x + Math.sin(k * 1.1 + ph) * 1.2, 14 - k * 2.4]), 0.9, R.white, { spec: false }); },
-  steam1(c) { c.tube(Array.from({ length: 4 }, (_, k) => [8 + Math.sin(k * 1.1) * 1.2, 14 - k * 2.4]), 0.9, R.cloud, { spec: false }); },
+  steam3(c) { c.inkAmt = 0.12; for (const [x, ph] of [[3.6, 0], [8, 1.6], [12.4, 3]]) c.tube(Array.from({ length: 6 }, (_, k) => [x + Math.sin(k * 1.2 + ph) * 1.4, 14.6 - k * 2.4]), (t) => 0.95 - t * 0.35, R.steam, { spec: false }); },
+  steam2(c) { c.inkAmt = 0.12; for (const [x, ph] of [[5, 0], [11, 1.8]]) c.tube(Array.from({ length: 6 }, (_, k) => [x + Math.sin(k * 1.2 + ph) * 1.4, 14.6 - k * 2.4]), (t) => 0.95 - t * 0.35, R.steam, { spec: false }); },
+  steam1(c) { c.inkAmt = 0.12; c.tube(Array.from({ length: 5 }, (_, k) => [8 + Math.sin(k * 1.2) * 1.4, 14.6 - k * 2.4]), (t) => 0.95 - t * 0.35, R.steam, { spec: false, bias: -0.25 }); },
   cold(c) {
     for (let k = 0; k < 3; k++) { const a = (k / 3) * Math.PI + Math.PI / 2; c.tube([[8 - Math.cos(a) * 6, 8 - Math.sin(a) * 6], [8 + Math.cos(a) * 6, 8 + Math.sin(a) * 6]], 0.9, R.sky); }
     c.ball(8, 8, 1.6, 1.6, R.white);
@@ -870,15 +930,57 @@ const GLYPHS = {
   leaf(c) { c.pillow(mapleLeaf(8, 7.6, 6.6), R.orange, { rad: 1 }); },
   dot(c) { c.ball(8, 8, 3, 3, R.gold); },
   home(c) { c.pillow(inPoly([[1, 8], [8, 1.6], [15, 8]]), R.red, { rad: 1 }); c.pillow(rrect(3, 7, 13, 14.6, 0.4), R.timber, { rad: 1, line: true }); c.face(rrect(6.6, 9.6, 9.4, 14.6, 0), R.darkwood, { t: 2, line: true }); },
-  cocoa(c) { c.ring(12, 9.4, 1.4, 2.8, R.red); c.pillow(rrect(3, 5, 12, 14.6, 1.6), R.red, { rad: 1.6 }); c.ball(7.4, 5.6, 4, 1.4, R.cocoa, { t: 3 }); c.face(rrect(3.4, 8.6, 11.6, 10, 0), R.cream, { t: 4 }); },
+  cocoa(c) { mug16(c, R.red, R.cream); },
+  // the six recipes as little mugs (colours match the food sprites)
+  mug_classic(c) { mug16(c, R.red, R.cream); },
+  mug_maple(c) { mug16(c, R.cream, R.red, R.tan); },
+  mug_mint(c) { mug16(c, R.teal, R.white, R.white); },
+  mug_pumpkin(c) { mug16(c, R.pumpkin, R.black, R.white); },
+  mug_cinnamon(c) { mug16(c, R.maroon, R.fire); },
+  mug_mocha(c) { mug16(c, R.navy, R.yellow); },
+  // weather
+  sun(c) { for (let k = 0; k < 8; k++) { const a = (k / 8) * Math.PI * 2; c.dot(8 + Math.cos(a) * 6.6 - 0.5, 8 + Math.sin(a) * 6.6 - 0.5, 0xf07e2a); } c.ball(8, 8, 4.4, 4.4, R.yellow); },
+  moon(c) { c.ball(7.4, 8, 6, 6, R.cream, { clip: (x, y) => Math.hypot(x - 11, y - 5.4) > 4.8 }); c.dot(13, 12, 0xf8d040); },
+  cloud(c) { c.ball(5.4, 9.6, 3.6, 3, R.cloud); c.ball(10.6, 9.4, 4, 3.4, R.cloud); c.ball(8, 6.6, 4, 3.6, R.cloud); },
+  rain(c) { c.ball(5.4, 7, 3.4, 2.8, R.cloud); c.ball(10.6, 6.8, 3.8, 3, R.cloud); c.ball(8, 4.6, 3.6, 3, R.cloud); for (const [x, y] of [[4, 12.6], [8, 14], [12, 12.6]]) c.ball(x, y, 0.9, 1.4, R.sky); },
+  snow(c) { for (let k = 0; k < 3; k++) { const a = (k / 3) * Math.PI + Math.PI / 2; c.tube([[8 - Math.cos(a) * 6.4, 8 - Math.sin(a) * 6.4], [8 + Math.cos(a) * 6.4, 8 + Math.sin(a) * 6.4]], 0.85, R.snow); } c.ball(8, 8, 1.6, 1.6, R.white); },
+  fog(c) { for (let k = 0; k < 3; k++) c.tube([[2 + (k % 2) * 2, 4.4 + k * 3.8], [13 + (k % 2), 4.4 + k * 3.8]], 1.2, R.cloud); },
+  wind(c) { c.tube([[1.6, 6], [11, 6], [13, 4.4], [11.4, 2.6]], 0.8, R.cloud, { spec: false }); c.tube([[1.6, 10], [13, 10], [14.4, 12], [12.6, 13.6]], 0.8, R.cloud, { spec: false }); c.pillow(mapleLeaf(6, 13, 2.6), R.orange, { rad: 0.6 }); },
+  rush(c) { c.pillow(inPoly([[9.6, 1], [3, 9], [7.4, 9], [5.6, 15], [13, 6.4], [8.4, 6.4], [11, 1]]), R.yellow, { rad: 1 }); },
+  target(c) { c.ring(8, 8, 4.6, 6.8, R.red); c.ring(8, 8, 2.4, 4.6, R.white); c.ball(8, 8, 2.4, 2.4, R.red); },
+  // mood marks that pop around speech bubbles
+  mark_anger(c) { for (const [a, b] of [[[3, 3], [6.4, 6.4]], [[13, 3], [9.6, 6.4]], [[3, 13], [6.4, 9.6]], [[13, 13], [9.6, 9.6]]]) c.tube([a, [a[0] + (b[0] - a[0]) * 0.4, b[1]], b], 1.3, R.red); },
+  mark_bang(c) { c.pillow(inPoly([[5, 1], [11, 1], [9.4, 10], [6.6, 10]]), R.red, { rad: 1.2 }); c.ball(8, 13, 2, 2, R.red); },
+  mark_sweat(c) { c.pillow(or(inEll(8, 10.4, 4.6, 4.4), inPoly([[8, 1], [12, 9], [4, 9]])), R.sky, { rad: 1.8 }); c.dots([[6, 9], [6, 10]], 0xffffff); },
+  mark_heart(c) { c.pillow(or(inEll(5.2, 6, 3.8, 3.8), inEll(10.8, 6, 3.8, 3.8), inPoly([[1.6, 7], [14.4, 7], [8, 14.6]])), R.pink, { rad: 2.2 }); c.dots([[4, 4], [4, 5]], 0xffffff); },
+  mark_note(c) { c.tube([[6, 12], [6, 2.6], [13, 1.4], [13, 10]], 0.8, R.black); c.ball(4.4, 12.4, 2.6, 2, R.black); c.ball(11.4, 10.4, 2.6, 2, R.black); },
+  mark_sparkle(c) { c.pillow(inPoly([[8, 0.6], [9.6, 6.4], [15.4, 8], [9.6, 9.6], [8, 15.4], [6.4, 9.6], [0.6, 8], [6.4, 6.4]]), R.yellow, { rad: 1.2 }); c.dot(8, 8, 0xffffff); },
+  mark_question(c) { c.tube([[4.4, 5.6], [5.2, 2.4], [10, 1.6], [12, 4.2], [10.6, 6.8], [8, 8.2], [8, 10.4]], 1.5, R.blue); c.ball(8, 13.6, 1.7, 1.7, R.blue); },
+  mark_zzz(c) {
+    c.tube([[7, 2], [13, 2], [7, 8], [13, 8]], 0.9, R.blue);
+    c.tube([[2, 9], [6, 9], [2, 13.6], [6, 13.6]], 0.8, R.blue);
+  },
+  mark_tear(c) { c.pillow(or(inEll(8, 10.6, 3.6, 3.6), inPoly([[8, 3], [11.2, 9.4], [4.8, 9.4]])), R.sky, { rad: 1.4 }); c.dot(7, 10, 0xffffff); },
+  mark_shock(c) { for (const [a, b] of [[[2, 2], [5, 5]], [[14, 2], [11, 5]], [[8, 0.6], [8, 4.4]], [[1, 9], [4.6, 9]], [[15, 9], [11.4, 9]]]) c.tube([a, b], 0.9, R.black); },
+  mark_ha(c) {
+    c.tube([[1.6, 3], [1.6, 13]], 0.9, R.red); c.tube([[5.4, 3], [5.4, 13]], 0.9, R.red); c.tube([[1.6, 8], [5.4, 8]], 0.9, R.red);
+    c.tube([[8, 13], [10.6, 3], [13.4, 13]], 0.9, R.red); c.tube([[9, 9.4], [12.4, 9.4]], 0.8, R.red);
+  },
 };
+function mug16(c, body, band, top = R.cocoa) {
+  c.ring(12.2, 9.4, 1.3, 2.9, body);
+  c.pillow(rrect(2.6, 5, 12, 14.8, 1.6), body, { rad: 1.6 });
+  c.face(rrect(3, 8.6, 11.6, 10.2, 0), band, { t: 4, line: 2 });
+  c.ball(7.3, 5.4, 4.2, 1.5, top === R.cocoa ? R.cocoa : top, { t: 3 });
+  if (top !== R.cocoa) c.ball(7.3, 4.6, 2.6, 1.6, top, { t: 4 });
+}
 
 // ---------------------------------------------------------------- API
 const cache = new Map();
 function render(fn, S, design = 32) {
   const c = new Ico(S, design);
   fn?.(c);
-  return c.finish();
+  return c.finish({ ink: c.inkAmt ?? 0.55 });
 }
 // an icon by name; unknown names fall back to a sensible sibling (skills often come with new ids)
 const FALLBACK = [
@@ -889,7 +991,8 @@ const FALLBACK = [
 ];
 export function resolveIcon(name) {
   if (ICONS[name]) return name;
-  const n = String(name || '').toLowerCase();
+  const n = String(name || '').toLowerCase().replace(/^(skill|icon)_/, '');
+  if (ICONS[n]) return n;
   for (const [re, to] of FALLBACK) if (re.test(n)) return to;
   return 'medal';
 }
@@ -907,6 +1010,23 @@ export function iconURL(name) {
   cache.set(key, url);
   return url;
 }
+// any icon redrawn at another size (e.g. 24px for touch buttons), as a Pix
+export function iconAt(name, size) {
+  const key = `a:${name}:${size}`;
+  if (cache.has(key)) return cache.get(key);
+  const p = render(ICONS[resolveIcon(name)], size, 32);
+  cache.set(key, p);
+  return p;
+}
+// a 32px icon redrawn on a 16px grid (for inline use where no hand-made glyph exists)
+export function iconSmallURL(name) {
+  if (GLYPHS[name]) return glyphURL(name);
+  const key = `s:${name}`;
+  if (cache.has(key)) return cache.get(key);
+  const url = render(ICONS[resolveIcon(name)], 16, 32).toDataURL();
+  cache.set(key, url);
+  return url;
+}
 export function glyph(name) {
   const key = `g:${name}`;
   if (cache.has(key)) return cache.get(key);
@@ -921,8 +1041,8 @@ export function glyphURL(name) {
   cache.set(key, url);
   return url;
 }
-export const hasIcon = (name) => !!ICONS[name];
-// the world atlas (keepsake billboards) and old callers list only the real item icons
-export const ICON_NAMES = Object.keys(ICONS).filter((n) => !n.startsWith('t_'));
+export const hasIcon = (name) => !!ICONS[name] || /^skill_/.test(name);
+// what the world atlas bakes in (keepsake billboards float around the map); the UI draws the rest on demand
+export const ICON_NAMES = ['cane', 'spyglass', 'pack', 'clock', 'coat', 'medbag', 'suitcase', 'keys', 'books', 'map', 'lantern', 'bottles', 'coin', 'star'];
 export const ALL_ICON_NAMES = Object.keys(ICONS);
 export const GLYPH_NAMES = Object.keys(GLYPHS);

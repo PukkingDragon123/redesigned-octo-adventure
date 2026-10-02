@@ -114,6 +114,13 @@ if (what === 'icons' || what === 'all') {
   nl();
   if (I.GLYPH_NAMES) for (const n of I.GLYPH_NAMES) put(I.glyph(n));
 }
+if (what === 'bubbles') {
+  for (const s of ['round', 'shout', 'shaky', 'think', 'whisper', 'sel', 'dark']) {
+    const [x, y] = place(76, 54);
+    nine(sheet, K.bubbleArt(s), x, y, 76, 40, [10, 10, 10, 10]);
+    sheet.blit(K.bubbleTailArt(s), x + 14, y + 40 - K.BUBBLE_JOIN);
+  }
+}
 if (what === 'glyphs') {
   const I = await import('../src/art/icons.js');
   const tile = K.plateArt('parchment');

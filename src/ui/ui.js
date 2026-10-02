@@ -1,129 +1,51 @@
-// HUD, dialogue, toasts, banners, prompts and menu plumbing.
+// HUD, dialogue, toasts, banners, prompts and menu plumbing, all built from the
+// pixel UI kit (kit.js / kit.css).
+import './kit.css';
 import './ui.css';
 import './paper.css';
+import './menus.css';
 import { Bubbles } from './bubbles.js';
-import { buildPaperHUD, updatePaperHUD } from './paperhud.js';
-import { frameURL, slotURL } from './frames.js';
-import { iconURL, ICON_NAMES } from '../art/icons.js';
+import { buildPaperHUD, updatePaperHUD, Gauge } from './paperhud.js';
+import { installKit, kButton, kPanel, el, snap, snapBox, scale } from './kit.js';
+import { iconURL, hasIcon } from '../art/icons.js';
 import { foodIconURL, FOOD_INFO } from '../art/foodsprites.js';
-
-// a pixel icon by name: the UI set first, then the food sprites
-const ICON_ALIAS = { candy: 'candy_corn', pumpkin: 'pumpkin', camera: 'cocoa_takeaway' };
-function anyIcon(name) {
-  if (ICON_NAMES.includes(name)) return iconURL(name);
-  const f = FOOD_INFO[name] ? name : ICON_ALIAS[name];
-  return f ? foodIconURL(f) : iconURL(name);
-}
 import { portraitURL } from '../art/portraits.js';
 import { CHARACTERS } from '../art/characters.js';
 import { input } from '../core/input.js';
 import { sound } from '../game/sound.js';
-import { Pix } from '../art/pixel.js';
-import { clamp } from '../core/math.js';
+import { loadSettings } from '../game/state.js';
 
-const el = (tag, cls, html) => {
-  const e = document.createElement(tag);
-  if (cls) e.className = cls;
-  if (html !== undefined) e.innerHTML = html;
-  return e;
-};
+// a pixel icon by name: the UI set first, then the food sprites
+const ICON_ALIAS = { candy: 'candy_corn' };
+export function anyIcon(name) {
+  if (hasIcon(name)) return { src: iconURL(name), size: 32 };
+  const f = FOOD_INFO[name] ? name : ICON_ALIAS[name];
+  return f ? { src: foodIconURL(f), size: 48 } : { src: iconURL(name), size: 32 };
+}
 
 export const VOICE = { hank: 'hank', hankBuried: 'hank', grandma: 'grandma', reaper: 'reaper', gus: 'gus', marie: 'marie', doug: 'doug', birdie: 'birdie', ingrid: 'ingrid', lou: 'lou', agnes: 'agnes', pip: 'kid', pop: 'kid', ollie: 'ollie', cat: 'cat' };
 
+// old callers styled elements with a frame name; map those onto kit panels
+const FRAME_CLASS = { wood: [], paper: ['k-parchment'], dark: ['k-dark'], order: ['k-parchment'] };
 export function frameStyle(e, style = 'wood') {
-  e.style.borderImageSource = `url(${frameURL(style)})`;
+  e.classList.add('k-panel', ...(FRAME_CLASS[style] || []));
   return e;
-}
-
-// ---------------------------------------------------------------- gear & wheel gauge
-class Gauge {
-  constructor() {
-    this.canvas = el('canvas');
-    this.canvas.width = 72;
-    this.canvas.height = 72;
-    this.ctx = this.canvas.getContext('2d');
-    this.pix = new Pix(72, 72);
-    this.img = this.ctx.createImageData(72, 72);
-    this.shiftFlash = 0;
-    this.lastGear = 1;
-  }
-  draw(bike, dt) {
-    const p = this.pix;
-    p.data.fill(0);
-    const cx = 36, cy = 34;
-    const s = bike.stats;
-    const top = s.motor ? s.topSpeed : s.topSpeed * (0.42 + 0.58);
-    const k = clamp(bike.speed / (top * 1.25), 0, 1);
-    // speed arc (lots of little pixel segments)
-    for (let i = 0; i < 28; i++) {
-      const t = i / 27;
-      const a = Math.PI * (0.8 + t * 1.4);
-      const on = t <= k;
-      const col = t < 0.55 ? 0x6ad050 : t < 0.8 ? 0xf2c443 : 0xe8401e;
-      const r0 = 31, r1 = 34;
-      for (let r = r0; r <= r1; r++) p.set(Math.round(cx + Math.cos(a) * r), Math.round(cy + Math.sin(a) * r), on ? col : 0x3a2418);
-    }
-    // the wheel: tyre, rim, rotating spokes, hub
-    p.ring(cx, cy, 26, 0x1e1618, 4);
-    p.ring(cx, cy, 22, 0xc4c6cc, 1);
-    p.ring(cx, cy, 21, 0x7a7c84, 1);
-    const ang = bike.wheelAngle;
-    for (let i = 0; i < 8; i++) {
-      const a = ang + (i / 8) * Math.PI;
-      p.line(cx + Math.cos(a) * 20, cy + Math.sin(a) * 20, cx - Math.cos(a) * 20, cy - Math.sin(a) * 20, 0x9a9ca4);
-    }
-    // chainring with teeth (spins with the cranks) holding the gear number
-    const cr = bike.crank;
-    p.circle(cx, cy, 11, 0x2a2a30);
-    for (let i = 0; i < 14; i++) {
-      const a = cr + (i / 14) * Math.PI * 2;
-      p.rect(Math.round(cx + Math.cos(a) * 11.5) - 1, Math.round(cy + Math.sin(a) * 11.5) - 1, 2, 2, 0xd8b050);
-    }
-    p.circle(cx, cy, 9, this.shiftFlash > 0 ? 0xffe08a : 0xf2c443);
-    p.circle(cx, cy, 7.5, 0x3a2418);
-    // big pixel gear digit
-    const g = s.motor ? Math.max(1, bike.gear) : bike.gear;
-    if (g !== this.lastGear) { this.shiftFlash = 0.35; this.lastGear = g; }
-    this.shiftFlash = Math.max(0, this.shiftFlash - dt);
-    drawDigit(p, cx - 3, cy - 5, g, this.shiftFlash > 0 ? 0xffffff : 0xffe08a);
-    // gear pips (how many gears you own)
-    const n = s.motor ? 4 : s.gears;
-    const pw = Math.min(5, Math.floor(56 / n));
-    for (let i = 0; i < n; i++) {
-      const x = cx - (n * pw) / 2 + i * pw;
-      p.rect(Math.round(x), 66, Math.max(1, pw - 1), 3, i < g ? 0xf2c443 : 0x4a2a1a);
-    }
-    // speed number
-    const kmh = Math.round(bike.speed * 3.6);
-    drawNumber(p, cx, 56, kmh, 0xfff4dc);
-    this.img.data.set(p.data);
-    this.ctx.putImageData(this.img, 0, 0);
-  }
-}
-
-const DIG = ['111101101101111', '010110010010111', '111001111100111', '111001111001111', '101101111001001', '111100111001111', '111100111101111', '111001001001001', '111101111101111', '111101111001111'];
-function drawDigit(p, x, y, d, c, sc = 2) {
-  const g = DIG[d % 10];
-  for (let r = 0; r < 5; r++) for (let k = 0; k < 3; k++) if (g[r * 3 + k] === '1') p.rect(x + k * sc, y + r * sc, sc, sc, c);
-}
-function drawNumber(p, cx, y, n, c) {
-  const s = String(n);
-  const w = s.length * 4 - 1;
-  for (let i = 0; i < s.length; i++) drawDigit(p, cx - Math.floor(w / 2) + i * 4, y, +s[i], c, 1);
 }
 
 // ---------------------------------------------------------------- UI
 export class UI {
   constructor(game) {
     this.game = game;
+    installKit({ offset: (game.settings || loadSettings()).uiSize ?? 0 });
     this.root = document.getElementById('ui');
     this.root.innerHTML = '';
+    this.root.classList.add('k-text');
     this.buildHUD();
     this.dialogue = this.buildDialogue();
     this.bubbles = new Bubbles(this);
     this.toasts = el('div', 'toasts');
     this.root.appendChild(this.toasts);
-    this.skipHint = el('div', 'skiphint', `<span class="key">Esc</span> skip`);
+    this.skipHint = el('div', 'skiphint', '<span class="k-key">Esc</span><span class="k-shadow">skip</span>');
     this.skipHint.addEventListener('pointerdown', (e) => {
       e.stopPropagation();
       const sc = this.game.currentScene;
@@ -154,7 +76,10 @@ export class UI {
   }
 
   setObjective(text) {
-    if (this.objective.textContent !== text) this.objective.textContent = text || '';
+    if (this.objective.textContent !== (text || '')) {
+      this.objective.textContent = text || '';
+      this.objective.classList.toggle('on', !!text);
+    }
   }
 
   prompt(text, key = 'E') {
@@ -164,29 +89,34 @@ export class UI {
       this.promptEl.classList.remove('on');
       return;
     }
-    this.promptEl.innerHTML = `<span class="ink-key">${key}</span><span class="pt">${text}</span>`;
+    this.promptEl.innerHTML = `<span class="k-key">${key}</span><span class="pt">${text}</span>`;
+    this.promptEl.classList.remove('on');
+    void this.promptEl.offsetWidth;
     this.promptEl.classList.add('on');
+    snapBox(this.promptEl);
   }
 
   toast(text, icon = null, ms = 3200) {
-    const t = el('div', 'toast paper-note');
-    t.style.setProperty('--rot', `${(Math.random() * 4 - 2).toFixed(1)}deg`);
-    t.innerHTML = `${icon ? `<img src="${anyIcon(icon)}">` : ''}<span>${text}</span>`;
+    const t = el('div', 'k-plate toast');
+    let ic = '';
+    if (icon) { const a = anyIcon(icon); ic = `<img class="ti s${a.size}" src="${a.src}">`; }
+    t.innerHTML = `${ic}<span class="tt">${text}</span>`;
     this.toasts.appendChild(t);
     setTimeout(() => {
       t.classList.add('out');
-      setTimeout(() => t.remove(), 450);
+      setTimeout(() => t.remove(), 360);
     }, ms);
     while (this.toasts.childElementCount > 4) this.toasts.firstChild.remove();
   }
 
   // big announcements arrive as the front page of the Maple Cove Gazette
   banner(title, sub = '', ms = 2600) {
-    const b = el('div', 'banner gazette', `<div class="mast">THE MAPLE COVE GAZETTE</div><div class="rule"></div><div class="b1">${title}</div>${sub ? `<div class="b2">${sub}</div>` : ''}<div class="cols"><i></i><i></i><i></i></div>`);
+    const b = el('div', 'k-news banner gazette', `<div class="mast k-bold">THE MAPLE COVE GAZETTE</div><div class="rule"></div><div class="b1 k-bold">${title}</div>${sub ? `<div class="b2">${sub}</div>` : ''}<div class="cols"><i></i><i></i><i></i></div>`);
     this.root.appendChild(b);
+    snapBox(b);
     setTimeout(() => {
       b.classList.add('out');
-      setTimeout(() => b.remove(), 650);
+      setTimeout(() => b.remove(), 520);
     }, ms);
   }
 
@@ -194,11 +124,11 @@ export class UI {
     this.root.classList.toggle('letterbox', on);
   }
 
-  // floating text tags over world positions (e.g. "!!" shouts)
+  // floating text over world positions: comic stamps (cls) or little tooltip tags
   tag(id, text, pos, ms = 1500, cls = '') {
     let t = this.tags.get(id);
     if (!t) {
-      t = { e: cls ? el('div', `stamp ${cls}`) : frameStyle(el('div', 'panel wtag'), 'paper') };
+      t = { e: cls ? el('div', `stamp k-bold ${cls}`) : el('div', 'k-tip wtag') };
       this.root.appendChild(t.e);
       this.tags.set(id, t);
     }
@@ -219,17 +149,18 @@ export class UI {
       const v = t.pos.clone().project(cam);
       const vis = v.z < 1 && Math.abs(v.x) < 1.1 && Math.abs(v.y) < 1.1;
       t.e.style.display = vis ? '' : 'none';
-      t.e.style.left = `${(v.x * 0.5 + 0.5) * window.innerWidth}px`;
-      t.e.style.top = `${(-v.y * 0.5 + 0.5) * window.innerHeight}px`;
+      if (!vis) continue;
+      const x = (v.x * 0.5 + 0.5) * window.innerWidth, y = (-v.y * 0.5 + 0.5) * window.innerHeight;
+      t.e.style.transform = `translate(${snap(x - t.e.offsetWidth / 2)}px, ${snap(y - t.e.offsetHeight)}px)`;
     }
   }
 
-  // ---------------------------------------------------------------- dialogue
+  // ---------------------------------------------------------------- dialogue (the classic box; speech bubbles are the default)
   buildDialogue() {
     const d = el('div');
     d.id = 'dialogue';
-    const box = frameStyle(el('div', 'panel dlg-box'), 'wood');
-    box.innerHTML = `<div class="dlg-portrait"></div><div class="dlg-main"><div class="dlg-name"></div><div class="dlg-text"></div><div class="dlg-choices"></div></div><div class="dlg-next">▼</div>`;
+    const box = kPanel('leather', 'dlg-box');
+    box.innerHTML = '<div class="dlg-portrait"></div><div class="dlg-main"><div class="dlg-name k-bold"></div><div class="dlg-text"></div><div class="dlg-choices"></div></div><div class="dlg-next"></div>';
     d.appendChild(box);
     this.root.appendChild(d);
     d.addEventListener('pointerdown', () => (this._dlgClick = true));
@@ -243,19 +174,15 @@ export class UI {
     const name = opts.name ?? (who === 'cat' ? 'Poutine' : spec?.name ?? '');
     if (!opts.classic) return this.bubbles.say(who, text, opts, name, VOICE[who] || 'narrator');
     D.root.classList.add('on');
-    // narration gets a dark storybook caption instead of the parchment speech box
     const narr = !who && !opts.choices;
-    if (D.box.classList.contains('narr') !== narr) {
-      D.box.classList.toggle('narr', narr);
-      frameStyle(D.box, narr ? 'dark' : 'wood');
-    }
+    D.box.classList.toggle('narr', narr);
+    D.box.classList.toggle('k-dark', narr);
     D.portrait.classList.toggle('empty', !who);
     if (who) D.portrait.style.backgroundImage = `url(${portraitURL(who === 'hankBuried' ? 'hankBuried' : who, opts.expr || 'neutral')})`;
     D.name.textContent = name;
     D.name.style.display = name ? '' : 'none';
     D.choices.innerHTML = '';
     D.next.style.display = 'none';
-    // tokenise markup: *emphasis*, ~wobble~
     const parts = [];
     let mode = '';
     for (const ch of text) {
@@ -310,7 +237,6 @@ export class UI {
         if (!opts.keepOpen) D.root.classList.remove('on');
         resolve(opts.choices ? sel : undefined);
       };
-      // hideDialogue() (e.g. skipping a cutscene) settles the line with its default answer
       this._dlgResolve = () => resolve(opts.choices ? 0 : undefined);
       this._dlgClick = false;
       this.dialogueTick = (dt) => {
@@ -327,7 +253,7 @@ export class UI {
               sound.blip(voice);
               blipped = true;
             }
-            if ('.!?'.includes(p.ch)) acc -= 4; // little pauses
+            if ('.!?'.includes(p.ch)) acc -= 4;
             else if (p.ch === ',') acc -= 2;
           }
           if (i >= parts.length) finishTyping();
@@ -363,15 +289,17 @@ export class UI {
   }
 
   // ---------------------------------------------------------------- menus
-  // A menu is { el, items: [elements], onBack } ; navigation handled here.
+  // A menu is { ov, items: [elements], sel, onBack, grid }; navigation handled here.
+  // Items that have a nudge(dir) method (sliders, cycles, toggles) take left/right.
   openOverlay(contentEl, { onBack = null, items = null, grid = 0 } = {}) {
     const ov = el('div', 'overlay');
     ov.appendChild(contentEl);
     this.root.appendChild(ov);
-    const m = { ov, items: items || [...contentEl.querySelectorAll('.btn:not(:disabled), .slot, .slip')], sel: 0, onBack, grid };
+    const m = { ov, items: items || [...contentEl.querySelectorAll(MENU_ITEMS)], sel: 0, onBack, grid };
     this.menuStack.push(m);
     this.highlight(m);
     sound.play('ui_open');
+    snapBox(contentEl);
     return m;
   }
   closeOverlay(m = this.menuStack[this.menuStack.length - 1]) {
@@ -381,19 +309,22 @@ export class UI {
     this.swallowInput();
     sound.play('ui_close');
   }
-  refreshItems(m, selector = '.btn:not(:disabled), .slot, .slip') {
+  refreshItems(m, selector = MENU_ITEMS) {
     m.items = [...m.ov.querySelectorAll(selector)];
     m.sel = Math.min(m.sel, m.items.length - 1);
     this.highlight(m);
   }
   highlight(m) {
-    m.items.forEach((e, i) => {
-      e.classList.toggle('sel', i === m.sel);
-      if (e.classList.contains('btn')) e.style.borderImageSource = `url(${frameURL(i === m.sel ? 'buttonHot' : 'button')})`;
-      if (e.classList.contains('slot')) e.style.borderImageSource = `url(${slotURL(i === m.sel)})`;
-    });
+    m.items.forEach((e, i) => e.classList.toggle('sel', i === m.sel));
     const cur = m.items[m.sel];
     cur?.dispatchEvent(new CustomEvent('focus-item'));
+    // keep the focused row in view inside a scrolling list or menu (never scroll the page)
+    const box = cur?.closest('.k-list, .menu');
+    if (box && box.scrollHeight > box.clientHeight) {
+      const r = cur.getBoundingClientRect(), b = box.getBoundingClientRect();
+      if (r.top < b.top) box.scrollTop -= b.top - r.top + 8;
+      else if (r.bottom > b.bottom) box.scrollTop += r.bottom - b.bottom + 8;
+    }
   }
   menuTick() {
     const m = this.menuStack[this.menuStack.length - 1];
@@ -406,44 +337,53 @@ export class UI {
       sound.play('ui_hover');
     };
     const cols = m.grid || 1;
+    const cur = m.items[m.sel];
     if (input.pressed('up') || input.pressed('menuUp')) move(-cols);
     if (input.pressed('down') || input.pressed('menuDown')) move(cols);
     if (cols > 1) {
       if (input.pressed('left')) move(-1);
       if (input.pressed('right')) move(1);
+    } else if (cur?.nudge) {
+      if (input.pressed('left')) { cur.nudge(-1); sound.play('ui_hover'); }
+      if (input.pressed('right')) { cur.nudge(1); sound.play('ui_hover'); }
     }
-    if ((input.pressed('interact') || input.pressed('jump') || (input.pressed('confirm'))) && n) {
-      m.items[m.sel]?.click();
+    if ((input.pressed('interact') || input.pressed('jump') || input.pressed('confirm')) && n) {
+      if (cur?.nudge && !cur.matches('button')) cur.nudge(1);
+      else cur?.click();
     }
     if (input.pressed('back') || input.pressed('pause')) {
       if (m.onBack) m.onBack();
     }
     return true;
   }
-
-  button(label, onClick, { small = '', disabled = false } = {}) {
-    const b = el('button', 'btn', `${label}${small ? `<small>${small}</small>` : ''}`);
-    b.disabled = disabled;
-    b.style.borderImageSource = `url(${frameURL('button')})`;
-    b.addEventListener('click', () => {
-      if (b.disabled) return;
-      sound.play('ui_click');
-      onClick?.();
-    });
-    b.addEventListener('pointerenter', () => {
+  // make any element hover-selectable inside the current menu
+  hoverSelect(e) {
+    e.addEventListener('pointerenter', () => {
       const m = this.menuStack[this.menuStack.length - 1];
       if (!m) return;
-      const i = m.items.indexOf(b);
+      const i = m.items.indexOf(e);
       if (i >= 0 && i !== m.sel) {
         m.sel = i;
         this.highlight(m);
       }
     });
-    return b;
+    return e;
   }
 
+  button(label, onClick, { small = '', disabled = false, face = '', icon = '' } = {}) {
+    const b = kButton(label, null, { small, disabled, face, icon, cls: 'btn' });
+    b.addEventListener('click', () => {
+      if (b.disabled) return;
+      sound.play('ui_click');
+      onClick?.();
+    });
+    return this.hoverSelect(b);
+  }
+
+  // style: wood/leather | paper/parchment | dark
   panel(style = 'wood', cls = 'menu') {
-    return frameStyle(el('div', `panel ${cls}`), style);
+    const kind = { wood: 'leather', leather: 'leather', paper: 'parchment', parchment: 'parchment', dark: 'dark' }[style] || 'leather';
+    return kPanel(kind, cls);
   }
 
   update(dt) {
@@ -453,4 +393,5 @@ export class UI {
   }
 }
 
-export { el };
+export const MENU_ITEMS = '.k-btn:not(:disabled), .k-slot.pick, .pick';
+export { el, scale };

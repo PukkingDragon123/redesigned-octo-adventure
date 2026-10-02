@@ -1,15 +1,27 @@
-// Screens: title, pause, settings, controls, order board, garage, keepsakes, map, day summary.
-import { el, frameStyle } from '../ui/ui.js';
-import { frameURL, slotURL } from '../ui/frames.js';
-import { iconURL } from '../art/icons.js';
+// Screens: title, Hank's journal (pause), settings, controls, Nana's order board,
+// the Skill Book (Harold's garage), keepsakes, the paper map, recipes, the Moose &
+// Goose shop, pumpkin carving and the day's receipt. All built from the pixel UI
+// kit (src/ui/kit.js, styles in src/ui/menus.css).
+import { el } from '../ui/ui.js';
+import { kPanel, kRibbon, kClose, kBook, kBar, kSlider, kToggle, kSlot, kKey, esc, scale, snap, snapBox, setUIScaleOffset } from '../ui/kit.js';
+import { iconURL, iconSmallURL, glyphURL } from '../art/icons.js';
 import { charSnapshot } from '../ui/snapshots.js';
 import { CHARACTERS } from '../art/characters.js';
-import { UPGRADES, canBuy } from './upgrades.js';
 import { KEEPSAKES, POI, CUSTOMERS, WORLD_HALF, BUILDINGS } from '../world/layout.js';
 import { KEEPSAKE_ICON } from './keepsakes.js';
 import { hasSave } from './state.js';
 import { foodIconURL, FOOD_INFO } from '../art/foodsprites.js';
-import { QUESTS, SHOP, RECIPES, CATS, LOST, BIRDS, BIRD_NAMES } from './quests.js';
+import { QUESTS, SHOP, RECIPES, LOST, BIRD_NAMES } from './quests.js';
+
+const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V'];
+
+// a stand-in move list so the Skill Book can be opened before game.skills exists
+const STUB_SKILLS = [
+  { id: 'wheelie', name: 'Wheelie', icon: 'skill_wheelie', how: 'Pedal and hold lean-back to lift the front wheel. Small taps keep it up.', desc: 'Harold once rode a wheelie from the mill to the chapel.', tier: 1, maxTier: 3, goal: 'Hold a wheelie for 5 seconds', progress: 0.4 },
+  { id: 'stoppie', name: 'Stoppie', icon: 'skill_stoppie', how: 'Brake hard and lean forward: the back wheel lifts.', desc: 'Stopping, but with style.', tier: 0, maxTier: 3, goal: 'Stoppie for 0.8 seconds', progress: 0.1 },
+  { id: 'bunnyhop', name: 'Bunny Hop', icon: 'skill_hop', how: 'Hold hop to crouch, let go to pop.', desc: 'Up and over: logs, kerbs, ducks.', tier: 2, maxTier: 3, goal: 'Hop 1.12 m high', progress: 0.7 },
+  { id: 'drift', name: 'Drift', icon: 'skill_drift', how: 'At speed, hold drift and steer into a corner.', desc: 'The cocoa stays (mostly) in the cup.', tier: 3, maxTier: 3, goal: 'Mastered!', progress: 1 },
+];
 
 export class Menus {
   constructor(game) {
@@ -17,7 +29,31 @@ export class Menus {
     this.ui = game.ui;
   }
 
-  // ---------------------------------------------------------------- title
+  // ---------------------------------------------------------------- building blocks
+  // a framed sheet with a ribbon title and a close button; body is the scrolling part
+  sheet(title, { kind = 'leather', cls = '', ribbon = 'red', onClose = null } = {}) {
+    const p = kPanel(kind, `menu ${cls}`);
+    const rb = kRibbon(title, ribbon, 'm-title');
+    p.appendChild(rb);
+    if (onClose) {
+      const x = kClose(() => { this.game.sound?.play('ui_click'); onClose(); });
+      x.classList.add('m-close');
+      p.appendChild(x);
+    }
+    const body = el('div', 'm-body');
+    p.appendChild(body);
+    // centre the ribbon on whole pixels once the sheet is laid out
+    requestAnimationFrame(() => { snapBox(p); snapRibbon(rb); });
+    return { p, body };
+  }
+  // a selectable row (index entries, list rows): glyph + label (+ right side)
+  item(label, onClick, { icon = '', right = '', cls = '' } = {}) {
+    const b = el('button', `k-item pick${cls ? ` ${cls}` : ''}`, `${icon ? `<img class="k-g" src="${icon}">` : '<i class="k-g"></i>'}<span class="lbl">${label}</span>${right ? `<span class="rt">${right}</span>` : ''}`);
+    b.addEventListener('click', () => { this.game.sound?.play('ui_click'); onClick?.(b); });
+    return this.ui.hoverSelect(b);
+  }
+
+  // ---------------------------------------------------------------- title (the lead's screen; built from the kit)
   title({ onContinue, onNew, onSettings }) {
     const ui = this.ui;
     const t = el('div');
@@ -28,12 +64,12 @@ export class Menus {
     const menu = el('div', 'title-menu');
     const buttons = [];
     if (hasSave()) buttons.push(ui.button('Continue', () => close(onContinue), { small: `Day ${this.game.peekSave()?.day ?? 1}` }));
-    buttons.push(ui.button(hasSave() ? 'New Game' : 'Start', () => close(onNew), { small: hasSave() ? 'overwrites your save' : 'press E / Enter / click' }));
+    buttons.push(ui.button(hasSave() ? 'New Game' : 'Start', () => close(onNew), { small: hasSave() ? 'overwrites your save' : '' }));
     buttons.push(ui.button('Settings', () => onSettings()));
     buttons.push(ui.button('Controls', () => this.controls()));
     buttons.forEach((b) => menu.appendChild(b));
     t.appendChild(menu);
-    t.appendChild(el('div', 'title-foot', 'Autumn in Maple Cove · ride gently, deliver warmly<br><small>fonts: monogram by datagoblin (CC0) · BoldPixels by YukiPixels (CC BY-SA 4.0)</small>'));
+    t.appendChild(el('div', 'title-foot', 'Autumn in Maple Cove'));
     this.ui.root.appendChild(t);
     const m = { ov: t, items: buttons, sel: 0, onBack: null };
     ui.menuStack.push(m);
@@ -53,52 +89,54 @@ export class Menus {
     const g = this.game;
     const ui = this.ui;
     const st = g.state;
-    const p = ui.panel('paper', 'menu journal');
-    p.appendChild(el('h2', '', "Hank's Journal"));
-    const book = el('div', 'jbook');
-    const left = el('div', 'jpage');
-    const right = el('div', 'jpage');
-    book.append(left, right);
-    p.appendChild(book);
-    // left page: today + favours
-    left.innerHTML = `<div class="jdate">Day ${st.day} · $${Math.floor(st.money)} · ${st.stats.deliveries} cocoas delivered${st.candy ? ` · ${st.candy} candies` : ''}</div><h3>Favours & errands</h3>`;
-    const Q = st.quests || {};
-    const lines = [];
-    const snap = (who) => (who ? `<img class="jsnap" src="${charSnapshot(g, who, 'happy', 64)}">` : '');
-    for (const [id, def] of Object.entries(QUESTS)) {
-      const q = Q[id];
-      if (q?.state === 'active') lines.push(`<div class="jq">${snap(def.giver)}☐ ${def.title}</div>`);
-      else if (q?.state === 'done') lines.push(`<div class="jq done">${snap(def.giver)}☑ ${def.title}</div>`);
-    }
-    for (const L of LOST) {
-      const q = Q[`lost_${L.id}`];
-      if (q?.state === 'active') lines.push(`<div class="jq">${snap(L.owner)}☐ ${q.found ? 'Return' : 'Find'} the ${L.name}</div>`);
-      else if (q?.state === 'done') lines.push(`<div class="jq done">${snap(L.owner)}☑ Found the ${L.name}</div>`);
-    }
-    left.innerHTML += lines.length ? lines.join('') : '<p class="hint">Nothing yet. Stop and chat with folks around town — someone always needs a hand. Or a skeleton.</p>';
-    if (st.photos && Object.keys(st.photos).length) {
-      left.innerHTML += '<h3>Photos</h3><div class="polaroids">' + Object.keys(st.photos).map((k, i) => `<div class="polaroid" style="--r:${(i % 3) - 1}deg"><span>${BIRD_NAMES[k] || k}</span></div>`).join('') + '</div>';
-    }
-    // right page: where to go
     let m;
     const close = () => {
+      g.sound.play('book_close');
       ui.closeOverlay(m);
       g.resumeFromMenu();
     };
-    right.appendChild(ui.button('Back to the road', close));
-    right.appendChild(ui.button('Unfold the map', () => this.map()));
-    right.appendChild(ui.button("Harold's keepsakes", () => this.keepsakes()));
-    right.appendChild(ui.button("Nana's recipe book", () => this.recipes()));
-    right.appendChild(ui.button('Settings', () => this.settings()));
-    right.appendChild(ui.button('Controls', () => this.controls()));
-    right.appendChild(ui.button('Save & quit to title', () => {
-      g.save();
-      location.href = location.pathname;
-    }));
+    const { p, body } = this.sheet("Hank's Journal", { cls: 'journal', onClose: close });
+    const { book, left, right } = kBook('jbook');
+    body.appendChild(book);
+    // left page: today + favours
+    const d = st.stats || {};
+    left.innerHTML = `<div class="jdate"><img class="k-g" src="${glyphURL('coin')}"><b>$${Math.floor(st.money)}</b><img class="k-g" src="${glyphURL('cocoa')}">${d.deliveries || 0} delivered${st.candy ? `<img class="k-g" src="${iconSmallURL('candy')}">${st.candy}` : ''}</div><div class="k-h k-bold">Day ${st.day} &middot; Errands</div>`;
+    const Q = st.quests || {};
+    const lines = [];
+    const row = (done, text) => `<div class="jq${done ? ' done' : ''}"><img class="k-g" src="${glyphURL(done ? 'boxOn' : 'box')}"><span>${text}</span></div>`;
+    for (const [id, def] of Object.entries(QUESTS)) {
+      const q = Q[id];
+      if (q?.state === 'active') lines.push(row(false, def.title));
+      else if (q?.state === 'done') lines.push(row(true, def.title));
+    }
+    for (const L of LOST) {
+      const q = Q[`lost_${L.id}`];
+      if (q?.state === 'active') lines.push(row(false, `${q.found ? 'Return' : 'Find'} the ${L.name}`));
+      else if (q?.state === 'done') lines.push(row(true, `Found the ${L.name}`));
+    }
+    const list = el('div', 'jlist');
+    list.innerHTML = lines.length ? lines.join('') : '<p class="hint">Nothing yet. Stop and chat with folks around town: someone always needs a hand. Or a skeleton.</p>';
+    left.appendChild(list);
+    if (st.photos && Object.keys(st.photos).length) {
+      left.insertAdjacentHTML('beforeend', `<div class="k-h k-bold">Bird book</div><div class="jphotos">${Object.keys(st.photos).map((k) => `<span class="jph"><img class="k-g" src="${glyphURL('camera')}">${esc(BIRD_NAMES[k] || k)}</span>`).join('')}</div>`);
+    }
+    // right page: an index of where to go
+    right.insertAdjacentHTML('beforeend', '<div class="k-h k-bold">Contents</div>');
+    const items = [
+      this.item('Back to the road', close, { icon: glyphURL('arrowR') }),
+      this.item('The map', () => this.map(), { icon: iconSmallURL('map') }),
+      this.item("Harold's keepsakes", () => this.keepsakes(), { icon: iconSmallURL('lantern') }),
+      this.item('Skill book', () => this.skillBook(), { icon: iconSmallURL('skill_wheelie') }),
+      this.item("Nana's recipes", () => this.recipes(), { icon: glyphURL('mug_classic') }),
+      this.item('Settings', () => this.settings(), { icon: glyphURL('gear') }),
+      this.item('Controls', () => this.controls(), { icon: glyphURL('pad') }),
+      this.item('Save & quit', () => { g.save(); location.href = location.pathname; }, { icon: glyphURL('home'), cls: 'quit' }),
+    ];
+    const idx = el('div', 'jindex');
+    items.forEach((b) => idx.appendChild(b));
+    right.appendChild(idx);
     g.sound.play('book_open');
-    m = ui.openOverlay(p, { onBack: close });
-    const old = m.onBack;
-    m.onBack = () => { g.sound.play('book_close'); old(); };
+    m = ui.openOverlay(p, { onBack: close, items });
     return m;
   }
 
@@ -106,26 +144,27 @@ export class Menus {
   carve(onDone) {
     const ui = this.ui;
     const g = this.game;
-    const p = ui.panel('paper', 'menu carve');
-    p.appendChild(el('h2', '', 'Pick a face to carve'));
-    const faces = ['classic', 'happy', 'scared', 'toothy', 'cat', 'skull'];
-    const grid = el('div', 'carvegrid');
-    const items = faces.map((f) => {
-      const b = el('div', 'slip carveface');
-      b.innerHTML = `<img src="${faceSketch(f)}"><span>${f}</span>`;
-      b.addEventListener('click', () => done(f));
-      grid.appendChild(b);
-      return b;
-    });
-    p.appendChild(grid);
     let m;
     const done = (f) => {
       ui.closeOverlay(m);
       if (f) g.sound.play('pencil_scribble');
       onDone?.(f);
     };
+    const { p, body } = this.sheet('Pick a face to carve', { cls: 'carve', onClose: () => done(null) });
+    const faces = ['classic', 'happy', 'scared', 'toothy', 'cat', 'skull'];
+    const grid = el('div', 'carvegrid');
+    const items = faces.map((f) => {
+      const cell = el('div', 'carvecell');
+      const s = kSlot(faceSketch(f), { cls: 'pick' });
+      s.addEventListener('click', () => done(f));
+      ui.hoverSelect(s);
+      cell.append(s, el('div', 'cap', f));
+      grid.appendChild(cell);
+      return s;
+    });
+    body.appendChild(grid);
     const back = ui.button('Not now', () => done(null));
-    p.appendChild(back);
+    body.appendChild(el('div', 'm-foot')).appendChild(back);
     m = ui.openOverlay(p, { onBack: () => done(null), items: [...items, back], grid: 3 });
     return m;
   }
@@ -134,25 +173,22 @@ export class Menus {
   recipes() {
     const g = this.game;
     const ui = this.ui;
-    const st = g.state;
-    const pantry = st.pantry || {};
-    const p = ui.panel('paper', 'menu recipes');
-    p.appendChild(el('h2', '', "Nana's Recipe Book"));
+    const pantry = g.state.pantry || {};
+    let m;
+    const close = () => ui.closeOverlay(m);
+    const { p, body } = this.sheet("Nana's Recipe Book", { kind: 'parchment', cls: 'recipes', onClose: close });
     const names = { classic: 'Classic Cocoa', maple: 'Maple Marshmallow', cinnamon: 'Cinnamon Fire', mint: 'Peppermint Swirl', pumpkin: 'Pumpkin Spice', mocha: 'Lumberjack Mocha' };
     const grid = el('div', 'rgrid');
     for (const [id, ing] of Object.entries(RECIPES)) {
       const can = ing.every((k) => (pantry[k] || 0) > 0);
-      const card = el('div', `rcard${can ? '' : ' short'}`);
-      card.innerHTML = `<span class="steamy"><img class="big" src="${foodIconURL('cocoa_' + id)}"></span><div class="rn">${names[id]}</div><div class="ri">${ing.map((k) => `<span class="${(pantry[k] || 0) > 0 ? '' : 'out'}"><img src="${foodIconURL(k)}">${pantry[k] || 0}</span>`).join('')}</div>`;
+      const card = el('div', `k-paper rcard${can ? '' : ' short'}`);
+      card.innerHTML = `<img class="big" src="${foodIconURL('cocoa_' + id)}"><div class="rn k-bold">${names[id] || id}</div><div class="ri">${ing.map((k) => `<div class="${(pantry[k] || 0) > 0 ? 'ok' : 'out'}"><img class="k-g" src="${glyphURL((pantry[k] || 0) > 0 ? 'check' : 'cross')}"><span>${esc(FOOD_INFO[k]?.label || k)}</span><b>${pantry[k] || 0}</b></div>`).join('')}</div>`;
       grid.appendChild(card);
     }
-    p.appendChild(grid);
-    p.appendChild(el('p', 'hint', 'Each cup uses one of everything listed. Running low? Mo at Moose & Goose has it all — bring the groceries home to Nana.'));
-    let m;
-    const close = () => ui.closeOverlay(m);
-    p.appendChild(ui.button('Close the book', close));
+    body.appendChild(grid);
+    body.appendChild(el('p', 'hint', 'Each cup uses one of everything listed. Running low? Mo at Moose &amp; Goose has it all: bring the groceries home to Nana.'));
     g.sound.play('page_flip');
-    m = ui.openOverlay(p, { onBack: close });
+    m = ui.openOverlay(p, { onBack: close, items: [p.querySelector('.m-close')] });
     return m;
   }
 
@@ -162,34 +198,9 @@ export class Menus {
     const ui = this.ui;
     const st = g.state;
     st.bag = st.bag || {};
-    const p = ui.panel('paper', 'menu shop');
-    p.appendChild(el('h2', '', 'Moose & Goose · Price List'));
-    const money = el('p', '');
-    p.appendChild(money);
-    const grid = el('div', 'shopgrid');
-    p.appendChild(grid);
+    let m;
     const cart = {};
     const total = () => Object.entries(cart).reduce((s, [k, n]) => s + n * (FOOD_INFO[k]?.price || 3), 0);
-    const items = [];
-    const render = () => {
-      money.innerHTML = `In your pocket: <b>$${Math.floor(st.money)}</b> · basket: <b>$${total()}</b>`;
-      items.forEach((e) => e.sync());
-    };
-    for (const k of SHOP) {
-      const info = FOOD_INFO[k] || { label: k, price: 3 };
-      const e = el('div', 'slip shopitem');
-      e.innerHTML = `<img src="${foodIconURL(k)}"><span class="nm">${info.label}</span><span class="pr">$${info.price}</span><span class="qty"></span>`;
-      e.sync = () => { e.querySelector('.qty').textContent = cart[k] ? `×${cart[k]}` : ''; e.classList.toggle('taken', !!cart[k]); };
-      e.addEventListener('click', () => {
-        if (total() + info.price > st.money) { g.sound.play('ui_error'); ui.toast("Mo: 'That's a little more than you've got, Hank!'", 'coin', 1800); return; }
-        cart[k] = (cart[k] || 0) + 1;
-        g.sound.play('register', { volume: 0.5 });
-        render();
-      });
-      grid.appendChild(e);
-      items.push(e);
-    }
-    let m;
     const done = (pay) => {
       if (pay && total() > 0) {
         st.money -= total();
@@ -201,91 +212,137 @@ export class Menus {
       ui.closeOverlay(m);
       onDone?.();
     };
-    const pay = ui.button('Pay & bag it', () => done(true), { small: 'each item makes two cups' });
+    const { p, body } = this.sheet('Moose & Goose', { cls: 'shop', ribbon: 'green', onClose: () => done(false) });
+    const money = el('div', 'shopbar');
+    body.appendChild(money);
+    const grid = el('div', 'shopgrid');
+    body.appendChild(grid);
+    const items = [];
+    const render = () => {
+      money.innerHTML = `<span><img class="k-g" src="${glyphURL('coin')}">Pocket <b>$${Math.floor(st.money)}</b></span><span><img class="k-g" src="${iconSmallURL('basket')}">Basket <b>$${total()}</b></span>`;
+      items.forEach((e) => e.sync());
+    };
+    for (const k of SHOP) {
+      const info = FOOD_INFO[k] || { label: k, price: 3 };
+      const e = el('button', 'k-plate k-parchment shopitem pick', `<img class="fi" src="${foodIconURL(k)}"><span class="nm">${esc(info.label)}</span><span class="pr"><b>$${info.price}</b></span><span class="k-count qty"></span>`);
+      e.sync = () => { const q = e.querySelector('.qty'); q.textContent = cart[k] ? `${cart[k]}` : ''; q.style.visibility = cart[k] ? '' : 'hidden'; e.classList.toggle('taken', !!cart[k]); };
+      e.addEventListener('click', () => {
+        if (total() + info.price > st.money) { g.sound.play('ui_error'); ui.toast("Mo: 'That's a little more than you've got, Hank!'", 'coin', 1800); return; }
+        cart[k] = (cart[k] || 0) + 1;
+        g.sound.play('register', { volume: 0.5 });
+        render();
+      });
+      ui.hoverSelect(e);
+      grid.appendChild(e);
+      items.push(e);
+    }
+    const foot = el('div', 'm-foot');
+    const pay = ui.button('Pay & bag it', () => done(true), { small: 'each item makes two cups', face: 'green' });
     const leave = ui.button('Never mind', () => done(false));
-    p.append(pay, leave);
+    foot.append(pay, leave);
+    body.appendChild(foot);
     render();
     g.sound.play('shop_bell');
-    m = ui.openOverlay(p, { onBack: () => done(false), items: [...items, pay, leave], grid: 4 });
+    m = ui.openOverlay(p, { onBack: () => done(false), items: [...items, pay, leave], grid: shopCols() });
     return m;
   }
 
-    settings(onClose) {
+  // ---------------------------------------------------------------- settings
+  settings(onClose) {
     const g = this.game;
     const ui = this.ui;
     const s = g.settings;
-    const p = ui.panel('wood');
-    p.appendChild(el('h2', '', 'Settings'));
-    const row = (label, ctrl) => {
-      const r = el('div', 'row');
-      r.appendChild(el('span', '', label));
-      r.appendChild(ctrl);
-      p.appendChild(r);
-    };
-    const slider = (key, min, max, step) => {
-      const i = el('input');
-      i.type = 'range';
-      i.min = min; i.max = max; i.step = step;
-      i.value = s[key];
-      i.addEventListener('input', () => {
-        s[key] = parseFloat(i.value);
-        g.applySettings();
-      });
-      return i;
-    };
-    const cycle = (key, opts, labels) => {
-      const b = el('button', 'btn', '');
-      b.style.width = 'auto';
-      b.style.borderImageSource = `url(${frameURL('button')})`;
-      const show = () => (b.textContent = labels[opts.indexOf(s[key])] ?? s[key]);
-      show();
-      b.addEventListener('click', () => {
-        s[key] = opts[(opts.indexOf(s[key]) + 1) % opts.length];
-        // a hand-picked look wins over the automatic quality governor
-        if (key === 'pixel' || key === 'quality') s.autoQuality = false;
-        show();
-        g.applySettings();
-      });
-      return b;
-    };
-    row('Pixel size', cycle('pixel', [2, 3, 4], ['Fine (2x)', 'Classic (3x)', 'Chunky (4x)']));
-    row('Graphics', cycle('quality', ['low', 'medium', 'high'], ['Low', 'Medium', 'High']));
-    row('Master volume', slider('master', 0, 1, 0.05));
-    row('Music', slider('music', 0, 1, 0.05));
-    row('Sound effects', slider('sfx', 0, 1, 0.05));
-    row('Camera distance', slider('camDist', 0.8, 1.5, 0.05));
-    row('Show FPS', cycle('fps', [false, true], ['Off', 'On']));
     let m;
     const close = () => {
       g.saveSettings();
       ui.closeOverlay(m);
       onClose?.();
     };
-    p.appendChild(ui.button('Done', close));
-    m = ui.openOverlay(p, { onBack: close, items: [...p.querySelectorAll('.btn')] });
+    const { p, body } = this.sheet('Settings', { cls: 'settings', onClose: close });
+    const rows = [];
+    if (s.uiSize === undefined) s.uiSize = 0;
+    // a row is the menu item: left/right nudges its control, confirm clicks it
+    const row = (label, ctrl, icon) => {
+      const r = el('div', 'k-setrow pick', `${icon ? `<img class="k-g" src="${icon}">` : '<i class="k-g"></i>'}<span class="lbl">${label}</span>`);
+      r.appendChild(ctrl);
+      r.nudge = (d) => ctrl.nudge?.(d);
+      r.addEventListener('click', (e) => { if (e.target === r || e.target.classList.contains('lbl')) ctrl.nudge?.(1); });
+      ui.hoverSelect(r);
+      body.appendChild(r);
+      rows.push(r);
+      return r;
+    };
+    const slider = (key, min, max, step) => kSlider(s[key], min, max, step, (v) => { s[key] = v; g.applySettings(); });
+    const cycle = (key, opts, labels, after) => {
+      const c = el('div', 'k-cycle', '<i class="l"></i><span class="v"></span><i class="r"></i>');
+      const v = c.querySelector('.v');
+      const show = () => (v.textContent = labels[opts.indexOf(s[key])] ?? labels[0]);
+      c.nudge = (d) => {
+        let i = opts.indexOf(s[key]);
+        if (i < 0) i = 0;
+        s[key] = opts[(i + d + opts.length) % opts.length];
+        // a hand-picked look wins over the automatic quality governor
+        if (key === 'pixel' || key === 'quality') s.autoQuality = false;
+        show();
+        after ? after(s[key]) : g.applySettings();
+        g.sound?.play('ui_hover');
+      };
+      c.querySelector('.l').addEventListener('click', (e) => { e.stopPropagation(); c.nudge(-1); });
+      c.querySelector('.r').addEventListener('click', (e) => { e.stopPropagation(); c.nudge(1); });
+      v.addEventListener('click', (e) => { e.stopPropagation(); c.nudge(1); });
+      show();
+      return c;
+    };
+    // resolution: CSS pixels per rendered pixel (Ultra renders above 1:1 on sharp screens)
+    const res = [1, 1.5, 2, 3], resL = ['HD', 'Balanced', 'Retro', 'Chunky'];
+    if ((window.devicePixelRatio || 1) >= 1.5) { res.unshift(0.5); resL.unshift('Ultra'); }
+    row('Resolution', cycle('pixel', res, resL), glyphURL('eye'));
+    row('Graphics', cycle('quality', ['low', 'medium', 'high'], ['Low', 'Medium', 'High']), glyphURL('gear'));
+    row('Interface size', cycle('uiSize', [-1, 0, 1, 2], ['Small', 'Normal', 'Big', 'Huge'], (v) => { setUIScaleOffset(v); requestAnimationFrame(() => snapBox(p)); }), glyphURL('hand'));
+    row('Master volume', slider('master', 0, 1, 0.05), glyphURL('speaker'));
+    row('Music', slider('music', 0, 1, 0.05), glyphURL('note'));
+    row('Sound effects', slider('sfx', 0, 1, 0.05), glyphURL('bones'));
+    row('Camera distance', slider('camDist', 0.8, 1.5, 0.05), glyphURL('camera'));
+    const fps = kToggle(!!s.fps, (on) => { s.fps = on; g.applySettings(); });
+    row('Show FPS', fps, glyphURL('dot'));
+    const foot = el('div', 'm-foot');
+    const ok = ui.button('Done', close, { face: 'green' });
+    foot.appendChild(ok);
+    body.appendChild(foot);
+    m = ui.openOverlay(p, { onBack: close, items: [...rows, ok] });
     return m;
   }
 
+  // ---------------------------------------------------------------- controls
   controls() {
     const ui = this.ui;
-    const p = ui.panel('wood');
-    p.appendChild(el('h2', '', 'Controls'));
-    const lines = [
-      ['W / ↑ / RT', 'Pedal'], ['S / ↓ / LT', 'Brake / reverse'], ['A D / ← → / stick', 'Steer'],
-      ['Space / A', 'Hop (hold in the air to glide)'], ['Shift / RB', 'Drift (release for a mini-boost)'],
-      ['F or Q / B', 'Maple-Cola boost'], ['E / X', 'Talk · deliver · interact'], ['R / Y', 'Ring the bell'],
-      ['M', 'Map'], ['Tab', "Harold's keepsakes"], ['Mouse drag / right stick', 'Look around'], ['Esc / Start', 'Journal'],
-      ['E (stopped)', 'Hop off / on the bike'], ['WASD on foot', 'Walk (Shift runs)'], ['F on foot', 'Kick!'], ['Shift + dir in the air', 'Tricks'], ['C', 'Camera (once you have one)'],
-    ];
-    for (const [k, v] of lines) {
-      const r = el('div', 'row');
-      r.innerHTML = `<span class="key">${k}</span><span>${v}</span>`;
-      p.appendChild(r);
-    }
     let m;
     const close = () => ui.closeOverlay(m);
-    p.appendChild(ui.button('Got it', close));
-    m = ui.openOverlay(p, { onBack: close });
+    const { p, body } = this.sheet('Controls', { cls: 'controls', onClose: close });
+    const touch = document.getElementById('ui')?.classList.contains('touchmode');
+    const K = (...k) => k.map((x) => kKey(x)).join('');
+    const ride = [
+      [K('W'), 'Pedal (tap in rhythm to sprint)'], [K('S'), 'Brake / reverse'], [K('A', 'D'), 'Steer; spin in the air'],
+      [K('Space'), 'Hop (hold to crouch, let go to pop)'], [K('Shift'), 'Drift; with a direction in the air: poses'],
+      [K('Q'), 'Lean back: wheelie, manual, backflip'], [K('F'), 'Lean forward: stoppie, nose, frontflip'],
+      [K('E'), 'Talk, deliver, hop off / on'], [K('R'), 'Ring the bell'],
+    ];
+    const foot = [
+      [K('W', 'A', 'S', 'D'), 'Walk (Shift runs)'], [K('Space'), 'Jump'], [K('F'), 'Kick!'], [K('C'), 'Camera (once you have one)'],
+      [K('M'), 'Map'], [K('Tab'), "Harold's keepsakes"], [K('Esc'), 'Journal / skip a scene'],
+    ];
+    const col = (title, lines) => {
+      const c = el('div', 'ccol');
+      c.innerHTML = `<div class="k-h k-bold">${title}</div>` + lines.map(([k, v]) => `<div class="crow"><span class="ck">${k}</span><span>${v}</span></div>`).join('');
+      return c;
+    };
+    const cols = el('div', 'ccols');
+    cols.append(col('On the bike', ride), col('On foot & anywhere', foot));
+    body.appendChild(cols);
+    body.appendChild(el('p', 'hint', touch ? 'On a touch screen: turn the wheel to steer, hold the pedal, tap hop, hold the lean buttons for wheelies and stoppies.' : 'Gamepad: RT pedal, LT brake, A hop, RB drift, left stick up/down leans, X talk, Start journal.'));
+    const ok = ui.button('Got it', close);
+    body.appendChild(el('div', 'm-foot')).appendChild(ok);
+    m = ui.openOverlay(p, { onBack: close, items: [ok] });
     return m;
   }
 
@@ -294,22 +351,27 @@ export class Menus {
     const g = this.game;
     const ui = this.ui;
     const O = g.orders;
-    const p = ui.panel('wood');
-    p.appendChild(el('h2', '', "Nana's Order Board"));
-    const info = el('p', '');
-    p.appendChild(info);
-    const cork = el('div', 'cork');
-    p.appendChild(cork);
+    let m;
+    const done = () => {
+      ui.closeOverlay(m);
+      onDone?.();
+    };
+    const { p, body } = this.sheet("Nana's Order Board", { kind: 'wood', cls: 'board', onClose: done });
+    const info = el('div', 'boardbar');
+    body.appendChild(info);
+    const cork = el('div', 'k-panel k-cork cork');
+    body.appendChild(cork);
     const slips = [];
     const all = O.list.filter((o) => o.state === 'board' || o.state === 'carried');
     all.forEach((o, i) => {
-      const s = el('div', 'slip');
-      s.style.borderImageSource = `url(${frameURL('order')})`;
-      s.style.setProperty('--rot', `${((i * 37) % 7) - 3}deg`);
+      const s = el('button', 'k-paper slip pick');
       const name = CHARACTERS[o.customer]?.name || o.customer;
-      s.innerHTML = `<div class="who"><img class="snap" src="${charSnapshot(g, o.customer, 'happy')}">${name}</div>
-        <div class="what"><img class="ico" src="${iconURL('cocoa')}">${o.label}${o.rush ? ' · <b style="color:#c8361f">RUSH</b>' : ''}</div>
-        <div class="what"><i>“${o.note}”</i></div><div class="pay">$${o.price}+ tips</div>`;
+      const mug = mugOf(o);
+      s.innerHTML = `<i class="tack"></i><div class="who"><span class="pola"><img src="${charSnapshot(g, o.customer, 'happy', 32)}"></span><span class="nm k-bold">${esc(name)}</span></div>
+        <div class="what"><img class="k-g" src="${glyphURL(`mug_${mug}`)}"><span>${esc(o.label)}</span></div>
+        <div class="note">“${esc(o.note)}”</div>
+        <div class="pay"><img class="k-g" src="${glyphURL('coin')}"><b>$${o.price}</b><span>+ tips</span>${o.rush ? `<span class="rush"><img class="k-g" src="${glyphURL('rush')}">RUSH</span>` : ''}</div>
+        <span class="packed k-bold">PACKED</span>`;
       const sync = () => s.classList.toggle('taken', o.state === 'carried');
       sync();
       s.addEventListener('click', () => {
@@ -317,12 +379,12 @@ export class Menus {
         if (o.state === 'carried') O.unpack(o);
         else if (!O.pack(o)) {
           g.sound.play('ui_error');
-          const miss = O.missing(o);
+          const miss = O.missing ? O.missing(o) : [];
           if (miss.length) {
-            ui.toast(`Nana: "We're out of <b>${miss.map((k) => FOOD_INFO[k]?.label || k).join(' & ')}</b>! Could you pop over to Moose & Goose?"`, 'basket', 3600);
+            ui.toast(`Nana: "We're out of <b>${miss.map((k) => FOOD_INFO[k]?.label || k).join(' &amp; ')}</b>! Could you pop over to Moose &amp; Goose?"`, 'basket', 3600);
             const q = g.quests.q('groceries');
             if (q.state !== 'active') { q.state = 'active'; g.sound.play('quest_new'); }
-          } else ui.toast(`Your bike only holds ${O.capacity()} cocoas. Upgrade in the garage!`, 'basket');
+          } else ui.toast(`The basket only holds ${O.capacity()} cocoas.`, 'basket');
         } else {
           g.sound.play('cup');
           packed = true;
@@ -338,94 +400,63 @@ export class Menus {
           ui.highlight(m);
         }
       });
+      ui.hoverSelect(s);
       cork.appendChild(s);
       slips.push(s);
     });
-    const upd = () => (info.innerHTML = `Pick the orders to pack: <b>${O.carried().length} / ${O.capacity()}</b> cups in the basket. Hot cocoa cools as you ride!`);
-    upd();
-    let m;
-    const done = () => {
-      ui.closeOverlay(m);
-      onDone?.();
+    if (!all.length) cork.appendChild(el('p', 'hint', 'No orders pinned up yet. Check back after breakfast!'));
+    const upd = () => {
+      const n = O.carried().length, cap = O.capacity();
+      info.innerHTML = `<span>Pick the orders to pack. Cocoa cools as you ride!</span><span class="cups">${Array.from({ length: cap }, (_, k) => `<img class="k-g${k < n ? '' : ' empty'}" src="${glyphURL('mug_classic')}">`).join('')}<b>${n}/${cap}</b></span>`;
     };
-    const go = ui.button("Let's ride!", done, { small: 'cocoa is poured when you leave' });
-    p.appendChild(go);
-    m = ui.openOverlay(p, { onBack: done, items: [...slips, go], grid: 3 });
+    upd();
+    const go = ui.button("Let's ride!", done, { small: 'cocoa is poured when you leave', face: 'green' });
+    body.appendChild(el('div', 'm-foot')).appendChild(go);
+    m = ui.openOverlay(p, { onBack: done, items: [...slips, go], grid: boardCols() });
     return m;
   }
 
-  // ---------------------------------------------------------------- garage
+  // ---------------------------------------------------------------- Harold's garage: the Skill Book
   garage(onDone) {
+    return this.skillBook(onDone);
+  }
+  skillBook(onDone) {
     const g = this.game;
     const ui = this.ui;
-    const st = g.state;
-    const p = ui.panel('wood');
-    p.appendChild(el('h2', '', "Harold's Garage"));
-    const money = el('p', '');
-    p.appendChild(money);
-    const split = el('div', 'split');
-    p.appendChild(split);
-    const grid = el('div', 'slots');
-    split.appendChild(grid);
-    const detail = frameStyle(el('div', 'panel detail'), 'paper');
-    split.appendChild(detail);
-    const slots = [];
-    const render = () => {
-      money.innerHTML = `Savings: <b>$${Math.floor(st.money)}</b> — tools, oil and a lot of duct tape.`;
-      slots.forEach((s) => s.sync());
-    };
-    for (const u of UPGRADES) {
-      const s = el('div', 'slot');
-      s.style.borderImageSource = `url(${slotURL(false)})`;
-      s.innerHTML = `<img src="${iconURL(u.icon)}"><span class="price"></span><span class="owned"></span>`;
-      s.sync = () => {
-        const owned = !!st.upgrades[u.id];
-        const locked = u.req && !st.upgrades[u.req];
-        s.classList.toggle('locked', !!locked);
-        s.querySelector('.price').textContent = owned ? '' : `$${u.price}`;
-        s.querySelector('.owned').textContent = owned ? 'owned' : '';
-      };
-      const show = () => {
-        const c = canBuy(u, st);
-        const owned = !!st.upgrades[u.id];
-        detail.innerHTML = `<b>${u.name}</b> ${owned ? '<span style="color:#2f6e52">(installed)</span>' : `— $${u.price}`}<p>${u.desc}</p>${!owned && !c.ok ? `<p style="color:#8a2214">${c.why}</p>` : ''}`;
-      };
-      s.addEventListener('focus-item', show);
-      s.addEventListener('pointerenter', () => {
-        const m2 = ui.menuStack[ui.menuStack.length - 1];
-        const i = m2.items.indexOf(s);
-        if (i >= 0) { m2.sel = i; ui.highlight(m2); }
-      });
-      s.addEventListener('click', () => {
-        const c = canBuy(u, st);
-        if (!c.ok) {
-          g.sound.play('ui_error');
-          show();
-          return;
-        }
-        st.money -= u.price;
-        st.upgrades[u.id] = true;
-        g.applyUpgrades();
-        g.sound.play('upgrade');
-        g.effects.confetti(g.bike.pos.x, g.bike.pos.y + 1.5, g.bike.pos.z, 40);
-        ui.toast(`Installed: <b>${u.name}</b>!`, u.icon);
-        g.save();
-        render();
-        show();
-        g.story?.onUpgrade?.(u);
-      });
-      grid.appendChild(s);
-      slots.push(s);
-    }
-    render();
+    const list = g.skills?.list ? g.skills.list() : STUB_SKILLS;
     let m;
-    const done = () => {
+    const close = () => {
+      g.sound?.play('book_close');
       ui.closeOverlay(m);
       onDone?.();
     };
-    const back = ui.button('Back to the road', done);
-    p.appendChild(back);
-    m = ui.openOverlay(p, { onBack: done, items: [...slots, back], grid: 4 });
+    const { p, body } = this.sheet('The Skill Book', { cls: 'skillbook', onClose: close });
+    const { book, left, right } = kBook('sbook');
+    body.appendChild(book);
+    const mastered = list.reduce((n, s) => n + (s.tier || 0), 0), total = list.reduce((n, s) => n + (s.maxTier || 3), 0);
+    left.innerHTML = `<div class="k-h k-bold">Harold's riding notes</div><div class="sbtotal"><img class="k-g" src="${glyphURL('medalG')}"><span>${mastered} / ${total} medals</span></div>`;
+    const rows = el('div', 'sblist');
+    left.appendChild(rows);
+    const medals = (s, big = false) => Array.from({ length: s.maxTier || 3 }, (_, k) => `<img class="k-g${big ? ' big' : ''}" src="${glyphURL(k < s.tier ? ['medalB', 'medalS', 'medalG', 'medalG', 'medalG'][k] : 'medalNone')}">`).join('');
+    const detail = (s) => {
+      const done = s.tier >= (s.maxTier || 3);
+      const best = s.best != null && s.unit != null ? `${fmtNum(s.best)}${s.unit ? ` ${s.unit}` : ''}` : '';
+      right.innerHTML = `<div class="sbhead"><div class="k-slot"><img src="${iconURL(s.icon || s.id)}"></div><div><div class="sbname k-bold">${esc(s.name)}${s.tier ? ` ${ROMAN[s.tier]}` : ''}</div><div class="sbmedals">${medals(s, true)}</div></div></div>
+        <div class="sbgoal"><span class="lbl">${done ? 'Mastered!' : 'Next:'}</span> ${done ? '' : esc(s.goal || '')}</div>
+        <div class="sbbar"></div>${best ? `<div class="sbbest">Best: <b>${esc(best)}</b></div>` : ''}
+        <div class="sbhow">${esc(s.how || '')}</div>
+        <div class="sbdesc">${esc(s.desc || '')}</div>${s.note ? `<div class="sbnote">${esc(s.note)}</div>` : ''}`;
+      right.querySelector('.sbbar').appendChild(kBar(done ? 1 : s.progress || 0, done ? 'grow' : 'gold'));
+    };
+    const items = list.map((s) => {
+      const r = this.item(esc(s.name), () => detail(s), { icon: iconSmallURL(s.icon || s.id), right: medals(s), cls: s.tier >= (s.maxTier || 3) ? 'master' : s.tier ? '' : 'new' });
+      r.addEventListener('focus-item', () => detail(s));
+      rows.appendChild(r);
+      return r;
+    });
+    if (list[0]) detail(list[0]);
+    g.sound?.play('book_open');
+    m = ui.openOverlay(p, { onBack: close, items });
     return m;
   }
 
@@ -434,33 +465,31 @@ export class Menus {
     const g = this.game;
     const ui = this.ui;
     const st = g.state;
-    const p = ui.panel('wood');
-    p.appendChild(el('h2', '', "Harold's Keepsakes"));
+    let m;
+    const close = () => ui.closeOverlay(m);
+    const { p, body } = this.sheet("Harold's Keepsakes", { cls: 'keeps', onClose: close });
     const n = Object.keys(st.keepsakes).length;
-    p.appendChild(el('p', '', `${n} / ${KEEPSAKES.length} found. Bring them home — Nana has a story for each one.`));
+    body.appendChild(el('div', 'boardbar', `<span><b>${n} / ${KEEPSAKES.length}</b> found. Bring them home: Nana has a story for each one.</span>`));
     const split = el('div', 'split');
-    p.appendChild(split);
+    body.appendChild(split);
     const grid = el('div', 'slots');
     split.appendChild(grid);
-    const detail = frameStyle(el('div', 'panel detail'), 'paper');
+    const detail = el('div', 'k-plate k-parchment detail');
     split.appendChild(detail);
     const slots = KEEPSAKES.map((k) => {
-      const s = el('div', 'slot');
       const have = st.keepsakes[k.id];
-      s.classList.toggle('locked', !have);
-      s.style.borderImageSource = `url(${slotURL(false)})`;
-      s.innerHTML = `<img src="${iconURL(KEEPSAKE_ICON[k.id])}"><span class="owned given">${have === 'given' ? 'given' : ''}</span>`;
+      const s = kSlot(iconURL(KEEPSAKE_ICON[k.id]), { state: have ? '' : 'locked', badge: have === 'given' ? ' ' : '', cls: 'pick' });
+      if (have === 'given') s.querySelector('.k-badge').classList.add('given');
       s.addEventListener('focus-item', () => {
-        detail.innerHTML = have ? `<b>${k.name}</b><p>${k.note}</p>${have === 'found' ? '<p style="color:#8a2214">Bring it home to Nana!</p>' : ''}` : `<b>???</b><p>Somewhere out in the wilds... Harold always did wander.</p>`;
+        detail.innerHTML = have ? `<div class="k-h k-bold">${esc(k.name)}</div><p>${esc(k.note)}</p>${have === 'found' ? '<p class="warn">Bring it home to Nana!</p>' : '<p class="okay">Nana has it on the mantel.</p>'}` : '<div class="k-h k-bold">???</div><p>Somewhere out in the wilds... Harold always did wander.</p>';
       });
       s.addEventListener('click', () => s.dispatchEvent(new CustomEvent('focus-item')));
+      ui.hoverSelect(s);
       grid.appendChild(s);
       return s;
     });
-    let m;
-    const close = () => ui.closeOverlay(m);
     const back = ui.button('Close', close);
-    p.appendChild(back);
+    body.appendChild(el('div', 'm-foot')).appendChild(back);
     m = ui.openOverlay(p, { onBack: close, items: [...slots, back], grid: 4 });
     return m;
   }
@@ -469,54 +498,71 @@ export class Menus {
   map() {
     const g = this.game;
     const ui = this.ui;
-    const p = ui.panel('paper', 'menu mapsheet');
-    p.appendChild(el('h2', '', 'Maple Hollow & Maple Cove'));
-    const wrap = el('div', 'mapwrap');
-    const c = this.mapCanvas || (this.mapCanvas = paintMap(g.world.terrain));
+    let m;
+    const close = () => ui.closeOverlay(m);
+    const { p, body } = this.sheet('Maple Hollow & Maple Cove', { cls: 'mapsheet', onClose: close });
+    // paint the map at exactly the art-pixel size it is shown at, so it stays crisp
+    const N = Math.max(120, Math.min(300, Math.floor(Math.min(scale.rows - 74, scale.cols - 40) / 4) * 4));
+    this.mapCanvases = this.mapCanvases || new Map();
+    const c = this.mapCanvases.get(N) || paintMap(g.world.terrain, N);
+    this.mapCanvases.set(N, c);
+    const wrap = el('div', 'k-paper mapwrap');
     const img = el('canvas');
     img.width = c.width;
     img.height = c.height;
     img.getContext('2d').drawImage(c, 0, 0);
+    img.style.width = img.style.height = `calc(var(--u) * ${N})`;
     wrap.appendChild(img);
-    const pin = (x, z, iconName, cls = '') => {
+    const at = (x, z) => [((x + WORLD_HALF) / (WORLD_HALF * 2)) * N, ((z + WORLD_HALF) / (WORLD_HALF * 2)) * N];
+    const pin = (x, z, src, cls = '') => {
       const e = el('img', `pin ${cls}`);
-      e.src = iconURL(iconName);
-      e.style.left = `${((x + WORLD_HALF) / (WORLD_HALF * 2)) * 100}%`;
-      e.style.top = `${((z + WORLD_HALF) / (WORLD_HALF * 2)) * 100}%`;
+      e.src = src;
+      const [px, py] = at(x, z);
+      e.style.left = `calc(var(--u) * ${Math.round(px) - 8 + 3})`;
+      e.style.top = `calc(var(--u) * ${Math.round(py) - 8 + 3})`;
       wrap.appendChild(e);
     };
+    const labels = [];
     const label = (x, z, text, cls = '') => {
       const e = el('div', `lbl ${cls}`, text);
-      e.style.left = `${((x + WORLD_HALF) / (WORLD_HALF * 2)) * 100}%`;
-      e.style.top = `${((z + WORLD_HALF) / (WORLD_HALF * 2)) * 100}%`;
+      const [px, py] = at(x, z);
+      e.dataset.x = px;
+      e.dataset.y = py;
       wrap.appendChild(e);
+      labels.push(e);
     };
     label(POI.plaza.x, POI.plaza.z - 22, 'Maple Cove', 'big');
     label(POI.cabin.x, POI.cabin.z + 14, "Nana's");
     label(POI.graveyard.x, POI.graveyard.z - 14, 'Old Pine Cemetery');
-    label(POI.lookout.x, POI.lookout.z - 12, 'Sunset Lookout');
-    label(POI.lighthouse.x - 8, POI.lighthouse.z - 14, 'Lighthouse');
-    label(POI.sawmill.x, POI.sawmill.z + 12, 'Sawmill');
-    label(POI.pond.x, POI.pond.z - 12, 'Beaver Pond');
-    label(POI.trapper.x, POI.trapper.z + 12, "Trapper's Hut");
-    label(POI.bridge.x + 18, POI.bridge.z + 12, 'Covered Bridge');
-    pin(POI.cabin.x, POI.cabin.z, 'home');
-    for (const o of g.orders.carried()) { const c2 = CUSTOMERS[o.spot]; pin(c2.x, c2.z, 'cocoa'); }
-    for (const k of KEEPSAKES) if (g.state.keepsakes[k.id]) pin(k.x, k.z, KEEPSAKE_ICON[k.id]);
-    if (g.catEventActive) pin(POI.catLog.x, POI.catLog.z, 'cat');
-    pin(g.playerPos.x, g.playerPos.z, 'star', 'me');
-    for (const q of g.quests?.markers() || []) pin(q.x, q.z, q.icon, 'quest');
-    const rose = el('img', 'rose');
-    rose.src = compassRose();
-    wrap.appendChild(rose);
-    wrap.appendChild(el('div', 'folds'));
-    wrap.appendChild(el('div', 'scrawl', 'X = cocoa · ★ = Harold\'s stuff · skull = you'));
-    p.appendChild(wrap);
-    let m;
-    const close = () => ui.closeOverlay(m);
-    p.appendChild(ui.button('Fold it up', close));
+    if (POI.lookout) label(POI.lookout.x, POI.lookout.z - 12, 'Sunset Lookout');
+    if (POI.lighthouse) label(POI.lighthouse.x - 8, POI.lighthouse.z - 14, 'Lighthouse');
+    if (POI.sawmill) label(POI.sawmill.x, POI.sawmill.z + 12, 'Sawmill');
+    if (POI.pond) label(POI.pond.x, POI.pond.z - 12, 'Beaver Pond');
+    if (POI.trapper) label(POI.trapper.x, POI.trapper.z + 12, "Trapper's Hut");
+    if (POI.bridge) label(POI.bridge.x + 18, POI.bridge.z + 12, 'Covered Bridge');
+    pin(POI.cabin.x, POI.cabin.z, glyphURL('home'));
+    for (const o of g.orders.carried()) { const c2 = CUSTOMERS[o.spot]; if (c2) pin(c2.x, c2.z, glyphURL('cocoa')); }
+    for (const k of KEEPSAKES) if (g.state.keepsakes[k.id]) pin(k.x, k.z, iconSmallURL(KEEPSAKE_ICON[k.id]));
+    if (g.catEventActive) pin(POI.catLog.x, POI.catLog.z, iconSmallURL('cat'));
+    for (const q of g.quests?.markers() || []) pin(q.x, q.z, iconSmallURL(q.icon), 'quest');
+    pin(g.playerPos.x, g.playerPos.z, iconSmallURL('skull'), 'me');
+    const legend = el('div', 'maplegend', `<span><img class="k-g" src="${glyphURL('cocoa')}">cocoa</span><span><img class="k-g" src="${iconSmallURL('skull')}">you</span><span><img class="k-g" src="${glyphURL('home')}">home</span>`);
+    body.appendChild(wrap);
+    body.appendChild(legend);
+    const ok = ui.button('Fold it up', close);
+    body.appendChild(el('div', 'm-foot')).appendChild(ok);
     g.sound.play('paper_unfold');
-    m = ui.openOverlay(p, { onBack: close });
+    m = ui.openOverlay(p, { onBack: close, items: [ok] });
+    // centre the labels on whole art pixels once they have a width
+    requestAnimationFrame(() => {
+      const u = scale.u;
+      for (const e of labels) {
+        const w = Math.round(e.offsetWidth / u), h = Math.round(e.offsetHeight / u);
+        e.style.left = `${(Math.round(+e.dataset.x - w / 2) + 3) * u}px`;
+        e.style.top = `${(Math.round(+e.dataset.y - h / 2) + 3) * u}px`;
+        e.style.visibility = 'visible';
+      }
+    });
     return m;
   }
 
@@ -525,118 +571,117 @@ export class Menus {
     const g = this.game;
     const ui = this.ui;
     const st = g.state;
-    const p = ui.panel('paper');
-    p.appendChild(el('h2', '', `Day ${st.day} — Receipt`));
-    const r = el('div', 'receipt');
-    const s = st.stats;
-    const line = (a, b, cls = '') => r.appendChild(el('div', `line ${cls}`, `<span>${a}</span><span>${b}</span>`));
-    line('Cocoas delivered', s.dayDeliveries);
-    line('Tips', `$${s.dayTips}`);
-    line('Crashes (bones re-attached)', s.dayCrashes || 0);
-    line('Best air time', `${(s.dayAir || 0).toFixed(1)}s`);
-    line('Earned today', `$${s.dayEarned}`, 'total');
-    line('Savings', `$${Math.floor(st.money)}`);
-    p.appendChild(r);
-    p.appendChild(el('p', 'hint', 'Nana: “You did good today, dear. Now off to bed — the dead need their rest too.”'));
     let m;
     const done = () => {
       ui.closeOverlay(m);
       onDone?.();
     };
-    p.appendChild(ui.button('Sleep  zzz', done));
-    m = ui.openOverlay(p, { onBack: done });
+    const { p, body } = this.sheet(`Day ${st.day} receipt`, { cls: 'summary' });
+    const r = el('div', 'k-paper receipt');
+    const s = st.stats;
+    r.appendChild(el('div', 'rhead k-bold', 'NANA MARGUERITE’S COCOA'));
+    const line = (a, b, cls = '', icon = '') => r.appendChild(el('div', `line ${cls}`, `<span>${icon ? `<img class="k-g" src="${icon}">` : ''}${a}</span><span>${b}</span>`));
+    line('Cocoas delivered', s.dayDeliveries || 0, '', glyphURL('cocoa'));
+    line('Tips', `$${s.dayTips || 0}`, '', glyphURL('coin'));
+    line('Crashes (bones re-attached)', s.dayCrashes || 0, '', glyphURL('bones'));
+    line('Best air time', `${(s.dayAir || 0).toFixed(1)}s`, '', glyphURL('star'));
+    line('Earned today', `$${s.dayEarned || 0}`, 'total');
+    line('Savings', `$${Math.floor(st.money)}`);
+    body.appendChild(r);
+    body.appendChild(el('p', 'hint', 'Nana: “You did good today, dear. Now off to bed: the dead need their rest too.”'));
+    const ok = ui.button('Sleep', done, { icon: glyphURL('moon') });
+    body.appendChild(el('div', 'm-foot')).appendChild(ok);
+    m = ui.openOverlay(p, { onBack: done, items: [ok] });
     return m;
   }
 }
 
-// a hand-drawn paper map: pencil contours, hatched water, little tree doodles,
-// inked roads and tiny houses
-function paintMap(terrain) {
-  const N = 384;
+// ---------------------------------------------------------------- helpers
+function snapRibbon(rb) {
+  if (!rb?.isConnected) return;
+  const host = rb.parentElement;
+  const u = scale.u;
+  const w = Math.round(rb.offsetWidth / u);
+  const hw = Math.round(host.clientWidth / u);
+  rb.style.left = `${Math.round((hw - w) / 2) * u}px`;
+  rb.style.transform = 'none';
+}
+const fmtNum = (v) => (Math.abs(v - Math.round(v)) < 0.01 ? String(Math.round(v)) : v.toFixed(1));
+const shopCols = () => (scale.cols < 330 ? 3 : scale.cols < 420 ? 4 : 6);
+const boardCols = () => (scale.cols < 330 ? 2 : 3);
+const MUGS = ['classic', 'maple', 'mint', 'pumpkin', 'cinnamon', 'mocha'];
+function mugOf(o) {
+  if (MUGS.includes(o.cocoa)) return o.cocoa;
+  const l = (o.label || '').toLowerCase();
+  return MUGS.find((k) => l.includes(k)) || (l.includes('spice') ? 'pumpkin' : l.includes('lumberjack') ? 'mocha' : 'classic');
+}
+
+// a hand-drawn paper map, N art pixels square: pencil contours, hatched water,
+// little tree doodles, inked roads and tiny houses
+function paintMap(terrain, N = 192) {
   const c = document.createElement('canvas');
   c.width = N;
   c.height = N;
   const ctx = c.getContext('2d');
   const img = ctx.createImageData(N, N);
   const toW = (i) => -WORLD_HALF + ((i + 0.5) / N) * WORLD_HALF * 2;
-  const H = new Float32Array(N * N);
-  for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) H[j * N + i] = terrain.heightAt(toW(i), toW(j));
+  const H = new Float32Array(N * N), RD = new Uint8Array(N * N);
+  for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
+    H[j * N + i] = terrain.heightAt(toW(i), toW(j));
+    RD[j * N + i] = terrain.splatAt(toW(i), toW(j)).road > 0.5 ? 1 : 0;
+  }
+  const cstep = Math.max(4, Math.round(5 * (384 / N) * 0.6));
   for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
     const h = H[j * N + i];
-    const s = terrain.splatAt(toW(i), toW(j));
-    const n = ((i * 73856093) ^ (j * 19349663)) & 15;
-    let r = 240 - n * 0.6, gg = 226 - n * 0.6, b = 190 - n;
+    const n = ((i * 73856093) ^ (j * 19349663)) & 7;
+    let r = 244 - n, gg = 230 - n, b = 196 - n;
+    const hr = H[j * N + Math.min(N - 1, i + 1)], hd = H[Math.min(N - 1, j + 1) * N + i];
     if (h < 0) {
       // water: pale blue with diagonal pencil hatching
-      r = 170; gg = 196; b = 206;
-      if ((i + j) % 6 === 0) { r -= 40; gg -= 30; b -= 20; }
+      r = 172; gg = 200; b = 210;
+      if ((i + j) % 4 === 0) { r -= 34; gg -= 26; b -= 16; }
     } else {
       const k = Math.min(1, h / 60);
-      r -= k * 30; gg -= k * 26; b -= k * 22;
-      // contour lines every 5 m
-      const hr = H[j * N + Math.min(N - 1, i + 1)], hd = H[Math.min(N - 1, j + 1) * N + i];
-      if (Math.floor(h / 5) !== Math.floor(hr / 5) || Math.floor(h / 5) !== Math.floor(hd / 5)) { r -= 60; gg -= 56; b -= 50; }
-      if (s.road > 0.5) { r = 120; gg = 78; b = 52; }
+      r -= k * 28; gg -= k * 24; b -= k * 20;
+      if (Math.floor(h / cstep) !== Math.floor(hr / cstep) || Math.floor(h / cstep) !== Math.floor(hd / cstep)) { r -= 46; gg -= 42; b -= 38; }
+      if (RD[j * N + i]) { r = 138; gg = 92; b = 60; }
     }
     // coast line in ink
-    if ((h < 0) !== (H[j * N + Math.min(N - 1, i + 1)] < 0) || (h < 0) !== (H[Math.min(N - 1, j + 1) * N + i] < 0)) { r = 60; gg = 50; b = 60; }
+    if ((h < 0) !== (hr < 0) || (h < 0) !== (hd < 0)) { r = 58; gg = 46; b = 56; }
     const o = (j * N + i) * 4;
     img.data[o] = r; img.data[o + 1] = gg; img.data[o + 2] = b; img.data[o + 3] = 255;
   }
   ctx.putImageData(img, 0, 0);
   // tree doodles where the forest is thick
-  ctx.fillStyle = '#4a6a3a';
-  for (let j = 4; j < N; j += 9) for (let i = 4 + ((j / 9) % 2) * 4; i < N; i += 9) {
+  const sp = N >= 240 ? 8 : 7;
+  for (let j = 4; j < N; j += sp) for (let i = 4 + ((j / sp) % 2) * 3; i < N; i += sp) {
     const x = toW(i), z = toW(j);
-    const h = H[j * N + i];
-    if (h < 2 || terrain.splatAt(x, z).road > 0.2) continue;
-    const f = forestDensity(terrain, x, z);
+    if (H[j * N + i] < 2 || RD[j * N + i]) continue;
+    const f = terrain.splatAt(x, z).litter ?? 0.5;
     if (f < 0.45) continue;
-    const col = f > 0.7 ? '#5a6a3a' : '#a86a3a';
-    ctx.fillStyle = col;
-    ctx.fillRect(i - 1, j - 3, 3, 1); ctx.fillRect(i - 2, j - 2, 5, 2); ctx.fillStyle = '#4a3020'; ctx.fillRect(i, j, 1, 2);
+    ctx.fillStyle = f > 0.7 ? '#4e6a34' : '#b0602a';
+    ctx.fillRect(i - 1, j - 3, 3, 1); ctx.fillRect(i - 2, j - 2, 5, 2);
+    ctx.fillStyle = '#3e2a1c'; ctx.fillRect(i, j, 1, 1);
   }
   // little houses
   for (const bld of BUILDINGS) {
     const x = Math.round(((bld.x + WORLD_HALF) / (WORLD_HALF * 2)) * N), y = Math.round(((bld.z + WORLD_HALF) / (WORLD_HALF * 2)) * N);
-    ctx.fillStyle = '#3a2a24'; ctx.fillRect(x - 3, y - 2, 7, 5);
-    ctx.fillStyle = '#c8502e'; ctx.fillRect(x - 2, y - 4, 5, 2); ctx.fillRect(x - 1, y - 5, 3, 1);
-    ctx.fillStyle = '#f2e6c8'; ctx.fillRect(x - 2, y - 1, 5, 3);
-    ctx.fillStyle = '#3a2a24'; ctx.fillRect(x, y, 1, 2);
+    ctx.fillStyle = '#3a2a24'; ctx.fillRect(x - 2, y - 2, 5, 4);
+    ctx.fillStyle = '#c8502e'; ctx.fillRect(x - 2, y - 3, 5, 1); ctx.fillRect(x - 1, y - 4, 3, 1);
+    ctx.fillStyle = '#f2e6c8'; ctx.fillRect(x - 1, y - 1, 3, 2);
   }
+  // a compass rose in the corner
+  const rx = N - 14, ry = N - 14;
+  ctx.fillStyle = '#6a4a2a';
+  for (let k = -9; k <= 9; k++) { ctx.fillRect(rx + k, ry, 1, 1); ctx.fillRect(rx, ry + k, 1, 1); }
+  ctx.fillStyle = '#c8361f';
+  for (let k = 1; k < 9; k++) ctx.fillRect(rx - Math.floor((9 - k) / 4), ry - k, 1 + 2 * Math.floor((9 - k) / 4), 1);
+  ctx.fillStyle = '#2a1a14';
+  ctx.fillRect(rx - 2, ry - 15, 1, 5); ctx.fillRect(rx + 2, ry - 15, 1, 5); ctx.fillRect(rx - 1, ry - 14, 1, 1); ctx.fillRect(rx, ry - 13, 1, 1); ctx.fillRect(rx + 1, ry - 12, 1, 1);
   return c;
 }
-function forestDensity(terrain, x, z) {
-  const s = terrain.splatAt(x, z);
-  return s.litter ?? 0.5;
-}
 
-// a brass compass rose for the map corner
-function compassRose() {
-  const c = document.createElement('canvas');
-  c.width = c.height = 48;
-  const g = c.getContext('2d');
-  const R = (x, y, w, h, col) => { g.fillStyle = col; g.fillRect(x, y, w, h); };
-  for (let y = 0; y < 48; y++) for (let x = 0; x < 48; x++) {
-    const d = Math.hypot(x - 23.5, y - 23.5);
-    if (d < 22 && d > 20) R(x, y, 1, 1, '#6a4a2a');
-    if (d < 13 && d > 12) R(x, y, 1, 1, '#6a4a2a');
-  }
-  for (let k = 0; k < 4; k++) {
-    for (let t = 0; t < 19; t++) {
-      const w = Math.max(0, 4 - t * 0.22);
-      for (let q = -w; q <= w; q++) {
-        const ax = [0, 1, 0, -1][k], ay = [-1, 0, 1, 0][k];
-        const x = 24 + ax * t - ay * q, y = 24 + ay * t + ax * q;
-        R(Math.round(x), Math.round(y), 1, 1, k === 0 ? (q < 0 ? '#c8361f' : '#8a2214') : q < 0 ? '#e8d8b0' : '#8a6a4a');
-      }
-    }
-  }
-  R(22, 0, 1, 5, '#2a1a14'); R(26, 0, 1, 5, '#2a1a14'); R(23, 1, 1, 1, '#2a1a14'); R(24, 2, 1, 1, '#2a1a14'); R(25, 3, 1, 1, '#2a1a14');
-  return c.toDataURL();
-}
-
-// pencil sketches of jack-o'-lantern faces for the carving page
+// pencil sketches of jack-o'-lantern faces for the carving page (32x32)
 function faceSketch(kind) {
   const c = document.createElement('canvas');
   c.width = c.height = 32;
@@ -645,9 +690,9 @@ function faceSketch(kind) {
   for (let y = 0; y < 32; y++) for (let x = 0; x < 32; x++) {
     const dx = (x - 15.5) / 14, dy = (y - 17) / 12;
     const d = dx * dx + dy * dy;
-    if (d < 1) R(x, y, 1, 1, d > 0.82 ? '#8a3a10' : (x % 7 === 0 ? '#d8601a' : '#e8781e'));
+    if (d < 1) R(x, y, 1, 1, d > 0.82 ? '#8a3a10' : (x % 7 === 0 ? '#d8601a' : (x + y < 22 && d < 0.5 ? '#f8a050' : '#e8781e')));
   }
-  R(14, 2, 3, 4, '#4a6a2a');
+  R(14, 2, 3, 4, '#4a6a2a'); R(15, 2, 1, 1, '#7a9a4a');
   const ink = '#2a1408', glow = '#ffd060';
   const tri = (x, y, s, up = true) => { for (let k = 0; k < s; k++) R(x - k, up ? y + k : y - k, 1 + k * 2, 1, glow); };
   switch (kind) {
@@ -658,5 +703,10 @@ function faceSketch(kind) {
     case 'skull': R(8, 10, 6, 6, glow); R(18, 10, 6, 6, glow); R(15, 17, 2, 2, glow); R(9, 21, 14, 4, glow); for (let x = 10; x < 23; x += 2) R(x, 21, 1, 4, '#e8781e'); break;
     default: tri(10, 10, 4); tri(21, 10, 4); tri(16, 15, 2); for (let x = 7; x < 25; x++) R(x, 21 + (x % 4 < 2 ? 0 : 1), 1, 3, glow);
   }
+  // ink outline
+  const d = g.getImageData(0, 0, 32, 32);
+  const A = (x, y) => x >= 0 && y >= 0 && x < 32 && y < 32 && d.data[(y * 32 + x) * 4 + 3] > 0;
+  g.fillStyle = '#1e1418';
+  for (let y = 0; y < 32; y++) for (let x = 0; x < 32; x++) if (!A(x, y) && (A(x + 1, y) || A(x - 1, y) || A(x, y + 1) || A(x, y - 1))) g.fillRect(x, y, 1, 1);
   return c.toDataURL();
 }

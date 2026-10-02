@@ -41,39 +41,45 @@ export function tone(ramp, lit) {
 const LX = -0.55, LY = -0.835; // light comes from the top left (y down)
 
 // ---------------------------------------------------------------- distance field
-const OFFS = [];
-{
-  const R = 9;
-  for (let dy = -R; dy <= R; dy++) for (let dx = -R; dx <= R; dx++) {
-    const d = Math.hypot(dx, dy);
-    if (d > 0 && d <= R + 0.01) OFFS.push([dx, dy, d]);
-  }
-  OFFS.sort((a, b) => a[2] - b[2]);
+const RMAX = 9;
+const OFF = [];
+for (let dy = -RMAX; dy <= RMAX; dy++) for (let dx = -RMAX; dx <= RMAX; dx++) {
+  const d = Math.hypot(dx, dy);
+  if (d > 0 && d <= RMAX + 0.01) OFF.push([dx, dy, d]);
 }
+OFF.sort((a, b) => a[2] - b[2]);
+const OX = Int8Array.from(OFF, (o) => o[0]), OY = Int8Array.from(OFF, (o) => o[1]), OD = Float32Array.from(OFF, (o) => o[2]);
 
 // For each pixel of a mask: distance to the nearest outside pixel and the
 // light term of the outward normal there. Outside pixels get d = 0.
 // maxR caps the search (interior pixels further in than that get d = maxR + 1).
-export function field(w, h, inside, maxR = 9) {
+export function field(w, h, inside, maxR = 8) {
+  const P = RMAX + 1, W = w + P * 2, H = h + P * 2;
+  const pad = new Uint8Array(W * H);
   const ins = new Uint8Array(w * h);
   let x0 = w, y0 = h, x1 = -1, y1 = -1;
   for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (inside(x, y)) {
     ins[y * w + x] = 1;
+    pad[(y + P) * W + x + P] = 1;
     if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
   }
-  const out = (x, y) => x < 0 || y < 0 || x >= w || y >= h || !ins[y * w + x];
+  let nOff = 0;
+  while (nOff < OD.length && OD[nOff] <= maxR + 0.01) nOff++;
+  const lin = new Int32Array(nOff);
+  for (let k = 0; k < nOff; k++) lin[k] = OY[k] * W + OX[k];
   const D = new Float32Array(w * h), L = new Float32Array(w * h);
   for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
     const i = y * w + x;
     if (!ins[i]) continue;
+    const j = (y + P) * W + x + P;
     let d = maxR + 1, nx = 0, ny = 0, n = 0;
-    for (const [dx, dy, dd] of OFFS) {
-      if (dd > maxR + 0.01) break;
-      if (dd > d + 0.5) break;
-      if (out(x + dx, y + dy)) {
+    for (let k = 0; k < nOff; k++) {
+      const dd = OD[k];
+      if (n && dd > d + 0.5) break;
+      if (!pad[j + lin[k]]) {
         if (n === 0) d = dd;
         // average the directions of all equally-near outside pixels (smooth normals on curves)
-        nx += dx / dd; ny += dy / dd; n++;
+        nx += OX[k] / dd; ny += OY[k] / dd; n++;
       }
     }
     D[i] = d;
@@ -354,7 +360,7 @@ export function paperArt(kind = 'note') {
 
 // ---------------------------------------------------------------- buttons
 // 40x30 9-slice (slice 10 top, 10 right, 12 bottom, 10 left): face + a 4px lip; pressed sinks 3px.
-export const BTN_SLICE = [10, 10, 12, 10];
+export const BTN_SLICE = [11, 10, 12, 10];
 const FACES = {
   leather: [C.leaHi, C.leaL, C.lea, C.leaD, C.leaDD],
   red: RAMP.red,
@@ -392,7 +398,7 @@ export function buttonArt(state = 'normal', face = 'leather') {
     (l) => (l > 0.2 ? rim[3] : rim[2]),
     () => C.ink,
     (l) => (l > 0.15 ? Fr[0] : l < -0.45 ? Fr[3] : Fr[1]),
-    (l, x, y) => (y < top + 11 ? Fr[1] : Fr[2]),
+    (l, x, y) => (y < 11 ? Fr[1] : Fr[2]),
   ]);
   if (state !== 'disabled') { p.set(5, top + 5, 0xffffff); p.set(6, top + 5, Fr[0]); p.set(5, top + 6, Fr[0]); }
   return p;
@@ -515,7 +521,7 @@ export function ribbonArt(ramp = RAMP.red) {
     (l) => (l > 0.4 ? ramp[0] : l < -0.4 ? ramp[3] : ramp[1]),
     (l, x, y) => (y < 7 ? ramp[1] : ramp[2]),
   ]);
-  for (let x = 10; x < W - 10; x++) if (x % 3 !== 0) { p.set(x, 3, C.goldL); p.set(x, 14, C.goldD); }
+  for (let x = 10; x < W - 10; x++) if (x % 4 !== 3) { p.set(x, 3, C.goldL); p.set(x, 14, C.goldD); }
   return p;
 }
 
@@ -591,6 +597,107 @@ export function tipTailArt() {
   for (let y = 0; y < 5; y++) for (let x = 0; x < W; x++) {
     const dx = Math.abs(x - 4), w = 4 - y;
     if (dx <= w) p.set(x, y, dx === w || y === 4 ? C.ink : 0x34201a);
+  }
+  return p;
+}
+
+// ---------------------------------------------------------------- speech bubbles (9-slice 32x32, slice 10)
+// Comic bubbles: cream fill, ink outline, a lit inner rim and a hard shadow.
+// Edge patterns repeat every 4 or 6 px so the 12 px middle segments tile cleanly.
+export const BUBBLE_SLICE = 10;
+const BUB = {
+  round: { fill: [0xffffff, 0xfffaf0, 0xf2e8d8, 0xd8ccb8], out: C.ink },
+  shout: { fill: [0xffffff, 0xfff8dc, 0xf4e4b4, 0xd8c08a], out: C.ink },
+  shaky: { fill: [0xffffff, 0xf8f6f2, 0xe4e0e8, 0xc4c0d0], out: 0x2a2440 },
+  think: { fill: [0xffffff, 0xf8fafe, 0xe2e8f2, 0xc2cada], out: 0x2a3250 },
+  whisper: { fill: [0xffffff, 0xf4f2ee, 0xe2ded8, 0xc8c2b8], out: 0x5a5260 },
+  sel: { fill: [0xffffff, 0xfff0b8, 0xf6d878, 0xd8a840], out: C.ink },
+  dark: { fill: [0x5a3e34, 0x3a2622, 0x2a1a18, 0x1e1210], out: C.ink },
+};
+export function bubbleArt(style = 'round') {
+  const S = 32;
+  const P = BUB[style] || BUB.round;
+  const p = new Pix(S, S);
+  const e = 3; // room for spikes and the shadow
+  const per = (t, n) => ((t % n) + n) % n;
+  const bot = S - 3; // last row of the silhouette's box (the 2 rows below are shadow)
+  const inside = (x, y) => {
+    if (x < 0 || y < 0 || x >= S || y > bot) return false;
+    const ex = Math.min(x - e, S - 1 - e - x), ey = Math.min(y - e, bot - e - y);
+    if (style === 'shout') {
+      // triangular spikes every 6px, 3px tall
+      const tx = per(x, 6), ty = per(y, 6);
+      const sx = 3 - Math.abs(tx - 3), sy = 3 - Math.abs(ty - 3);
+      return ex >= -sy && ey >= -sx && ex + ey >= -1;
+    }
+    if (style === 'think') {
+      // scalloped cloud edge: half-discs every 6px
+      const bx = per(x, 6) + 0.5 - 3, by = per(y, 6) + 0.5 - 3;
+      const hx = Math.sqrt(Math.max(0, 9 - bx * bx)), hy = Math.sqrt(Math.max(0, 9 - by * by));
+      return ex >= 2 - hy && ey >= 2 - hx && ex + ey >= 0;
+    }
+    if (style === 'shaky') {
+      const wy = per(x, 6) < 3 ? 0 : 1, wx = per(y, 6) < 3 ? 0 : 1;
+      return ex >= wx - 1 && ey >= wy - 1 && ex + ey >= 1;
+    }
+    return ex >= -1 && ey >= -1 && ex + ey >= 1 && !(ex === -1 && ey < 2) && !(ey === -1 && ex < 2);
+  };
+  const f = field(S, S, inside, 4);
+  // hard shadow one pixel right, two down
+  for (let y = 2; y < S; y++) for (let x = 1; x < S; x++) if (!f.ins[y * S + x] && f.ins[(y - 2) * S + x - 1]) p.set(x, y, C.shadow, 96);
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+    const d = f.D[y * S + x];
+    if (!d) continue;
+    const b = band(d), l = f.L[y * S + x];
+    let c;
+    if (b === 0) c = style === 'whisper' && per(x + y, 4) === 0 ? P.fill[2] : P.out;
+    else if (b === 1) c = l > 0.3 ? P.fill[0] : l < -0.35 ? P.fill[2] : P.fill[1];
+    else c = P.fill[1];
+    p.set(x, y, c);
+  }
+  return p;
+}
+// a tail goes this many px above the bottom of the bubble frame (its top rows cover the outline)
+export const BUBBLE_JOIN = 7;
+// tails that point down at the speaker (16x14); the first 3 rows sit over the
+// bubble's bottom edge and erase its outline so the two join up
+export function bubbleTailArt(style = 'round') {
+  const W = 16, H = 14;
+  const P = BUB[style] || BUB.round;
+  const p = new Pix(W, H);
+  if (style === 'think') {
+    for (const [cx, cy, r] of [[8, 6.5, 2.9], [5.5, 11.2, 1.9]]) {
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+        const d = Math.hypot(x + 0.5 - cx, y + 0.5 - cy);
+        if (d <= r) p.set(x, y, d > r - 1 ? P.out : x + y < cx + cy - 1.5 ? P.fill[0] : P.fill[1]);
+        else if (Math.hypot(x - 0.5 - cx, y - 1.5 - cy) <= r && !p.alpha(x, y)) p.set(x, y, C.shadow, 96);
+      }
+    }
+    return p;
+  }
+  const pts = style === 'shout'
+    ? [[3, 0], [13, 0], [10, 4], [12, 4], [7, 9], [9, 9], [2, 14], [5, 8], [3, 8], [5, 4], [3, 4]]
+    : style === 'shaky'
+      ? [[3, 0], [12, 0], [10, 3], [10.5, 5], [8, 7], [8, 9], [5, 11], [1.5, 13.6], [3, 10], [3.5, 7], [3, 4]]
+      : [[3, 0], [12.5, 0], [9.5, 4.5], [6, 8.5], [1.5, 13.6], [3, 8], [3.4, 4]];
+  const inPolyF = (x, y) => {
+    let c = false;
+    for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+      const [xi, yi] = pts[i], [xj, yj] = pts[j];
+      if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) c = !c;
+    }
+    return c;
+  };
+  const inside = (x, y) => y >= 0 && x >= 0 && x < W && y < H && inPolyF(x + 0.5, y + 0.5);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    if (!inside(x, y)) { if (inside(x - 1, y - 2) && y > 3) p.set(x, y, C.shadow, 96); continue; }
+    const side = !inside(x - 1, y) || !inside(x + 1, y);
+    const under = !inside(x, y + 1);
+    let c = P.fill[1];
+    if (y < 3) c = side ? P.out : P.fill[1];
+    else if (side || under) c = style === 'whisper' && (x + y) % 3 === 0 ? P.fill[2] : P.out;
+    else if (!inside(x - 1, y - 1) || !inside(x - 2, y)) c = P.fill[0];
+    p.set(x, y, c);
   }
   return p;
 }
