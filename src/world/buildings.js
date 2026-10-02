@@ -461,6 +461,7 @@ const GENERIC = {
   sugarshack: { lift: 0.3, H: (b) => 5.5 },
   gazebo: { lift: 0.05, H: () => 5.6, open: true },
   lifeguard: { lift: 0.0, H: () => 4.2, open: true },
+  rink: { lift: 0.08, H: () => 1.2, open: true },
 };
 function generic(ctx, B, b) {
   const { terrain, physics } = ctx;

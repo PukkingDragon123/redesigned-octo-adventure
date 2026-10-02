@@ -12,6 +12,7 @@ import { voxMesh, sharedVoxelMaterial, createFlatMaterial } from '../render/voxe
 import { PhysProps } from './physprops.js';
 import { Vox } from '../voxel/vox.js';
 import { nearestRoad } from './terrain.js';
+import { dressPlaces } from './places.js';
 
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _s = new THREE.Vector3(1, 1, 1), _p = new THREE.Vector3();
 const UP = new THREE.Vector3(0, 1, 0);
@@ -51,7 +52,10 @@ export class VoxelWorld {
     if (!c) this.chunks.set(key, (c = []));
     _q.setFromAxisAngle(UP, yaw);
     _s.setScalar(scale);
-    c.push({ geo: r.geometry, m: new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), _q.clone(), _s.clone()) });
+    const M = new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), _q.clone(), _s.clone());
+    c.push({ geo: r.geometry, m: M });
+    // lettering painted on the prop (signposts, STOP signs, stands)
+    for (const sg of r.meta?.signs || []) this.sign(sg, M, {});
     // lights from the model meta
     for (const l of r.meta?.lights || []) {
       _p.set(l.x, l.y, l.z).multiplyScalar(scale).applyAxisAngle(UP, yaw).add(new THREE.Vector3(x, y, z));
@@ -267,6 +271,9 @@ export class VoxelWorld {
         case 'wheelbarrow':
           this.addStatic(this.model('wheelbarrow', () => PR.wheelbarrow({ contents: 'pumpkins' })), d.x, d.y, d.z, d.yaw ?? 0);
           break;
+        case 'ramp':
+          this.addStatic(this.model(`ramp:${d.len}:${d.h}`, () => PR.jumpRamp({ len: d.len, h: d.h, w: d.w })), d.x, d.y, d.z, d.yaw);
+          break;
         case 'picnic':
           this.addStatic(this.model(`picnic:${seed % 2}`, () => PR.picnicTable({ cloth: seed % 2 === 0 })), d.x, d.y, d.z, d.yaw ?? 0);
           break;
@@ -371,6 +378,8 @@ export class VoxelWorld {
         : this.model(`pumpkin:medium:${i % 6}`, () => PR.pumpkin({ kind: 'medium', seed: i + 30 }));
       physprops.add(r, x, gy(x, z), z, { yaw: i * 1.3, kind: jack ? 'jack' : 'pumpkin', hp: 3, mass: 1.2, lights: jack });
     });
+    // the rest of the remade map: streets, green, harbour, farm, beach, campground, signposts...
+    dressPlaces(this, physprops);
   }
 }
 

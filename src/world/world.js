@@ -22,6 +22,8 @@ import { VoxelWorld } from './voxelWorld.js';
 import { VoxelForest } from './voxelForest.js';
 import { PhysProps } from './physprops.js';
 import * as VOXPROPS from '../voxel/models/props.js';
+import { meshVox } from '../voxel/mesh.js';
+import { voxMesh, sharedVoxelMaterial } from '../render/voxelMaterial.js';
 
 export class World {
   constructor(pipeline, progress = () => {}) {
@@ -153,14 +155,32 @@ export class World {
       this.scene.add(m);
       this.townMeshes.push(m);
     }
-    // boats bob on the water as separate meshes
+    // boats bob on the water as separate meshes (voxel lobster boats, dinghies & canoes)
+    const HULLS = { hull: 0xb8352c, hullBlue: 0x2e5a8a, hullGreen: 0x3a7a5a };
+    const boatGeo = new Map();
+    const voxBoat = (kind, hull) => {
+      const key = kind + ':' + hull;
+      if (!boatGeo.has(key)) {
+        const col = HULLS[hull] ?? 0x2e5a8a;
+        const r = kind === 'fishing' ? VOXPROPS.fishingBoat({ hull: col }) : kind === 'rowboat' ? VOXPROPS.rowboat({ color: col }) : VOXPROPS.canoe({ color: 0xb83a2a });
+        boatGeo.set(key, { geo: meshVox(r.vox, { size: r.size, origin: r.origin, jitter: 0 }), y: kind === 'fishing' ? 0 : kind === 'rowboat' ? -0.22 : -0.12 });
+      }
+      return boatGeo.get(key);
+    };
     this.boats = ctx.boats.map((bt, i) => {
-      const B = new Builder();
-      boatGeometry(B, bt.kind, bt.hull);
-      const m = propMesh(B.build(), this.propMat);
-      m.position.set(bt.x, 0, bt.z);
+      let m, baseY = 0;
+      if (voxel) {
+        const vb = voxBoat(bt.kind, bt.hull);
+        m = voxMesh(vb.geo, sharedVoxelMaterial());
+        baseY = vb.y;
+      } else {
+        const B = new Builder();
+        boatGeometry(B, bt.kind, bt.hull);
+        m = propMesh(B.build(), this.propMat);
+      }
+      m.position.set(bt.x, baseY, bt.z);
       m.rotation.y = bt.yaw;
-      m.userData = { ...bt, phase: i * 1.7 };
+      m.userData = { ...bt, phase: i * 1.7, baseY };
       this.scene.add(m);
       if (bt.kind !== 'canoe') this.physics.addBox({ x: bt.x, z: bt.z, yaw: bt.yaw, w: bt.kind === 'fishing' ? 2.3 : 1.4, l: bt.kind === 'fishing' ? 6.5 : 3.2, y0: -2, y1: 2.5, kind: 'boat' });
       return m;
@@ -186,7 +206,7 @@ export class World {
     const t = G.uTime.value;
     for (const b of this.boats || []) {
       const ph = b.userData.phase;
-      b.position.y = Math.sin(t * 1.1 + ph) * 0.06 - 0.02;
+      b.position.y = (b.userData.baseY || 0) + Math.sin(t * 1.1 + ph) * 0.06 - 0.02;
       b.rotation.z = Math.sin(t * 0.9 + ph) * 0.035;
       b.rotation.x = Math.sin(t * 0.7 + ph * 1.3) * 0.02;
     }

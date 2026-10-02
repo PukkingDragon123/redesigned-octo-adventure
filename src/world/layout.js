@@ -82,6 +82,9 @@ export const RIVER = [
 
 // Main Street: straight, with curbs & sidewalks; storefronts line both sides.
 export const MAIN_ST = { x0: 114, x1: 268, z: 50, road: 8, walk: 2.6 };
+// zebra crossings (x) and the side streets that meet Main Street (sidewalk gaps, stop lines)
+export const CROSSWALKS = [118, 166, 205.5, 262];
+export const SIDE_STREETS = [{ x: 118, side: -1, w: 4 }, { x: 166, side: 1, w: 5 }];
 const MS_N = MAIN_ST.z - MAIN_ST.road / 2 - MAIN_ST.walk - 0.2; // north-side building fronts (z)
 const MS_S = MAIN_ST.z + MAIN_ST.road / 2 + MAIN_ST.walk + 0.2; // south-side building fronts
 
@@ -197,6 +200,7 @@ export const BUILDINGS = [
   // ---- the green, the chapel & the harbour
   { id: 'chapel', kind: 'chapel', x: 186, z: -2, w: 8, d: 13, floors: 1, color: 'white', roof: 'dark', facing: 0 },
   { id: 'gazebo', kind: 'gazebo', x: 186, z: 24, w: 7, d: 7, floors: 1, color: 'white', roof: 'green', facing: 0 },
+  { id: 'rink', kind: 'rink', x: 226, z: 16, w: 26, d: 13, floors: 1, color: 'white', roof: 'dark', facing: 0 },
   { id: 'boathouse', kind: 'house', x: 204, z: 93, w: 10, d: 8, floors: 1, color: 'white', roof: 'green', stilts: true, facing: Math.PI },
   { id: 'fishmarket', kind: 'house', x: 244, z: 92.5, w: 9, d: 7, floors: 1, color: 'red', roof: 'dark', stilts: true, facing: Math.PI, sign: 'LOBSTER' },
   { id: 'lighthouse', kind: 'lighthouse', x: 306, z: 2, w: 5, d: 5, floors: 3, color: 'white', roof: 'red', facing: 0 },

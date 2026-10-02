@@ -2488,6 +2488,558 @@ export function trophyCup() {
   return finish(v, FINE, { origin: [c + 0.5, 0, cz + 0.5], radius: 0.16, meta: { pickup: true } });
 }
 
+// ================================================================== the remade map: town, coast & countryside
+const MID = 0.1; // chunky large props (sidewalks, ramps, corn rows, boats)
+const CONCRETE = 0xb8b2a6, CONCRETE_D = 0x9e988c, CONCRETE_L = 0xccc6ba, GRANITE = 0x8e8c94, GRANITE_L = 0xa8a6ae;
+const POST_RED = 0xc8282a, POST_RED_D = 0x961e20;
+const pmk = (v, x, y, z, r, seed = 1) => paintPumpkin(v, x, y, z, { rx: r, ry: r * 0.78, seed });
+// a sign plane description for voxelWorld (metres relative to the finished model's origin)
+function signPlane(pre, size, at, w, h, text, o = {}) {
+  return { x: r3((at[0] - pre[0]) * size), y: r3((at[1] - pre[1]) * size), z: r3((at[2] - pre[2]) * size), w: r3(w * size), h: r3(h * size), text, normal: o.normal || [0, 0, 1], bg: o.bg || '#f2e6c8', fg: o.fg || '#3a2418', kind: o.kind || 'board' };
+}
+
+// sidewalk({ len, w, seed }) — a length of concrete paving with a granite curb along its +z (road) edge.
+// 0.1 m voxels, 0.4 m tall (bury ~0.2 m); origin at the centre of the base.
+export function sidewalk({ len = 4, w = 2.6, seed = 1 } = {}) {
+  const L = Math.round(len / MID), Wd = Math.round(w / MID), H = 4;
+  const v = new Vox(L, H, Wd);
+  const R = rng(seed * 13 + 1);
+  const slabT = [];
+  for (let i = 0; i < 8; i++) slabT.push([CONCRETE, CONCRETE_L, tone(CONCRETE, -0.04), tone(CONCRETE, 0.03)][Math.floor(R() * 4)]);
+  for (let z = 0; z < Wd; z++) for (let x = 0; x < L; x++) {
+    const curb = z >= Wd - 2;
+    for (let y = 0; y < H; y++) {
+      let c;
+      if (curb) c = y === H - 1 ? (z === Wd - 1 ? GRANITE : GRANITE_L) : GRANITE;
+      else if (y < H - 1) c = CONCRETE_D;
+      else {
+        const sx = Math.floor(x / 10), sz = z < (Wd - 2) / 2 ? 0 : 1;
+        const seam = x % 10 === 0 || z === Math.floor((Wd - 2) / 2);
+        c = seam ? CONCRETE_D : slabT[(sx * 2 + sz) % slabT.length];
+      }
+      v.set(x, y, z, c);
+    }
+  }
+  // a few fallen leaves and a crack or two
+  for (let i = 0; i < 5; i++) v.set(Math.floor(R() * L), H, Math.floor(R() * (Wd - 3)), [0xc8401e, 0xe8781e, 0xd8a032][i % 3]);
+  for (let i = 0; i < 2; i++) { const x = 2 + Math.floor(R() * (L - 4)), z = 1 + Math.floor(R() * (Wd - 5)); v.set(x, H - 1, z, CONCRETE_D); v.set(x + 1, H - 1, z + 1, CONCRETE_D); }
+  return finish(v, MID, { origin: [L / 2, 0, Wd / 2], radius: 0.1, meta: { top: H * MID } });
+}
+
+// townLamp({ banner }) — Main Street lamp: fluted iron post, twin acorn globes, a maple-leaf banner
+export function townLamp({ banner = true, flip = false } = {}) {
+  const v = new Vox(30, 90, 12);
+  const c = 14.5, cz = 5.5;
+  const glass = 0xffd890 | EMIT;
+  lathe(v, c, cz, 0, 5, (y) => (y < 2 ? 3.4 : 2.6), (x, y) => (y === 5 || y === 1 ? IRON_L : IRON));
+  lathe(v, c, cz, 6, 70, (y) => (y < 14 ? 1.9 : 1.3), (x, y, z, a) => (y < 14 && Math.floor((a + Math.PI) * 2) % 2 ? IRON_L : IRON));
+  lathe(v, c, cz, 70, 72, 2, IRON_L);
+  // crossarm with scrolls
+  v.fill(c - 11, 72, cz, c + 11, 73, cz, IRON);
+  for (const s of [-1, 1]) {
+    polyline(v, [[c + s * 2, 66, cz], [c + s * 6, 70, cz], [c + s * 10, 71, cz]], IRON, 0.5);
+    const gx = c + s * 11;
+    v.fill(Math.round(gx) - 1, 74, cz - 1, Math.round(gx) + 1, 74, cz + 1, IRON);
+    lathe(v, gx, cz, 75, 83, (y) => [2.2, 2.8, 3.1, 3.2, 3.1, 2.9, 2.4, 1.8, 1.0][y - 75], (x, y) => (y === 79 ? tone(glass, 0.1) : glass));
+    lathe(v, gx, cz, 84, 85, (y) => (y === 84 ? 2.4 : 1.2), IRON);
+    v.set(Math.round(gx), 86, Math.round(cz), IRON_L);
+  }
+  // banner: red maple leaf on white with red bars, hung from a little bracket
+  if (banner) {
+    const bx = flip ? c - 2 : c + 2, s = flip ? -1 : 1;
+    v.fill(bx, 60, cz, bx + s * 9, 60, cz, IRON);
+    for (let y = 40; y <= 59; y++) for (let k = 0; k < 9; k++) {
+      const x = bx + s * (k + 1);
+      let col = y < 44 || y > 55 ? RED : 0xf2ece0;
+      const dx = Math.abs(k - 4), dy = y - 49.5;
+      if (y >= 44 && y <= 55 && ((dx <= 1 && Math.abs(dy) <= 4.5) || (Math.abs(dy) <= 1.5 && dx <= 3.5) || (dy > -4 && dy < 2 && dx < 2.6 - dy * 0.2))) col = RED;
+      v.set(x, y, cz, col);
+    }
+    v.fill(bx + s * 9, 40, cz, bx + s * 9, 59, cz, IRON);
+  }
+  bevel(v, { top: 0.06, bottom: 0 });
+  return finish(v, STD, { origin: [c + 0.5, 0, cz + 0.5], radius: 0.18, lights: [{ at: [c - 11, 79, cz], color: L_LAMP, radius: 11 }, { at: [c + 11, 79, cz], color: L_LAMP, radius: 9 }] });
+}
+
+// planter({ seed }) — a wooden half-barrel of autumn mums with a little pumpkin tucked in
+export function planter({ seed = 1 } = {}) {
+  const v = new Vox(22, 20, 22);
+  const c = 10.5, R = rng(seed * 3 + 7);
+  lathe(v, c, c, 0, 9, (y) => 8.2 + Math.sin((y / 9) * Math.PI) * 0.8, (x, y, z, a) => (y === 2 || y === 7 ? IRON : Math.floor((a + Math.PI) * 4) % 2 ? WOOD : WOOD_L), { wall: 1.2, floor: 1 });
+  lathe(v, c, c, 8, 8, 7.2, DIRT_D);
+  const fam = [[0xe8781e, 0xf6a040], [0x8a2238, 0xb04058], [0xf2c23a, 0xfadc70], [0x7a4aa8, 0xa070cc]];
+  for (let i = 0; i < 14; i++) {
+    const a = R() * TAU, d = Math.sqrt(R()) * 5.6, [m, l] = fam[Math.floor(R() * fam.length)];
+    const x = c + Math.cos(a) * d, z = c + Math.sin(a) * d, h = 10 + R() * 4;
+    v.ellipsoid(x, h, z, 2.1, 1.5, 2.1, (xx, y) => (y > h ? l : m));
+    v.set(Math.round(x), Math.round(h) - 2, Math.round(z), LEAF_D);
+  }
+  for (let i = 0; i < 6; i++) { const a = R() * TAU; v.ellipsoid(c + Math.cos(a) * 6.5, 9.5, c + Math.sin(a) * 6.5, 1.6, 0.8, 1.6, LEAF); }
+  pmk(v, c + 3.5, 9, c + 4, 2.6, seed);
+  bevel(v, { top: 0.05, bottom: 0 });
+  return finish(v, STD, { origin: [c + 0.5, 0, c + 0.5], radius: 0.45 });
+}
+
+// postBox() — a red Canada Post street mailbox: rounded hood, a slot, a white band
+export function postBox() {
+  const v = new Vox(16, 30, 16);
+  rbox(v, 2, 0, 2, 13, 2, 13, 1, POST_RED_D, 0);
+  for (let y = 3; y <= 22; y++) rbox(v, 3, y, 3, 12, y, 12, 1.5, (x, yy, z) => (yy === 15 || yy === 16 ? 0xf2ece0 : POST_RED), 0);
+  for (let y = 23; y <= 27; y++) { const r = Math.sqrt(Math.max(0, 25 - (y - 22) * (y - 22))); rbox(v, Math.round(7.5 - r), y, 3, Math.round(7.5 + r), y, 12, 1, POST_RED, 0); }
+  v.fill(5, 19, 13, 10, 20, 13, 0x2a1e1e); v.fill(5, 21, 13, 10, 21, 13, POST_RED_D); // slot & lip
+  v.fill(6, 16, 13, 9, 16, 13, RED); v.fill(7, 15, 13, 8, 17, 13, RED); // little leaf on the band
+  v.fill(6, 6, 13, 9, 10, 13, POST_RED_D); v.set(10, 8, 13, METAL_L);
+  bevel(v, { top: 0.08, bottom: -0.06 });
+  return finish(v, STD, { origin: [8, 0, 8], radius: 0.32 });
+}
+
+// hydrant() — a squat red fire hydrant with yellow caps
+export function hydrant() {
+  const v = new Vox(14, 18, 14);
+  const c = 6.5;
+  lathe(v, c, c, 0, 1, 4.2, RED_D);
+  lathe(v, c, c, 2, 11, 3, (x, y) => (y === 9 ? RED_L : RED));
+  lathe(v, c, c, 12, 14, (y) => [3.6, 3, 2][y - 12], (x, y) => (y === 12 ? RED_D : RED));
+  lathe(v, c, c, 15, 16, 1.2, GOLD);
+  for (const [dx, dz] of [[-4, 0], [4, 0], [0, 4]]) v.fill(Math.round(c + dx * 0.8) - 1, 6, Math.round(c + dz * 0.8) - 1, Math.round(c + dx) + (dx > 0 ? 1 : 0), 8, Math.round(c + dz) + (dz > 0 ? 1 : 0), GOLD);
+  bevel(v, { top: 0.1, bottom: -0.08 });
+  return finish(v, STD, { origin: [c + 0.5, 0, c + 0.5], radius: 0.2 });
+}
+
+// litterBin() — a green slatted bin with a domed lid
+export function litterBin() {
+  const v = new Vox(16, 22, 16);
+  const c = 7.5, G = 0x2e5a3a, GL = 0x3e7a4a;
+  lathe(v, c, c, 0, 15, 6, (x, y, z, a) => (y === 0 || y === 15 ? IRON : Math.floor((a + Math.PI) * 3) % 2 ? G : GL), { wall: 1, floor: 0 });
+  lathe(v, c, c, 16, 19, (y) => [6.4, 5.6, 4.2, 2.2][y - 16], (x, y) => (y === 16 ? IRON : G));
+  v.fill(Math.round(c) - 1, 20, Math.round(c), Math.round(c), 20, Math.round(c), IRON_L);
+  bevel(v, { top: 0.06, bottom: 0 });
+  return finish(v, STD, { origin: [c + 0.5, 0, c + 0.5], radius: 0.32 });
+}
+
+// bikeRack() — three iron hoops on a rail
+export function bikeRack() {
+  const v = new Vox(40, 18, 6);
+  v.fill(0, 0, 2, 39, 0, 3, IRON);
+  for (const x0 of [4, 17, 30]) for (let a = 0; a <= 20; a++) {
+    const t = (a / 20) * Math.PI, x = x0 + 3 - Math.cos(t) * 3, y = Math.sin(t) * 4 + 12;
+    v.set(Math.round(x), Math.round(y), 2, METAL_L); v.set(Math.round(x), Math.round(y), 3, METAL);
+  }
+  for (const x of [4, 10, 17, 23, 30, 36]) v.fill(x, 1, 2, x, 12, 3, METAL);
+  return finish(v, STD, { origin: [20, 0, 3], radius: 0.2 });
+}
+
+// stopSign() — bilingual STOP / ARRÊT on a red octagon; lettering is a sign plane
+export function stopSign() {
+  const v = new Vox(20, 56, 6);
+  const c = 9.5;
+  v.fill(9, 0, 2, 10, 40, 3, METAL);
+  for (let y = 0; y < 18; y++) for (let x = 0; x < 18; x++) {
+    const dx = Math.abs(x - 8.5), dy = Math.abs(y - 8.5);
+    if (dx > 8.6 || dy > 8.6 || dx + dy > 12.5) continue;
+    const rim = dx > 7.4 || dy > 7.4 || dx + dy > 11.2;
+    v.set(x + 1, 37 + y, 4, rim ? 0xf2ece0 : 0xc8282a);
+    v.set(x + 1, 37 + y, 3, 0x9a9aa2);
+  }
+  const pre = [c + 0.5, 0, 3];
+  const res = finish(v, STD, { origin: pre, radius: 0.1 });
+  res.meta.signs = [signPlane(pre, STD, [c + 0.5, 46, 5], 12, 9, 'STOP ARRÊT', { bg: '#c8282a', fg: '#f6f0e4' })];
+  return res;
+}
+
+// mooseSign() — yellow diamond, black moose: watch out on the road home
+export function mooseSign() {
+  const v = new Vox(26, 64, 6);
+  v.fill(12, 0, 2, 13, 44, 3, METAL);
+  const M = ['.AA..........AA..', 'AAAA........AAAA', '.AA.AA....AA.AA.', '....AAAAAAAA.....', '...........BBBB..', '..BBBBBBBBBBBBBB.', '.BBBBBBBBBBBBBB..', '.BBBBBBBBBBBBB...', '.BB.BB.....B..B..', '.B...B.....B..B..', '.B...B.....B..B..'];
+  for (let y = 0; y < 24; y++) for (let x = 0; x < 24; x++) {
+    const d = Math.abs(x - 11.5) + Math.abs(y - 11.5);
+    if (d > 12.2) continue;
+    v.set(x + 1, 38 + y, 4, d > 10.8 ? 0x1e1418 : 0xf2c23a);
+    v.set(x + 1, 38 + y, 3, 0x9a9aa2);
+  }
+  M.forEach((row, i) => { for (let k = 0; k < row.length; k++) if (row[k] !== '.') v.set(5 + k, 55 - i, 5, 0x1e1418); });
+  return finish(v, STD, { origin: [13, 0, 3], radius: 0.1 });
+}
+
+// flagPole({ h }) — a tall white pole with a gold ball (the flag itself is cloth, see world.flags)
+export function flagPole({ h = 8 } = {}) {
+  const H = Math.round(h / STD);
+  const v = new Vox(12, H + 3, 12);
+  const c = 5.5;
+  rbox(v, 1, 0, 1, 10, 2, 10, 1, STONE, 0);
+  lathe(v, c, c, 3, H, (y) => (y < 8 ? 1.4 : 0.9), (x, y) => (y % 24 === 0 ? 0xe8e4dc : 0xf6f2ea));
+  v.ellipsoid(c, H + 1, c, 1.6, 1.6, 1.6, GOLD);
+  v.fill(Math.round(c) + 1, H - 6, Math.round(c), Math.round(c) + 2, H - 6, Math.round(c), METAL);
+  return finish(v, STD, { origin: [c + 0.5, 0, c + 0.5], radius: 0.12, meta: { flagAt: r3((H - 7) * STD) } });
+}
+
+// signPost() — the wooden post of a junction signpost, with a little peaked cap
+export function signPost() {
+  const v = new Vox(8, 62, 8);
+  v.fill(2, 0, 2, 5, 56, 5, (x, y, z) => ((x + z + (y >> 3)) % 4 === 0 ? WOOD_D : WOOD));
+  v.fill(1, 0, 1, 6, 1, 6, WOOD_DD);
+  for (let k = 0; k < 4; k++) v.fill(1 + k, 57 + k, 1 + k, 6 - k, 57 + k, 6 - k, k ? RED_D : RED);
+  bevel(v, { top: 0.08, bottom: 0 });
+  return finish(v, STD, { origin: [4, 0, 4], radius: 0.12 });
+}
+// signArrow({ text, color, len }) — an arrow board that points along +x from the post; lettering both sides
+export function signArrow({ text = '', color = 0xf2e6c8, len } = {}) {
+  const L = len ?? Math.max(18, Math.min(40, 8 + text.length * 2.4));
+  const v = new Vox(Math.ceil(L) + 2, 8, 3);
+  for (let x = 0; x <= L; x++) for (let y = 0; y < 7; y++) {
+    const tip = x > L - 4 && Math.abs(y - 3) > L - x;
+    if (tip) continue;
+    const edge = y === 0 || y === 6 || x === 0 || (x > L - 4 && Math.abs(y - 3) === Math.round(L - x));
+    v.set(x, y, 1, edge ? tone(color, -0.3) : color);
+    v.set(x, y, 0, tone(color, -0.12)); v.set(x, y, 2, tone(color, -0.12));
+  }
+  v.set(1, 3, 3 - 3, IRON_L);
+  const res = finish(v, STD, { origin: [0, 3.5, 1.5], radius: 0.1 });
+  const w = (L - 6) * STD, h = 4.6 * STD, cx = (L / 2 - 1.5) * STD;
+  const bg = '#' + (color & 0xffffff).toString(16).padStart(6, '0');
+  res.meta.signs = [
+    { x: r3(cx), y: 0, z: r3(1.5 * STD + 0.012), w: r3(w), h: r3(h), text, normal: [0, 0, 1], bg, fg: '#3a2418' },
+    { x: r3(cx), y: 0, z: r3(-1.5 * STD - 0.012), w: r3(w), h: r3(h), text, normal: [0, 0, -1], bg, fg: '#3a2418' },
+  ];
+  return res;
+}
+
+// welcomeSign({ text }) — a big painted board on two posts with a maple leaf
+export function welcomeSign({ text = 'MAPLE COVE' } = {}) {
+  const v = new Vox(64, 44, 8);
+  for (const x of [6, 55]) v.fill(x, 0, 3, x + 2, 36, 5, WOOD_D);
+  v.fill(2, 18, 4, 61, 40, 5, (x, y) => (x <= 3 || x >= 60 || y <= 19 || y >= 39 ? WOOD_D : 0x2e5a40));
+  // leaf on top
+  const leaf = ['....#....', '.#.###.#.', '.#######.', '#########', '.#######.', '..#####..', '....#....'];
+  leaf.forEach((row, i) => { for (let k = 0; k < row.length; k++) if (row[k] === '#') { v.set(28 + k, 43 - i, 4, RED); v.set(28 + k, 43 - i, 5, RED_D); } });
+  bevel(v, { top: 0.06, bottom: 0 });
+  const pre = [32, 0, 4];
+  const res = finish(v, STD, { origin: pre, radius: 0.3 });
+  res.meta.signs = [signPlane(pre, STD, [32, 29, 6], 54, 18, text, { bg: '#2e5a40', fg: '#f6ecd2' })];
+  return res;
+}
+
+// muskokaChair({ color }) — the slatted, slanted-back cottage chair
+export function muskokaChair({ color = 0xc8382e } = {}) {
+  const v = new Vox(20, 24, 26);
+  const c = color, d = tone(c, -0.2), l = tone(c, 0.12);
+  // runners & legs
+  for (const x of [1, 18]) { polyline(v, [[x, 0, 2], [x, 7, 20]], d, 0.5); v.fill(x, 0, 19, x, 9, 20, d); }
+  // seat slats sloping back
+  for (let z = 6; z <= 20; z += 2) { const y = 6 + Math.round((20 - z) * 0.12); v.fill(1, y, z, 18, y, z, z % 4 ? c : l); }
+  // fan back of tall slats, raked back
+  for (let x = 2; x <= 17; x += 2) { const top = 22 - Math.round(Math.abs(x - 9.5) * 0.4); polyline(v, [[x, 7, 6], [x, top, 0]], x % 4 ? c : l); }
+  v.fill(2, 12, 3, 17, 12, 3, d);
+  // wide flat armrests
+  for (const x of [0, 1, 18, 19]) v.fill(x, 11, 8, x, 11, 22, l);
+  for (const x of [0, 19]) v.fill(x, 0, 21, x, 10, 21, d);
+  bevel(v, { top: 0.06, bottom: 0 });
+  return finish(v, STD, { origin: [10, 0, 13], radius: 0.45, meta: { seatHeight: 0.38 } });
+}
+
+// tent({ color }) — a ridge tent with guy lines and an open door flap
+export function tent({ color = 0xd8702a, seed = 1 } = {}) {
+  const v = new Vox(44, 30, 50);
+  const c = color, d = tone(c, -0.18), l = tone(c, 0.1);
+  for (let z = 4; z <= 44; z++) for (let x = 2; x <= 41; x++) {
+    const h = 27 - Math.abs(x - 21.5) * 1.25;
+    if (h < 1) continue;
+    const y = Math.round(h);
+    v.set(x, y, z, z === 4 || z === 44 ? d : (z % 8 === 0 ? d : x < 22 ? l : c));
+    if (z === 4 || z === 44) for (let yy = 0; yy < y; yy++) { const door = z === 44 && Math.abs(x - 21.5) < 6 - yy * 0.15; v.set(x, yy, z, door ? 0 : d); }
+  }
+  // door flaps tied back, ridge pole ends, pegs and lines
+  v.fill(13, 0, 45, 15, 18, 46, l); v.fill(28, 0, 45, 30, 18, 46, l);
+  v.fill(21, 0, 46, 22, 30, 47, WOOD); v.fill(21, 0, 2, 22, 30, 3, WOOD);
+  for (const [x, z] of [[0, 2], [43, 2], [0, 47], [43, 47]]) { polyline(v, [[x, 0, z], [x < 20 ? 6 : 37, 18, z < 20 ? 6 : 42]], 0xe8e0d0); v.fill(x, 0, z, x, 1, z, WOOD_D); }
+  v.fill(16, 0, 30, 27, 0, 43, DENIM_D); // sleeping bag peeking out
+  bevel(v, { top: 0.05, bottom: 0 });
+  return finish(v, STD, { origin: [22, 0, 25], radius: 1.1 });
+}
+
+// sapBucket() — a tin sap bucket with a peaked lid, hung on a spile (origin: back of the hook, against a trunk)
+export function sapBucket() {
+  const v = new Vox(12, 16, 12);
+  lathe(v, 5.5, 6, 1, 10, (y) => 3.6 + y * 0.12, (x, y, z, a) => (y === 1 || y === 10 ? METAL_D : Math.floor((a + Math.PI) * 3) % 2 ? METAL_L : METAL), { wall: 1, floor: 1 });
+  for (let k = 0; k < 3; k++) lathe(v, 5.5, 6, 11 + k, 11 + k, 5.4 - k * 1.8, k ? METAL : METAL_L);
+  v.fill(5, 12, 0, 6, 12, 3, METAL_D); // spile into the tree
+  v.fill(5, 4, 9, 6, 4, 9, 0xc87a1e); // a drip of sap
+  return finish(v, FINE, { origin: [6, 0, 0], radius: 0.08 });
+}
+
+// sandCastle({ seed }) — towers, a wall, a moat and a little flag
+export function sandCastle({ seed = 1 } = {}) {
+  const v = new Vox(30, 22, 30);
+  const R = rng(seed * 11 + 5);
+  const S = 0xc8b08a, SD = 0xa89068, SL = 0xdcc8a0, WET = 0x8e7a5a;
+  lathe(v, 14.5, 14.5, 0, 0, 14, (x, y, z) => (Math.hypot(x - 14.5, z - 14.5) > 11 ? WET : S));
+  lathe(v, 14.5, 14.5, 1, 4, 9, (x, y, z, a) => (y === 4 && Math.floor((a + Math.PI) * 4) % 2 ? 0 : y === 4 ? SL : S));
+  const towers = [[8, 8], [21, 8], [8, 21], [21, 21]];
+  towers.forEach(([x, z], i) => {
+    const h = 9 + Math.floor(R() * 4) + (i === 0 ? 4 : 0);
+    lathe(v, x, z, 1, h, (y) => 3.4 - y * 0.08, (xx, y, zz, a) => (y === h && Math.floor((a + Math.PI) * 2) % 2 ? 0 : y % 3 === 0 ? SD : y === h ? SL : S));
+  });
+  lathe(v, 14.5, 14.5, 5, 13, (y) => 3.6 - (y - 5) * 0.25, (x, y) => (y === 13 ? SL : S));
+  v.fill(14, 14, 14, 14, 19, 14, WOOD_L); v.fill(15, 17, 14, 17, 19, 14, RED);
+  v.set(3, 1, 24, 0xf2ece0); v.set(4, 1, 25, 0xe8b8c0); // shells
+  bevel(v, { top: 0.04, bottom: 0 });
+  return finish(v, STD, { origin: [14.5, 0, 14.5], radius: 0.7 });
+}
+
+// beachUmbrella({ color }) — a striped umbrella leaning in the sand
+export function beachUmbrella({ color = RED } = {}) {
+  const v = new Vox(44, 46, 44);
+  const c = 21.5;
+  polyline(v, [[c, 0, c], [c + 2, 40, c]], 0xe8e0d0, 0.5);
+  for (let k = 0; k < 9; k++) {
+    const y = 42 - k, r = 2 + k * 2.3;
+    lathe(v, c + 2, c, y, y, r, (x, yy, z, a) => (Math.floor(((a + Math.PI) / TAU) * 12) % 2 ? color : 0xf2ece0), { wall: 1.6 });
+  }
+  v.fill(Math.round(c) + 1, 43, Math.round(c), Math.round(c) + 2, 44, Math.round(c), 0xe8e0d0);
+  return finish(v, STD, { origin: [c + 0.5, 0, c + 0.5], radius: 0.1 });
+}
+
+// driftwood({ seed }) — a silvery sun-bleached log with a broken branch
+export function driftwood({ seed = 1 } = {}) {
+  const v = new Vox(70, 12, 14);
+  const R = rng(seed * 17 + 3);
+  const DW = 0xb8ae9c, DWD = 0x988e7c, DWL = 0xcfc6b4;
+  for (let x = 2; x < 66; x++) {
+    const r = 3.6 + Math.sin(x * 0.17 + seed) * 0.6 - Math.max(0, (x - 52) * 0.12);
+    for (let z = -5; z <= 5; z++) for (let y = -5; y <= 5; y++) if (y * y + z * z <= r * r) v.set(x, Math.round(4 + y), Math.round(7 + z), y > r * 0.5 ? DWL : (x + y * 3) % 7 === 0 ? DWD : DW);
+  }
+  polyline(v, [[40, 6, 7], [52, 11, 12]], DW, 1);
+  for (let i = 0; i < 4; i++) v.set(10 + Math.floor(R() * 50), 8, 5 + Math.floor(R() * 4), DWD);
+  return finish(v, STD, { origin: [35, 0, 7], radius: 0.4 });
+}
+
+// inukshuk({ seed }) — a stone figure on the lookout, arms wide
+export function inukshuk({ seed = 1 } = {}) {
+  const v = new Vox(34, 38, 12);
+  const R = rng(seed * 7 + 1);
+  const st = (x0, y0, x1, y1) => rbox(v, x0, y0, 2 + Math.floor(R() * 2), x1, y1, 9 - Math.floor(R() * 2), 1.2, (x, y, z) => [STONE, STONE_L, STONE_D, 0x9a988e][Math.floor(vhash(x0, y0, 1, seed) * 4)], 1);
+  st(6, 0, 12, 12); st(21, 0, 27, 12); // legs
+  st(4, 13, 29, 18); // hips
+  st(9, 19, 24, 25); // body
+  st(0, 26, 33, 30); // arms
+  st(11, 31, 22, 37); // head
+  mossify(v, seed, 0.25);
+  return finish(v, STD, { origin: [17, 0, 6], radius: 0.6 });
+}
+
+// jumpRamp({ len, h, w }) — a plank kicker on timber trestles with yellow arrows and red rails (0.1 m voxels)
+export function jumpRamp({ len = 5, h = 1.3, w = 2.8 } = {}) {
+  const L = Math.round(len / MID), Hh = Math.round(h / MID), Wd = Math.round(w / MID);
+  const v = new Vox(Wd + 2, Hh + 3, L + 1);
+  const prof = (z) => { const t = z / (L - 1); return (t * t * 0.4 + t * 0.6) * Hh; };
+  for (let z = 0; z < L; z++) {
+    const top = Math.round(prof(z));
+    for (let x = 1; x <= Wd; x++) {
+      const plank = (z >> 1) % 3;
+      v.set(x, top, z, x === 1 || x === Wd ? 0xc8382e : [WOOD_L, WOOD, tone(WOOD_L, -0.05)][plank]);
+      if (top > 0) v.set(x, top - 1, z, WOOD_D);
+      // arrows
+      const ax = Math.abs(x - (Wd + 1) / 2), az = (z % 12) - 4;
+      if (az >= 0 && az <= 4 && ax <= 4 - az * 0.9 && ax >= 2.4 - az * 0.9 - 1.4) v.set(x, top, z, 0xf2c23a);
+    }
+    // side skirts & trestle posts
+    if (z % 6 === 3 || z === L - 1) for (const x of [1, 2, Wd - 1, Wd]) v.fill(x, 0, z, x, Math.max(0, top - 1), z, WOOD_D);
+  }
+  for (const x of [1, Wd]) for (let z = 1; z < L; z += 6) polyline(v, [[x, 0, z], [x, Math.round(prof(Math.min(L - 1, z + 5))) - 1, Math.min(L - 1, z + 5)]], WOOD_DD);
+  return finish(v, MID, { origin: [(Wd + 2) / 2, 0, L / 2], radius: w / 2 });
+}
+
+// railFence({ len }) — a split-rail fence section (two posts, three rails)
+export function railFence({ len = 3, seed = 1 } = {}) {
+  const L = Math.round(len / STD);
+  const v = new Vox(L + 3, 26, 6);
+  const R = rng(seed * 5 + 9);
+  for (const x of [1, L]) v.fill(x, 0, 1, x + 2, 24, 4, (xx, y) => (y === 24 ? GREYWOOD_L : GREYWOOD_D));
+  for (const y of [7, 14, 21]) {
+    const off = Math.floor(R() * 2);
+    for (let x = 1; x <= L + 2; x++) { const yy = y + Math.round(Math.sin(x * 0.11 + y) * 0.6); v.set(x, yy, 2 + off, GREYWOOD); v.set(x, yy + 1, 2 + off, (x + y) % 9 === 0 ? GREYWOOD_D : GREYWOOD_L); }
+  }
+  return finish(v, STD, { origin: [(L + 3) / 2, 0, 3], radius: 0.1 });
+}
+// picketFence({ len, color }) — white pickets with pointed tops
+export function picketFence({ len = 3, color = 0xf2ece0 } = {}) {
+  const L = Math.round(len / STD);
+  const v = new Vox(L + 2, 22, 4);
+  for (let x = 0; x <= L + 1; x += 3) { v.fill(x, 0, 2, x + 1, 17, 2, color); v.set(x, 18, 2, color); v.set(x + 1, 18, 2, tone(color, -0.1)); }
+  for (const y of [5, 14]) v.fill(0, y, 1, L + 1, y + 1, 1, tone(color, -0.08));
+  for (const x of [0, L]) v.fill(x, 0, 1, x + 1, 20, 3, tone(color, -0.05));
+  return finish(v, STD, { origin: [(L + 2) / 2, 0, 2], radius: 0.1 });
+}
+
+// cornRow({ len }) — a 2.2 m wall of dry corn stalks for the corn maze (0.1 m voxels, kept cheap:
+// vertical stalk stripes merge into long quads, leaves and ears are a sprinkle of single voxels)
+export function cornRow({ len = 4, seed = 1 } = {}) {
+  const L = Math.round(len / MID);
+  const v = new Vox(L, 25, 8);
+  const R = rng(seed * 19 + 4);
+  const tops = [];
+  for (let x = 0; x < L; x++) tops.push(19 + Math.floor(R() * 4));
+  for (let x = 0; x < L; x++) {
+    const c = x % 3 === 0 ? STRAW_D : x % 3 === 1 ? STRAW : STRAW_L;
+    v.fill(x, 0, 2, x, tops[x], 5, c);
+    v.set(x, tops[x] + 1, 3 + (x % 2), 0xe2d29a); // tassels
+  }
+  for (let i = 0; i < L * 0.9; i++) {
+    const x = Math.floor(R() * L), y = 5 + Math.floor(R() * 13), side = R() < 0.5 ? 1 : 6;
+    v.set(x, y, side, R() < 0.25 ? 0xe8b23a : side === 1 ? STRAW_D : STRAW_L);
+    if (R() < 0.4) v.set(x, y - 1, side === 1 ? 0 : 7, side === 1 ? STRAW_D : STRAW_L);
+  }
+  return finish(v, MID, { origin: [L / 2, 0, 4], radius: 0.3 });
+}
+
+// pumpkinVines({ seed }) — a 2 x 2 m patch of sprawling vines and big leaves (pumpkins are placed on top)
+export function pumpkinVines({ seed = 1 } = {}) {
+  const v = new Vox(40, 6, 40);
+  const R = rng(seed * 23 + 7);
+  for (let i = 0; i < 10; i++) {
+    let x = R() * 40, z = R() * 40, a = R() * TAU;
+    for (let k = 0; k < 18; k++) { v.set(Math.round(x), 0, Math.round(z), LEAF_D); x += Math.cos(a); z += Math.sin(a); a += (R() - 0.5) * 0.8; }
+  }
+  for (let i = 0; i < 22; i++) {
+    const x = R() * 38 + 1, z = R() * 38 + 1, r = 1.6 + R() * 1.6;
+    v.ellipsoid(x, 1.2, z, r, 1, r, (xx, y) => (y >= 2 ? LEAF_L : vhash(xx, y, 3, seed) < 0.2 ? 0x8a8a3a : LEAF));
+  }
+  return finish(v, STD, { origin: [20, 0, 20], radius: 0.1 });
+}
+
+// tractor({ color }) — an old farm tractor with big rear wheels
+export function tractor({ color = 0xc8302a } = {}) {
+  const v = new Vox(34, 40, 64);
+  const c = color, d = tone(c, -0.2), TY = 0x2a2626, TYL = 0x3e3a3a, HUB = 0xe8c040;
+  const wheel = (cx, cy, cz, r, w) => { for (let x = cx - w; x <= cx + w; x++) for (let y = -r; y <= r; y++) for (let z = -r; z <= r; z++) { const d2 = y * y + z * z; if (d2 > r * r + 0.5) continue; v.set(x, cy + y, cz + z, d2 < (r * 0.45) ** 2 ? HUB : d2 > (r - 1.4) ** 2 && ((Math.atan2(y, z) * 6) | 0) % 2 ? TYL : TY); } };
+  wheel(4, 13, 16, 13, 3); wheel(29, 13, 16, 13, 3);
+  wheel(7, 7, 52, 7, 2); wheel(26, 7, 52, 7, 2);
+  rbox(v, 11, 10, 22, 22, 22, 60, 2, (x, y, z) => (y === 22 ? tone(c, 0.1) : z % 6 === 0 && z > 40 ? d : c)); // hood
+  v.fill(12, 12, 61, 21, 20, 61, (x, y) => (y % 2 ? 0x8a8a90 : 0x5a5a60)); // grille
+  rbox(v, 9, 10, 6, 24, 18, 22, 1, c); // body
+  v.fill(13, 19, 8, 20, 22, 14, 0x2a2a2a); // seat
+  v.fill(13, 22, 6, 20, 28, 7, 0x2a2a2a);
+  polyline(v, [[16.5, 22, 20], [16.5, 28, 17]], IRON, 0.6); v.fill(13, 28, 16, 20, 28, 18, IRON); // steering wheel
+  v.fill(16, 22, 50, 17, 34, 51, IRON); v.fill(16, 35, 50, 17, 35, 51, 0x5a5a60); // exhaust
+  for (const x of [1, 32]) v.fill(x, 24, 6, x + 1, 25, 28, d); // fenders
+  bevel(v, { top: 0.06, bottom: -0.05 });
+  return finish(v, STD, { origin: [17, 0, 32], radius: 1.4 });
+}
+
+// farmStand({ seed }) — a roadside stand heaped with pumpkins and an honour box; the sign is lettered
+export function farmStand({ text = 'PUMPKINS 3$', seed = 1 } = {}) {
+  const v = new Vox(48, 44, 26);
+  for (const [x, z] of [[2, 4], [44, 4], [2, 21], [44, 21]]) v.fill(x, 0, z, x + 1, z > 10 ? 30 : 36, z + 1, WOOD_D);
+  v.fill(1, 14, 3, 46, 15, 23, (x) => plankTone(WOOD, x >> 2));
+  for (let z = 1; z <= 25; z++) { const y = 36 - Math.round((z - 1) * 0.28); v.fill(0, y, z, 47, y, z, (x) => (((x >> 2) + (z >> 3)) % 2 ? RED : 0xf2ece0)); }
+  const R = rng(seed * 3 + 1);
+  for (let i = 0; i < 9; i++) pmk(v, 6 + (i % 5) * 9 + R() * 2, 16, 8 + Math.floor(i / 5) * 9 + R() * 2, 3 + R() * 1.5, i);
+  v.fill(40, 16, 18, 45, 21, 23, WOOD_L); v.fill(42, 21, 20, 43, 21, 21, IRON); // honour box
+  for (let i = 0; i < 4; i++) pmk(v, 8 + i * 9, 0, 14 + (i % 2) * 4, 3.2, i + 20);
+  bevel(v, { top: 0.05, bottom: 0 });
+  const pre = [24, 0, 13];
+  const res = finish(v, STD, { origin: pre, radius: 1.0 });
+  res.meta.signs = [signPlane(pre, STD, [24, 28, 24.2], 34, 6, text, { bg: '#f2e6c8', fg: '#a83228' })];
+  v.fill(7, 25, 23, 41, 31, 23, 0); // (sign board itself is drawn by the plane on a voxel backing)
+  return res;
+}
+
+// bbqGrill() — a kettle grill on legs
+export function bbqGrill() {
+  const v = new Vox(16, 22, 16);
+  const c = 7.5;
+  for (const a of [0.4, 2.5, 4.6]) polyline(v, [[c + Math.cos(a) * 5, 0, c + Math.sin(a) * 5], [c + Math.cos(a) * 3, 11, c + Math.sin(a) * 3]], IRON, 0.4);
+  for (let y = 11; y <= 19; y++) { const r = Math.sqrt(Math.max(0, 30 - (y - 15) ** 2)); lathe(v, c, c, y, y, r, y === 15 ? METAL_D : 0x2a2a2e); }
+  v.fill(Math.round(c) - 1, 20, Math.round(c), Math.round(c), 20, Math.round(c), METAL_L);
+  return finish(v, STD, { origin: [c + 0.5, 0, c + 0.5], radius: 0.35 });
+}
+
+// cenotaph() — the village war memorial: a granite obelisk on steps, poppy wreaths at its foot
+export function cenotaph() {
+  const v = new Vox(30, 66, 30);
+  for (let k = 0; k < 3; k++) rbox(v, 1 + k * 3, k * 3, 1 + k * 3, 28 - k * 3, k * 3 + 2, 28 - k * 3, 1, k % 2 ? GRANITE : GRANITE_L, 0);
+  rbox(v, 10, 9, 10, 19, 22, 19, 1, GRANITE, 0);
+  for (let y = 23; y <= 58; y++) { const r = 4 - (y - 23) * 0.06; rbox(v, Math.round(14.5 - r), y, Math.round(14.5 - r), Math.round(14.5 + r), y, Math.round(14.5 + r), 0, y % 12 === 0 ? GRANITE_L : GRANITE, 0); }
+  for (let k = 0; k < 4; k++) rbox(v, 12 + k, 59 + k, 12 + k, 17 - k, 59 + k, 17 - k, 0, GRANITE_L, 0);
+  v.fill(11, 13, 20, 18, 18, 20, GOLD); // bronze plaque
+  for (const [x, z] of [[8, 25], [21, 25], [25, 14]]) torus(v, x, 3, z, 3, 1, (xx, y, zz, a) => (Math.floor(a * 3) % 2 ? 0xc8202a : LEAF_D), 'y');
+  bevel(v, { top: 0.06, bottom: 0 });
+  return finish(v, STD, { origin: [15, 0, 15], radius: 0.8 });
+}
+
+// rowboat({ color }) — a little wooden dinghy with oars (sits on the water)
+export function rowboat({ color = 0x3a7ab0 } = {}) {
+  const L = 64, W = 26, v = new Vox(W, 14, L);
+  const cx = 12.5;
+  for (let z = 0; z < L; z++) {
+    const t = z / (L - 1), hw = 11 * Math.pow(Math.sin(Math.PI * Math.min(1, t * 1.12)), 0.6) + 0.5;
+    for (let x = Math.floor(cx - hw); x <= Math.ceil(cx + hw); x++) {
+      const dx = Math.abs(x - cx) / hw;
+      if (dx > 1) continue;
+      const yb = Math.round(dx * dx * 4);
+      for (let y = yb; y <= 9; y++) {
+        const shell = dx > 1 - 1.4 / hw || y === yb || t > 0.96;
+        if (!shell) continue;
+        v.set(x, y, z, y === 9 ? WOOD_L : y < 4 ? 0xe8e0d0 : (y >> 1) % 2 ? color : tone(color, -0.12));
+      }
+      if (dx <= 1 - 1.4 / hw) v.set(x, yb + 1, z, z % 6 === 0 ? WOOD_D : WOOD);
+    }
+  }
+  for (const z of [18, 40]) v.fill(3, 7, z, 22, 7, z + 2, WOOD_L);
+  polyline(v, [[4, 8, 26], [-1 + 2, 8, 50]], WOOD_L); polyline(v, [[21, 8, 26], [24, 8, 50]], WOOD_L);
+  bevel(v, { top: 0.05, bottom: 0 });
+  return finish(v, STD, { origin: [cx + 0.5, 0, L / 2], radius: 1.0, meta: { length: L * STD } });
+}
+
+// fishingBoat({ hull }) — a Cape Islander lobster boat: high bow, wheelhouse forward, a mast and a flag (0.1 m)
+export function fishingBoat({ hull = 0x2e5a8a, seed = 1 } = {}) {
+  const L = 76, W = 28, v = new Vox(W, 42, L);
+  const cx = 13.5, top = (t) => 12 + Math.round(5 * Math.pow(Math.max(0, t - 0.55) / 0.45, 1.8));
+  for (let z = 0; z < L; z++) {
+    const t = z / (L - 1);
+    const hw = 13 * Math.pow(Math.sin(Math.PI * Math.min(1, 0.32 + t * 0.7)), 0.5) * (t < 0.06 ? 0.85 : 1);
+    const gt = top(t);
+    for (let x = Math.floor(cx - hw); x <= Math.ceil(cx + hw); x++) {
+      const dx = Math.abs(x - cx) / Math.max(1, hw);
+      if (dx > 1) continue;
+      const yb = Math.round(dx * dx * 5 + Math.pow(t, 6) * 6);
+      for (let y = yb; y <= gt; y++) {
+        const shell = dx > 1 - 1.5 / hw || y === yb || z === 0;
+        if (!shell) continue;
+        v.set(x, y, z, y >= gt - 1 ? 0xf2ece0 : y < 5 ? 0x9e2a24 : y === 5 ? 0xf2ece0 : hull);
+      }
+      if (dx <= 1 - 1.5 / hw && yb + 1 < gt) v.set(x, Math.min(gt - 3, 9), z, z % 4 ? 0x9a8a72 : 0x86765e); // deck
+    }
+  }
+  // wheelhouse forward of midships
+  rbox(v, 6, 9, 40, 21, 26, 56, 1, (x, y, z) => (y >= 18 && y <= 22 && z === 56 && x > 7 && x < 20 ? 0x27354e | GLASS : y >= 18 && y <= 22 && (x === 6 || x === 21) && z > 42 && z < 54 ? 0x27354e | GLASS : 0xf2ece0));
+  v.fill(5, 27, 39, 22, 28, 57, 0x2c3c64);
+  // mast, boom, flag, a stack of traps at the stern
+  v.fill(13, 29, 47, 14, 40, 48, 0xe8e4dc);
+  v.fill(15, 37, 47, 21, 40, 47, (x, y) => (x < 17 || x > 19 ? RED : 0xf2ece0));
+  for (let i = 0; i < 4; i++) v.fill(5 + (i % 2) * 9, 10 + Math.floor(i / 2) * 4, 6 + (i % 2) * 2, 11 + (i % 2) * 9, 13 + Math.floor(i / 2) * 4, 13 + (i % 2) * 2, (x, y, z) => ((x + y + z) % 2 ? 0x6a8a7a : 0xb08a5a));
+  v.ellipsoid(23, 12, 30, 1.5, 2.2, 1.5, (x, y) => ((y >> 1) % 2 ? 0xf2c23a : RED)); // fender buoy
+  bevel(v, { top: 0.04, bottom: 0 });
+  return finish(v, MID, { origin: [cx + 0.5, 6, L / 2], radius: 1.4, meta: { length: L * MID, beam: W * MID } });
+}
+
+// hockeyNet() — red pipe frame, white mesh
+export function hockeyNet() {
+  const v = new Vox(38, 26, 22);
+  for (const x of [1, 36]) v.fill(x, 0, 18, x, 24, 19, RED);
+  v.fill(1, 24, 18, 36, 24, 19, RED);
+  for (let z = 2; z <= 18; z++) for (let x = 1; x <= 36; x++) {
+    const h = 24 - Math.round((18 - z) * 0.9);
+    if (h < 1) continue;
+    if ((x + z) % 3 === 0 || x === 1 || x === 36) v.set(x, h, z, 0xf2f0ea);
+    if (x === 1 || x === 36) for (let y = 0; y < h; y += 3) v.set(x, y, z, 0xf2f0ea);
+  }
+  for (let x = 1; x <= 36; x += 3) for (let y = 0; y < 24; y += 3) v.set(x, y, 2 + Math.round((24 - y) * 0), 0xe8e6e0);
+  v.fill(1, 0, 2, 36, 0, 3, RED);
+  return finish(v, STD, { origin: [19, 0, 11], radius: 0.9 });
+}
+
 export const PREVIEW = {
   pumpkin_small: () => pumpkin({ kind: 'small', seed: 1 }),
   pumpkin_medium: () => pumpkin({ kind: 'medium', seed: 2 }),
@@ -2608,4 +3160,38 @@ export const PREVIEW = {
   item_mountie_hat: () => mountieHat(),
   item_trophy: () => trophyCup(),
   item_candy_corn: () => candyCorn(),
+  // the remade map
+  sidewalk: () => sidewalk({ len: 4 }),
+  town_lamp: () => townLamp({}),
+  planter: () => planter({ seed: 2 }),
+  post_box: () => postBox(),
+  hydrant: () => hydrant(),
+  litter_bin: () => litterBin(),
+  bike_rack: () => bikeRack(),
+  stop_sign: () => stopSign(),
+  moose_sign: () => mooseSign(),
+  flag_pole: () => flagPole({ h: 4 }),
+  sign_post: () => signPost(),
+  sign_arrow: () => signArrow({ text: 'MAPLE COVE' }),
+  welcome_sign: () => welcomeSign({}),
+  muskoka_red: () => muskokaChair({ color: 0xc8382e }),
+  muskoka_teal: () => muskokaChair({ color: 0x2f8a86 }),
+  tent: () => tent({}),
+  sap_bucket: () => sapBucket(),
+  sand_castle: () => sandCastle({ seed: 2 }),
+  beach_umbrella: () => beachUmbrella({}),
+  driftwood: () => driftwood({}),
+  inukshuk: () => inukshuk({}),
+  jump_ramp: () => jumpRamp({ len: 5, h: 1.3 }),
+  rail_fence: () => railFence({}),
+  picket_fence: () => picketFence({}),
+  corn_row: () => cornRow({}),
+  pumpkin_vines: () => pumpkinVines({}),
+  tractor: () => tractor({}),
+  farm_stand: () => farmStand({}),
+  bbq_grill: () => bbqGrill(),
+  cenotaph: () => cenotaph(),
+  rowboat: () => rowboat({}),
+  fishing_boat: () => fishingBoat({}),
+  hockey_net: () => hockeyNet(),
 };

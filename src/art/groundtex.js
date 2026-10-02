@@ -259,4 +259,18 @@ export function gravelTex() {
   return p;
 }
 
+// asphalt for Main Street: dark grey with a warm cast, soft worn patches, fine aggregate, a few patched cracks
+export function asphaltTex() {
+  const p = new Pix(S, S);
+  p.wrap = true;
+  const rng = new RNG(71);
+  bandFill(p, [0x3c3c40, 0x444448, 0x4c4b4e, 0x555354], 23, 0.9, 0.15);
+  scatterClusters(rng, 60, [4, 8], 6, (x, y) => { x = Math.round(x); y = Math.round(y); p.set(x, y, rng.pick([0x6a6864, 0x5e5c5a, 0x2e2e32])); });
+  // a tar-sealed crack and a patch
+  let x = rng.int(0, S), y = rng.int(0, S);
+  for (let k = 0; k < 40; k++) { p.set(x, y, 0x26262a); p.set(x + 1, y, 0x26262a); x += rng.pick([0, 1, 1]); y += rng.pick([-1, 0, 1]); }
+  p.rect(rng.int(10, 80), rng.int(10, 80), 22, 14, 0x3a3a3e);
+  return p;
+}
+
 export { mix };

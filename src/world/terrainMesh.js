@@ -3,9 +3,9 @@ import * as THREE from 'three';
 import { G, worldUniforms, LIGHT_PARS_VERT, SHADOW_VERT, LIGHT_PARS_FRAG, NOISE_GLSL, HEIGHT_GLSL } from '../render/shaderlib.js';
 import { SEA, SEA_GLSL, buildSeaTexture } from './water.js';
 import { pixTexture, dataTexture } from '../render/textures.js';
-import { grassTex, dirtTex, litterTex, rockTex, sandTex, gravelTex } from '../art/groundtex.js';
+import { grassTex, dirtTex, litterTex, rockTex, sandTex, gravelTex, asphaltTex } from '../art/groundtex.js';
 import { H_RES } from './terrain.js';
-import { WORLD_HALF, VILLAGE_FLAT } from './layout.js';
+import { WORLD_HALF, VILLAGE_FLAT, MAIN_ST, CROSSWALKS, SIDE_STREETS } from './layout.js';
 
 const VERT = /* glsl */ `
 ${LIGHT_PARS_VERT}
@@ -34,6 +34,9 @@ uniform sampler2D tLitter;
 uniform sampler2D tRock;
 uniform sampler2D tSand;
 uniform sampler2D tGravel;
+uniform sampler2D tAsphalt;
+uniform sampler2D uPaint;
+uniform vec4 uPaintRect;
 uniform sampler2D uSplatTex;
 uniform vec4 uVillage;
 varying vec3 vWorldPos;
@@ -97,6 +100,15 @@ void main() {
     col = village ? tex(tGravel, uv) : tex(tDirt, uv);
     col *= re < 0.09 ? 0.84 : (sp.r > 0.97 ? 1.04 : 1.0);
   } else if (re > -0.06) col *= 0.88; // grass trodden flat along the verge
+  // village road paint: asphalt on Main Street, a dashed centre line, zebra crossings, stop lines
+  vec2 puv = (wp - uPaintRect.xy) / (uPaintRect.zw - uPaintRect.xy);
+  if (puv.x > 0.0 && puv.y > 0.0 && puv.x < 1.0 && puv.y < 1.0) {
+    vec4 pt = texture2D(uPaint, puv);
+    if (pt.b > 0.5) col = tex(tAsphalt, uv);
+    float wear = vnoise(wp * 3.1) * 0.6 + hash12(floor(texel / 2.0)) * 0.4;
+    if (pt.r > 0.5 && wear < 0.82) col = vec3(0.86, 0.85, 0.8);
+    if (pt.g > 0.5 && wear < 0.85) col = vec3(0.88, 0.7, 0.22);
+  }
 
   // wet ground darkens + gets a sky sheen
   col *= mix(1.0, 0.62, uWet);
@@ -121,6 +133,29 @@ void main() {
 }
 `;
 
+// ---- road paint for the village (4 texels per metre): r white, g yellow, b asphalt
+const PAINT_RECT = [VILLAGE_FLAT.x0 - 6, VILLAGE_FLAT.z0 - 6, VILLAGE_FLAT.x1 + 6, VILLAGE_FLAT.z1 + 2];
+const PAINT = { value: null };
+function buildPaintTexture() {
+  const [x0, z0, x1, z1] = PAINT_RECT, K = 4;
+  const w = Math.round((x1 - x0) * K), h = Math.round((z1 - z0) * K);
+  const d = new Uint8Array(w * h * 4);
+  const put = (ax, az, bx, bz, ch) => {
+    for (let j = Math.max(0, Math.floor((az - z0) * K)); j < Math.min(h, Math.ceil((bz - z0) * K)); j++)
+      for (let i = Math.max(0, Math.floor((ax - x0) * K)); i < Math.min(w, Math.ceil((bx - x0) * K)); i++) d[(j * w + i) * 4 + ch] = 255;
+  };
+  const M = MAIN_ST, hw = M.road / 2;
+  put(M.x0 - 2, M.z - hw - 0.3, M.x1 + 2, M.z + hw + 0.3, 2); // asphalt
+  for (const s of SIDE_STREETS) put(s.x - s.w / 2, s.side < 0 ? M.z - hw - M.walk - 9 : M.z + hw, s.x + s.w / 2, s.side < 0 ? M.z - hw : M.z + hw + M.walk + 9, 2);
+  for (let x = M.x0 + 2; x < M.x1 - 2; x += 6) if (!CROSSWALKS.some((c) => Math.abs(c - x - 1.5) < 3.5)) put(x, M.z - 0.09, x + 3, M.z + 0.09, 1); // centre dashes
+  for (const c of CROSSWALKS) for (let z = M.z - hw + 0.35; z < M.z + hw - 0.3; z += 1.0) put(c - 1.6, z, c + 1.6, z + 0.5, 0);
+  for (const s of SIDE_STREETS) { const z = s.side < 0 ? M.z - hw - M.walk - 0.9 : M.z + hw + M.walk + 0.5; put(s.x - s.w / 2 + 0.3, z, s.x + s.w / 2 - 0.3, z + 0.4, 0); }
+  const tex = new THREE.DataTexture(d, w, h, THREE.RGBAFormat);
+  tex.magFilter = tex.minFilter = THREE.NearestFilter;
+  tex.needsUpdate = true;
+  return tex;
+}
+
 export function createTerrainMaterial() {
   const uniforms = worldUniforms({
     tGrass: { value: pixTexture(grassTex(0)) },
@@ -130,6 +165,9 @@ export function createTerrainMaterial() {
     tRock: { value: pixTexture(rockTex()) },
     tSand: { value: pixTexture(sandTex()) },
     tGravel: { value: pixTexture(gravelTex()) },
+    tAsphalt: { value: pixTexture(asphaltTex()) },
+    uPaint: PAINT,
+    uPaintRect: { value: new THREE.Vector4(...PAINT_RECT) },
     uVillage: { value: new THREE.Vector4(VILLAGE_FLAT.x0 - 10, VILLAGE_FLAT.x1 + 10, VILLAGE_FLAT.z0 - 12, VILLAGE_FLAT.z1 + 10) },
     ...SEA,
   });
@@ -149,7 +187,8 @@ export function createWorldTextures(terrain) {
   G.uHeightN.value = n;
   G.uHRes.value = H_RES;
   const seaTex = buildSeaTexture(terrain);
-  return { heightTex, splatTex, seaTex };
+  PAINT.value = buildPaintTexture();
+  return { heightTex, splatTex, seaTex, paintTex: PAINT.value };
 }
 
 export function createTerrainMeshes(terrain, material, chunkCells = 40) {

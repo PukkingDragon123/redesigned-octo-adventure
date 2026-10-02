@@ -2780,10 +2780,76 @@ function buildLifeguard(spec, ctx) {
   return ctx;
 }
 
+// ------------------------------------------------------------------ OUTDOOR HOCKEY RINK
+function buildRink(spec, ctx) {
+  const hw = ctx.hw;
+  const W = evenV(spec.w ?? 26), D = evenV(spec.d ?? 13);
+  const G = (ctx.G = 2);
+  const x0 = -W / 2, x1 = W / 2 - 1, z0 = -D / 2, z1 = D / 2 - 1;
+  const vb = (ctx.vb = new VB(x0 - 34, -10, z0 - 40, x1 + 34, 70, z1 + 12));
+  const CR = 22; // corner radius
+  const inside = (x, z, inset = 0) => {
+    const cx = Math.max(x0 + CR, Math.min(x1 - CR, x)), cz = Math.max(z0 + CR, Math.min(z1 - CR, z));
+    return Math.hypot(x - cx, z - cz) <= CR - inset;
+  };
+  const ICE = 0xe6eef2, ICE_D = 0xd2dce4, LRED = 0xc8383a, LBLUE = 0x3a5aa8;
+  // ice + its markings
+  for (let z = z0; z <= z1; z++) for (let x = x0; x <= x1; x++) {
+    if (!inside(x, z)) continue;
+    let c = (vhash(x >> 2, z >> 2, 7) < 0.25 ? ICE_D : ICE);
+    const ax = Math.abs(x + 0.5);
+    if (ax < 1.5) c = LRED;
+    if (Math.abs(ax - W / 6) < 1.5) c = LBLUE;
+    if (Math.abs(ax - (W / 2 - 14)) < 0.8) c = LRED;
+    for (const fx of [0, -(W / 2 - 34), W / 2 - 34]) { const d = Math.hypot(x + 0.5 - fx, z + 0.5); if (Math.abs(d - (fx ? 12 : 14)) < 0.8) c = LRED; if (d < 1.2) c = fx ? LRED : LBLUE; }
+    // goal creases
+    for (const sx of [-1, 1]) { const gx = sx * (W / 2 - 14); const d = Math.hypot(x + 0.5 - gx, z + 0.5); if (d < 7 && Math.sign(x + 0.5 - gx) === -sx) c = 0x9ab8e8; }
+    vb.set(x, -1, z, c);
+    vb.fill(x, -G - 2, z, x, -2, z, P.stoneB);
+  }
+  // boards: white, yellow kick plate, red cap; a gate on the front side
+  const gate = [Math.round(-W * 0.3) - 6, Math.round(-W * 0.3) + 6];
+  for (let z = z0 - 2; z <= z1 + 2; z++) for (let x = x0 - 2; x <= x1 + 2; x++) {
+    if (inside(x, z) || !inside(x, z, -2)) continue;
+    if (z > 0 && x >= gate[0] && x <= gate[1]) continue;
+    for (let y = -G - 2; y <= 8; y++) vb.set(x, y, z, y < 0 ? P.stoneB : y <= 1 ? 0xe8c040 : y === 8 ? LRED : y === 7 ? LBLUE : 0xf2f0ea);
+  }
+  // plexiglass panels at the ends
+  for (const sx of [-1, 1]) for (let z = z0 + 6; z <= z1 - 6; z++) for (let y = 9; y <= 16; y++) { const x = sx < 0 ? x0 - 1 : x1 + 1; vb.set(x, y, z, z % 12 === 0 || y === 16 ? 0xd8dce0 : 0xb8d8e8 | GLASS); }
+  // bleachers along the back
+  for (let r = 0; r < 4; r++) vb.fill(-44, r * 3, z0 - 6 - r * 4, 43, r * 3 + 2, z0 - 3 - r * 4, (x, y) => (y === r * 3 + 2 ? plankTone(x >> 2, 9, 0x4a7ab0) : P.woodDark));
+  vb.fill(-44, -G, z0 - 22, 43, 11, z0 - 22, (x, y) => (x % 8 === 0 || y === 11 ? P.iron : 0));
+  signFree(ctx, -24, 14, z0 - 21, 48, 8, 'PATINOIRE MAPLE COVE RINK', { bg: 0x2c3c64, fg: '#f2e8d4', edge: P.trim });
+  vb.fill(-26, 0, z0 - 22, -25, 22, z0 - 22, P.iron); vb.fill(24, 0, z0 - 22, 25, 22, z0 - 22, P.iron);
+  // light poles at the corners
+  for (const [x, z] of [[x0 - 6, z0 - 6], [x1 + 6, z0 - 6], [x0 - 6, z1 + 6], [x1 + 6, z1 + 6]]) {
+    vb.fill(x, -G, z, x + 1, 52, z + 1, P.iron);
+    vb.fill(x - 3, 52, z - 1, x + 4, 54, z + 2, P.iron);
+    vb.fill(x - 2, 51, z, x + 3, 51, z + 1, P.lampHot);
+    addLight(ctx, [x + 0.5, 48, z + 0.5], [1.0, 0.92, 0.78], 18, 'lamp');
+  }
+  if (hw) {
+    for (const [x, z] of [[x0 + 30, z1 + 3], [x1 - 30, z1 + 3], [x0 - 3, 0]]) jack(ctx, x, 9, z, { size: 1 });
+    jack(ctx, -30, 12, z0 - 16, { size: 2 });
+    jack(ctx, 22, 12, z0 - 16, { size: 2 });
+  }
+  ctx.door = { ...M3(gate[0] + 6, 0, z1 + 6), face: 'front' };
+  // walkable ice, and the boards collide (four straight runs; the gate stays open)
+  ctx.porch.push({ x0: r3(x0 / VPM), z0: r3(z0 / VPM), x1: r3((x1 + 1) / VPM), z1: r3((z1 + 1) / VPM), y: 0 });
+  const bt = 2 / VPM, by1 = 1.1;
+  ctx.solids.push({ collide: true, x0: r3((x0 + CR) / VPM), y0: 0, z0: r3((z0 - 2) / VPM), x1: r3((x1 - CR) / VPM), y1: by1, z1: r3(z0 / VPM) });
+  ctx.solids.push({ collide: true, x0: r3((x0 + CR) / VPM), y0: 0, z0: r3((z1 + 1) / VPM), x1: r3(gate[0] / VPM), y1: by1, z1: r3((z1 + 3) / VPM) });
+  ctx.solids.push({ collide: true, x0: r3((gate[1] + 1) / VPM), y0: 0, z0: r3((z1 + 1) / VPM), x1: r3((x1 - CR) / VPM), y1: by1, z1: r3((z1 + 3) / VPM) });
+  ctx.solids.push({ collide: true, x0: r3((x0 - 2) / VPM), y0: 0, z0: r3((z0 + CR) / VPM), x1: r3(x0 / VPM), y1: by1, z1: r3((z1 - CR) / VPM) });
+  ctx.solids.push({ collide: true, x0: r3((x1 + 1) / VPM), y0: 0, z0: r3((z0 + CR) / VPM), x1: r3((x1 + 3) / VPM), y1: by1, z1: r3((z1 - CR) / VPM) });
+  void bt;
+  return ctx;
+}
+
 // ------------------------------------------------------------------ API
 const KINDS = {
   house: buildHouse, cabin: buildCabin, shed: buildGarage, garage: buildGarage, outhouse: buildOuthouse, chapel: buildChapel, lighthouse: buildLighthouse, sawmill: buildSawmill,
-  shop: buildShop, firehall: buildFirehall, barn: buildBarn, sugarshack: buildSugarShack, gazebo: buildGazebo, lifeguard: buildLifeguard,
+  shop: buildShop, firehall: buildFirehall, barn: buildBarn, sugarshack: buildSugarShack, gazebo: buildGazebo, lifeguard: buildLifeguard, rink: buildRink,
 };
 
 export function buildVoxelBuilding(spec = {}) {

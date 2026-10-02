@@ -306,6 +306,8 @@ function ramps(ctx, B) {
     const y0 = ctx.terrain.heightAt(r.x - Math.sin(r.yaw) * r.len / 2, r.z - Math.cos(r.yaw) * r.len / 2) - 0.05;
     const M = buildingMatrix(r.x, 0, r.z, r.yaw);
     const w = 2.8;
+    if (DECOR.on) decor('ramp', r.x, y0, r.z, { yaw: r.yaw, len: r.len, h: r.h, w });
+    else {
     const g = new THREE.BoxGeometry(w, 0.12, r.len);
     const p = g.attributes.position;
     for (let i = 0; i < p.count; i++) {
@@ -327,6 +329,7 @@ function ramps(ctx, B) {
     }
     // painted arrows on the ramp
     for (let k = 0; k < 2; k++) B.box([0, y0 + r.h * (0.3 + k * 0.35) + 0.08, -r.len / 2 + r.len * (0.3 + k * 0.35)], [0.6, 0.02, 0.35], { color: 0xf2c443 }, [-Math.atan2(r.h, r.len), 0, 0], M);
+    }
     // physics: two platforms approximating the curve
     const hmid = r.h * 0.25 * 0.4 + r.h * 0.5 * 0.6;
     const half = r.len / 2;
@@ -490,19 +493,9 @@ function village(ctx, B) {
   const { terrain } = ctx;
   const rng = new RNG(99);
   const MS = L.MAIN_ST;
-  // street lamps along both curbs of Main Street, evenly spaced and staggered
-  const curb = MS.road / 2 + 0.55;
-  for (let x = MS.x0 + 6, k = 0; x <= MS.x1 - 4; x += 12, k++) {
-    const z = MS.z + (k % 2 ? curb : -curb);
-    lampPost(ctx, B, x, terrain.heightAt(x, z), z);
-  }
-  // the green: flag pole, fall fair hay bales & pumpkins, banner
+  // the green: fall fair hay bales & pumpkins, banner (lamps, benches, the flag: places.js)
   const p = L.POI.plaza;
   const py = terrain.heightAt(p.x, p.z);
-  const fx = p.x + 7, fz = p.z - 6, fy = terrain.heightAt(fx, fz);
-  B.tube([fx, fy, fz], [fx, fy + 7, fz], 0.07, 0.05, { color: 0xe8e8ec }, 6);
-  ctx.flags.push({ pos: new THREE.Vector3(fx, fy + 6.4, fz), w: 1.8, h: 0.9 });
-  ctx.physics.addCircle({ x: fx, z: fz, r: 0.15, kind: 'post' });
   const free = (x, z) => Math.hypot(x - p.x, z - p.z) > 6 && z < MS.z - MS.road / 2 - MS.walk - 1 && Math.abs(x - p.x) > 1.8;
   for (let i = 0; i < 8; i++) {
     const a = rng.range(0, Math.PI * 2), d = rng.range(7, 12);
@@ -523,11 +516,6 @@ function village(ctx, B) {
   const t = TILESIZE('sign:FALL FAIR!');
   B.box([p.x, py + 3.6, p.z + 12], [(t.w / 25.6) * 2, (t.h / 25.6) * 2, 0.05], { tile: 'sign:FALL FAIR!', keepUV: true });
   B.box([p.x, py + 3.6, p.z + 11.97], [(t.w / 25.6) * 2, (t.h / 25.6) * 2, 0.05], { tile: 'sign:FALL FAIR!', keepUV: true }, [0, Math.PI, 0]);
-  // welcome sign at the west entrance & moose crossing on the main road
-  const wx = 104, wz = 43.6, wy = terrain.heightAt(wx, wz);
-  signAt(B, buildingMatrix(wx, wy, wz, -Math.PI / 2), 'MAPLE COVE', 0, 1.9, 0, 1.6);
-  const mx = 40, mz = 44.4, my = terrain.heightAt(mx, mz);
-  signAt(B, buildingMatrix(mx, my, mz, -Math.PI / 2 - 0.1), 'MOOSE XING', 0, 1.7, 0, 1.2);
   // picnic tables on the waterfront lawns
   for (const [x, z, yaw] of [[172, 78, 0.2], [158, 79, -0.3], [236, 79, 0.1]]) {
     const y = terrain.heightAt(x, z);
@@ -538,12 +526,6 @@ function village(ctx, B) {
     for (const sx of [-0.7, 0.7]) B.box([sx, 0.38, 0], [0.08, 0.75, 1.5], { color: WOOD }, null, M);
     ctx.physics.addBox({ x, z, yaw, w: 1.9, l: 1.6, y0: y - 1, y1: y + 0.8, kind: 'table' });
     B.box([0.3, 0.83, 0.1], [0.1, 0.12, 0.1], { color: 0xf4ecdc }, null, M);
-  }
-  // canoes pulled up on the shore by the river mouth
-  for (const [x, z, yaw] of [[120, 90, 0.5], [122, 92, 0.6]]) {
-    const y = terrain.heightAt(x, z);
-    const M = buildingMatrix(x, y - 0.05, z, yaw);
-    B.geom(new THREE.SphereGeometry(0.5, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), [0, 0.05, 0], null, [0.65, 0.55, 4.4], { color: x < 121 ? 0xc8361f : 0x2f6e6a }, M);
   }
 }
 
