@@ -15,12 +15,13 @@ import { Kit, clamp, impulse } from './synth.js';
 import { SFX } from './sfx.js';
 import { SFX2 } from './sfx2.js';
 import { SFX3 } from './sfx3.js';
+import { SFX4 } from './sfx4.js';
 import { blipVoice, VOICE_NAMES } from './voices.js';
 import { Music, MOOD_NAMES } from './music.js';
 import { Ambience, AMB_NAMES } from './ambience.js';
 import { Bike, Motor } from './vehicle.js';
 
-const LIB = Object.assign(Object.create(null), SFX, SFX2, SFX3);
+const LIB = Object.assign(Object.create(null), SFX, SFX2, SFX3, SFX4);
 export const SFX_NAMES = Object.keys(LIB);
 export { VOICE_NAMES, MOOD_NAMES, AMB_NAMES };
 

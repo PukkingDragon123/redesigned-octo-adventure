@@ -26,6 +26,22 @@ export const CHARACTERS = {
     head: { w: 12, h: 11, d: 11 }, torso: { w: 10, h: 11, d: 6 }, arm: { len: 12, t: 2 }, leg: { len: 12, t: 2 },
     eyes: 'skull', voice: 'hank',
   },
+  // Hank before his very long nap: a big bearded lumberjack in red plaid
+  hankAlive: {
+    name: 'Hank', skin: SKIN.rosy, head: { w: 12, h: 11, d: 11 }, torso: { w: 15, h: 13, d: 9, belly: 1 },
+    arm: { len: 13, t: 4 }, leg: { len: 13, t: 4 },
+    hair: { style: 'short', color: 0x6a3a1e }, beard: { style: 'full', color: 0x7a4422 }, brows: 'bushy',
+    hat: { type: 'toque', color: 0x2f5e3a, band: 0xe8b23a, pom: 0xe8b23a },
+    top: { type: 'plaid', color: 0xc8261e, accent: 0x1e1418, suspenders: 0x3a2a1e }, legs: { color: 0x34507e }, shoes: 0x5a3420, boots: true,
+    eyes: 'bean', voice: 'hank',
+  },
+  pastor: {
+    name: 'Father Gilles', skin: SKIN.fair, head: { w: 11, h: 11, d: 10 }, torso: { w: 11, h: 13, d: 7 },
+    arm: { len: 12, t: 3 }, leg: { len: 15, t: 3 },
+    hair: { style: 'short', color: 0xc8c0b8 }, glasses: 'round', brows: 'bushy',
+    top: { type: 'coat', color: 0x24222c, accent: 0xf6f0e6 }, legs: { color: 0x1e1c24 }, shoes: 0x1e1418,
+    eyes: 'bean', voice: 'ollie',
+  },
   grandma: {
     name: 'Nana Marguerite', skin: SKIN.rosy, head: { w: 12, h: 11, d: 11, chub: 0.8 }, torso: { w: 12, h: 9, d: 9, belly: 1 },
     arm: { len: 8, t: 3 }, leg: { len: 4, t: 3 },

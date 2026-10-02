@@ -2,6 +2,7 @@
 // deliveries, keepsakes and the ending. Plus world triggers.
 import * as THREE from 'three';
 import { Scene } from './cutscene.js';
+import { runPrologue, PROLOGUE } from './prologue.js';
 import { Billboard } from '../render/sprites.js';
 import { Builder } from '../render/builder.js';
 import { propMesh } from '../render/propMaterial.js';
@@ -109,155 +110,16 @@ export class Story {
     }
   }
 
-  // ---------------------------------------------------------------- 1. the intro
+  // ---------------------------------------------------------------- 1. the prologue (src/game/prologue.js)
   intro() {
-    const g = this.g;
-    return this.scene(async (S) => {
-      const A = g.world.atmosphere;
-      g.setBikeVisible(false);
-      g.pipeline.post.uFade.value = 1;
-      // storybook opening: drifting over the forest at golden hour
-      A.hour = 17.9;
-      A.setWeather('breezy', true);
-      A.cold = 0;
-      S.music('title');
-      await S.cam(V(-10, 34, 46), V(-110, 16, 30), 0, 50);
-      S.cam(V(-55, 26, 38), V(-150, 14, 30), 24, 50);
-      S.fade(0, 2.5);
-      await S.wait(1.2);
-      await S.narrate('Autumn. Somewhere in the wilds of Canada...');
-      await S.narrate('Hank was a lumberjack. A good one, mostly. He had just one tiny flaw.');
-      await S.narrate('Hank could sleep. Anywhere. Any time. For a ~very, very~ long time.');
-      await S.narrate('One afternoon he lay down in the leaves for a quick nap... and nobody could wake him up.');
-      await S.fade(1, 1.2);
-      // ...that night, at the old cemetery
-      A.hour = 23.6;
-      A.setWeather('misty', true);
-      A.cold = 0.6;
-      S.music('spooky');
-      const gr = POI.grave;
-      const gy = g.physics.groundAt(gr.x, gr.z).h;
-      await S.cam(V(gr.x + 4, gy + 1.4, gr.z + 6), V(gr.x, gy + 0.3, gr.z), 0, 45);
-      await S.narrate('The village held a lovely funeral. Everyone cried. Hank snored.');
-      await S.fade(0, 2.2);
-      // snoring from under the dirt
-      const zz = S.emote('zzz', V(gr.x, gy + 0.9, gr.z), 6);
-      S.sfx('snore');
-      await S.wait(1.6);
-      S.sfx('snore');
-      await S.cam(V(gr.x + 6.5, gy + 2.4, gr.z + 3.5), V(gr.x, gy + 1.2, gr.z), 2.5, 50);
-      // the Grim Reaper arrives, clipboard in hand
-      const R = S.actor('reaper', gr.x + 2.6, gr.z + 1.6, -2.2, 'clipboard');
-      R.groundSnap = true;
-      R.floatY = 0.25;
-      R.bb.fade = 1;
-      // an eerie violet glow travels with him, so the black robe reads against the night
-      const glow = g.lightPool.addDynamic({ pos: R.pos.clone().add(V(0.6, 1.6, 0.8)), color: [0.55, 0.45, 1.0], radius: 7, intensity: 1.3 });
-      S.temp.push({ remove: () => g.lightPool.removeDynamic(glow) });
-      R.faceTowards(gr.x + 6.5, gr.z + 4.8);
-      S.sfx('reaper');
-      g.effects.magic(R.pos.x, R.pos.y + 1, R.pos.z, 18, [0.5, 0.4, 0.8]);
-      for (let k = 0; k <= 10; k++) {
-        R.bb.fade = 1 - k / 10;
-        await S.wait(0.06);
-      }
-      R.bb.fade = 0;
-      await S.frame(R, [2.5, 0.6, 3.2], 1.2, 40, 1.1);
-      await S.say('reaper', 'Right then. Next on the list...', { actor: R });
-      await S.say('reaper', 'Hank. Lumberjack. Aged forty-seven. Cause of departure... a *nap?*', { actor: R, expr: 'surprised' });
-      R.play('facepalm');
-      await S.say('reaper', 'Oh no. Oh no no no no.', { actor: R, expr: 'shock' });
-      await S.say('reaper', "You're not due for another *sixty years!* Somebody in Accounting is getting a very stern memo.", { actor: R, expr: 'sheepish' });
-      R.play('float');
-      await S.say('reaper', "Ahem. Well. This is awkward. I can't exactly un-bury you...", { actor: R, expr: 'sheepish' });
-      await S.say('reaper', '...but I can do the next best thing!', { actor: R, expr: 'happy' });
-      R.play('point');
-      S.sfx('magic');
-      for (let k = 0; k < 4; k++) {
-        g.effects.magic(gr.x, gy + 0.3 + k * 0.2, gr.z, 16);
-        await S.wait(0.25);
-      }
-      g.pipeline.post.uFlash.value = 0.9;
-      g.tween(g.pipeline.post.uFlash, 'value', 0, 0.8);
-      g.chase.shake(1);
-      // a hand bursts out of the dirt... then the rest of Hank
-      S.sfx('dirt');
-      g.effects.dirtBurst(gr.x, gy + 0.2, gr.z, 30);
-      const H = S.actor('hankBuried', gr.x, gr.z, 0.6, 'crawl');
-      H.lockView = 'front';
-      H.yOffset = -0.9;
-      await S.frame(H, [1.8, 0.9, 2.6], 0.8, 42, 0.4);
-      for (let k = 0; k < 12; k++) {
-        H.yOffset = -0.9 + (k / 12) * 0.9;
-        if (k % 3 === 0) { S.sfx('dirt'); g.effects.dirtBurst(gr.x, gy + 0.1, gr.z, 6); }
-        await S.wait(0.12);
-      }
-      H.yOffset = 0;
-      H.lockView = null;
-      H.play('shiver', 'scared');
-      H.bounce(0.6);
-      g.effects.frost(H.pos.x, H.pos.y, H.pos.z, 14);
-      S.sfx('brrr');
-      await S.frame(H, [1.6, 1.1, 2.8], 0.6, 40, 1.1);
-      await S.say('hankBuried', 'B-b-brrr... wh-why is it so c-c-cold?', { actor: H, expr: 'scared' });
-      await S.say('hankBuried', 'And why... am I... *all bones?!*', { actor: H, expr: 'shock' });
-      R.play('clipboard');
-      await S.frame(R, [2.2, 0.8, 3.0], 0.8, 42, 1.1);
-      await S.say('reaper', 'Side effects may include: chills, rattling, a slight lack of skin, and being *technically dead.*', { actor: R, expr: 'sheepish' });
-      R.play('float');
-      await S.say('reaper', "But hey — you're up! Have a wonderful afterlife! Toodles!", { actor: R, expr: 'happy' });
-      S.sfx('whoosh');
-      for (let k = 0; k < 14; k++) g.effects.ps.spawn({ x: R.pos.x + (Math.random() - 0.5), y: R.pos.y + Math.random() * 2, z: R.pos.z + (Math.random() - 0.5), vy: 0.6, life: 1.6, size: 0.6, size1: 1.6, sprite: P.smoke, color: [0.3, 0.26, 0.36], drag: 1, alpha: 0.85 });
-      for (let k = 0; k <= 8; k++) {
-        R.bb.fade = k / 8;
-        await S.wait(0.05);
-      }
-      R.visible = false;
-      g.lightPool.removeDynamic(glow);
-      await S.frame(H, [1.5, 1.0, 2.4], 0.8, 40, 1.1);
-      H.faceTowards(R.pos.x, R.pos.z);
-      await S.say('hankBuried', '...Toodles?', { actor: H, expr: 'sad' });
-      // out through the cemetery gate and down the dark trail
-      await S.fade(1, 0.8);
-      S.music('night');
-      const T = (x, z, up = 0) => V(x, g.physics.groundAt(x, z).h + up, z);
-      H.pos.copy(T(-210.4, -25.2));
-      H.walkTo([[-208.4, -19.5], [-206.6, -13.6]], 0.85, 'walk+shiver');
-      await S.cam(T(-203.2, -8.6, 2.3), T(-208.0, -18.5, 0.7), 0, 46);
-      S.fade(0, 1.2);
-      await S.narrate('Cold. So very cold. Hank stumbled through the dark woods for what felt like hours...');
-      // a warm lantern bobbing up the trail
-      const N = S.actor('grandma', -199.8, 6.5, Math.PI + 0.36, 'walk+lantern');
-      const lamp = g.lightPool.addDynamic({ pos: N.pos.clone(), color: [1.0, 0.7, 0.35], radius: 9, intensity: 1.4 });
-      N.onTick = () => {
-        lamp.pos.set(N.pos.x + 0.3, N.pos.y + 1.0, N.pos.z);
-        // the lantern itself glows
-        g.effects.ps.spawn({ x: N.pos.x + 0.3, y: N.pos.y + 0.75, z: N.pos.z, life: 0.12, size: 0.55, sprite: P.glow, color: [1, 0.72, 0.35], emissive: 1, alpha: 0.5 });
-      };
-      this.followers = [N];
-      const walk = N.walkTo([[-202.6, -2.0], [-205.3, -9.4]], 1.15, 'walk+lantern');
-      await S.cam(T(-208.2, -17.6, 2.0), T(-203.6, -4.0, 1.0), 2.0, 44);
-      await S.say('grandma', 'Hello? Is someone out there? I heard the most dreadful racket from the cemetery!', { actor: N, expr: 'surprised' });
-      await walk;
-      if (H.path) { H.path = null; H.pos.copy(T(-206.6, -13.6)); }
-      N.play('lantern');
-      N.faceTowards(H.pos.x, H.pos.z);
-      H.faceTowards(N.pos.x, N.pos.z);
-      // two-shot along the trail, over Hank's shoulder
-      const mid = H.pos.clone().lerp(N.pos, 0.5);
-      await S.cam(V(mid.x - 0.34 * 6.4 + 0.94 * 1.4, mid.y + 3.1, mid.z - 0.94 * 6.4 - 0.34 * 1.4), V(mid.x, mid.y + 0.45, mid.z), 1.2, 42);
-      N.jump(2.5);
-      await S.say('grandma', 'Goodness gracious!', { actor: N, expr: 'shock' });
-      await S.say('grandma', "You're frozen to the bone, dear! Well. You ARE the bone, dear.", { actor: N, expr: 'sad' });
-      await S.say('hankBuried', 'I think I might be... dead? A little?', { actor: H, expr: 'sheepish' });
-      await S.say('grandma', "Dead or not, nobody freezes on my watch. I was married to a hunter for fifty years — I've seen worse things come out of these woods.", { actor: N, expr: 'smug' });
-      await S.say('grandma', 'Come along now. There\'s a fire going, and I make a *famous* hot cocoa.', { actor: N, expr: 'happy' });
-      await S.fade(1, 1.4);
-      g.lightPool.removeDynamic(lamp);
-      this.followers = [];
-      this.flag('intro', true);
-    });
+    return runPrologue(this);
   }
+  // test entry points: ?scene=lumberCamp | funeral | yearsPass | revival | nanaFindsHank
+  lumberCamp() { return PROLOGUE.lumberCamp(this); }
+  funeral() { return PROLOGUE.funeral(this); }
+  yearsPass() { return PROLOGUE.yearsPass(this); }
+  revival() { return PROLOGUE.revival(this); }
+  nanaFindsHank() { return PROLOGUE.nanaFindsHank(this); }
 
   // ---------------------------------------------------------------- 2. by the fire
   cabinNight() {
@@ -272,51 +134,84 @@ export class Story {
       S.music('cabin');
       const fire = g.world.ctx.fires[0];
       const fx = fire.x, fz = fire.z;
-      // both on the cabin side of the fire, so the glowing windows sit behind them
-      const H = S.actor('hankBuried', fx + Math.cos(4.0) * 2.0, fz + Math.sin(4.0) * 2.0, 0.6, 'shiver');
+      const fy = g.physics.groundAt(fx, fz).h;
+      // Hank on the stump by the fire, Nana opposite with her knitting
+      const seat = { x: fx + Math.cos(4.2) * 2.0, z: fz + Math.sin(4.2) * 2.0 };
+      const H = S.actor('hankBuried', seat.x, seat.z, 0.6, 'shiver');
       H.faceTowards(fx, fz);
-      const N = S.actor('grandma', fx + Math.cos(5.3) * 2.1, fz + Math.sin(5.3) * 2.1, -0.6, 'idle');
+      const N = S.actor('grandma', fx + Math.cos(5.4) * 2.2, fz + Math.sin(5.4) * 2.2, -0.6, 'idle');
       N.faceTowards(fx, fz);
       H.yaw = H.targetYaw;
       N.yaw = N.targetYaw;
-      const fy = g.physics.groundAt(fx, fz).h;
-      await S.cam(V(fx + 0.6, fy + 1.7, fz + 5.0), V(fx - 0.1, fy + 0.9, fz - 1.4), 0, 45);
-      await S.fade(0, 1.6);
+      // establishing: the cabin glowing in the dark woods, smoke curling from the chimney
+      const cab = POI.cabin;
+      await S.cam(V(fx + 9, fy + 6.5, fz + 11), V(cab.x, fy + 2.4, cab.z), 0, 50);
+      S.cam(V(fx + 4.2, fy + 2.4, fz + 6.2), V(fx - 0.4, fy + 1.0, fz - 0.8), 5.5, 46);
+      await S.fade(0, 1.8);
+      S.sfx('owl', { volume: 0.5 });
+      await S.wait(2.4);
+      await S.cam(V(fx + 0.6, fy + 1.7, fz + 5.0), V(fx - 0.1, fy + 0.9, fz - 1.4), 1.6, 45);
       await S.say('grandma', 'There we are. Sit close, dear. Get that fire into you.', { actor: N, expr: 'happy' });
-      await S.say('grandma', 'Here — these were my Harold\'s. His good sweater, and his lucky toque.', { actor: N, expr: 'neutral' });
+      H.play('sit', 'scared');
+      H.yOffset = 0.14;
+      g.effects.frost(H.pos.x, H.pos.y + 0.3, H.pos.z, 8);
+      S.sfx('brrr', { volume: 0.6 });
+      await S.frame(H, [1.0, 0.4, 2.4], 0.8, 40, 0.8);
+      await S.say('hankBuried', "Th-thank you, ma'am. My t-teeth won't stop chattering.", { actor: H, expr: 'scared' });
+      S.sfx('jaw_chatter', { volume: 0.6 });
+      await S.say('grandma', "Marguerite, dear. Everyone calls me Nana. Here, these were my Harold's. His good sweater, and his lucky toque.", { actor: N, expr: 'neutral' });
       N.play('offer');
       await S.wait(0.6);
       // outfit change, ta-da!
+      H.yOffset = 0;
+      H.play('idle', 'surprised');
       S.sfx('magic');
       g.effects.magic(H.pos.x, H.pos.y + 1, H.pos.z, 20, [1, 0.85, 0.5]);
       g.effects.confetti(H.pos.x, H.pos.y + 1.4, H.pos.z, 24);
+      g.effects.poof?.(H.pos.x, H.pos.y + 0.8, H.pos.z, { scale: 1.2, color: [1, 0.92, 0.8], count: 6 });
       H.char = 'hank';
       H.bounce(0.5);
-      H.play('idle', 'happy');
+      H.react('spin');
       g.setOutfit('hank');
       N.play('idle');
       await S.frame(H, [0.9, 0.7, 2.6], 0.6, 38, 1.0);
-      await S.say('hank', 'Oh... oh, that\'s *cozy.*', { actor: H, expr: 'happy' });
-      await S.say('grandma', "Harold was a hunter. A terrible one. Fifty years and he never hit a single thing. Too soft-hearted.", { actor: N, expr: 'laugh' });
+      await S.say('hank', "Oh... oh, that's *cozy.*", { actor: H, expr: 'happy' });
+      await S.say('grandma', 'Harold was a hunter. A terrible one. Fifty years and he never hit a single thing. Too soft-hearted.', { actor: N, expr: 'laugh' });
       N.play('offer');
+      await S.cam(V(fx + 1.8, fy + 1.4, fz + 2.6), V((H.pos.x + N.pos.x) / 2, fy + 1.0, (H.pos.z + N.pos.z) / 2), 1.0, 40);
       await S.say('grandma', 'And this... is my famous hot cocoa. Fifty years, and not one complaint.', { actor: N, expr: 'smug' });
+      // the first sip... straight through the ribs
       H.play('sip');
-      S.sfx('sip');
-      await S.wait(1.4);
-      await S.say('hank', '...I can\'t taste a thing.', { actor: H, expr: 'sad' });
-      await S.say('hank', 'But it\'s *warm.* I can feel it all the way down.', { actor: H, expr: 'happy' });
+      S.sfx('slurp');
+      await S.frame(H, [0.8, 0.4, 1.8], 0.8, 34, 0.9);
+      await S.wait(0.5);
+      S.sfx('pour_cocoa', { volume: 0.6 });
+      for (let k = 0; k < 18; k++) g.effects.ps.spawn({ x: H.pos.x + (Math.random() - 0.5) * 0.12, y: H.pos.y + 0.75, z: H.pos.z + (Math.random() - 0.5) * 0.12, vy: -0.4, life: 0.9, size: 0.06, sprite: P.drop, color: [0.45, 0.24, 0.12], gravity: 9, drag: 0.2, ground: true, rest: 0.6 });
+      await S.wait(1.0);
+      N.react('gasp');
+      await S.say('grandma', '...Oh. Oh dear.', { actor: N, expr: 'surprised' });
+      await S.say('hank', "...I can't taste a thing. But it's *warm.* I can feel it all the way down.", { actor: H, expr: 'happy' });
+      await S.say('hank', '...And all the way out, apparently.', { actor: H, expr: 'sheepish' });
+      N.react('laugh');
       H.play('idle', 'happy');
       N.play('idle');
-      await S.say('grandma', 'Now then. Tell me — can you feel the cold, dear?', { actor: N, expr: 'neutral' });
+      await S.cam(V(fx + 0.6, fy + 1.7, fz + 5.0), V(fx - 0.1, fy + 0.9, fz - 1.4), 1.0, 45);
+      await S.say('grandma', 'Now then. Tell me: can you feel the cold, dear?', { actor: N, expr: 'neutral' });
       await S.say('hank', 'Not anymore. Not... really anything, actually.', { actor: H, expr: 'neutral' });
+      await S.frame(N, [-1.0, 0.5, 2.2], 0.8, 40, 1.0);
       await S.say('grandma', 'Perfect. Then I have a proposition for you.', { actor: N, expr: 'smug' });
       await S.say('grandma', "My cocoa keeps half of Maple Cove going through the autumn, and my knees aren't what they used to be.", { actor: N, expr: 'neutral' });
       const c = await S.say('grandma', "How would you like a job? Delivering cocoa. Harold's old bicycle is just sitting in the garage.", { actor: N, expr: 'happy', choices: ["I'd love to!", 'Do I get paid?', 'Will people scream at me?'] });
       if (c === 1) await S.say('grandma', 'Of course you do! And tips, if it arrives hot.', { actor: N, expr: 'laugh' });
-      else if (c === 2) await S.say('grandma', '...Probably. At first. They\'ll come around. Everybody loves cocoa.', { actor: N, expr: 'sheepish' });
+      else if (c === 2) await S.say('grandma', "...Probably. At first. They'll come around. Everybody loves cocoa.", { actor: N, expr: 'sheepish' });
       else await S.say('grandma', 'Wonderful!', { actor: N, expr: 'laugh' });
       await S.say('grandma', 'We start at sunrise. Sleep well, dear. ...Do you sleep?', { actor: N, expr: 'surprised' });
-      await S.say('hank', 'Oh, I *sleep.* That\'s how I got into this mess.', { actor: H, expr: 'sheepish' });
+      H.react('headpop');
+      await S.say('hank', "Oh, I *sleep.* That's how I got into this mess.", { actor: H, expr: 'sheepish' });
+      // pull back to the stars, the fire popping
+      S.cam(V(fx + 7, fy + 5, fz + 9), V(fx, fy + 1.2, fz), 4, 48);
+      for (let k = 0; k < 12; k++) g.effects.ps.spawn({ x: fx, y: fy + 0.5, z: fz, vx: (Math.random() - 0.5) * 0.6, vy: 1.5 + Math.random() * 1.5, vz: (Math.random() - 0.5) * 0.6, life: 1.6, size: 0.06, sprite: P.ember, color: [1, 0.7, 0.3], emissive: 1, drag: 0.6, blink: 8 });
+      await S.wait(2.2);
       await S.fade(1, 1.4);
       g.villagers.setVisible('grandma', true);
       this.flag('cabin', true);

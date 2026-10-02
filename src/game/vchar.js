@@ -432,6 +432,14 @@ const ALIAS = {
   land: 'idle', jump: 'air', bones: 'lie', glider: 'handsup', upgrade: 'cheer', squish: 'idle', splash: 'scared', wobble: 'idle',
   coast: 'ride', pedal: 'ride', stand: 'ride',
 };
+// other modules (e.g. the prologue) can register extra poses, held props and personalities
+export function extendVChar({ poses = {}, held = {}, persona = {}, loco = [] } = {}) {
+  Object.assign(POSES, poses);
+  Object.assign(HELD, held);
+  Object.assign(PERSONA, persona);
+  for (const k of loco) LOCO_OK.add(k);
+}
+export const POSE_KIT = { arm: (...a) => arm(...a), leg: (...a) => leg(...a), idleArms: (...a) => idleArms(...a), wob: (...a) => wob(...a), POSES };
 const LOCO_OK = new Set(['idle', 'walk', 'talk', 'hold', 'carry', 'lantern', 'gun', 'shiver', 'sip', 'wave', 'clipboard', 'photo', 'water', 'scared', 'angry', 'sad', 'think', 'knit', 'point', 'float', 'facepalm']);
 const LOCO_ARMS = new Set(['idle', 'walk', 'talk', 'angry', 'sad']);
 

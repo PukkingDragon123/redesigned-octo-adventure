@@ -2,6 +2,8 @@
 import * as THREE from 'three';
 import { VoxelCharacter } from './vchar.js';
 import { Billboard } from '../render/sprites.js';
+import { meshVox } from '../voxel/mesh.js';
+import { voxMesh, sharedVoxelMaterial } from '../render/voxelMaterial.js';
 
 const v3 = (a) => (a.isVector3 ? a.clone() : new THREE.Vector3(a[0], a[1], a[2]));
 
@@ -11,10 +13,42 @@ export class Scene {
     this.temp = [];
     this.actors = [];
     this.emotes = [];
+    this.tickers = [];
     this.skip = false;
+  }
+  // run fn(dt) every frame until it returns true or the scene ends
+  every(fn) {
+    this.tickers.push(fn);
+    return () => (this.tickers = this.tickers.filter((f) => f !== fn));
+  }
+  // animate k: 0 -> 1 over dur seconds with fn(k); instant when skipping
+  anim(dur, fn, ease = (k) => k) {
+    if (this.skip || dur <= 0) { fn(1); return Promise.resolve(); }
+    return new Promise((res) => {
+      let t = 0;
+      this.every((dt) => {
+        t += dt;
+        const k = Math.min(1, t / dur);
+        fn(ease(k));
+        if (k >= 1) { res(); return true; }
+        return false;
+      });
+    });
+  }
+  // a voxel model placed in the world for this scene only
+  prop(res, x, z, { yaw = 0, scale = 1, y = null, parent = null } = {}) {
+    const geo = meshVox(res.vox, { size: res.size, origin: res.origin, greedy: true });
+    const m = voxMesh(geo, sharedVoxelMaterial());
+    m.position.set(x, y ?? this.g.physics.groundAt(x, z).h, z);
+    m.rotation.y = yaw;
+    m.scale.setScalar(scale);
+    (parent || this.g.scene).add(m);
+    this.temp.push({ remove: () => { m.parent?.remove(m); geo.dispose(); } });
+    return m;
   }
   update(dt) {
     const cam = this.g.camera.position;
+    if (this.tickers.length) this.tickers = this.tickers.filter((f) => !f(dt));
     for (const a of this.actors) a.update(dt, cam);
     // a soft moonlight fill from the lens at night, so faces stay readable
     const night = this.g.world.atmosphere.sunDir.y < -0.05;
@@ -102,5 +136,6 @@ export class Scene {
     this.temp = [];
     this.actors = [];
     this.emotes = [];
+    this.tickers = [];
   }
 }
