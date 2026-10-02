@@ -242,7 +242,7 @@ export class Forest {
         const t = { species, x: px, y: h - (species === 'stump' ? 0.05 : 0), z: pz, H: 1, trunk: null, bush: true, vyaw: yaw };
         if (species === 'stump') {
           // the axe stump (variant 1) only a couple of times in the whole forest
-          t.vseed = rng.chance(0.06) && axes < 3 ? (axes++, 1) : rng.chance(0.5) ? 0 : 2;
+          t.vseed = rng.chance(0.06) && axes < 3 ? (axes++, 1) : rng.pick([0, 2, 3, 4]);
           this.colliders.insert({ type: 'circle', x: px, z: pz, r: 0.42 }, px, pz, 0.5);
         }
         this.trees.push(t);

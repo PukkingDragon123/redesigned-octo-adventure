@@ -89,7 +89,7 @@ const LEAF_P = {
   aspen: [0x9a7414, 0xc49a1e, 0xe2bc2c, 0xf4d644, 0xfff07c],
   aspenGold: [0xa8601a, 0xd08222, 0xeca630, 0xf8c848, 0xffe480],
   spruce: [0x14261c, 0x1e3a26, 0x2c522e, 0x406c3a, 0x5e8c4a],
-  spruceBlue: [0x14282a, 0x1e3c36, 0x2c5442, 0x406e52, 0x5e8c68],
+  spruceBlue: [0x16261f, 0x203a2b, 0x2f5236, 0x436c45, 0x62895a],
   spruceWarm: [0x1a2c1a, 0x284222, 0x3a5c2a, 0x507a36, 0x6c9844],
   pine: [0x1c3018, 0x2a4420, 0x3c5e28, 0x527a32, 0x6e9842],
   pineDeep: [0x162e1e, 0x224228, 0x325c32, 0x48783c, 0x64964a],
@@ -439,10 +439,11 @@ const SPECS = {
     { leaf: 'brackenGold', alt: 'bracken' }, { leaf: 'fernGreen' },
   ] },
   mushroom: { h: [0.3, 0.48], kind: 'mushroom', variants: [
-    { type: 'agaric' }, { type: 'bolete' }, { type: 'mixed' }, { type: 'tiny' },
+    { type: 'agaric' }, { type: 'bolete' }, { type: 'mixed' }, { type: 'tiny' }, { type: 'agaric' }, { type: 'mixed' },
   ] },
-  stump: { h: [0.4, 0.7], kind: 'stump', variants: [{}, { axe: true }, { hollow: true }] },
-  log: { h: [2.6, 3.8], kind: 'log', variants: [{}, { ferns: true }, { broken: true }] },
+  // variant 1 (the axe) is placed by hand, a couple of times in the whole forest
+  stump: { h: [0.4, 0.7], kind: 'stump', variants: [{}, { axe: true }, { hollow: true }, {}, { hollow: true }] },
+  log: { h: [2.6, 3.8], kind: 'log', variants: [{}, { ferns: true }, { broken: true }, { ferns: true, broken: true }, {}] },
   sapling: { h: [1.2, 2.2], kind: 'sapling', variants: [
     { type: 'maple', leaf: 'mapleRed' }, { type: 'birch', leaf: 'birch' }, { type: 'spruce', leaf: 'spruce' }, { type: 'maple', leaf: 'sugarOrange' },
     { type: 'birch', leaf: 'birchGold' }, { type: 'spruce', leaf: 'spruceWarm' },
@@ -1279,7 +1280,7 @@ function simplifyFar(vox, passes = 1) {
 }
 
 // Crop to the filled bounds on a 4-voxel lattice (so the pivot stays on a voxel
-// corner through two 2:1 box filters). Returns the new origin.
+// corner through two 2:1 box filters); the pivot moves to (g.ox, g.oy, g.oz).
 function crop4(g) {
   const v = g.vox, b = v.bounds();
   if (b.x1 < 0) return;
@@ -1314,7 +1315,6 @@ export function buildTreeLods(species, { seed = 0, height, lods = 3 } = {}) {
   const s = TREE_INFO[species].size;
   const g = new Grid(s, p.R, p.H, p.bury);
   p.draw(g);
-  const ground = g.b;
   g.ox = g.n; g.oy = g.b; g.oz = g.n;
   crop4(g);
   fillCavities(g.vox);
@@ -1331,7 +1331,6 @@ export function buildTreeLods(species, { seed = 0, height, lods = 3 } = {}) {
     out.push({ vox: src, size, origin: o });
   }
   const b = g.vox.bounds();
-  void ground;
   const meta = { ...p.meta, height: (b.y1 + 1 - g.oy) * s, variant, kind: spec.kind };
   return { lods: out, meta };
 }

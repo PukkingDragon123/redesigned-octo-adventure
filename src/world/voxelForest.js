@@ -23,9 +23,9 @@ const POLICY = {
   bush: { d: [16, 34, 70], imp: 200, cast: [1, 1, 0], far: 6 },
   sapling: { d: [12, 28, 56], imp: 130, cast: [1, 0, 0], far: 6 },
   fern: { d: [12, 26, 50], imp: 0, cast: [1, 0, 0], far: 6 },
-  stump: { d: [12, 28, 56], imp: 0, cast: [1, 1, 0], far: 3 },
-  log: { d: [15, 34, 70], imp: 0, cast: [1, 1, 0], far: 3 },
-  mushroom: { d: [7, 15, 28], imp: 0, cast: [1, 0, 0], far: 4 },
+  stump: { d: [12, 28, 56], imp: 0, cast: [1, 1, 0], far: 6 },
+  log: { d: [15, 34, 70], imp: 0, cast: [1, 1, 0], far: 6 },
+  mushroom: { d: [7, 15, 28], imp: 0, cast: [1, 0, 0], far: 6 },
 };
 const KIND_POLICY = { broad: 'tree', slim: 'tree', conifer: 'tree', tamarack: 'tree', pine: 'tree', dead: 'dead', bush: 'bush', sapling: 'sapling', fern: 'fern', stump: 'stump', log: 'log', mushroom: 'mushroom' };
 const HYST = 0.07;
@@ -154,7 +154,6 @@ void main() {
   vec3 right = vec3(f.z, 0.0, -f.x);
   float sc = iInfo.z;
   vec3 wp = iPos + right * (quad.x + position.x * quad.z) * sc + vec3(0.0, (quad.y + position.y * quad.w) * sc, 0.0);
-  // lean the card back a little towards a camera above it
   vWorldPos = wp;
   vRight = right;
   vFwd = f;
@@ -225,23 +224,23 @@ function bakeAll(jobs, onProgress) {
     workers = [];
   }
   if (!workers.length) return mainThread(jobs).then(() => results);
+  // Each worker takes the next job until none are left, then retires. Jobs of a
+  // failed worker (or all of them, if workers cannot start) bake on the main thread
+  // once every worker has retired.
   return new Promise((resolve) => {
-    let next = 0;
-    let alive = workers.length;
+    let next = 0, alive = workers.length, settled = false;
     const leftovers = [];
-    const end = () => {
-      if (done + leftovers.length < jobs.length || alive > 0 && next < jobs.length) return;
-      if (alive > 0 && done + leftovers.length < jobs.length) return;
-      if (done + leftovers.length === jobs.length) {
-        const rest = leftovers.splice(0);
-        mainThread(rest).then(() => resolve(results));
-      }
+    const retire = (w) => {
+      w.terminate();
+      if (--alive > 0 || settled) return;
+      settled = true;
+      while (next < jobs.length) leftovers.push(jobs[next++]);
+      mainThread(leftovers).then(() => resolve(results));
     };
     const give = (w) => {
-      if (next >= jobs.length) { w.terminate(); alive--; end(); return; }
-      const id = next++;
-      w.busy = id;
-      w.postMessage({ id, job: jobs[id] });
+      if (next >= jobs.length) return retire(w);
+      w.busy = next++;
+      w.postMessage({ id: w.busy, job: jobs[w.busy] });
     };
     for (const w of workers) {
       w.onmessage = (e) => {
@@ -255,11 +254,8 @@ function bakeAll(jobs, onProgress) {
         console.warn('tree worker unavailable, baking on the main thread');
         if (w.busy >= 0) leftovers.push(jobs[w.busy]);
         w.busy = -1;
-        w.terminate();
-        alive--;
-        // hand everything not yet started to the main thread too
-        if (alive === 0) while (next < jobs.length) leftovers.push(jobs[next++]);
-        end();
+        w.onmessage = w.onerror = null;
+        retire(w);
       };
       give(w);
     }
@@ -537,7 +533,7 @@ export class VoxelForest {
       this.pools.push(row);
       // shadow-only proxy (coarsest LOD of the far model): skipped by every
       // perspective camera, drawn by the sun's orthographic shadow camera
-      if (M.geos[2] && M.policy.cast[0] && counts[M.index][2]) {
+      if (M.geos[2] && M.policy.cast[1] && counts[M.index][2]) {
         const cap = counts[M.index][2];
         const im = new THREE.InstancedMesh(M.geos[2], this.material, cap);
         im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
@@ -592,21 +588,17 @@ export class VoxelForest {
     if (!this.pools) return;
     if (camera) this.mainCam = camera;
     const fwd = this._dir;
-    let half = Math.PI; // horizontal half-angle of the view wedge
-    let fov = 0, aspect = 0;
-    if (camera) {
-      camera.getWorldDirection(fwd);
-      fov = camera.fov; aspect = camera.aspect;
-      half = this.viewHalfAngle(camera, fwd);
-    } else fwd.set(0, 0, -1);
-    const key = `${fov.toFixed(1)},${aspect.toFixed(2)},${this.lodScale}`;
+    if (camera) camera.getWorldDirection(fwd);
+    else fwd.set(0, 0, -1);
+    const key = camera ? `${camera.fov.toFixed(1)},${camera.aspect.toFixed(2)},${this.lodScale}` : `${this.lodScale}`;
     const dx = pos.x - this.last.x, dy = pos.y - this.last.y, dz = pos.z - this.last.z;
     const turned = this._lastDir ? fwd.dot(this._lastDir) < 0.9992 : true;
     if (dx * dx + dy * dy + dz * dz < 2.25 && !turned && key === this._key) return;
     this.last.copy(pos);
     (this._lastDir ||= new THREE.Vector3()).copy(fwd);
     this._key = key;
-    this.refill(pos, fwd, half);
+    // horizontal half-angle of the view wedge (everything without a camera)
+    this.refill(pos, fwd, camera ? this.viewHalfAngle(camera, fwd) : Math.PI);
   }
 
   // half-angle (radians, about the vertical axis) that the camera frustum covers, plus a margin
@@ -704,7 +696,7 @@ export class VoxelForest {
         if (lod === 3 && d > P.imp * S) lod = 4; // gone
         if (!vis) {
           // only shadows from out-of-view trees
-          if (d < SHADOW_R && P.cast[0]) {
+          if (d < SHADOW_R && P.cast[1]) {
             const L = Math.min(60, (y - MAT[i * 16 + 13] + r) * shk) * 0.5;
             if (inView(x + shx * L, z + shz * L, r + L)) {
               const px = this.proxies[M.far.index];
