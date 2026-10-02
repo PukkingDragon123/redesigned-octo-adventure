@@ -516,16 +516,21 @@ export class Game {
   // player picked their own settings). Swiftshader test runs pass ?frames and skip this.
   governQuality() {
     const now = performance.now();
-    const pf = this.perf || (this.perf = { t: 0, n: 0, last: now, steps: 0 });
+    const pf = this.perf || (this.perf = { t: 0, n: 0, last: now, steps: 0, warm: 0, low: 0 });
     const real = (now - pf.last) / 1000;
     pf.last = now;
-    if (!this.settings.autoQuality || this.params.has('frames') || this.mode !== 'ride' || real > 0.5 || document.hidden) return;
+    if (!this.settings.autoQuality || this.params.has('frames') || this.mode !== 'ride' || real > 1.5 || document.hidden) return;
+    // let shaders warm up first, and only react to slowness that sticks around
+    pf.warm += real;
+    if (pf.warm < 8) return;
     pf.t += real;
     pf.n++;
     if (pf.t < 5) return;
     const fps = pf.n / pf.t;
     pf.t = pf.n = 0;
-    if (fps >= 38 || pf.steps >= 4) return;
+    pf.low = fps < 38 ? pf.low + 1 : 0;
+    if (pf.low < 2 || pf.steps >= 4) return;
+    pf.low = 0;
     const s = this.settings;
     if (s.quality === 'high') s.quality = 'medium';
     else if (s.quality === 'medium') s.quality = 'low';
