@@ -32,13 +32,13 @@ const FOOD_FOR = { pancakes: 'pancakes', egg: 'eggsToast', bacon: 'eggsToast', t
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 
 const DELIVERY_LINES = {
-  gus: { hot: ['Hmph. Hot. ...Thanks, kid.', "Not bad for a walking compost heap.", 'Tell Marguerite the marshmallows were... adequate.'], cold: ["This is colder than my ex-wife's heart.", "Lukewarm. Like your personality. Kidding. Mostly."] },
-  marie: { hot: ['Magnifique! Still steaming!', 'Ahh, Marguerite, you angel. And you too, mon zombie.', 'My customers will riot with joy!'], cold: ['Hmm, a little tiède... but I forgive you. You are cute for a corpse.'] },
+  gus: { hot: ['Hmph. Hot. ...Thanks, kid.', "Not bad for a walking coat rack.", 'Tell Marguerite the marshmallows were... adequate.'], cold: ["This is colder than my ex-wife's heart.", "Lukewarm. Like your personality. Kidding. Mostly."] },
+  marie: { hot: ['Magnifique! Still steaming!', 'Ahh, Marguerite, you angel. And you too, mon petit squelette.', 'My customers will riot with joy!'], cold: ['Hmm, a little tiède... but I forgive you. You are cute for a skeleton.'] },
   birdie: { hot: ['Hot as a ship\'s boiler! Fair winds, Hank!', 'Warms the old bones. You know about bones, eh?'], cold: ['Bit nippy, sailor. Pedal faster next time!'] },
   agnes: { hot: ['Oh lovely! The cats and I thank you.', 'You poor dear, you look peaky. Have you tried eating?'], cold: ['Room temperature. Just like my tea. Thank you, dear.'] },
   doug: { hot: ['Excellent. Strictly for official purposes.', 'Citizen, your service is noted in my report.'], cold: ['I could ticket you for this temperature. I won\'t. But I could.'] },
   ingrid: { hot: ['Still no pulse, but excellent cocoa.', 'May I take a tiny sample of your... no? Fair.'], cold: ['Cold. Like your extremities. Fascinating.'] },
-  pip: { hot: ['ZOMBIE COCOA!!! BEST DAY EVER!!!', 'Can you do a wheelie? DO A WHEELIE!'], cold: ['It\'s cold but you\'re a ZOMBIE so it\'s still awesome.'] },
+  pip: { hot: ['SKELETON COCOA!!! BEST DAY EVER!!!', 'Can you do a wheelie? DO A WHEELIE!'], cold: ['It\'s cold but you\'re a SKELETON so it\'s still awesome.'] },
   lou: { hot: ['Hank, buddy! Back from the dead AND bringing cocoa? Legend.', 'Boys! Hank brought cocoa!'], cold: ['Lukewarm! Still drinking it! You still owe me five bucks.'] },
   ollie: { hot: ['Ahh, warm as a lighthouse lamp. Thank ye.', 'Long ride out here. Mind the gulls.'], cold: ['Cold as the North Atlantic, lad. Still welcome.'] },
 };
@@ -200,10 +200,10 @@ export class Story {
       S.sfx('brrr');
       await S.frame(H, [1.6, 1.1, 2.8], 0.6, 40, 1.1);
       await S.say('hankBuried', 'B-b-brrr... wh-why is it so c-c-cold?', { actor: H, expr: 'scared' });
-      await S.say('hankBuried', 'And why... am I... *green?*', { actor: H, expr: 'shock' });
+      await S.say('hankBuried', 'And why... am I... *all bones?!*', { actor: H, expr: 'shock' });
       R.play('clipboard');
       await S.frame(R, [2.2, 0.8, 3.0], 0.8, 42, 1.1);
-      await S.say('reaper', 'Side effects may include: chills, mild greenness, and being *technically dead.*', { actor: R, expr: 'sheepish' });
+      await S.say('reaper', 'Side effects may include: chills, rattling, a slight lack of skin, and being *technically dead.*', { actor: R, expr: 'sheepish' });
       R.play('float');
       await S.say('reaper', "But hey — you're up! Have a wonderful afterlife! Toodles!", { actor: R, expr: 'happy' });
       S.sfx('whoosh');
@@ -248,7 +248,7 @@ export class Story {
       await S.cam(V(mid.x - 0.34 * 6.4 + 0.94 * 1.4, mid.y + 3.1, mid.z - 0.94 * 6.4 - 0.34 * 1.4), V(mid.x, mid.y + 0.45, mid.z), 1.2, 42);
       N.jump(2.5);
       await S.say('grandma', 'Goodness gracious!', { actor: N, expr: 'shock' });
-      await S.say('grandma', "You're frozen to the bone, dear! And a touch... green.", { actor: N, expr: 'sad' });
+      await S.say('grandma', "You're frozen to the bone, dear! Well. You ARE the bone, dear.", { actor: N, expr: 'sad' });
       await S.say('hankBuried', 'I think I might be... dead? A little?', { actor: H, expr: 'sheepish' });
       await S.say('grandma', "Dead or not, nobody freezes on my watch. I was married to a hunter for fifty years — I've seen worse things come out of these woods.", { actor: N, expr: 'smug' });
       await S.say('grandma', 'Come along now. There\'s a fire going, and I make a *famous* hot cocoa.', { actor: N, expr: 'happy' });
@@ -490,7 +490,7 @@ export class Story {
       kid.jump(3);
       S.sfx('scream', { pitch: 1.5 });
       await S.frame(kid, [-2.5, 1.0, 3.0], 0.4, 45, 0.9);
-      await S.say('pip', "MOM?! THERE'S A ZOMBIE ON A BICYCLE!", { actor: kid, expr: 'shock' });
+      await S.say('pip', "MOM?! THERE'S A SKELETON ON A BICYCLE!", { actor: kid, expr: 'shock' });
       for (const a of crowd) {
         if (!a) continue;
         a.play('scared', 'scared');
@@ -522,7 +522,7 @@ export class Story {
       await S.say('hank', 'Classic. Extra hot. For a... "Gus"?', { actor: H, expr: 'sheepish' });
       gus.play('gun', 'happy');
       await S.say('gus', "Well why in the blue blazes didn't ya say so!", { actor: gus, expr: 'laugh' });
-      await S.say('gus', 'Hand it over before it gets cold, ya walking compost heap.', { actor: gus, expr: 'smug' });
+      await S.say('gus', 'Hand it over before it gets cold, ya rattling coat rack.', { actor: gus, expr: 'smug' });
       H.play('offer', 'happy');
       gus.walkTo([[H.pos.x + 1.2 * fwd.x, H.pos.z + 1.2 * fwd.z]], 2);
       await S.wait(1.4);

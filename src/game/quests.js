@@ -82,7 +82,7 @@ const GREET = {
   doug: ['Citizen.', 'Keep it under the speed limit. Which is... vibes.', 'Everything is under control. Mostly.'],
   ingrid: ['Fascinating. Still no pulse.', 'Have you considered donating yourself to science? Kidding! ...Unless?', 'Doctor Ingrid. Hello.'],
   lou: ['HANK! My guy!', 'Still owe me five bucks, buddy.', 'Lift with your legs. If you have muscles. Do you?'],
-  pip: ['ZOMBIE!!! Hi zombie!!', 'Can you do a wheelie?! DO A WHEELIE!', 'Pop says you are a skeleton. I say you are AWESOME.'],
+  pip: ['SKELETON!!! Hi skeleton!!', 'Can you do a wheelie?! DO A WHEELIE!', 'Pop says you are a skeleton. I say you are AWESOME.'],
   pop: ["I'm not scared. Pip is scared.", 'Do skeletons get cold?', 'Is your skull detachable? Asking for Pip.'],
   ollie: ['Ahh, the bony lad.', 'Lighthouse is lonely work. Nice to see a face. Skull. Face.', 'Mind the gulls.'],
   mo: ['Welcome to Moose & Goose!', 'Fresh pumpkins, fresh milk, fresh gossip!', 'Hank! Cash or... bones?'],
@@ -265,7 +265,7 @@ export class Quests {
       const found = CATS.filter((c) => cats.have[c.id] === 'carried');
       if (found.length) {
         for (const c of found) cats.have[c.id] = 'home';
-        if (CATS.every((c) => cats.have[c.id] === 'home')) return done('cats', 'All my babies, home safe! You are the sweetest corpse in Canada.', 'love');
+        if (CATS.every((c) => cats.have[c.id] === 'home')) return done('cats', 'All my babies, home safe! You are the sweetest skeleton in Canada.', 'love');
         await ui.say('agnes', `${found.map((c) => c.name).join(' and ')}! Oh, thank you! ${CATS.length - CATS.filter((c) => cats.have[c.id] === 'home').length} still out there...`, { expr: 'happy' });
         return true;
       }
@@ -286,7 +286,7 @@ export class Quests {
     const cafe = this.q('cafe');
     if (who === 'marie' && cafe.state === 'active' && cafe.n >= 3) return done('cafe', 'Magnifique! Pumpkin spice is BACK! You are a hero, mon squelette!', 'love');
     const bowling = this.q('bowling');
-    if (who === 'pip' && bowling.state === 'active' && bowling.strike) return done('bowling', 'STRIIIIKE!!! You are the BEST ZOMBIE EVER!!!', 'sparkle');
+    if (who === 'pip' && bowling.state === 'active' && bowling.strike) return done('bowling', 'STRIIIIKE!!! You are the BEST SKELETON EVER!!!', 'sparkle');
     const treat = this.q('treat');
     if (who === 'pop' && treat.state === 'active' && treat.n >= 6) {
       g.state.candy = (g.state.candy || 0) + 5;

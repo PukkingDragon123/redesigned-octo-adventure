@@ -297,9 +297,10 @@ export class VoxelWorld {
     this.world.physics.addCircle({ x: c.x - 14, z: c.z + 12, r: 1.1, kind: 'post' });
     // Nana's TV on the porch (news, weather and who needs a hand)
     {
-      const x = -166.4, z = 69.4, yaw = -Math.PI / 2 + 0.5;
+      const x = -171.4, z = 70.4, yaw = Math.PI / 2 - 0.25;
+      const ty = this.world.physics.groundAt(x, z, 100).h;
       const r = this.model('tv', tvVox);
-      this.addStatic(r, x, gy(x, z), z, yaw);
+      this.addStatic(r, x, ty, z, yaw);
       const c = document.createElement('canvas');
       c.width = 80; c.height = 48;
       const tex = new THREE.CanvasTexture(c);
@@ -307,7 +308,7 @@ export class VoxelWorld {
       tex.generateMipmaps = false;
       tex.colorSpace = THREE.SRGBColorSpace;
       const plane = new THREE.Mesh(new THREE.PlaneGeometry(0.45, 0.4), createFlatMaterial(tex));
-      plane.position.set(x, gy(x, z) + 0.6, z).add(new THREE.Vector3(0.025, 0, 0.32).applyAxisAngle(UP, yaw));
+      plane.position.set(x, ty + 0.6, z).add(new THREE.Vector3(0.025, 0, 0.32).applyAxisAngle(UP, yaw));
       plane.rotation.y = yaw;
       this.scene.add(plane);
       this.tv = { c, g: c.getContext('2d'), tex, t: 0, x, z };

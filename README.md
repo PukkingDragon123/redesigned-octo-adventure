@@ -1,12 +1,12 @@
 # Deli-very-dead
 
-A cozy 3D pixel-art delivery game set in autumn Canada.
+A cozy 3D voxel delivery game set in a Halloween-decorated autumn Canada.
 
 Hank the lumberjack was buried alive by accident during an extremely long nap.
-The Grim Reaper, embarrassed by the paperwork, brings him back. Freezing, green
-and only technically dead, Hank is taken in by Nana Marguerite, who wraps him in
-her late husband's sweater and toque and hires him to deliver her famous hot
-cocoa around Maple Cove on Harold's old bicycle.
+The Grim Reaper, embarrassed by the paperwork, brings him back as a rattling
+skeleton. Freezing and only technically dead, Hank is taken in by Nana
+Marguerite, who wraps him in her late husband's scarf and toque and hires him to
+deliver her famous hot cocoa around Maple Cove on Harold's old bicycle.
 
 Each day goes like this: wake up for a breakfast that falls straight through
 you, pick orders off Nana's board, ride through the forest and the village while
@@ -14,9 +14,9 @@ the cocoa cools, deliver for pay and tips, explore, come home, and spend your
 savings on bike upgrades in Harold's garage. Upgrades range from cargo racks
 and lamps to Maple-Cola boosters, a glider, and finally a motorbike.
 
-Everything runs in the browser. Terrain, trees, buildings, characters, icons,
-music and sound effects are all generated in code, so there are no asset
-files.
+Everything runs in the browser. Terrain, voxel models, characters, icons,
+music and sound effects are all generated in code; the only asset files are
+two pixel fonts.
 
 ## Running it
 

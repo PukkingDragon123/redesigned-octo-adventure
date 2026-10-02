@@ -355,6 +355,10 @@ export class Game {
       this.pipeline.reflections = q !== 'low';
       this.world.water.material.uniforms.uReflOn.value = q !== 'low' ? 1 : 0;
       this.world.forest.lodScale = q === 'low' ? 0.55 : q === 'medium' ? 0.8 : 1;
+      if (this.world.voxelForest) {
+        this.world.voxelForest.lodScale = q === 'low' ? 0.7 : q === 'medium' ? 0.85 : 1.15;
+        this.world.voxelForest.last.set(1e9, 0, 1e9);
+      }
       const grid = q === 'low' ? 90 : q === 'medium' ? 120 : 150;
       if (this.world.grass.gridN !== grid) {
         this.scene.remove(this.world.grass.mesh);
