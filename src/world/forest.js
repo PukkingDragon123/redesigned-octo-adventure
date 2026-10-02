@@ -345,6 +345,20 @@ function clearingFactor(x, z) {
   return f;
 }
 
+// The lookout's vista: a wedge of open hillside falling away toward Maple Cove,
+// so the bench actually looks out over something.
+const VISTA_DIR = 1.0; // radians from +x toward +z
+function vistaFactor(x, z) {
+  const dx = x - L.POI.lookout.x, dz = z - L.POI.lookout.z;
+  const d = Math.hypot(dx, dz);
+  if (d < 4 || d > 125) return 1;
+  let da = Math.atan2(dz, dx) - VISTA_DIR;
+  da = Math.atan2(Math.sin(da), Math.cos(da));
+  const inWedge = 1 - smoothstep(0.42, 0.62, Math.abs(da));
+  const fall = d < 75 ? 1 : 1 - (d - 75) / 50;
+  return 1 - inWedge * fall * 0.96;
+}
+
 function pickSpecies(x, z, h, river, rng) {
   const a = sxA.noise(x / 75, z / 75);
   const b = sxB.noise(x / 52 + 9, z / 52 - 3);
@@ -408,7 +422,7 @@ export class Forest {
         if (sp.rock > 0.55 && rng.chance(0.8)) continue;
         const vm = villageMask(px, pz);
         let p = smoothstep(0.22, 0.72, forestNoise(px, pz)) * 0.8 + 0.1;
-        p *= clearingFactor(px, pz);
+        p *= clearingFactor(px, pz) * vistaFactor(px, pz);
         p *= 1 - smoothstep(52, 75, h); // treeline on the rim mountains
         // the unreachable rim needs fewer trees (it is mostly seen from afar)
         const edge = Math.min(px + L.WORLD_HALF, L.WORLD_HALF - pz, pz + L.WORLD_HALF);
@@ -437,7 +451,7 @@ export class Forest {
         const fd = forestNoise(px, pz);
         let p = 0.08 + smoothstep(0.3, 0.8, fd) * 0.3;
         if (villageMask(px, pz) > 0.3) p *= 0.15;
-        p *= 0.4 + 0.6 * clearingFactor(px, pz);
+        p *= (0.4 + 0.6 * clearingFactor(px, pz)) * (0.3 + 0.7 * vistaFactor(px, pz));
         if (rng.next() > p) continue;
         if (this.roadNear(px, pz, 1.2)) continue;
         if (buildingBlocked(px, pz, 1.5)) continue;
