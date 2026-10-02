@@ -11,7 +11,7 @@ export function newState() {
     earned: 0,
     outfit: 'hankBuried',
     flags: {},
-    upgrades: {},
+    skills: { best: {}, tiers: {}, poses: {} }, // Harold's riding notes (skills.js)
     keepsakes: {}, // id -> 'found' | 'given'
     orders: [],
     board: [],
@@ -40,7 +40,9 @@ export function loadGame() {
   try {
     const s = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null');
     if (!s || s.version !== 1) return null;
-    return { ...newState(), ...s, stats: { ...newState().stats, ...(s.stats || {}) } };
+    // older saves may carry `upgrades` (retired, ignored) and no skills yet
+    const d = newState();
+    return { ...d, ...s, stats: { ...d.stats, ...(s.stats || {}) }, skills: { ...d.skills, ...(s.skills || {}) } };
   } catch {
     return null;
   }

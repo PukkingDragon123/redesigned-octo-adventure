@@ -10,9 +10,12 @@ deliver her famous hot cocoa around Maple Cove on Harold's old bicycle.
 
 Each day goes like this: wake up for a breakfast that falls straight through
 you, pick orders off Nana's board, ride through the forest and the village while
-the cocoa cools, deliver for pay and tips, explore, come home, and spend your
-savings on bike upgrades in Harold's garage. Upgrades range from cargo racks
-and lamps to Maple-Cola boosters, a glider, and finally a motorbike.
+the cocoa cools, deliver for pay and tips, explore, and come home. There are no bike
+upgrades: Bessie is an old 3-speed with a basket, a crate and a lamp, and she
+is hard to ride well. Progression is skill. Harold's riding notes in the garage
+track wheelies, manuals, stoppies, bunny hops, drifts, spins, flips, wheelie
+drops, perfect landings, long jumps and combos, each with three mastery tiers
+that you earn by actually pulling the moves off.
 
 Everything runs in the browser. Terrain, voxel models, characters, icons,
 music and sound effects are all generated in code; the only asset files are
@@ -34,13 +37,14 @@ audio starts.
 
 | Keyboard | Gamepad | Action |
 | --- | --- | --- |
-| W / Up arrow | RT | Pedal |
-| S / Down arrow | LT | Brake / reverse |
-| A D / Left Right arrows | Left stick | Steer |
-| Space | A | Hop (hold in the air to glide once you have the glider); jump on foot |
-| Shift | RB | Drift (let go for a mini-boost); run on foot |
-| Shift + direction (in the air) | RB + stick | Bike tricks: Superman, No-Hander, Can-Can, Nothin', Skull Toss |
-| F or Q | B | Maple-Cola boost; kick on foot |
+| W / Up arrow | RT | Pedal. Hold it to cruise; tap it in a steady rhythm (about three taps a second) to sprint. Mash it and Hank's foot slips off |
+| S / Down arrow | LT | Brake; hold when stopped to roll backwards |
+| A D / Left Right arrows | Left stick | Steer (lean into corners; too fast on grass and the tyres let go); spin in the air |
+| Space | A | Hold to crouch, let go to bunny hop (crouch about a third of a second for the full pop; pop right at a ramp lip to go higher); jump on foot |
+| Q / Right Ctrl | Left stick down | Lean back: wheelie (while pedalling), manual (coasting), backflip (in the air). Tap the brake to save a loop-out |
+| F | Left stick up | Lean forward: stoppie (with the brake), nose manual (coasting), frontflip (in the air); kick on foot (F or Q) |
+| Shift | RB | Drift (let go for a little kick); run on foot |
+| Shift + direction (in the air) | RB + stick | Poses: Superman, No-Hander, Can-Can, Nothin', Skull Toss. Let go before you land |
 | E / Enter | X | Talk, deliver, hop off / on the bike, pick things up |
 | R | Y | Ring the bell |
 | C | | Camera (once Birdie lends you hers) |
@@ -49,9 +53,14 @@ audio starts.
 | Mouse drag | Right stick | Look around |
 | Esc | Start | Hank's journal (pause); skips a cutscene while one is playing |
 
+Landings have to match the ground: roughly level with the slope and pointing
+the way you're travelling. A perfect landing gives a little burst of speed; a
+crooked one wobbles; a bad one is a bail.
+
 On a touch screen, on-screen controls appear after your first tap: a steering
 wheel on the left (turn it, it springs back) and pedal, brake, hop, trick,
-bell and boost buttons on the right. On foot the wheel becomes a stick and the
+lean and bell buttons on the right. Touch riding gets assists (steadier
+balance, forgiving landings, no slide-outs). On foot the wheel becomes a stick and the
 buttons become jump, kick and snap. A paper tag shows whatever you can do right
 now; tap it.
 
@@ -99,10 +108,15 @@ now; tap it.
   procedural texture atlas.
 - **2D art** (`src/art`): food icons, emotes, particles and other pixel art are
   painted in code.
-- **Game** (`src/game`): arcade bicycle physics with gears, drifting, jumps,
-  boosts and gliding, a chase camera, cutscene scripting, orders whose cocoa
-  cools as you ride, upgrades, keepsakes, villagers, wildlife, a day/night
-  cycle, weather, and saving to localStorage.
+- **Game** (`src/game`): bicycle physics with momentum, rhythm pedalling,
+  spring-lean cornering and grip limits, wheelies, manuals and stoppies as
+  balancing inverted pendulums, crouch-and-pop hops, air spins and flips with
+  landing checks, foot dabs, kerb bumps and comic bails; skill tracking
+  (`skills.js`), tricks and combos, a chase camera with punch-ins and
+  hit-stop, cutscene scripting, orders whose cocoa cools as you ride,
+  keepsakes, villagers, wildlife, a day/night cycle, weather, and saving to
+  localStorage. `node`-friendly: `Bike` only needs a physics object with
+  `groundAt` and `resolve`, so it can be driven by scripted inputs.
 - **Audio** (`src/audio`): a WebAudio synth for sound effects, character voice
   blips, adaptive music, ambience, and bicycle and motor sounds. Open
   `/src/audio/test.html` in the dev server to audition the sounds.
@@ -112,7 +126,9 @@ now; tap it.
 These are useful while developing:
 
 - `?start=ride` starts riding straight away (`&spawn=x,z,yaw`, `&day=3`,
-  `&money=200`, `&upgrades=rack,lamp,cola`, `&cat=1`)
+  `&money=200`, `&skills=max` or `&skills=1` to pre-fill Harold's notes,
+  `&assist=1` / `&assist=0` to force riding assists, `&nofreeze` to turn off
+  hit-stop, `&cat=1`)
 - `?start=intro` plays the new-game story
 - `?scene=morning|cabinNight|garageReveal|villagePanic|catRescue|ending`
   plays a single story beat

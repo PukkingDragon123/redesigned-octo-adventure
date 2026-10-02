@@ -305,7 +305,7 @@ export class Story {
         await S.say(gg[0], gg[1], { expr: gg[2], actor: gg[0] === 'hank' ? H : N });
       }
       if (day === 2) {
-        await S.say('grandma', 'Oh! And with what you earned yesterday, you could fix up Harold\'s bike in the garage. He\'d have loved that.', { actor: N, expr: 'happy' });
+        await S.say('grandma', 'Oh! Harold kept his riding notes in the garage, dear. Wheelies, hops, all sorts of nonsense. Have a read when you pass by.', { actor: N, expr: 'happy' });
       }
       await S.say('grandma', day === 1 ? 'Now, the orders are pinned on the board. Two to start — Gus and Marie-Claude, down in Maple Cove.' : "Today's orders are on the board, dear. Bundle up! ...Out of habit.", { actor: N, expr: 'neutral' });
       await S.fade(1, 0.5);
@@ -340,7 +340,7 @@ export class Story {
       g.rider.visible = true;
       this.flag('bike', true);
     }).then(() => {
-      g.ui.toast('<span class="key">W</span> pedal · <span class="key">A</span><span class="key">D</span> steer · <span class="key">Space</span> hop · <span class="key">Shift</span> drift', null, 7000);
+      g.ui.toast('<span class="key">W</span> pedal (tap in rhythm to sprint) · <span class="key">A</span><span class="key">D</span> steer · hold <span class="key">Space</span> and let go to hop · <span class="key">Q</span> wheelie · <span class="key">Shift</span> drift', null, 8000);
       g.ui.toast('Follow the cocoa cups on the compass', 'cocoa', 6000);
     });
   }
@@ -642,7 +642,7 @@ export class Story {
       g.villagers.setVisible('grandma', false);
       const y = g.bike.pos.y;
       await S.cam(V(-138.8, y + 1.8, 91), V(-144.3, y + 0.9, 95), 0, 46);
-      await S.say('grandma', "Look at her. Harold's motorbike, purring like a kitten. He'd be so proud of you, dear.", { actor: N, expr: 'cry' });
+      await S.say('grandma', "Look at you two. Bessie hasn't been ridden like that since Harold was courting me. He'd be so proud of you, dear.", { actor: N, expr: 'cry' });
       const R = S.actor('reaper', -141.3, 92.5, -0.8, 'float');
       R.floatY = 0.25;
       S.sfx('reaper');
@@ -677,10 +677,12 @@ export class Story {
     });
   }
 
-  onUpgrade(u) {
-    if (u.id === 'motor' && !this.flag('ending')) {
-      this.pendingEnding = true;
-    }
+  // riding Bessie like Harold did (enough of his riding notes mastered): Nana wants to see,
+  // and the ending plays the next time Hank opens the notes at the garage
+  onMastery(total, max, need = 20) {
+    if (total < need || this.flag('ending') || this.flag('masteryReady')) return;
+    this.flag('masteryReady', true);
+    this.g.ui.toast('Nana (far away): “Hank, dear! Come round to the garage, I want to see you ride!”', 'home', 7000);
   }
 
   // ---------------------------------------------------------------- world triggers
