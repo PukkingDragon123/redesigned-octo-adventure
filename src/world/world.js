@@ -219,7 +219,7 @@ export class World {
     G.uTime.value += dt;
     this.atmosphere.update(dt);
     this.sky.position.copy(camera.position);
-    this.voxelForest?.update(camera.position);
+    this.voxelForest?.update(camera.position, camera);
     this.forest?.updateVisibility(camera.position);
     this.grass?.update(camera.position);
     this.updateShadow(focus);
