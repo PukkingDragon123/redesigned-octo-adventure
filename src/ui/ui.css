@@ -76,6 +76,12 @@
   font-size: calc(var(--u) * 5.5); white-space: nowrap; color: #fff4dc;
 }
 
+/* tall, narrow screens (phones held upright): the compass and objective drop below the panels */
+@media (max-aspect-ratio: 4/5) {
+  .hud-compass { top: calc(var(--u) * 66); width: min(calc(var(--u) * 130), 92vw); }
+  .hud-objective { top: calc(var(--u) * 82); white-space: normal; text-align: center; width: 92vw; }
+  .hud-orders { transform: scale(0.86); transform-origin: top right; }
+}
 .hud-gauge { position: absolute; left: calc(var(--u) * 4); bottom: calc(var(--u) * 4); display: flex; align-items: flex-end; gap: calc(var(--u) * 2); }
 .hud-gauge canvas { width: calc(var(--u) * 72); height: calc(var(--u) * 72); image-rendering: pixelated; }
 .hud-boosts { display: flex; gap: var(--u); margin-bottom: calc(var(--u) * 4); }

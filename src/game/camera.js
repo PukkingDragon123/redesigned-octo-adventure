@@ -123,7 +123,10 @@ export class ChaseCamera {
     // the damped position can lag into a wall too
     const hit2 = this.ph.segmentHit(this.look.x, this.look.y, this.look.z, this.pos.x, this.pos.y, this.pos.z);
     if (hit2 < 1) this.pos.lerpVectors(this.look, this.pos, Math.max(0.2, hit2 - 0.05));
-    const fovT = 55 + clamp(speed - 4, 0, 22) * 0.75 + (bike.boostTime > 0 ? 8 : 0);
+    // upright phones get a taller field of view so the road ahead still fits
+    const aspect = this.cam.aspect || 1.6;
+    const base = aspect < 1 ? Math.min(80, 55 / Math.pow(aspect, 0.55)) : 55;
+    const fovT = base + clamp(speed - 4, 0, 22) * 0.75 + (bike.boostTime > 0 ? 8 : 0);
     this.fov = instant ? fovT : damp(this.fov, fovT, 3, dt);
     this.roll = damp(this.roll, bike.lean * 0.12, 4, dt);
     this.apply(dt);
