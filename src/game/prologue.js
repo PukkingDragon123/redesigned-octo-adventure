@@ -304,10 +304,10 @@ function funeral(story) {
     }
     const N = who.grandma, Lou = who.lou, Pa = who.pastor;
 
-    const wide = at(4.8, 7.5);
-    await S.cam(V(wide.x, y0 + 5.5, wide.z), V(gr.x, y0 + 0.8, gr.z), 0, 46);
-    const wide2 = at(3.2, 5.6);
-    S.cam(V(wide2.x, y0 + 2.6, wide2.z), V(gr.x, y0 + 0.9, gr.z), 6, 44);
+    const wide = at(7.8, 4.2);
+    await S.cam(V(wide.x, y0 + 6.5, wide.z), V(gr.x, y0 + 0.6, gr.z), 0, 46);
+    const wide2 = at(5.8, -0.6);
+    S.cam(V(wide2.x, y0 + 2.3, wide2.z), V(gr.x, y0 + 0.9, gr.z + 0), 6, 46);
     S.fade(0, 2.2);
     S.sfx('funeral_bell');
     await S.wait(1.6);
@@ -339,7 +339,7 @@ function funeral(story) {
     await S.wait(1.4);
     await S.narrate('Everyone cried. Hank snored.');
     // lowered on ropes
-    await S.cam(V(wide2.x, y0 + 2.4, wide2.z), V(gr.x, y0 + 0.3, gr.z), 0.8, 44);
+    await S.cam(V(wide2.x, y0 + 2.6, wide2.z), V(gr.x, y0 + 0.2, gr.z), 0.8, 46);
     Lou.play('lower', 'sad');
     who.gus.play('lower', 'sad');
     const cy0 = coffin.position.y;
