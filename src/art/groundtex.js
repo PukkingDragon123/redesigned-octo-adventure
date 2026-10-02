@@ -160,11 +160,12 @@ export function sandTex() {
   const p = new Pix(S, S);
   p.wrap = true;
   const rng = new RNG(51);
-  bandFill(p, [0x857761, 0x968670, 0xa79780, 0xb6a68d], 17, 1.0);
-  for (let i = 0; i < 90; i++) pebble(p, rng, rng.int(0, S), rng.int(0, S), rng.pick([0x6e665c, 0x8c8476, 0x5e574f, 0xa6a094, 0x7d6f60]), rng.int(1, 2), 1);
-  for (let i = 0; i < 6; i++) {
+  bandFill(p, [0x9a8666, 0xa89474, 0xb6a280, 0xc2ae8a], 17, 1.0);
+  // a few warm pebbles and pale shell bits (not too many: sand should read as smooth)
+  for (let i = 0; i < 26; i++) pebble(p, rng, rng.int(0, S), rng.int(0, S), rng.pick([0x8c7c64, 0x9e8c70, 0x7e705c, 0xb0a084]), 1, 1);
+  for (let i = 0; i < 10; i++) {
     const x = rng.int(0, S), y = rng.int(0, S);
-    p.set(x, y, 0xe8e0d0); p.set(x + 1, y, 0xd8cfc0);
+    p.set(x, y, 0xf0e6d2); p.set(x + 1, y, 0xe0d4bc);
   }
   return p;
 }

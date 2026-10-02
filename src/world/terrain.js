@@ -240,8 +240,8 @@ export class Terrain {
     if (bm > 0) {
       const W = beachWidth(x, z);
       let hb;
-      if (sd < 0) hb = Math.max(-7, sd * 0.052 - 0.04 * sd * sd / 100);
-      else if (sd < W) hb = 0.05 + 1.9 * Math.pow(sd / W, 1.35);
+      if (sd < 0) hb = Math.max(-7, sd * 0.06 - 0.04 * sd * sd / 100);
+      else if (sd < W) hb = 0.08 + 1.87 * Math.pow(sd / W, 0.95);
       else hb = 1.95 + (sd - W) * 0.1;
       // dune hummocks along the back of the beach
       const dune = smoothstep(W - 6, W + 2, sd) * (1 - smoothstep(W + 6, W + 20, sd));

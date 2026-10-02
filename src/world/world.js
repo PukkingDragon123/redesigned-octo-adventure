@@ -80,7 +80,7 @@ export class World {
     this.scene.add(this.grass.mesh);
 
     await step(0.5, 'filling the cove');
-    this.water = createWater(this.pipeline);
+    this.water = createWater(this.pipeline, this.terrain);
     this.scene.add(this.water);
     this.sky = createSky();
     this.scene.add(this.sky);
