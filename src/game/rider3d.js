@@ -3,7 +3,9 @@
 // burst into bones that zip back together next to the bike.
 import * as THREE from 'three';
 import { VoxelCharacter } from './vchar.js';
-import { Billboard } from '../render/sprites.js';
+import { catVox } from './quests.js';
+import { meshVox } from '../voxel/mesh.js';
+import { voxMesh, sharedVoxelMaterial } from '../render/voxelMaterial.js';
 
 const _v = new THREE.Vector3();
 
@@ -35,9 +37,14 @@ export class VoxelRider {
 
   get mesh() { return this.ch.root; }
 
+  // Poutine rides in the basket: a little voxel cat who bobs, looks around and cheers on jumps
   enableCat(on) {
     if (on && !this.cat) {
-      this.cat = new Billboard(this.game.atlas, 'cat:basket:back:0', { castShadow: false, upright: 0.85 });
+      const r = catVox(0xe8a050, 0xfff0d8, 0x60c0e8);
+      const m = voxMesh(meshVox(r.vox, { size: r.size * 0.9, origin: r.origin, jitter: 0.03 }), sharedVoxelMaterial());
+      this.cat = { mesh: new THREE.Group() };
+      this.cat.mesh.add(m);
+      this.catBody = m;
       this.game.scene.add(this.cat.mesh);
       this.catT = 0;
     }
@@ -172,14 +179,13 @@ export class VoxelRider {
     // the cat rides in the basket
     if (this.cat && this.catOn) {
       this.catT += dt;
-      const b = model.basket.getWorldPosition(_v);
-      const toCam = camPos.clone().sub(b).setY(0).normalize();
-      const blink = Math.floor(this.catT * 1.3) % 6 === 0 ? 1 : 0;
+      model.basket.updateWorldMatrix(true, false);
+      model.basket.matrixWorld.decompose(this.cat.mesh.position, this.cat.mesh.quaternion, _v);
       const happy = bike.airTime > 0.3 || bike.boostTime > 0;
-      const back = Math.cos(bike.yaw) * toCam.z + Math.sin(bike.yaw) * toCam.x < 0;
-      this.cat.setFrame(back ? 'cat:basket:back:0' : `cat:basket:front:${happy ? 2 : blink}`);
-      this.cat.mesh.position.copy(b).addScaledVector(toCam, 0.1);
-      this.cat.mesh.position.y += 0.02 + Math.max(0, Math.sin(this.catT * 9)) * Math.min(0.06, bike.speed * 0.004);
+      const bob = Math.max(0, Math.sin(this.catT * 9)) * Math.min(0.05, bike.speed * 0.004) + (happy ? 0.06 : 0);
+      this.catBody.position.y = 0.02 + bob;
+      this.catBody.rotation.y = Math.sin(this.catT * 0.7) * 0.5;
+      this.catBody.scale.y = happy ? 1.15 : 1 + Math.sin(this.catT * 3) * 0.02;
       this.cat.mesh.visible = this.visible && bike.crash <= 0 && model.root.visible;
     }
   }

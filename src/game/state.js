@@ -62,7 +62,7 @@ export function clearSave() {
   }
 }
 
-export const DEFAULT_SETTINGS = { pixel: 3, master: 0.8, music: 0.55, sfx: 0.85, quality: 'high', camDist: 1, fps: false, autoQuality: true };
+export const DEFAULT_SETTINGS = { pixel: 2, master: 0.8, music: 0.55, sfx: 0.85, quality: 'high', camDist: 1, fps: false, autoQuality: true };
 
 // phones and small tablets start one notch lower; the governor in game.js steps further if needed
 function deviceDefaults() {

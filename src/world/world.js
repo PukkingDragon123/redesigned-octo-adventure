@@ -21,6 +21,7 @@ import { DECOR } from './decor.js';
 import { VoxelWorld } from './voxelWorld.js';
 import { VoxelForest } from './voxelForest.js';
 import { PhysProps } from './physprops.js';
+import * as VOXPROPS from '../voxel/models/props.js';
 
 export class World {
   constructor(pipeline, progress = () => {}) {
@@ -120,6 +121,7 @@ export class World {
     if (voxel) {
       const t0 = performance.now();
       this.voxel = new VoxelWorld(this);
+      this.voxelProps = VOXPROPS;
       this.physprops = new PhysProps(null, this.scene, ctx.lights);
       await step(0.41, 'building voxel houses');
       this.voxel.buildings(this.buildings);

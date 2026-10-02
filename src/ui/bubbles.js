@@ -266,6 +266,7 @@ export class Bubbles {
           else if (confirm && i > 2) finish();
           return;
         }
+        if (this.game.params?.has('autotalk') && (A.doneT = (A.doneT || 0) + dt) > 1.2) { close(); return; }
         if (opts.choices) {
           if (input.pressed('up') || input.pressed('left') || input.pressed('menuUp')) setSel(sel - 1);
           if (input.pressed('down') || input.pressed('right') || input.pressed('menuDown')) setSel(sel + 1);
@@ -344,6 +345,7 @@ export class Bubbles {
           }
           return;
         }
+        if (this.game.params?.has('autotalk') && (this.active.doneT = (this.active.doneT || 0) + dt) > 1.2) { close(); return; }
         if (confirm) close();
       };
       if (opts.instant) { while (i < parts.length) add(parts[i++]); done = true; next.classList.add('on'); }

@@ -33,7 +33,7 @@ export class Menus {
     buttons.push(ui.button('Controls', () => this.controls()));
     buttons.forEach((b) => menu.appendChild(b));
     t.appendChild(menu);
-    t.appendChild(el('div', 'title-foot', 'Autumn in Maple Cove · ride gently, deliver warmly'));
+    t.appendChild(el('div', 'title-foot', 'Autumn in Maple Cove · ride gently, deliver warmly<br><small>fonts: monogram by datagoblin (CC0) · BoldPixels by YukiPixels (CC BY-SA 4.0)</small>'));
     this.ui.root.appendChild(t);
     const m = { ov: t, items: buttons, sel: 0, onBack: null };
     ui.menuStack.push(m);
@@ -98,6 +98,34 @@ export class Menus {
     m = ui.openOverlay(p, { onBack: close });
     const old = m.onBack;
     m.onBack = () => { g.sound.play('book_close'); old(); };
+    return m;
+  }
+
+  // ---------------------------------------------------------------- pumpkin carving
+  carve(onDone) {
+    const ui = this.ui;
+    const g = this.game;
+    const p = ui.panel('paper', 'menu carve');
+    p.appendChild(el('h2', '', 'Pick a face to carve'));
+    const faces = ['classic', 'happy', 'scared', 'toothy', 'cat', 'skull'];
+    const grid = el('div', 'carvegrid');
+    const items = faces.map((f) => {
+      const b = el('div', 'slip carveface');
+      b.innerHTML = `<img src="${faceSketch(f)}"><span>${f}</span>`;
+      b.addEventListener('click', () => done(f));
+      grid.appendChild(b);
+      return b;
+    });
+    p.appendChild(grid);
+    let m;
+    const done = (f) => {
+      ui.closeOverlay(m);
+      if (f) g.sound.play('pencil_scribble');
+      onDone?.(f);
+    };
+    const back = ui.button('Not now', () => done(null));
+    p.appendChild(back);
+    m = ui.openOverlay(p, { onBack: () => done(null), items: [...items, back], grid: 3 });
     return m;
   }
 
@@ -245,7 +273,8 @@ export class Menus {
       ['W / ↑ / RT', 'Pedal'], ['S / ↓ / LT', 'Brake / reverse'], ['A D / ← → / stick', 'Steer'],
       ['Space / A', 'Hop (hold in the air to glide)'], ['Shift / RB', 'Drift (release for a mini-boost)'],
       ['F or Q / B', 'Maple-Cola boost'], ['E / X', 'Talk · deliver · interact'], ['R / Y', 'Ring the bell'],
-      ['M', 'Map'], ['Tab', "Harold's keepsakes"], ['Mouse drag / right stick', 'Look around'], ['Esc / Start', 'Pause'],
+      ['M', 'Map'], ['Tab', "Harold's keepsakes"], ['Mouse drag / right stick', 'Look around'], ['Esc / Start', 'Journal'],
+      ['E (stopped)', 'Hop off / on the bike'], ['WASD on foot', 'Walk (Shift runs)'], ['F on foot', 'Kick!'], ['Shift + dir in the air', 'Tricks'], ['C', 'Camera (once you have one)'],
     ];
     for (const [k, v] of lines) {
       const r = el('div', 'row');
@@ -439,7 +468,7 @@ export class Menus {
   map() {
     const g = this.game;
     const ui = this.ui;
-    const p = ui.panel('paper');
+    const p = ui.panel('paper', 'menu mapsheet');
     p.appendChild(el('h2', '', 'Maple Hollow & Maple Cove'));
     const wrap = el('div', 'mapwrap');
     const c = this.mapCanvas || (this.mapCanvas = paintMap(g.world.terrain));
@@ -475,10 +504,17 @@ export class Menus {
     for (const k of KEEPSAKES) if (g.state.keepsakes[k.id]) pin(k.x, k.z, KEEPSAKE_ICON[k.id]);
     if (g.catEventActive) pin(POI.catLog.x, POI.catLog.z, 'cat');
     pin(g.playerPos.x, g.playerPos.z, 'star', 'me');
+    for (const q of g.quests?.markers() || []) pin(q.x, q.z, q.icon, 'quest');
+    const rose = el('img', 'rose');
+    rose.src = compassRose();
+    wrap.appendChild(rose);
+    wrap.appendChild(el('div', 'folds'));
+    wrap.appendChild(el('div', 'scrawl', 'X = cocoa · ★ = Harold\'s stuff · skull = you'));
     p.appendChild(wrap);
     let m;
     const close = () => ui.closeOverlay(m);
-    p.appendChild(ui.button('Close', close));
+    p.appendChild(ui.button('Fold it up', close));
+    g.sound.play('paper_unfold');
     m = ui.openOverlay(p, { onBack: close });
     return m;
   }
@@ -512,40 +548,114 @@ export class Menus {
   }
 }
 
-// a parchment map painted from the heightmap
+// a hand-drawn paper map: pencil contours, hatched water, little tree doodles,
+// inked roads and tiny houses
 function paintMap(terrain) {
-  const N = 256;
+  const N = 384;
   const c = document.createElement('canvas');
   c.width = N;
   c.height = N;
   const ctx = c.getContext('2d');
   const img = ctx.createImageData(N, N);
+  const toW = (i) => -WORLD_HALF + ((i + 0.5) / N) * WORLD_HALF * 2;
+  const H = new Float32Array(N * N);
+  for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) H[j * N + i] = terrain.heightAt(toW(i), toW(j));
   for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
-    const x = -WORLD_HALF + ((i + 0.5) / N) * WORLD_HALF * 2, z = -WORLD_HALF + ((j + 0.5) / N) * WORLD_HALF * 2;
-    const h = terrain.heightAt(x, z);
-    const s = terrain.splatAt(x, z);
-    let r = 232, gg = 214, b = 170;
-    if (h < 0) { const d = Math.min(1, -h / 5); r = 120 - d * 40; gg = 160 - d * 40; b = 160 - d * 20; }
-    else {
-      const k = Math.min(1, h / 50);
-      r -= k * 60; gg -= k * 50; b -= k * 40;
-      if (s.litter > 0.5) { r -= 30; gg -= 40; b -= 50; }
-      if (s.road > 0.5) { r = 150; gg = 100; b = 60; }
-      if (Math.abs(h % 6) < 0.35) { r -= 25; gg -= 25; b -= 25; }
-    }
-    // parchment noise
+    const h = H[j * N + i];
+    const s = terrain.splatAt(toW(i), toW(j));
     const n = ((i * 73856093) ^ (j * 19349663)) & 15;
+    let r = 240 - n * 0.6, gg = 226 - n * 0.6, b = 190 - n;
+    if (h < 0) {
+      // water: pale blue with diagonal pencil hatching
+      r = 170; gg = 196; b = 206;
+      if ((i + j) % 6 === 0) { r -= 40; gg -= 30; b -= 20; }
+    } else {
+      const k = Math.min(1, h / 60);
+      r -= k * 30; gg -= k * 26; b -= k * 22;
+      // contour lines every 5 m
+      const hr = H[j * N + Math.min(N - 1, i + 1)], hd = H[Math.min(N - 1, j + 1) * N + i];
+      if (Math.floor(h / 5) !== Math.floor(hr / 5) || Math.floor(h / 5) !== Math.floor(hd / 5)) { r -= 60; gg -= 56; b -= 50; }
+      if (s.road > 0.5) { r = 120; gg = 78; b = 52; }
+    }
+    // coast line in ink
+    if ((h < 0) !== (H[j * N + Math.min(N - 1, i + 1)] < 0) || (h < 0) !== (H[Math.min(N - 1, j + 1) * N + i] < 0)) { r = 60; gg = 50; b = 60; }
     const o = (j * N + i) * 4;
-    img.data[o] = r - n;
-    img.data[o + 1] = gg - n;
-    img.data[o + 2] = b - n;
-    img.data[o + 3] = 255;
+    img.data[o] = r; img.data[o + 1] = gg; img.data[o + 2] = b; img.data[o + 3] = 255;
   }
   ctx.putImageData(img, 0, 0);
-  ctx.fillStyle = '#6b3d22';
+  // tree doodles where the forest is thick
+  ctx.fillStyle = '#4a6a3a';
+  for (let j = 4; j < N; j += 9) for (let i = 4 + ((j / 9) % 2) * 4; i < N; i += 9) {
+    const x = toW(i), z = toW(j);
+    const h = H[j * N + i];
+    if (h < 2 || terrain.splatAt(x, z).road > 0.2) continue;
+    const f = forestDensity(terrain, x, z);
+    if (f < 0.45) continue;
+    const col = f > 0.7 ? '#5a6a3a' : '#a86a3a';
+    ctx.fillStyle = col;
+    ctx.fillRect(i - 1, j - 3, 3, 1); ctx.fillRect(i - 2, j - 2, 5, 2); ctx.fillStyle = '#4a3020'; ctx.fillRect(i, j, 1, 2);
+  }
+  // little houses
   for (const bld of BUILDINGS) {
-    const x = ((bld.x + WORLD_HALF) / (WORLD_HALF * 2)) * N, y = ((bld.z + WORLD_HALF) / (WORLD_HALF * 2)) * N;
-    ctx.fillRect(Math.round(x) - 1, Math.round(y) - 1, 3, 3);
+    const x = Math.round(((bld.x + WORLD_HALF) / (WORLD_HALF * 2)) * N), y = Math.round(((bld.z + WORLD_HALF) / (WORLD_HALF * 2)) * N);
+    ctx.fillStyle = '#3a2a24'; ctx.fillRect(x - 3, y - 2, 7, 5);
+    ctx.fillStyle = '#c8502e'; ctx.fillRect(x - 2, y - 4, 5, 2); ctx.fillRect(x - 1, y - 5, 3, 1);
+    ctx.fillStyle = '#f2e6c8'; ctx.fillRect(x - 2, y - 1, 5, 3);
+    ctx.fillStyle = '#3a2a24'; ctx.fillRect(x, y, 1, 2);
   }
   return c;
+}
+function forestDensity(terrain, x, z) {
+  const s = terrain.splatAt(x, z);
+  return s.litter ?? 0.5;
+}
+
+// a brass compass rose for the map corner
+function compassRose() {
+  const c = document.createElement('canvas');
+  c.width = c.height = 48;
+  const g = c.getContext('2d');
+  const R = (x, y, w, h, col) => { g.fillStyle = col; g.fillRect(x, y, w, h); };
+  for (let y = 0; y < 48; y++) for (let x = 0; x < 48; x++) {
+    const d = Math.hypot(x - 23.5, y - 23.5);
+    if (d < 22 && d > 20) R(x, y, 1, 1, '#6a4a2a');
+    if (d < 13 && d > 12) R(x, y, 1, 1, '#6a4a2a');
+  }
+  for (let k = 0; k < 4; k++) {
+    for (let t = 0; t < 19; t++) {
+      const w = Math.max(0, 4 - t * 0.22);
+      for (let q = -w; q <= w; q++) {
+        const ax = [0, 1, 0, -1][k], ay = [-1, 0, 1, 0][k];
+        const x = 24 + ax * t - ay * q, y = 24 + ay * t + ax * q;
+        R(Math.round(x), Math.round(y), 1, 1, k === 0 ? (q < 0 ? '#c8361f' : '#8a2214') : q < 0 ? '#e8d8b0' : '#8a6a4a');
+      }
+    }
+  }
+  R(22, 0, 1, 5, '#2a1a14'); R(26, 0, 1, 5, '#2a1a14'); R(23, 1, 1, 1, '#2a1a14'); R(24, 2, 1, 1, '#2a1a14'); R(25, 3, 1, 1, '#2a1a14');
+  return c.toDataURL();
+}
+
+// pencil sketches of jack-o'-lantern faces for the carving page
+function faceSketch(kind) {
+  const c = document.createElement('canvas');
+  c.width = c.height = 32;
+  const g = c.getContext('2d');
+  const R = (x, y, w, h, col) => { g.fillStyle = col; g.fillRect(x, y, w, h); };
+  for (let y = 0; y < 32; y++) for (let x = 0; x < 32; x++) {
+    const dx = (x - 15.5) / 14, dy = (y - 17) / 12;
+    const d = dx * dx + dy * dy;
+    if (d < 1) R(x, y, 1, 1, d > 0.82 ? '#8a3a10' : (x % 7 === 0 ? '#d8601a' : '#e8781e'));
+  }
+  R(14, 2, 3, 4, '#4a6a2a');
+  const ink = '#2a1408', glow = '#ffd060';
+  const tri = (x, y, s, up = true) => { for (let k = 0; k < s; k++) R(x - k, up ? y + k : y - k, 1 + k * 2, 1, glow); };
+  switch (kind) {
+    case 'happy': tri(10, 11, 4); tri(21, 11, 4); for (let x = 7; x < 25; x++) R(x, 21 + Math.round(Math.sin(((x - 7) / 18) * Math.PI) * 3), 1, 2, glow); break;
+    case 'scared': R(8, 11, 5, 5, glow); R(19, 11, 5, 5, glow); R(10, 13, 1, 1, ink); R(21, 13, 1, 1, ink); R(13, 20, 6, 6, glow); break;
+    case 'toothy': tri(10, 10, 4); tri(21, 10, 4); R(7, 20, 18, 5, glow); for (let x = 8; x < 25; x += 3) R(x, 20, 1, 2, '#e8781e'), R(x + 1, 23, 1, 2, '#e8781e'); break;
+    case 'cat': R(8, 13, 5, 3, glow); R(19, 13, 5, 3, glow); R(10, 13, 1, 3, ink); R(21, 13, 1, 3, ink); R(15, 18, 2, 2, glow); R(11, 22, 4, 1, glow); R(17, 22, 4, 1, glow); break;
+    case 'skull': R(8, 10, 6, 6, glow); R(18, 10, 6, 6, glow); R(15, 17, 2, 2, glow); R(9, 21, 14, 4, glow); for (let x = 10; x < 23; x += 2) R(x, 21, 1, 4, '#e8781e'); break;
+    default: tri(10, 10, 4); tri(21, 10, 4); tri(16, 15, 2); for (let x = 7; x < 25; x++) R(x, 21 + (x % 4 < 2 ? 0 : 1), 1, 3, glow);
+  }
+  return c.toDataURL();
 }

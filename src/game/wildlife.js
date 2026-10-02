@@ -5,12 +5,14 @@ import { RNG } from '../core/noise.js';
 import { angleDamp, clamp, damp } from '../core/math.js';
 import * as L from '../world/layout.js';
 import { P } from '../render/particles.js';
+import { VoxCritter, hasVoxelAnimal } from './voxanimals.js';
 
 class Critter {
   constructor(game, kind, x, z, opt = {}) {
     this.game = game;
     this.kind = kind;
-    this.bb = new Billboard(game.atlas, null, { castShadow: opt.shadow ?? true, upright: 0.9 });
+    this.voxel = hasVoxelAnimal(kind);
+    this.bb = this.voxel ? new VoxCritter(kind, { shadow: opt.shadow ?? true }) : new Billboard(game.atlas, null, { castShadow: opt.shadow ?? true, upright: 0.9 });
     game.scene.add(this.bb.mesh);
     this.pos = new THREE.Vector3(x, 0, z);
     this.vel = new THREE.Vector3();
@@ -24,6 +26,13 @@ class Critter {
     this.alt = 0;
   }
   setFrame(anim, fps, n) {
+    if (this.voxel) {
+      const now = performance.now();
+      const dt = Math.min(0.1, (now - (this._last || now)) / 1000);
+      this._last = now;
+      this.bb.pose(dt, this.yaw, anim, fps);
+      return;
+    }
     const f = Math.floor(this.t * fps) % n;
     const name = `${this.kind}:${anim}:side:${f}`;
     const { view, flip } = pickView(this.yaw, this.pos, this.game.camera.position);

@@ -477,9 +477,9 @@ export class Game {
     const carried = this.orders.carried().length;
     const board = this.orders.board().length;
     if (this.catEventActive) return 'Something is meowing by the road home...';
-    if (carried) return `Deliver hot cocoa — ${carried} cup${carried > 1 ? 's' : ''} in the basket`;
-    if (board) return "Head home — more orders on Nana's board";
-    return this.world.atmosphere.hour > 17 ? 'All delivered! Head home and call it a day' : 'All delivered! Explore, or head home to Nana';
+    if (carried) return '';
+    if (board) return "More orders on Nana's board";
+    return this.world.atmosphere.hour > 17 ? 'All done! Home to bed' : 'All done! Explore or chat';
   }
 
   // ---------------------------------------------------------------- bike events -> sound, cocoa, stats

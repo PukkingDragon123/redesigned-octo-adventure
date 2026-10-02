@@ -88,15 +88,35 @@ export class Villagers {
           a.walkTo([a.patrol[a.patrolIdx]], 1.1).then(() => (a.patrolWait = 5 + Math.random() * 5));
         }
       }
+      // little strolls around home (more alive), back again after a while
+      if (!a.patrol && !a.path && d > 10 && a.homePos && !a.hiddenByStory) {
+        a.strollT = (a.strollT ?? 4 + Math.random() * 10) - dt;
+        if (a.strollT <= 0) {
+          const away = a.pos.distanceTo(a.homePos) > 0.6;
+          const ang = Math.random() * Math.PI * 2, r = 1.2 + Math.random() * 2.2;
+          const to = away ? a.homePos.clone() : a.homePos.clone().add(new THREE.Vector3(Math.cos(ang) * r, 0, Math.sin(ang) * r));
+          const anim = IDLE[a.char] && IDLE[a.char] !== 'idle' ? 'walk' : 'walk';
+          a.walkTo([to], 0.9 + Math.random() * 0.4, anim).then(() => {
+            a.play(away ? IDLE[a.char] || 'idle' : 'idle');
+            if (away && a.homeYaw !== undefined) a.face(a.homeYaw);
+            if (!away && Math.random() < 0.4) a.react(['nod', 'bounce', 'spin'][Math.floor(Math.random() * 3)]);
+          });
+          a.strollT = 7 + Math.random() * 12;
+        }
+      }
       // turn to look at Hank when he's close and slow
       if (d < 9 && !a.path) {
         a.faceTowards(p.x, p.z);
+        a.lookAt(g.playerChar);
         if (!this.scaredOfHank && (g.onFoot || g.bike.speed < 3) && !(this.waveCooldown[id] > 0) && d < 6) {
           this.waveCooldown[id] = 25;
           a.play('wave', 'happy');
           setTimeout(() => a.anim === 'wave' && a.play(IDLE[a.char] || 'idle', 'neutral'), 1600);
         }
-      } else if (!a.path && a.homeYaw !== undefined) a.face(a.homeYaw);
+      } else {
+        if (a.lookTarget === g.playerChar) a.lookAt(null);
+        if (!a.path && a.homeYaw !== undefined) a.face(a.homeYaw);
+      }
       this.waveCooldown[id] = (this.waveCooldown[id] || 0) - dt;
       a.update(dt, g.camera.position);
     }

@@ -289,6 +289,10 @@ export class VoxelWorld {
     S('flamingo', () => PR.lawnFlamingo({ hat: true }), c.x + 9, c.z - 11, 2.0);
     S('birdhouse', () => PR.birdhouse({}), c.x + 14, c.z + 6, 0.8);
     S('well', () => PR.well({}), c.x - 14, c.z + 12, 0.3);
+    // carving table on the porch steps
+    S('carvetable', () => PR.cafeTable({ color: 'wood' }), -166.2, 63.4, 0.4);
+    S('carvepumpkin', () => PR.pumpkin({ kind: 'medium', seed: 77 }), -166.2, 63.4, 0, 0.8, 0.8);
+    this.spot(-166.2, 63.4, 1.8, 'Carve a pumpkin', 'carve');
     this.world.physics.addCircle({ x: c.x - 14, z: c.z + 12, r: 1.1, kind: 'post' });
     // planting spots (side quest): dirt mounds waiting for saplings
     this.plantSpots = [];

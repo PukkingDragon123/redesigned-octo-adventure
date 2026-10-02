@@ -9,6 +9,24 @@ import { POI, CUSTOMERS, KEEPSAKES, HOME_SPOTS, HOME_SPAWN } from '../world/layo
 import { CHARACTERS } from '../art/characters.js';
 import { P } from '../render/particles.js';
 import { charForSpot } from './npcs.js';
+import * as FOOD from '../voxel/models/food.js';
+import { meshVox, fragmentVox } from '../voxel/mesh.js';
+import { Vox } from '../voxel/vox.js';
+import { voxMesh, sharedVoxelMaterial } from '../render/voxelMaterial.js';
+
+// a plate of voxel food that steams; returns { mesh, res, steam: [world points] }
+function voxelFood(g, builder, x, y, z, yaw = 0) {
+  const res = builder();
+  const geo = meshVox(res.vox, { size: res.size, origin: res.origin, jitter: 0.03 });
+  const mesh = voxMesh(geo, sharedVoxelMaterial());
+  mesh.position.set(x, y, z);
+  mesh.rotation.y = yaw;
+  g.scene.add(mesh);
+  mesh.updateMatrixWorld(true);
+  const steam = (res.meta?.steam || []).map((s) => new THREE.Vector3(s.x, s.y, s.z).applyMatrix4(mesh.matrixWorld));
+  return { mesh, res, steam };
+}
+const FOOD_FOR = { pancakes: 'pancakes', egg: 'eggsToast', bacon: 'eggsToast', toast: 'eggsToast' };
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 
@@ -324,6 +342,11 @@ export class Story {
       const ty = g.physics.groundAt(tx, tz).h;
       const table = this.table || (this.table = makeTable(g, tx, ty, tz));
       table.visible = true;
+      // breakfast on the table, steaming hot (Hank's plate and Nana's cocoa)
+      const plate = b ? voxelFood(g, FOOD[FOOD_FOR[b.food] || 'pancakes'], tx - 0.3, ty + 0.77, tz, Math.PI / 2) : voxelFood(g, FOOD.soupBowl, tx - 0.3, ty + 0.77, tz);
+      const mug = voxelFood(g, FOOD.cocoaMaple, tx + 0.28, ty + 0.77, tz + 0.18, -1.2);
+      this.steamers = [...plate.steam, ...mug.steam];
+      S.temp.push({ remove: () => { g.scene.remove(plate.mesh); g.scene.remove(mug.mesh); this.steamers = []; } });
       g.villagers.setVisible('grandma', false);
       const H = S.actor('hank', tx - 0.85, tz, Math.PI / 2, 'sit');
       const N = S.actor('grandma', tx + 0.25, tz + 1.05, Math.PI, 'idle');
@@ -348,10 +371,17 @@ export class Story {
         // ...and the food falls straight through him
         S.sfx('food_fall');
         const toCam = g.camera.position.clone().sub(H.pos).setY(0).normalize().multiplyScalar(0.3);
+        // bites of the real voxel food tumble through his ribs
+        const bites = fragmentVox(plate.res.vox, 4, Vox).filter((f) => f.n > 6).slice(0, 3);
         for (let k = 0; k < 3; k++) {
-          this.drop(`food:${b.food}`, V(H.pos.x + toCam.x, ty + 1.2 - k * 0.06, H.pos.z + toCam.z), V((Math.random() - 0.5) * 0.5, -0.4, (Math.random() - 0.5) * 0.5), 1.2);
+          const f = bites[k % Math.max(1, bites.length)];
+          if (f) {
+            const m = voxMesh(meshVox(f.vox, { size: plate.res.size, origin: [f.vox.w / 2, f.vox.h / 2, f.vox.d / 2] }), sharedVoxelMaterial());
+            this.dropMesh(m, V(H.pos.x + toCam.x, ty + 1.2 - k * 0.06, H.pos.z + toCam.z), V((Math.random() - 0.5) * 0.5, -0.4, (Math.random() - 0.5) * 0.5));
+          } else this.drop(`food:${b.food}`, V(H.pos.x + toCam.x, ty + 1.2 - k * 0.06, H.pos.z + toCam.z), V(0, -0.4, 0), 1.2);
           await S.wait(0.22);
         }
+        plate.mesh.scale.setScalar(0.7);
         await S.wait(0.5);
         S.sfx('plate');
         H.play('sit', 'sheepish');
@@ -766,8 +796,19 @@ export class Story {
     this.debris.push({ b, vel: vel.clone(), spin: (Math.random() - 0.5) * 12, landed: false });
   }
 
+  dropMesh(mesh, pos, vel) {
+    mesh.position.copy(pos);
+    this.g.scene.add(mesh);
+    const b = { mesh, get roll() { return mesh.rotation.z; }, set roll(v) { mesh.rotation.z = v; mesh.rotation.x = v * 0.7; } };
+    this.debris.push({ b, vel: vel.clone(), spin: (Math.random() - 0.5) * 12, landed: false });
+  }
+
   update(dt) {
     const g = this.g;
+    // hot food steams
+    for (const s of this.steamers || []) {
+      if (Math.random() < dt * 9) g.effects.ps.spawn({ x: s.x + (Math.random() - 0.5) * 0.04, y: s.y, z: s.z + (Math.random() - 0.5) * 0.04, vx: (Math.random() - 0.5) * 0.08, vy: 0.35 + Math.random() * 0.2, vz: (Math.random() - 0.5) * 0.08, life: 1.6, size: 0.06, size1: 0.2, sprite: P.steam, color: [1, 1, 1], alpha: 0.55, drag: 0.6, flutter: 0.4, wind: 0.3 });
+    }
     for (const d of this.debris) {
       d.vel.y -= 9.8 * dt;
       d.b.mesh.position.addScaledVector(d.vel, dt);

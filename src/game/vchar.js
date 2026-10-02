@@ -10,6 +10,59 @@ import { createVoxelMaterial, createFlatMaterial } from '../render/voxelMaterial
 import { FaceTex } from '../voxel/faces.js';
 import { Cloth, scarfTexture, capeTexture } from '../render/cloth.js';
 import { clamp, angleDamp, wrapAngle } from '../core/math.js';
+import * as PR from '../voxel/models/props.js';
+import * as FOOD from '../voxel/models/food.js';
+import { voxMesh, sharedVoxelMaterial } from '../render/voxelMaterial.js';
+
+// ---------------------------------------------------------------- held props per pose
+function stick(len, col, blade) {
+  const v = new Vox(3, len + 2, blade ? 8 : 3);
+  v.fill(1, 2, 1, 1, len + 1, 1, col);
+  if (blade === 'hockey') v.fill(0, 0, 1, 2, 1, 7, 0x2a2a30);
+  if (blade === 'shovel') v.fill(0, 0, 0, 2, 3, 3, 0x9aa0a8), v.fill(0, len + 1, 1, 2, len + 1, 1, 0x3a2418);
+  return { vox: v, size: 0.05, origin: [1.5, len + 1, 1.5] };
+}
+function popgun() {
+  const v = new Vox(3, 4, 10);
+  v.fill(0, 0, 0, 2, 3, 3, 0x3a3a46); v.fill(1, 2, 3, 1, 3, 9, 0x5a5a68); v.set(1, 3, 9, 0xf2c443); v.fill(1, 0, 1, 1, 1, 2, 0x8a5a32);
+  return { vox: v, size: 0.05, origin: [1.5, 3, 1.5] };
+}
+function yarn() {
+  const v = new Vox(5, 5, 5);
+  v.ellipsoid(2, 2, 2, 2.2, 2.2, 2.2, (x, y, z) => ((x + y + z) % 2 ? 0xc84a6a : 0xe86a8a));
+  v.line(2, 4, 2, 2, 4, 4, 0xd8c8a0);
+  return { vox: v, size: 0.05, origin: [2.5, 2.5, 2.5] };
+}
+const HELD = {
+  lantern: { fn: () => PR.lantern({ color: 'brass', lit: true }), scale: 0.55, upright: true, hang: true },
+  sip: { fn: FOOD.cocoaClassic, scale: 1, upright: true },
+  eat: { fn: FOOD.cocoaMaple, scale: 1, upright: true },
+  offer: { fn: FOOD.cocoaTakeaway, scale: 1, upright: true },
+  clipboard: { fn: () => PR.letter({}), scale: 1.2 },
+  photo: { fn: () => PR.camera(), scale: 1, upright: true },
+  water: { fn: () => PR.wateringCan({}), scale: 0.8, upright: true },
+  hockey: { fn: () => stick(18, 0x8a5a32, 'hockey'), scale: 1 },
+  dig: { fn: () => stick(16, 0x8a5a32, 'shovel'), scale: 1 },
+  sweep: { fn: () => PR.broom({}), scale: 0.7 },
+  aim: { fn: popgun, scale: 1 },
+  gun: { fn: popgun, scale: 1 },
+  knit: { fn: yarn, scale: 1, upright: true },
+};
+const HELD_CACHE = new Map();
+function heldMesh(name) {
+  const H = HELD[name];
+  let geo = HELD_CACHE.get(name);
+  if (!geo) {
+    const r = H.fn();
+    geo = meshVox(r.vox, { size: r.size, origin: r.origin, jitter: 0.02 });
+    HELD_CACHE.set(name, geo);
+  }
+  const m = voxMesh(geo, sharedVoxelMaterial());
+  m.scale.setScalar(H.scale);
+  m.userData.held = name;
+  m.userData.upright = H.upright;
+  return m;
+}
 
 const TAU = Math.PI * 2;
 const _v = new THREE.Vector3(), _w = new THREE.Vector3(), _q = new THREE.Quaternion(), _m = new THREE.Matrix4(), _e = new THREE.Euler();
@@ -444,6 +497,7 @@ export class VoxelCharacter {
     this.targetYaw = yaw;
     this.anim = ALIAS[anim] || anim;
     this.animT = 0;
+    this._initHold = true;
     this.expr = expr;
     this.t = Math.random() * 10;
     this.groundSnap = y == null;
@@ -477,6 +531,7 @@ export class VoxelCharacter {
     this.parentObj = parent || game?.scene;
     this.buildRig(shadow);
     if (cloth) this.buildCloth();
+    if (HELD[this.anim]) this.autoHold(this.anim);
     this.parentObj?.add(this.root);
     for (const cl of this.cloths) this.parentObj?.add(cl.group);
     this.snapGround();
@@ -633,6 +688,7 @@ export class VoxelCharacter {
     if (anim !== this.anim) {
       this.anim = anim;
       this.animT = 0;
+      this.autoHold(anim);
     }
     if (expr) this.expr = expr === 'blink' ? 'neutral' : expr;
     return this;
@@ -676,6 +732,14 @@ export class VoxelCharacter {
     const base = anim.startsWith('walk+') ? anim.slice(5) : anim === 'walk' ? (LOCO_OK.has(this.anim) ? this.anim : 'idle') : anim;
     this.play(base);
     return new Promise((res) => (this.onArrive = res));
+  }
+  // props that come with a pose (Nana's lantern, a mug for sipping, Pip's hockey stick...)
+  autoHold(anim) {
+    const cur = this.held.R;
+    if (cur && !cur.userData.held) return; // something scripted is held; leave it
+    if (cur?.userData.held === anim) return;
+    if (cur) this.hold(null, 'R');
+    if (HELD[anim]) this.hold(heldMesh(anim), 'R');
   }
   hold(obj, side = 'R') {
     const prev = this.held[side];
@@ -837,6 +901,14 @@ export class VoxelCharacter {
     this.springs(dt);
     this.apply();
     if (this.ride) this.solveRide(dt);
+    // upright held things (mugs, lanterns) stay level whatever the arm does
+    for (const s of ['L', 'R']) {
+      const h = this.held[s];
+      if (!h?.userData.upright) continue;
+      this.arms[s].hand.updateWorldMatrix(true, false);
+      this.arms[s].hand.getWorldQuaternion(_q).invert();
+      h.quaternion.copy(_q).multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), this.yaw));
+    }
     this.updateFace(dt, camPos);
     if (this.flashT > 0) {
       this.flashT -= dt;

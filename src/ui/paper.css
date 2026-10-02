@@ -356,3 +356,24 @@
 #touch .t-map { left: auto !important; right: calc(var(--u) * 24); top: calc(var(--u) * 52) !important; }
 .touchmode .ph-gauge { bottom: calc(var(--u) * 64); }
 .touchmode .ph-prompt { display: none; }
+.touchmode .ph-note .obj { display: none; }
+
+/* the paper map */
+.menu.mapsheet { padding-left: calc(var(--u) * 12) !important; }
+.menu.mapsheet::before { display: none; }
+.mapwrap { position: relative; }
+.mapwrap canvas { width: min(78vh, 86vw); height: min(78vh, 86vw); image-rendering: pixelated; display: block; }
+.mapwrap .pin { position: absolute; width: calc(var(--u) * 10); height: calc(var(--u) * 10); transform: translate(-50%, -50%); image-rendering: pixelated; filter: drop-shadow(0 0 0 #fff) drop-shadow(1px 1px 0 rgba(0, 0, 0, 0.4)); }
+.mapwrap .pin::after { content: ''; }
+.mapwrap .pin.me { width: calc(var(--u) * 12); height: calc(var(--u) * 12); animation: bob 0.8s ease-in-out infinite; }
+.mapwrap .pin.quest { outline: 2px dashed #b8321e; outline-offset: 2px; border-radius: 50%; }
+.mapwrap .rose { position: absolute; right: 3%; bottom: 3%; width: 18%; image-rendering: pixelated; opacity: 0.9; transform: rotate(-6deg); }
+.mapwrap .folds { position: absolute; inset: 0; pointer-events: none; background:
+  linear-gradient(90deg, transparent 33.1%, rgba(80, 50, 30, 0.18) 33.3%, rgba(255, 255, 255, 0.12) 33.6%, transparent 33.9%, transparent 66.4%, rgba(80, 50, 30, 0.18) 66.6%, rgba(255, 255, 255, 0.12) 66.9%, transparent 67.2%),
+  linear-gradient(180deg, transparent 49.6%, rgba(80, 50, 30, 0.2) 49.9%, rgba(255, 255, 255, 0.12) 50.3%, transparent 50.6%),
+  radial-gradient(circle at 78% 22%, rgba(120, 70, 30, 0.18) 0 7%, transparent 7.5% 9%, rgba(120, 70, 30, 0.1) 9.5% 10%, transparent 10.5%); }
+.mapwrap .scrawl { position: absolute; left: 3%; bottom: 2%; font-family: 'Monogram', monospace; font-size: var(--tf); color: #5a3a2a; transform: rotate(-2deg); background: rgba(255, 248, 230, 0.7); padding: 0 calc(var(--u) * 1.5); }
+.carvegrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: calc(var(--u) * 4); margin: calc(var(--u) * 2) 0; }
+.carveface { display: flex !important; flex-direction: column; align-items: center; background: #fffaf0 !important; border: none !important; border-image: none !important; padding: calc(var(--u) * 2) !important; cursor: pointer; box-shadow: calc(var(--u) * 1) calc(var(--u) * 1) 0 rgba(0, 0, 0, 0.2); font-family: 'Monogram', monospace; font-size: var(--tf); color: var(--pencil); }
+.carveface img { width: calc(var(--u) * 28); height: calc(var(--u) * 28); image-rendering: pixelated; }
+.carveface.sel { outline: 3px dashed #b8321e; outline-offset: 2px; transform: rotate(-2deg) scale(1.05); }

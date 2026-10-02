@@ -84,6 +84,24 @@ export class Interactables {
         g.effects.magic(s.x, g.walker.pos.y + 1.2, s.z, 24, [0.5, 1, 0.4]);
         g.quests?.event('cauldron');
         break;
+      case 'carve':
+        g.openMenu(() => g.menus.carve((face) => {
+          g.resumeFromMenu();
+          if (!face) return;
+          const slots = [[-167.6, 62.6], [-164.8, 62.4], [-168.6, 64.2], [-163.8, 64.4], [-166.2, 61.6]];
+          this.carved = (this.carved || 0) % slots.length;
+          const [x, z] = slots[this.carved++];
+          const PRm = g.world.voxel;
+          const r = PRm.model(`carved:${face}`, () => g.world.voxelProps.jackOLantern({ face, kind: 'medium', seed: 3, hollow: false }));
+          const y = g.physics.groundAt(x, z, 100).h;
+          g.world.physprops.add(r, x, y, z, { yaw: Math.PI / 2, kind: 'jack', hp: 3, mass: 1.2, lights: true, respawn: 0 });
+          g.sound.play('lantern_whoomp');
+          g.effects.magic(x, y + 0.5, z, 20, [1, 0.7, 0.3]);
+          ch.react('yay');
+          g.quests?.event('carve', face);
+          g.ui.toast(`You carved a <b>${face}</b> jack-o'-lantern! It's glowing on the porch.`, 'pumpkin', 2600);
+        }));
+        break;
       default:
         g.quests?.event('spot', s);
     }
