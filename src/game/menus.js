@@ -142,7 +142,7 @@ export class Menus {
     for (const [id, ing] of Object.entries(RECIPES)) {
       const can = ing.every((k) => (pantry[k] || 0) > 0);
       const card = el('div', `rcard${can ? '' : ' short'}`);
-      card.innerHTML = `<img class="big" src="${foodIconURL('cocoa_' + id)}"><div class="rn">${names[id]}</div><div class="ri">${ing.map((k) => `<span class="${(pantry[k] || 0) > 0 ? '' : 'out'}"><img src="${foodIconURL(k)}">${pantry[k] || 0}</span>`).join('')}</div>`;
+      card.innerHTML = `<span class="steamy"><img class="big" src="${foodIconURL('cocoa_' + id)}"></span><div class="rn">${names[id]}</div><div class="ri">${ing.map((k) => `<span class="${(pantry[k] || 0) > 0 ? '' : 'out'}"><img src="${foodIconURL(k)}">${pantry[k] || 0}</span>`).join('')}</div>`;
       grid.appendChild(card);
     }
     p.appendChild(grid);

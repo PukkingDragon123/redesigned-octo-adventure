@@ -394,3 +394,8 @@
 .banner.gazette.out { animation: gazout 0.6s ease-in forwards; }
 @keyframes gazin { 0% { transform: translate(-50%, -50%) rotate(-720deg) scale(0.05); } 100% { transform: translate(-50%, -50%) rotate(-3deg) scale(1); } }
 @keyframes gazout { to { transform: translate(-50%, 160%) rotate(12deg); opacity: 0; } }
+/* hot food: little pixel steam wisps curl up off the icon */
+.steamy { position: relative; display: block; width: max-content; margin: 0 auto; }
+.steamy::before, .steamy::after { content: ''; position: absolute; left: 42%; top: calc(var(--u) * -2); width: calc(var(--u) * 1.5); height: calc(var(--u) * 5); background: rgba(255, 255, 255, 0.85); box-shadow: calc(var(--u) * 1.5) calc(var(--u) * -3) 0 rgba(255, 255, 255, 0.7); animation: wisp 1.6s ease-in infinite; }
+.steamy::after { left: 58%; animation-delay: -0.8s; }
+@keyframes wisp { 0% { transform: translateY(calc(var(--u) * 4)) scaleY(0.4); opacity: 0; } 30% { opacity: 1; } 100% { transform: translate(calc(var(--u) * 2), calc(var(--u) * -6)) scaleY(1.2); opacity: 0; } }

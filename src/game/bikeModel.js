@@ -4,6 +4,9 @@ import * as THREE from 'three';
 import { Builder } from '../render/builder.js';
 import { createPropMaterial, propMesh } from '../render/propMaterial.js';
 import { damp } from '../core/math.js';
+import { bikeFrame, bikeFront, bikeWheel } from '../voxel/models/bike.js';
+import { meshVox } from '../voxel/mesh.js';
+import { voxMesh, sharedVoxelMaterial } from '../render/voxelMaterial.js';
 
 const R = 0.34; // wheel radius
 const WB = 0.54; // half wheelbase
@@ -61,6 +64,7 @@ export class BikeModel {
     this.steer = 0;
     this.flames = [];
     this.buildBicycle();
+    this.voxelizeBicycle();
     this.buildMotor();
     this.setMotor(false);
   }
@@ -317,6 +321,24 @@ export class BikeModel {
     this.mLampLight = new THREE.Object3D();
     this.mLampLight.position.set(0, 1.0, 1.6);
     g.add(this.mLampLight);
+  }
+
+  // swap the roadster's frame, front end and wheels for voxel versions
+  voxelizeBicycle() {
+    const mk = (r) => voxMesh(meshVox(r.vox, { size: r.size, origin: r.origin, jitter: 0.02 }), sharedVoxelMaterial());
+    const frame = mk(bikeFrame());
+    this.frameMesh.visible = false;
+    this.bicycle.add(frame);
+    const front = mk(bikeFront());
+    this.frontMesh.visible = false;
+    this.steerG.add(front);
+    const wheel = bikeWheel();
+    const wg = meshVox(wheel.vox, { size: wheel.size, origin: wheel.origin, jitter: 0.02 });
+    for (const w of [this.wheelF, this.wheelR]) {
+      w.geometry = wg;
+      w.material = sharedVoxelMaterial();
+      w.customDepthMaterial = w.material.userData.depth;
+    }
   }
 
   setMotor(on) {

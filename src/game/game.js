@@ -504,6 +504,13 @@ export class Game {
         st.stats.crashes++;
         st.stats.dayCrashes = (st.stats.dayCrashes || 0) + 1;
         this.crashGag();
+        // onlookers gasp... then can't help laughing
+        for (const a of Object.values(this.villagers.actors)) {
+          if (!a.visible || a.scripted || a.pos.distanceTo(b.pos) > 16) continue;
+          a.faceTowards(b.pos.x, b.pos.z);
+          a.react(this.villagers.scaredOfHank ? 'flinch' : 'gasp');
+          if (!this.villagers.scaredOfHank) this.wait(1.0 + Math.random() * 0.5).then(() => a.react('laugh'));
+        }
         break;
       case 'reassemble': break;
       case 'bonk': sound.play('wobble', { volume: 0.6 }); this.orders.slosh(1); break;

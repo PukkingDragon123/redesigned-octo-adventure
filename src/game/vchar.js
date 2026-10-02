@@ -8,7 +8,7 @@ import { meshVox } from '../voxel/mesh.js';
 import { Vox, tone } from '../voxel/vox.js';
 import { createVoxelMaterial, createFlatMaterial } from '../render/voxelMaterial.js';
 import { FaceTex } from '../voxel/faces.js';
-import { Cloth, scarfTexture, capeTexture } from '../render/cloth.js';
+import { Cloth, scarfTexture, capeTexture, stripeTexture } from '../render/cloth.js';
 import { clamp, angleDamp, wrapAngle } from '../core/math.js';
 import * as PR from '../voxel/models/props.js';
 import * as FOOD from '../voxel/models/food.js';
@@ -663,6 +663,14 @@ export class VoxelCharacter {
       const a = new Cloth({ cols: 2, rows: 7, width: 0.11, length: long, map: tex, anchor: this.scarfRing, pins: [new THREE.Vector3(k[0] - 0.05, k[1], k[2]), new THREE.Vector3(k[0] + 0.05, k[1], k[2])], dir: [0.15, -1, 0.35], colliders, ground, drag: 0.04 });
       const b = new Cloth({ cols: 2, rows: 6, width: 0.1, length: long * 0.75, map: tex, anchor: this.scarfRing, pins: [new THREE.Vector3(k[0] + 0.02, k[1], k[2] - 0.02), new THREE.Vector3(k[0] + 0.1, k[1], k[2] - 0.04)], dir: [0.6, -1, -0.2], colliders, ground, drag: 0.04 });
       this.cloths.push(a, b);
+    }
+    // apron strings tied in a bow at the back
+    if (S.apron && !S.apron.short) {
+      const tex = stripeTexture([S.apron.color, S.apron.color]);
+      const zb = -((S.torso.d / 2) + 0.7) * VS, y = 3.5 * VS;
+      for (const side of [-1, 1]) {
+        this.cloths.push(new Cloth({ cols: 2, rows: 4, width: 0.04, length: 0.2, map: tex, anchor: this.torso, pins: [new THREE.Vector3(side * 0.015, y, zb), new THREE.Vector3(side * 0.055, y, zb)], dir: [side * 0.3, -1, -0.3], colliders, ground, drag: 0.05, castShadow: false }));
+      }
     }
     if (S.cape) {
       const W = S.torso.w * VS * 0.95;

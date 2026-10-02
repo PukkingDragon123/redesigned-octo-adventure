@@ -48,11 +48,11 @@ export class Scene {
     else c.move(v3(pos), v3(look), dur, fov);
     return this.wait(dur);
   }
-  // camera framing helper: look at an actor from an offset. Offsets are scaled up so
-  // sprites stay around 2x pixel size; closer than that and the pixel art turns to mush.
+  // camera framing helper: look at an actor from an offset. The voxel cast holds up
+  // well close to the lens, so shots sit a little tighter on their faces.
   frame(target, offset = [3, 1.6, 4], dur = 0, fov = 45, lookUp = 1.0) {
     const t = target.isVector3 ? target : target.pos;
-    const k = 1.85;
+    const k = 1.35;
     // aim a little low so the subject sits in the upper part of the frame, clear of the dialogue box
     const look = new THREE.Vector3(t.x, t.y + lookUp * 0.9 - 0.4, t.z);
     const pos = new THREE.Vector3(t.x + offset[0] * k, t.y + 0.6 + (offset[1] - 0.6) * k * 0.8, t.z + offset[2] * k);
