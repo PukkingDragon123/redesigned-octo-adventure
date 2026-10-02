@@ -27,7 +27,7 @@ window.addEventListener('resize', onResize);
 let game = null;
 
 async function boot() {
-  if (params.has('px')) pipeline.pixelScale = parseInt(params.get('px'));
+  if (params.has('px')) pipeline.pixelScale = parseFloat(params.get('px'));
   if (params.has('noshadow')) pipeline.renderer.shadowMap.enabled = false;
   await world.build();
   onResize();

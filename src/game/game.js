@@ -336,8 +336,9 @@ export class Game {
 
   applySettings() {
     const s = this.settings;
-    if (s.pixel !== this.pipeline.pixelScale) {
-      this.pipeline.setPixelScale(s.pixel);
+    const px = this.params.has('px') ? parseFloat(this.params.get('px')) : s.pixel;
+    if (px !== this.pipeline.pixelScale) {
+      this.pipeline.setPixelScale(px);
       this.camera.aspect = this.pipeline.w / this.pipeline.h;
       this.camera.updateProjectionMatrix();
     }
@@ -561,7 +562,7 @@ export class Game {
     const s = this.settings;
     if (s.quality === 'high') s.quality = 'medium';
     else if (s.quality === 'medium') s.quality = 'low';
-    else if (s.pixel < 4) s.pixel++;
+    else if (s.pixel < 2) s.pixel = s.pixel < 1 ? 1 : s.pixel < 1.5 ? 1.5 : 2;
     else return;
     pf.steps++;
     this.applySettings();

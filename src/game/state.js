@@ -62,7 +62,7 @@ export function clearSave() {
   }
 }
 
-export const DEFAULT_SETTINGS = { pixel: 2, master: 0.8, music: 0.55, sfx: 0.85, quality: 'high', camDist: 1, fps: false, autoQuality: true };
+export const DEFAULT_SETTINGS = { pixel: 1, gfx: 2, master: 0.8, music: 0.55, sfx: 0.85, quality: 'high', camDist: 1, fps: false, autoQuality: true };
 
 // phones and small tablets start one notch lower; the governor in game.js steps further if needed
 function deviceDefaults() {
@@ -72,7 +72,10 @@ function deviceDefaults() {
 
 export function loadSettings() {
   try {
-    return { ...DEFAULT_SETTINGS, ...deviceDefaults(), ...(JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}')) };
+    const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
+    // settings from before the HD renderer: drop the old chunky pixel size
+    if ((saved.gfx || 1) < 2) { delete saved.pixel; delete saved.autoQuality; }
+    return { ...DEFAULT_SETTINGS, ...deviceDefaults(), ...saved, gfx: 2 };
   } catch {
     return { ...DEFAULT_SETTINGS, ...deviceDefaults() };
   }

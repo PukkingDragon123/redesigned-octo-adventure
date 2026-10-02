@@ -1,6 +1,8 @@
-// Low-resolution pixel render pipeline:
+// Render pipeline:
 //   scene -> HDR target (with depth) -> bloom -> composite (fog, god rays,
-//   grading, outlines, ordered dithering) -> canvas, upscaled with nearest.
+//   grading, cartoon outlines) -> FXAA -> canvas.
+// Renders at native resolution by default (or above it on high-DPI screens);
+// 'Retro' pixel sizes (>= 2) bring back the chunky dithered, posterised look.
 import * as THREE from 'three';
 import { G, NOISE_GLSL } from './shaderlib.js';
 import { SKY } from './sky.js';
@@ -39,6 +41,33 @@ void main() {
 }
 `;
 
+// FXAA (the classic console variant): smooths voxel edges at native resolution
+const FXAA_FRAG = /* glsl */ `
+uniform sampler2D tColor;
+uniform vec2 uTexel;
+varying vec2 vUv;
+float lum(vec3 c) { return dot(c, vec3(0.299, 0.587, 0.114)); }
+void main() {
+  vec3 nw = texture2D(tColor, vUv + vec2(-1.0, -1.0) * uTexel).rgb;
+  vec3 ne = texture2D(tColor, vUv + vec2(1.0, -1.0) * uTexel).rgb;
+  vec3 sw = texture2D(tColor, vUv + vec2(-1.0, 1.0) * uTexel).rgb;
+  vec3 se = texture2D(tColor, vUv + vec2(1.0, 1.0) * uTexel).rgb;
+  vec3 m = texture2D(tColor, vUv).rgb;
+  float lNW = lum(nw), lNE = lum(ne), lSW = lum(sw), lSE = lum(se), lM = lum(m);
+  float lMin = min(lM, min(min(lNW, lNE), min(lSW, lSE)));
+  float lMax = max(lM, max(max(lNW, lNE), max(lSW, lSE)));
+  if (lMax - lMin < max(0.04, lMax * 0.12)) { gl_FragColor = vec4(m, 1.0); return; }
+  vec2 dir = vec2(-((lNW + lNE) - (lSW + lSE)), (lNW + lSW) - (lNE + lSE));
+  float reduce = max((lNW + lNE + lSW + lSE) * 0.03125, 1.0 / 128.0);
+  float rcp = 1.0 / (min(abs(dir.x), abs(dir.y)) + reduce);
+  dir = clamp(dir * rcp, -8.0, 8.0) * uTexel;
+  vec3 a = 0.5 * (texture2D(tColor, vUv + dir * (1.0 / 3.0 - 0.5)).rgb + texture2D(tColor, vUv + dir * (2.0 / 3.0 - 0.5)).rgb);
+  vec3 b = a * 0.5 + 0.25 * (texture2D(tColor, vUv - dir * 0.5).rgb + texture2D(tColor, vUv + dir * 0.5).rgb);
+  float lB = lum(b);
+  gl_FragColor = vec4((lB < lMin || lB > lMax) ? a : b, 1.0);
+}
+`;
+
 const COMP_FRAG = /* glsl */ `
 ${NOISE_GLSL}
 uniform sampler2D tColor;
@@ -66,7 +95,9 @@ uniform vec3 uShadowTint;
 uniform vec3 uHighTint;
 uniform float uVignette;
 uniform float uLevels;
+uniform float uDither;
 uniform float uOutline;
+uniform float uOutlineW;
 uniform float uFade;
 uniform vec3 uFadeColor;
 uniform float uFlash;
@@ -109,7 +140,7 @@ void main() {
   // --- outlines from depth discontinuities (pixel-art edge darkening)
   if (uOutline > 0.0 && !sky) {
     float ld = dist;
-    vec2 px = 1.0 / uRes;
+    vec2 px = uOutlineW / uRes;
     float dmin = 1.0;
     for (int i = 0; i < 4; i++) {
       vec2 o = i == 0 ? vec2(px.x, 0.0) : i == 1 ? vec2(-px.x, 0.0) : i == 2 ? vec2(0.0, px.y) : vec2(0.0, -px.y);
@@ -177,7 +208,7 @@ void main() {
   col = clamp(col, 0.0, 1.0);
   col = pow(col, vec3(1.0 / 2.2));
   float b = bayer4(gl_FragCoord.xy) - 0.5;
-  col = floor(col * uLevels + 0.5 + b * 0.85) / uLevels;
+  col = floor(col * uLevels + 0.5 + b * uDither) / uLevels;
   gl_FragColor = vec4(col, 1.0);
 }
 `;
@@ -192,7 +223,9 @@ export class Pipeline {
     this.renderer.shadowMap.type = THREE.BasicShadowMap;
     this.renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
     this.renderer.toneMapping = THREE.NoToneMapping;
-    this.pixelScale = 3;
+    this.pixelScale = 1;
+    this.fxaa = true;
+    this.maxPixels = 2.4e6; // keep 4K screens affordable
     this.reflections = true;
     this.fsCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
     this.fsGeo = new THREE.PlaneGeometry(2, 2);
@@ -231,8 +264,10 @@ export class Pipeline {
       uShadowTint: { value: new THREE.Color(0.75, 0.62, 0.95) },
       uHighTint: { value: new THREE.Color(1.06, 0.98, 0.88) },
       uVignette: { value: 0.9 },
-      uLevels: { value: 40 },
+      uLevels: { value: 255 },
+      uDither: { value: 0.5 },
       uOutline: { value: 1 },
+      uOutlineW: { value: 1 },
       uFade: { value: 0 },
       uFadeColor: { value: new THREE.Color(0, 0, 0) },
       uFlash: { value: 0 },
@@ -244,6 +279,10 @@ export class Pipeline {
     };
     this.compMat = new THREE.ShaderMaterial({
       uniforms: this.post, vertexShader: FS_VERT, fragmentShader: COMP_FRAG, depthTest: false, depthWrite: false,
+    });
+    this.fxaaMat = new THREE.ShaderMaterial({
+      uniforms: { tColor: { value: null }, uTexel: { value: new THREE.Vector2() } },
+      vertexShader: FS_VERT, fragmentShader: FXAA_FRAG, depthTest: false, depthWrite: false,
     });
     this.reflCam = new THREE.PerspectiveCamera();
     this.reflUniforms = {
@@ -259,28 +298,52 @@ export class Pipeline {
     this.reflRT?.dispose();
     this.bloomA?.dispose();
     this.bloomB?.dispose();
+    this.ldrRT?.dispose();
     const depthTexture = new THREE.DepthTexture(w, h);
     depthTexture.type = THREE.UnsignedIntType;
     this.sceneRT = new THREE.WebGLRenderTarget(w, h, {
       type: THREE.HalfFloatType, minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, depthTexture, depthBuffer: true,
     });
-    const rw = Math.max(2, Math.floor(w * 0.75)), rh = Math.max(2, Math.floor(h * 0.75));
+    // reflections don't need full resolution once the frame is HD
+    const rk = this.retro ? 0.75 : 0.5;
+    const rw = Math.max(2, Math.floor(w * rk)), rh = Math.max(2, Math.floor(h * rk));
     this.reflRT = new THREE.WebGLRenderTarget(rw, rh, { type: THREE.HalfFloatType, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, depthBuffer: true });
     const bw = Math.max(2, Math.floor(w / 4)), bh = Math.max(2, Math.floor(h / 4));
     this.bloomA = new THREE.WebGLRenderTarget(bw, bh, { type: THREE.HalfFloatType, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, depthBuffer: false });
     this.bloomB = this.bloomA.clone();
+    this.ldrRT = new THREE.WebGLRenderTarget(w, h, { type: THREE.UnsignedByteType, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, depthBuffer: false });
+    this.fxaaMat.uniforms.tColor.value = this.ldrRT.texture;
+    this.fxaaMat.uniforms.uTexel.value.set(1 / w, 1 / h);
     this.reflUniforms.tRefl.value = this.reflRT.texture;
   }
 
+  // pixelScale = CSS pixels per rendered pixel: 0.5 (high-DPI 'Ultra'), 1 (HD),
+  // 1.5, or 2+ for the retro pixel look (nearest upscale, dither, posterise)
   resize() {
     const W = window.innerWidth, H = window.innerHeight;
-    const s = this.pixelScale;
-    this.w = Math.ceil(W / s);
-    this.h = Math.ceil(H / s);
+    let s = this.pixelScale;
+    this.retro = s >= 2;
+    if (this.retro) {
+      this.w = Math.ceil(W / s);
+      this.h = Math.ceil(H / s);
+      this.canvas.style.width = `${this.w * s}px`;
+      this.canvas.style.height = `${this.h * s}px`;
+    } else {
+      // never above the screen's real pixels, and capped for huge displays
+      s = Math.max(s, 1 / Math.max(1, window.devicePixelRatio || 1), Math.sqrt((W * H) / this.maxPixels));
+      this.w = Math.max(2, Math.round(W / s));
+      this.h = Math.max(2, Math.round(H / s));
+      this.canvas.style.width = `${W}px`;
+      this.canvas.style.height = `${H}px`;
+    }
+    this.canvas.style.imageRendering = this.retro ? 'pixelated' : 'auto';
     this.renderer.setSize(this.w, this.h, false);
-    this.canvas.style.width = `${this.w * s}px`;
-    this.canvas.style.height = `${this.h * s}px`;
     this.post.uRes.value.set(this.w, this.h);
+    const P = this.post;
+    P.uLevels.value = this.retro ? 40 : 255;
+    P.uDither.value = this.retro ? 0.85 : 0.5;
+    P.uOutlineW.value = this.retro ? 1 : Math.max(1, Math.round(this.h / 620));
+    P.uVignette.value = this.retro ? 0.9 : 0.55;
     this.makeTargets();
   }
 
@@ -365,6 +428,9 @@ export class Pipeline {
     P.uSunScreen.value.set(sp.x * 0.5 + 0.5, sp.y * 0.5 + 0.5);
     const facing = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion).dot(G.uSunDir.value);
     P.uSunVisible.value = Math.max(0, Math.min(1, (facing + 0.1) * 3)) * Math.max(0, Math.min(1, G.uSunDir.value.y * 8 + 0.4));
-    this.fs(this.compMat, null);
+    if (this.fxaa && !this.retro) {
+      this.fs(this.compMat, this.ldrRT);
+      this.fs(this.fxaaMat, null);
+    } else this.fs(this.compMat, null);
   }
 }
