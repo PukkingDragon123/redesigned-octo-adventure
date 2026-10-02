@@ -594,7 +594,9 @@ export class Bike {
     if (this.stoppie <= 0.001 && (this.fwdSpeed > 0.6 || this.wheelie > 0)) {
       let th = this.wheelie, om = this.wheelieVel;
       // pedal-power wheelie, or a manual (weight shift only) with enough speed
-      const L = back * (pedalling ? 10.5 : sp > 2.5 ? 9.4 : 0) * (1 - th / 1.6);
+      let L = back * (pedalling ? 10.5 : sp > 2.5 ? 9.4 : 0) * (1 - th / 1.6);
+      // assists: holding lean-back settles into a wheelie below the tipping point
+      if (assist) L *= clamp((WB_POINT - 0.08 - th) / 0.3, 0, 1);
       let tau = L - 9 * Math.sin(WB_POINT - th) + (pedalling && th > 0.05 ? 0.8 : 0);
       if (th > 0.02) {
         // a gentle hand near the balance point (stronger with assists), wobble that grows the longer you hold it
@@ -603,6 +605,7 @@ export class Bike {
         tau += noise * (1.4 + Math.min(1.6, this.wheelieT * 0.1));
         tau -= c.brake * 15; // tap the back brake to stop a loop-out
         tau -= fwdL * 8;
+        if (assist && th > WB_POINT + 0.08) tau -= 10;
       }
       om += (tau - 3.6 * om) * dt;
       th += om * dt;
@@ -639,7 +642,8 @@ export class Bike {
       let th = this.stoppie, om = this.stoppieVel;
       const braking = c.brake > 0.2;
       const decel = braking ? clamp(this.fwdSpeed / 3, 0, 1.4) * c.brake : 0;
-      const L = fwdL * (braking && this.fwdSpeed > 0.5 ? 7 + decel * 6 : sp > 3.2 ? 8.6 : 0) * (1 - th / 1.5);
+      let L = fwdL * (braking && this.fwdSpeed > 0.5 ? 7 + decel * 6 : sp > 3.2 ? 8.6 : 0) * (1 - th / 1.5);
+      if (assist) L *= clamp((ST_POINT - 0.1 - th) / 0.3, 0, 1);
       let tau = L - 8 * Math.sin(ST_POINT - th);
       if (th > 0.02) {
         const zone = Math.abs(th - ST_POINT) < 0.18 ? (assist ? 8 : 2.5) : assist ? 3 : 0;
@@ -647,6 +651,7 @@ export class Bike {
         tau += noise * (1.1 + Math.min(1.4, this.stoppieT * 0.12));
         tau -= back * 9;
         if (braking && fwdL < 0.05) tau -= 2;
+        if (assist && th > ST_POINT + 0.06) tau -= 10;
       }
       om += (tau - 3.2 * om) * dt;
       th += om * dt;
