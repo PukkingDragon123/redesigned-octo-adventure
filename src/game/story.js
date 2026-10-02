@@ -9,6 +9,7 @@ import { POI, CUSTOMERS, KEEPSAKES, HOME_SPOTS, HOME_SPAWN } from '../world/layo
 import { CHARACTERS } from '../art/characters.js';
 import { P } from '../render/particles.js';
 import { charForSpot } from './npcs.js';
+import { voxelPoutine } from './quests.js';
 import * as FOOD from '../voxel/models/food.js';
 import { meshVox, fragmentVox } from '../voxel/mesh.js';
 import { Vox } from '../voxel/vox.js';
@@ -354,7 +355,7 @@ export class Story {
       N.yaw = N.targetYaw;
       let cat = null;
       if (g.state.cat) {
-        cat = new Billboard(g.atlas, 'cat:sit:side:0', { castShadow: true });
+        cat = voxelPoutine(g);
         cat.mesh.position.set(tx + 0.1, ty, tz - 0.95);
         g.scene.add(cat.mesh);
         S.temp.push({ remove: () => g.scene.remove(cat.mesh) });
@@ -566,7 +567,8 @@ export class Story {
       const H = S.actor('hank', c.x + 1.1, c.z + 2.2, 0, 'idle');
       H.faceTowards(c.x, c.z);
       H.yaw = H.targetYaw;
-      const cat = new Billboard(g.atlas, 'cat:scared:side:0', { castShadow: true });
+      const cat = voxelPoutine(g);
+      cat.setFrame('cat:scared');
       cat.mesh.position.set(c.x + 0.4, cy, c.z);
       g.scene.add(cat.mesh);
       S.temp.push({ remove: () => g.scene.remove(cat.mesh) });

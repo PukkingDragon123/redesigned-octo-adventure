@@ -171,8 +171,9 @@ export class UI {
     while (this.toasts.childElementCount > 4) this.toasts.firstChild.remove();
   }
 
+  // big announcements arrive as the front page of the Maple Cove Gazette
   banner(title, sub = '', ms = 2600) {
-    const b = el('div', 'banner', `<div class="b1">${title}</div>${sub ? `<div class="b2">${sub}</div>` : ''}`);
+    const b = el('div', 'banner gazette', `<div class="mast">THE MAPLE COVE GAZETTE</div><div class="rule"></div><div class="b1">${title}</div>${sub ? `<div class="b2">${sub}</div>` : ''}<div class="cols"><i></i><i></i><i></i></div>`);
     this.root.appendChild(b);
     setTimeout(() => {
       b.classList.add('out');

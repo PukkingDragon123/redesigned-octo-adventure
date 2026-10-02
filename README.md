@@ -37,21 +37,53 @@ audio starts.
 | W / Up arrow | RT | Pedal |
 | S / Down arrow | LT | Brake / reverse |
 | A D / Left Right arrows | Left stick | Steer |
-| Space | A | Hop (hold in the air to glide once you have the glider) |
-| Shift | RB | Drift (let go for a mini-boost) |
-| F or Q | B | Maple-Cola boost |
-| E / Enter | X | Talk, deliver, use the garage |
+| Space | A | Hop (hold in the air to glide once you have the glider); jump on foot |
+| Shift | RB | Drift (let go for a mini-boost); run on foot |
+| Shift + direction (in the air) | RB + stick | Bike tricks: Superman, No-Hander, Can-Can, Nothin', Skull Toss |
+| F or Q | B | Maple-Cola boost; kick on foot |
+| E / Enter | X | Talk, deliver, hop off / on the bike, pick things up |
 | R | Y | Ring the bell |
-| M | Back | Map |
-| Tab | (from the pause menu) | Harold's keepsakes |
+| C | | Camera (once Birdie lends you hers) |
+| M | Back | The paper map |
+| Tab | | Harold's keepsakes |
 | Mouse drag | Right stick | Look around |
-| Esc | Start | Pause; skips a cutscene while one is playing |
+| Esc | Start | Hank's journal (pause); skips a cutscene while one is playing |
 
 On a touch screen, on-screen controls appear after your first tap: a steering
-stick on the left (push up to pedal, pull down to brake) and pedal, brake,
-hop, drift, bell and boost buttons on the right. A talk button lights up when
-someone is nearby. Tap the dialogue box to continue, or tap "skip" during a
-cutscene.
+wheel on the left (turn it, it springs back) and pedal, brake, hop, trick,
+bell and boost buttons on the right. On foot the wheel becomes a stick and the
+buttons become jump, kick and snap. A paper tag shows whatever you can do right
+now; tap it.
+
+## What there is to do
+
+- Deliver Nana's cocoa before it cools. Each cup uses ingredients from her
+  pantry; when something runs out, shop at Moose & Goose on the boardwalk and
+  bring the groceries home.
+- Hop off the bike anywhere. Kick, roll and smash pumpkins and
+  jack-o'-lanterns, sit on benches, bonk the giant skeleton bobblehead, stir
+  the cauldron, carve a jack-o'-lantern on Nana's porch.
+- Chat with villagers for favours: Agnes's three lost cats, lost glasses, puck,
+  compass, stethoscope and Mountie hat, six saplings to plant for Gus, bird
+  photos for Birdie, a secret letter, pumpkins for the café, pumpkin bowling,
+  trick-or-treating after dark, and three flaming trick hoops.
+- Crash badly and Hank bursts into bones, then zips back together.
+
+## How it's made
+
+- **Voxels** (`src/voxel`): models are painted in code into voxel grids and
+  meshed with face culling, baked ambient occlusion and greedy merging.
+  Buildings, Halloween props, trees (with LODs), food and animals each have a
+  model module; `tools/voxpreview.html?mod=/src/voxel/models/props.js` previews
+  any of them, `tools/charpreview.html` previews the characters.
+- **Characters** (`src/game/vchar.js`): jointed voxel rigs with springy
+  procedural poses, idle fidgets, cartoon reactions, pixel face decals with
+  many expressions, verlet-cloth scarves and capes, held props, bike-riding IK
+  and a fall-apart mode.
+- **UI** (`src/ui`): almost everything is a physical thing: a pocket watch, a
+  coin pouch, Nana's pinned list, a compass, paper prompts, black-and-white
+  pixel speech bubbles over the real 3D speaker, a journal book, a paper map,
+  the Gazette for day banners.
 
 ## How it's made
 
@@ -65,9 +97,8 @@ cutscene.
   and backlit translucency. Instanced grass follows the camera. The village,
   cabin, cemetery and props are merged into one mesh per area from a
   procedural texture atlas.
-- **Characters** (`src/art`): every sprite is painted in code: 14 characters
-  with directional views, walk cycles, expressions and riding poses, plus
-  portraits, animals, emotes and inventory-style icons.
+- **2D art** (`src/art`): food icons, emotes, particles and other pixel art are
+  painted in code.
 - **Game** (`src/game`): arcade bicycle physics with gears, drifting, jumps,
   boosts and gliding, a chase camera, cutscene scripting, orders whose cocoa
   cools as you ride, upgrades, keepsakes, villagers, wildlife, a day/night
@@ -91,3 +122,10 @@ These are useful while developing:
 
 Graphics quality drops automatically if the frame rate stays low. Picking a
 quality or pixel size in Settings turns that off.
+
+## Credits
+
+- Fonts: [monogram](https://datagoblin.itch.io/monogram) by datagoblin (CC0)
+  and [BoldPixels](https://yukipixels.itch.io/boldpixels) by YukiPixels
+  (CC BY-SA 4.0).
+- Everything else is generated in code.

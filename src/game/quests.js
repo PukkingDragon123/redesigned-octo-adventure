@@ -26,6 +26,25 @@ export function catVox(color = 0x2a2228, belly = 0xf2e6d0, eye = 0xb8e04a) {
   return { vox: v, size: 0.045, origin: [4.5, 0, 7] };
 }
 
+// Poutine as a little voxel cat for cutscenes (Billboard-compatible: mesh + setFrame)
+export function voxelPoutine(g) {
+  const r = catVox(0xe8a050, 0xfff0d8, 0x60c0e8);
+  const body = voxMesh(meshVox(r.vox, { size: r.size, origin: r.origin, jitter: 0.03 }), sharedVoxelMaterial());
+  const mesh = new THREE.Group();
+  mesh.add(body);
+  let t = 0;
+  return {
+    mesh,
+    setFrame(name) {
+      t += 0.05;
+      const walk = String(name).includes('walk'), scared = String(name).includes('scared');
+      body.position.y = walk ? Math.abs(Math.sin(t * 6)) * 0.03 : 0;
+      body.scale.set(scared ? 1.1 : 1, scared ? 0.8 + Math.sin(t * 40) * 0.03 : 1, 1);
+      body.rotation.y = walk ? 0 : Math.sin(t * 0.8) * 0.4;
+    },
+  };
+}
+
 // ---------------------------------------------------------------- quest data
 const CATS = [
   { id: 'mittens', owner: 'agnes', name: 'Mittens', color: 0x8a8a92, belly: 0xf6f0e6, x: -96, z: -60, hint: 'She loves the long grass in the west meadow.' },
