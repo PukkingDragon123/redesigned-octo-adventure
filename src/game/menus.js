@@ -5,7 +5,8 @@
 import { el } from '../ui/ui.js';
 import { kPanel, kRibbon, kClose, kBook, kBar, kSlider, kToggle, kSlot, kKey, esc, scale, snap, snapBox, setUIScaleOffset } from '../ui/kit.js';
 import { iconURL, iconSmallURL, glyphURL } from '../art/icons.js';
-import { charSnapshot } from '../ui/snapshots.js';
+import { drawPortrait } from '../art/portraits.js';
+import { Pix } from '../art/pixel.js';
 import { CHARACTERS } from '../art/characters.js';
 import { KEEPSAKES, POI, CUSTOMERS, WORLD_HALF, BUILDINGS } from '../world/layout.js';
 import { KEEPSAKE_ICON } from './keepsakes.js';
@@ -370,7 +371,7 @@ export class Menus {
       const s = el('button', 'k-paper slip pick');
       const name = CHARACTERS[o.customer]?.name || o.customer;
       const mug = mugOf(o);
-      s.innerHTML = `<i class="tack"></i><div class="who"><span class="pola"><img src="${charSnapshot(g, o.customer, 'happy', 32)}"></span><span class="nm k-bold">${esc(SHORT_NAME[o.customer] || name.split(' ')[0])}</span></div>
+      s.innerHTML = `<i class="tack"></i><div class="who"><span class="pola"><img src="${faceURL(o.customer)}"></span><span class="nm k-bold">${esc(SHORT_NAME[o.customer] || name.split(' ')[0])}</span></div>
         <div class="what"><img class="k-g" src="${glyphURL(`mug_${mug}`)}"><span>${esc(o.label)}</span></div>
         <div class="pay"><img class="k-g" src="${glyphURL('coin')}"><b>$${o.price}</b>${o.rush ? `<span class="rush"><img class="k-g" src="${glyphURL('rush')}">RUSH</span>` : '<span>+ tips</span>'}</div>
         <span class="packed k-bold">PACKED</span>`;
@@ -612,6 +613,19 @@ function snapRibbon(rb) {
   const hw = Math.round(host.clientWidth / u);
   rb.style.left = `${Math.round((hw - w) / 2) * u}px`;
   rb.style.transform = 'none';
+}
+// a 32px head-and-shoulders crop of a villager's pixel portrait (crisp at 1:1, no 3D render needed)
+const FACES = new Map();
+function faceURL(id) {
+  id = id === 'kids' ? 'pip' : id === 'lou_lh' ? 'ollie' : id;
+  if (FACES.has(id)) return FACES.get(id);
+  const full = new Pix(64, 64);
+  try { drawPortrait(full, 0, 0, id, 'happy'); } catch { /* unknown face: leave the photo blank */ }
+  const p = new Pix(32, 32);
+  p.blit(full, 0, 0, false, 16, 12, 32, 32);
+  const url = p.toDataURL();
+  FACES.set(id, url);
+  return url;
 }
 // arrow-key grids follow the real column count once the grid is laid out
 function autoGrid(m, items) {
