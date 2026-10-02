@@ -1,13 +1,14 @@
-// Harold's roadster bicycle as voxels (0.025 m): frame, steering front with
-// wicker basket and bell, and spoked wheels. Coordinates follow BikeModel's
-// local spaces so the parts drop straight into its groups.
-import { Vox, tone } from '../vox.js';
+// Harold's roadster bicycle, Bessie, as voxels (0.025 m): frame, steering front
+// with wicker basket and bell, spoked wheels, the crate on the rear rack, and a
+// finer (0.0125 m) brass headlamp. Coordinates follow BikeModel's local spaces so
+// the parts drop straight into its groups.
+import { Vox, tone, EMIT } from '../vox.js';
 
 const S = 0.025;
 const FRAME = 0x2f6e52, FRAME_HI = 0x4a9a72, CREAM = 0xeadfc4, CHROME = 0xc8ccd4, SADDLE = 0x6a3a1e, TIRE = 0x241e1c, RIM = 0xb4b8c0, BLACK = 0x1e1a1a, WICKER = 0xb98a48, WICKER_D = 0x8a5e2c, LEATHER = 0x4a2a1a;
 
 // a voxel grid laid over a metre-space box; line/point helpers take metres
-function grid(x0, x1, y0, y1, z0, z1) {
+function grid(x0, x1, y0, y1, z0, z1, S = 0.025) {
   const w = Math.ceil((x1 - x0) / S), h = Math.ceil((y1 - y0) / S), d = Math.ceil((z1 - z0) / S);
   const v = new Vox(w, h, d);
   const P = (x, y, z) => [(x - x0) / S, (y - y0) / S, (z - z0) / S];
@@ -20,7 +21,7 @@ function grid(x0, x1, y0, y1, z0, z1) {
     v.fill(a[0], a[1], a[2], b[0] - 1, b[1] - 1, b[2] - 1, c);
   };
   const origin = [-x0 / S, -y0 / S, -z0 / S];
-  return { v, P, line, box, origin };
+  return { v, P, line, box, origin, S };
 }
 
 export function bikeFrame() {
@@ -106,8 +107,74 @@ export function bikeWheel(radius = 0.34) {
   return { vox: v, size: S, origin: [2, n, n] };
 }
 
+// the wooden crate strapped to the rear rack (bike-local space; open top, the third cup rides inside)
+export function bikeCrate() {
+  const G = grid(-0.22, 0.22, 0.8, 1.05, -0.76, -0.36);
+  const { v } = G;
+  const WOOD = 0xa0703a, WOOD_D = 0x7a5228, POST = 0x5e3c1c, ROPE = 0xc8361f;
+  const [x0, y0, z0] = G.P(-0.18, 0.81, -0.73).map(Math.round);
+  const [x1, y1, z1] = G.P(0.18, 0.99, -0.39).map(Math.round);
+  // floor, then plank walls with a gap between boards
+  v.fill(x0, y0, z0, x1, y0, z1, WOOD_D);
+  for (let y = y0 + 1; y <= y1; y++) {
+    const band = (y - y0 - 1) % 3;
+    if (band === 2 && y < y1) continue; // gap between planks
+    const c = (x, z) => ((x * 7 + z * 3 + y) % 5 === 0 ? tone(WOOD, -0.08) : (y % 2 ? WOOD : tone(WOOD, 0.06)));
+    for (let x = x0; x <= x1; x++) { v.set(x, y, z0, c(x, z0)); v.set(x, y, z1, c(x, z1)); }
+    for (let z = z0; z <= z1; z++) { v.set(x0, y, z, c(x0, z)); v.set(x1, y, z, c(x1, z)); }
+  }
+  // corner posts poke up a voxel, a darker top rim
+  for (const [x, z] of [[x0, z0], [x1, z0], [x0, z1], [x1, z1]]) v.fill(x, y0, z, x, y1 + 1, z, POST);
+  for (let x = x0; x <= x1; x++) { v.set(x, y1, z0, WOOD_D); v.set(x, y1, z1, WOOD_D); }
+  for (let z = z0; z <= z1; z++) { v.set(x0, y1, z, WOOD_D); v.set(x1, y1, z, WOOD_D); }
+  // a red bungee cord over the top and down the sides, because of course
+  const zm = Math.round((z0 + z1) / 2);
+  for (let x = x0 - 1; x <= x1 + 1; x++) v.set(x, y1 + 1, zm, ROPE);
+  for (let y = y0 + 2; y <= y1; y++) { v.set(x0 - 1, y, zm, ROPE); v.set(x1 + 1, y, zm, ROPE); }
+  // a stencilled maple leaf on the back board
+  const lx = Math.round((x0 + x1) / 2), ly = y0 + 4;
+  for (const [dx, dy] of [[0, 0], [0, 1], [0, 2], [-1, 1], [1, 1], [-2, 2], [2, 2], [-1, 3], [1, 3], [0, 3], [0, 4], [0, -1]]) v.set(lx + dx, ly + dy, z0 - 1, ROPE);
+  return { vox: v, size: G.S, origin: G.origin };
+}
+
+// Harold's brass headlamp (steer-local space, finer voxels). part: 'body' | 'lit' | 'unlit'
+export function bikeLamp(part = 'body') {
+  const S = 0.0125;
+  // bolted to the front of the wicker basket
+  const G = grid(-0.07, 0.07, 0.22, 0.4, 0.29, 0.46, S);
+  const { v, line } = G;
+  const BRASS = 0xc8a050, BRASS_D = 0x8a6a2a, BRASS_HI = 0xf0d48a;
+  const c = G.P(0, 0.3, 0.32).map(Math.round);
+  const len = Math.round(0.1 / S);
+  if (part === 'body') {
+    // tapered brass can with a rolled rim, a highlight stripe and a little vent on top
+    for (let t = 0; t < len; t++) {
+      const r = 3.6 + (t / len) * 1.2;
+      v.cylinder(c[0], c[1], c[2] + t, r, 1, (x, y) => (y > c[1] + r - 1.2 ? BRASS_HI : y < c[1] - r + 1.2 ? BRASS_D : BRASS), 'z');
+    }
+    v.cylinder(c[0], c[1], c[2] + len - 1, 5.2, 1, BRASS_D, 'z');
+    v.fill(c[0] - 1, c[1] + 5, c[2] + 2, c[0] + 1, c[1] + 5, c[2] + 4, BRASS);
+    v.fill(c[0] - 2, c[1] + 6, c[2] + 1, c[0] + 2, c[1] + 6, c[2] + 5, BRASS_D);
+    // bracket back to the basket
+    line([0, 0.3, 0.33], [0, 0.3, 0.295], 0x2a2420, 1);
+    // carve the lens recess so the lens part sits flush
+    v.carve((x, y, z) => z === c[2] + len - 1 && Math.hypot(x - c[0], y - c[1]) <= 4.1);
+  } else {
+    const lit = part === 'lit';
+    v.cylinder(c[0], c[1], c[2] + len - 1, 4, 1, (x, y) => {
+      const d = Math.hypot(x - c[0], y - c[1]);
+      if (lit) return (d < 1.6 ? 0xfffbe8 : 0xffe9a0) | EMIT;
+      return d < 1.6 ? 0xf4f0e0 : (x + y) % 3 === 0 ? 0xc8c4b8 : 0xdcd8c8;
+    }, 'z');
+  }
+  return { vox: v, size: S, origin: G.origin };
+}
+
 export const PREVIEW = {
   frame: bikeFrame,
   front: bikeFront,
   wheel: () => bikeWheel(),
+  crate: bikeCrate,
+  lamp: () => bikeLamp('body'),
+  lampLit: () => bikeLamp('lit'),
 };

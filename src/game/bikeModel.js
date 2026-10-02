@@ -7,29 +7,14 @@ import * as THREE from 'three';
 import { Builder } from '../render/builder.js';
 import { createPropMaterial, propMesh } from '../render/propMaterial.js';
 import { damp, clamp } from '../core/math.js';
-import { bikeFrame, bikeFront, bikeWheel } from '../voxel/models/bike.js';
+import { bikeFrame, bikeFront, bikeWheel, bikeCrate, bikeLamp } from '../voxel/models/bike.js';
 import { meshVox } from '../voxel/mesh.js';
 import { voxMesh, sharedVoxelMaterial } from '../render/voxelMaterial.js';
 
 const R = 0.34; // wheel radius
 const WB = 0.54; // half wheelbase
 const SCALE = 0.86; // chibi riders: the roadster is scaled to fit the voxel villagers
-const COL = {
-  frame: 0x2f6e52,
-  frameHi: 0x4a9a72,
-  cream: 0xeadfc4,
-  saddle: 0x6a3a1e,
-  chrome: 0xdadde4,
-  chain: 0x4a4a50,
-  wicker: 0xb98a48,
-  wickerDark: 0x8a5e2c,
-  crate: 0xa0703a,
-  crateDark: 0x7a5228,
-  lamp: 0xfff2c0,
-  brass: 0xc8a050,
-  black: 0x1e1a1a,
-  leather: 0x4a2a1a,
-};
+const COL = { chrome: 0xdadde4, black: 0x1e1a1a };
 const _q = new THREE.Quaternion();
 const _e = new THREE.Euler();
 const _p = new THREE.Vector3();
@@ -56,7 +41,6 @@ export class BikeModel {
     this.tip = new THREE.Group();
     this.body.add(this.tip);
     this.tip.add(g);
-    const fr = { color: COL.frame };
     const rearAx = [0, R, -WB];
     // (the frame and front are voxel meshes, see voxelizeBicycle; these anchors match them)
     const front = new THREE.Group();
@@ -78,22 +62,7 @@ export class BikeModel {
     this.gripR = new THREE.Object3D();
     this.gripR.position.set(-0.34, 0.39, -0.18);
     steerG.add(this.gripL, this.gripR);
-    // brass headlamp on the fork crown; the lens only glows after dark
-    const lamp = new Builder();
-    lamp.tube([0, 0.25, 0.04], [0, 0.25, 0.14], 0.058, 0.048, { color: COL.brass }, 8);
-    lamp.tube([0, 0.25, 0.04], [0, 0.2, 0.0], 0.012, 0.012, { color: COL.black }, 4);
-    lamp.box([0, 0.315, 0.09], [0.03, 0.02, 0.05], { color: COL.brass });
-    this.lampMesh = propMesh(lamp.build(), this.mat);
-    steerG.add(this.lampMesh);
-    const lens = new Builder();
-    lens.tube([0, 0.25, 0.14], [0, 0.25, 0.152], 0.046, 0.046, { color: COL.lamp, emissive: 1.8 }, 8);
-    this.lensOn = propMesh(lens.build(), this.mat);
-    steerG.add(this.lensOn);
-    const lensOff = new Builder();
-    lensOff.tube([0, 0.25, 0.14], [0, 0.25, 0.15], 0.046, 0.046, { color: 0xd8d0b0 }, 8);
-    this.lensOff = propMesh(lensOff.build(), this.mat);
-    steerG.add(this.lensOff);
-    this.setLamp(false);
+    // brass headlamp on the fork crown (voxels, see voxelizeBicycle); the lens only glows after dark
 
     // wheels (geometry swapped for voxels below)
     this.wheelF = new THREE.Mesh(new THREE.BufferGeometry(), this.mat);
@@ -124,18 +93,9 @@ export class BikeModel {
       this.pedals.push(p);
     }
 
-    // the crate on the rear rack (holds the third cup)
-    const crate = new Builder();
-    crate.box([0, 0.9, -0.56], [0.36, 0.18, 0.34], { color: COL.crate });
-    crate.box([0, 0.995, -0.56], [0.38, 0.02, 0.36], { color: COL.crateDark });
-    for (const sx of [-0.181, 0.181]) crate.box([sx, 0.9, -0.56], [0.01, 0.06, 0.3], { color: 0x6a4420 });
-    for (const sz of [-0.73, -0.39]) crate.box([0, 0.9, sz], [0.3, 0.05, 0.01], { color: 0x6a4420 });
-    // a bungee cord, because of course
-    crate.box([0, 1.008, -0.56], [0.4, 0.012, 0.025], { color: 0xc8361f });
-    this.crateMesh = propMesh(crate.build(), this.mat);
-    g.add(this.crateMesh);
+    // the crate on the rear rack (voxels) holds the third cup, down inside it
     this.rearAnchor = new THREE.Object3D();
-    this.rearAnchor.position.set(0, 1.0, -0.56);
+    this.rearAnchor.position.set(0, 0.85, -0.56);
     g.add(this.rearAnchor);
     this.nozzles = [];
 
@@ -146,14 +106,20 @@ export class BikeModel {
     this.riderAnchor.position.set(0, 0.96, -0.22);
     g.add(this.riderAnchor);
     g.scale.setScalar(SCALE);
-    void fr;
   }
 
   // Bessie's frame, front end and wheels are voxel models (src/voxel/models/bike.js)
   voxelizeBicycle() {
-    const mk = (r) => voxMesh(meshVox(r.vox, { size: r.size, origin: r.origin, jitter: 0.02 }), sharedVoxelMaterial());
+    const mk = (r, jitter = 0.02) => voxMesh(meshVox(r.vox, { size: r.size, origin: r.origin, jitter }), sharedVoxelMaterial());
     this.bicycle.add(mk(bikeFrame()));
     this.steerG.add(mk(bikeFront()));
+    this.crateMesh = mk(bikeCrate(), 0.03);
+    this.bicycle.add(this.crateMesh);
+    this.lampMesh = mk(bikeLamp('body'), 0.01);
+    this.lensOn = mk(bikeLamp('lit'), 0);
+    this.lensOff = mk(bikeLamp('unlit'), 0);
+    this.steerG.add(this.lampMesh, this.lensOn, this.lensOff);
+    this.setLamp(false);
     const wheel = bikeWheel();
     const wg = meshVox(wheel.vox, { size: wheel.size, origin: wheel.origin, jitter: 0.02 });
     for (const w of [this.wheelF, this.wheelR]) {
