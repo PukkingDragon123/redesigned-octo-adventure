@@ -64,6 +64,7 @@ export class VoxelWorld {
   }
 
   buildStatic() {
+    this.buildSigns();
     const mat = sharedVoxelMaterial();
     for (const [key, list] of this.chunks) {
       const geos = list.map(({ geo, m }) => {
@@ -156,78 +157,88 @@ export class VoxelWorld {
     }
   }
 
-  // hand-lettered sign text planes (painted at 64 px per metre so the lettering stays crisp at HD)
+  // hand-lettered signs: queued here, painted into a shared atlas and merged into a few meshes by
+  // buildSigns() (64 px per metre so the lettering stays crisp at HD)
   sign(s, M, b) {
     const text = s.text || b.sign || '';
     if (!text) return;
     const PPM = 64;
-    const W = Math.max(16, Math.round(s.w * PPM)), H = Math.max(12, Math.round(s.h * PPM));
-    const c = document.createElement('canvas');
-    c.width = W;
-    c.height = H;
-    const g = c.getContext('2d');
-    g.imageSmoothingEnabled = false;
     const chalk = s.kind === 'chalk';
-    const bg = chalk ? '#2a3a32' : toCss(s.bg ?? 0xf2e6c8);
-    const fg = chalk ? '#f2efe2' : toCss(s.fg ?? 0x3a2418);
-    const draw = () => {
-      g.fillStyle = bg;
-      g.fillRect(0, 0, W, H);
-      // a thin painted pinstripe just inside the board edge
-      if (!chalk && H >= 24) {
-        g.fillStyle = fg;
-        g.globalAlpha = 0.5;
-        g.fillRect(3, 3, W - 6, 2); g.fillRect(3, H - 5, W - 6, 2); g.fillRect(3, 3, 2, H - 6); g.fillRect(W - 5, 3, 2, H - 6);
-        g.globalAlpha = 1;
-      }
-      // fit: one line if it fits, else two lines on a tall enough board
-      let lines = chalk ? text.split(/\s*\n\s*|(?<=JOUR)\s/) : [text];
-      const fits = (ls, size) => {
-        g.font = `${size}px BoldPixels`;
-        return Math.max(...ls.map((l) => g.measureText(l).width)) <= W - 12 && size * ls.length * 1.05 <= H - 8;
-      };
-      const sizes = [56, 48, 40, 32, 28, 24, 20, 16, 12, 10, 8];
-      let size = sizes.find((z) => fits(lines, z)) ?? 8;
-      if (!chalk && lines.length === 1 && text.includes(' ')) {
-        const words = text.split(' ');
-        const mid = Math.ceil(words.length / 2);
-        const two = [words.slice(0, mid).join(' '), words.slice(mid).join(' ')];
-        const size2 = sizes.find((z) => fits(two, z)) ?? 8;
-        if (size2 > size * 1.3) { lines = two; size = size2; }
-      }
-      g.font = `${size}px BoldPixels`;
-      g.textBaseline = 'middle';
-      g.textAlign = 'center';
-      const lh = size * 1.05;
-      lines.forEach((l, i) => {
-        const x = Math.round(W / 2), y = Math.round(H / 2 + (i - (lines.length - 1) / 2) * lh);
-        g.fillStyle = 'rgba(0, 0, 0, 0.28)';
-        g.fillText(l, x + Math.max(1, Math.round(size / 16)), y + Math.max(1, Math.round(size / 16)));
-        g.fillStyle = fg;
-        g.fillText(l, x, y);
-      });
-    };
-    draw();
-    const tex = new THREE.CanvasTexture(c);
-    tex.magFilter = THREE.NearestFilter;
-    tex.minFilter = THREE.LinearMipmapLinearFilter;
-    tex.generateMipmaps = true;
-    tex.colorSpace = THREE.SRGBColorSpace;
-    const mat = createFlatMaterial(tex);
-    const plane = new THREE.Mesh(new THREE.PlaneGeometry(s.w, s.h), mat);
     const n = new THREE.Vector3(...(s.normal ? [s.normal[0] ?? s.normal.x, s.normal[1] ?? s.normal.y, s.normal[2] ?? s.normal.z] : [0, 0, 1]));
     const pos = new THREE.Vector3(s.x, s.y, s.z).applyMatrix4(M);
     const nw = n.clone().transformDirection(M);
-    plane.position.copy(pos);
-    plane.lookAt(pos.clone().add(nw));
-    plane.receiveShadow = true;
-    this.scene.add(plane);
-    (this.signPlanes ||= []).push(plane);
-    // fonts may arrive after the first draw
-    document.fonts?.load?.('16px BoldPixels').then(() => {
-      draw();
-      tex.needsUpdate = true;
+    const o = new THREE.Object3D();
+    o.position.copy(pos);
+    o.lookAt(pos.clone().add(nw));
+    o.updateMatrix();
+    (this.signQueue ||= []).push({
+      text, chalk, w: s.w, h: s.h, matrix: o.matrix.clone(), normal: nw,
+      W: Math.max(16, Math.round(s.w * PPM)), H: Math.max(12, Math.round(s.h * PPM)),
+      bg: chalk ? '#2a3a32' : toCss(s.bg ?? 0xf2e6c8), fg: chalk ? '#f2efe2' : toCss(s.fg ?? 0x3a2418),
     });
+  }
+
+  buildSigns() {
+    const list = this.signQueue || [];
+    if (!list.length) return;
+    // shelf-pack into atlases 2048 px wide
+    const AW = 2048, PAD = 3;
+    const atlases = [];
+    let cur = null;
+    const sorted = list.slice().sort((a, b) => b.H - a.H);
+    for (const sg of sorted) {
+      const w = Math.min(AW - PAD * 2, sg.W), h = sg.H;
+      if (!cur || cur.x + w + PAD * 2 > AW) {
+        if (cur) { cur.y += cur.shelf; cur.x = 0; cur.shelf = 0; }
+        if (!cur || cur.y + h + PAD * 2 > AW) { cur = { x: 0, y: 0, shelf: 0, items: [] }; atlases.push(cur); }
+      }
+      sg.ax = cur.x + PAD; sg.ay = cur.y + PAD; sg.aw = w;
+      cur.x += w + PAD * 2;
+      cur.shelf = Math.max(cur.shelf, h + PAD * 2);
+      cur.items.push(sg);
+    }
+    for (const at of atlases) {
+      const c = document.createElement('canvas');
+      c.width = AW;
+      c.height = Math.max(16, at.y + at.shelf);
+      const g = c.getContext('2d');
+      g.imageSmoothingEnabled = false;
+      const draw = () => { for (const sg of at.items) drawSign(g, sg, PAD); };
+      draw();
+      const tex = new THREE.CanvasTexture(c);
+      tex.magFilter = THREE.NearestFilter;
+      tex.minFilter = THREE.LinearMipmapLinearFilter;
+      tex.colorSpace = THREE.SRGBColorSpace;
+      // one merged mesh of quads per atlas
+      const n = at.items.length;
+      const pos = new Float32Array(n * 12), nor = new Float32Array(n * 12), uv = new Float32Array(n * 8), idx = [];
+      const v = new THREE.Vector3();
+      at.items.forEach((sg, i) => {
+        const hw = sg.w / 2, hh = sg.h / 2;
+        const u0 = sg.ax / AW, u1 = (sg.ax + sg.aw) / AW, v1 = 1 - sg.ay / c.height, v0 = 1 - (sg.ay + sg.H) / c.height;
+        [[-hw, -hh, u0, v0], [hw, -hh, u1, v0], [hw, hh, u1, v1], [-hw, hh, u0, v1]].forEach(([x, y, uu, vv], k) => {
+          v.set(x, y, 0).applyMatrix4(sg.matrix);
+          pos.set([v.x, v.y, v.z], (i * 4 + k) * 3);
+          nor.set([sg.normal.x, sg.normal.y, sg.normal.z], (i * 4 + k) * 3);
+          uv.set([uu, vv], (i * 4 + k) * 2);
+        });
+        idx.push(i * 4, i * 4 + 1, i * 4 + 2, i * 4, i * 4 + 2, i * 4 + 3);
+      });
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+      geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+      geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+      geo.setIndex(idx);
+      geo.computeBoundingSphere();
+      const mesh = new THREE.Mesh(geo, createFlatMaterial(tex));
+      mesh.receiveShadow = true;
+      mesh.name = 'signs';
+      mesh.matrixAutoUpdate = false;
+      this.scene.add(mesh);
+      // fonts may arrive after the first paint
+      document.fonts?.load?.('16px BoldPixels').then(() => { draw(); tex.needsUpdate = true; });
+    }
+    this.signQueue = [];
   }
 
   // ------------------------------------------------------------ old prop placements -> voxel props
@@ -277,6 +288,9 @@ export class VoxelWorld {
           break;
         case 'wheelbarrow':
           this.addStatic(this.model('wheelbarrow', () => PR.wheelbarrow({ contents: 'pumpkins' })), d.x, d.y, d.z, d.yaw ?? 0);
+          break;
+        case 'bridge':
+          this.addStatic(this.model('coveredBridge', () => buildVoxelBuilding({ id: 'bridge', kind: 'coveredBridge', w: d.w, d: d.len })), d.x, d.y, d.z, d.yaw);
           break;
         case 'ramp':
           this.addStatic(this.model(`ramp:${d.len}:${d.h}`, () => PR.jumpRamp({ len: d.len, h: d.h, w: d.w })), d.x, d.y, d.z, d.yaw);
@@ -489,6 +503,50 @@ export function drawTV(tv, info) {
   for (let i = 3; i < id.data.length; i += 4) id.data[i] = 128;
   g.putImageData(id, 0, 0);
   tv.tex.needsUpdate = true;
+}
+
+// paint one sign board into an atlas canvas at (sg.ax, sg.ay)
+function drawSign(g, sg, pad) {
+  const { ax, ay, aw: W, H, bg, fg, chalk, text } = sg;
+  g.fillStyle = bg;
+  g.fillRect(ax - pad, ay - pad, W + pad * 2, H + pad * 2);
+  if (!chalk && H >= 24) {
+    g.fillStyle = fg;
+    g.globalAlpha = 0.5;
+    g.fillRect(ax + 3, ay + 3, W - 6, 2); g.fillRect(ax + 3, ay + H - 5, W - 6, 2); g.fillRect(ax + 3, ay + 3, 2, H - 6); g.fillRect(ax + W - 5, ay + 3, 2, H - 6);
+    g.globalAlpha = 1;
+  }
+  let lines = chalk ? text.split(/\s*\n\s*|(?<=JOUR)\s/) : [text];
+  const fits = (ls, size) => {
+    g.font = `${size}px BoldPixels`;
+    return Math.max(...ls.map((l) => g.measureText(l).width)) <= W - 12 && size * ls.length * 1.05 <= H - 8;
+  };
+  const sizes = [56, 48, 40, 32, 28, 24, 20, 16, 12, 10, 8];
+  let size = sizes.find((z) => fits(lines, z)) ?? 8;
+  if (!chalk && lines.length === 1 && text.includes(' ')) {
+    const words = text.split(' ');
+    const mid = Math.ceil(words.length / 2);
+    const two = [words.slice(0, mid).join(' '), words.slice(mid).join(' ')];
+    const size2 = sizes.find((z) => fits(two, z)) ?? 8;
+    if (size2 > size * 1.3) { lines = two; size = size2; }
+  }
+  g.font = `${size}px BoldPixels`;
+  g.textBaseline = 'middle';
+  g.textAlign = 'center';
+  const lh = size * 1.05;
+  g.save();
+  g.beginPath();
+  g.rect(ax, ay, W, H);
+  g.clip();
+  lines.forEach((l, i) => {
+    const x = Math.round(ax + W / 2), y = Math.round(ay + H / 2 + (i - (lines.length - 1) / 2) * lh);
+    const sh = Math.max(1, Math.round(size / 16));
+    g.fillStyle = 'rgba(0, 0, 0, 0.28)';
+    g.fillText(l, x + sh, y + sh);
+    g.fillStyle = fg;
+    g.fillText(l, x, y);
+  });
+  g.restore();
 }
 
 function toCss(c) {

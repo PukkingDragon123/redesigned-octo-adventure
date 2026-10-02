@@ -2854,10 +2854,66 @@ function buildRink(spec, ctx) {
   return ctx;
 }
 
+// ------------------------------------------------------------------ COVERED BRIDGE (Beaver Creek)
+// Local frame: the bridge runs along z (the road), the deck top is y = 0, walls at x = +-w/2.
+function buildCoveredBridge(spec, ctx) {
+  const hw = ctx.hw;
+  const Wd = evenV(spec.w ?? 5.2), Ln = evenV(spec.d ?? 24);
+  const x0 = -Wd / 2, x1 = Wd / 2 - 1, z0 = -Ln / 2, z1 = Ln / 2 - 1;
+  const H = 30; // wall height above the deck
+  const G = (ctx.G = 0);
+  const vb = (ctx.vb = new VB(x0 - 10, -46, z0 - 6, x1 + 10, H + 34, z1 + 6));
+  const red = 0xa83a2c, redD = 0x8a2e24;
+  // deck planks (across the bridge) on heavy stringers
+  vb.fill(x0, -2, z0, x1, -1, z1, (x, y, z) => (y === -1 ? plankTone(z >> 1, ctx.seed, P.plank) : P.woodDark));
+  for (const x of [x0 + 2, -1, x1 - 2]) vb.fill(x - 1, -6, z0, x + 1, -3, z1, P.woodDD);
+  // stone piers into the creek: at the banks and two in the water
+  for (const z of [z0 + 4, Math.round(z0 / 3), Math.round(z1 / 3), z1 - 4]) vb.fill(x0 + 1, -46, z - 3, x1 - 1, -7, z + 3, stoneFn(ctx.seed + 2));
+  // board & batten walls with a long window band, white trim
+  for (const x of [x0, x1]) {
+    for (let z = z0; z <= z1; z++) for (let y = 0; y <= H; y++) {
+      const win = y >= 10 && y <= 19 && ((z - z0) % 16) > 2 && ((z - z0) % 16) < 14;
+      if (win) continue;
+      const bat = (z - z0) % 4 === 0;
+      vb.set(x, y, z, bat ? redD : red);
+      if (bat && y < H) vb.set(x + (x < 0 ? -1 : 1), y, z, redD);
+    }
+    vb.fill(x + (x < 0 ? -1 : 1), 9, z0, x + (x < 0 ? -1 : 1), 9, z1, P.trim);
+    vb.fill(x + (x < 0 ? -1 : 1), 20, z0, x + (x < 0 ? -1 : 1), 20, z1, P.trim);
+    vb.fill(x, 0, z0, x, 1, z1, P.woodDark);
+  }
+  // trusses showing inside the window band
+  for (const x of [x0 + 1, x1 - 1]) for (let z = z0; z <= z1 - 16; z += 16) { vb.line(x, 10, z + 2, x, 19, z + 14, P.woodDark); vb.line(x, 19, z + 2, x, 10, z + 14, P.woodDark); }
+  // roof: a steep gable along the bridge, overhanging the portals
+  const Rf = roofGeom({ axis: 'z', b: { x0, x1, z0, z1 }, H: H + 1, pitch: 0.75, oh: 4, ohR0: 4, ohR1: 4 });
+  const st = roofStyle(spec.roof ?? 'dark', ctx.seed, { gutter: false });
+  for (let z = z0; z <= z1; z++) for (let x = x0 + 1; x <= x1 - 1; x++) for (let y = H + 1; y < Rf.topAt(x, z) - Rf.t; y++) if (z === z0 || z === z1) vb.set(x, y, z, red);
+  drawRoof(vb, Rf, st);
+  // portals: gable boards with the name, white posts, a lantern inside each end
+  for (const [z, face] of [[z1, 1], [z0, -1]]) {
+    for (let x = x0 - 1; x <= x1 + 1; x++) for (let y = H - 3; y <= H; y++) vb.set(x, y, z + face, P.trim);
+    for (const x of [x0 - 1, x1 + 1]) vb.fill(x, 0, z + face, x, H, z + face, P.trim);
+    const sw = Math.min(Wd - 8, 34), sh = 6;
+    vb.fill(-sw / 2 - 1, H + 2, z + face, sw / 2, H + 3 + sh, z + face, P.woodDark);
+    const p = M3(-0.5, H + 3 + sh / 2, z + face + (face > 0 ? 1 : 0));
+    ctx.signs.push({ x: p.x, y: p.y, z: r3(p.z + face * 0.012), w: sw / VPM, h: sh / VPM, text: 'BEAVER CREEK', normal: [0, 0, face], bg: '#5a3a22', fg: '#f6e7c8' });
+    vb.fill(-1, H - 5, z - face * 10, 0, H - 3, z - face * 10, P.lamp);
+    addLight(ctx, [-0.5, H - 6, z - face * 10], [1.0, 0.7, 0.35], 8, 'lamp');
+  }
+  if (hw) {
+    jack(ctx, x0 + 3, 0, z1 - 3, { size: 1 });
+    jack(ctx, x1 - 3, 0, z0 + 3, { size: 1 });
+    cobweb(ctx, [x0 + 1, H - 1, z1 - 1], [1, 0, 0], [0, -1, 0], 6);
+    cobweb(ctx, [x1 - 1, H - 1, z0 + 1], [-1, 0, 0], [0, -1, 0], 6);
+    placeBats(ctx, frames(vb, { x0, x1, z0, z1 }).left, 2, 22, H - 2);
+  }
+  return ctx;
+}
+
 // ------------------------------------------------------------------ API
 const KINDS = {
   house: buildHouse, cabin: buildCabin, shed: buildGarage, garage: buildGarage, outhouse: buildOuthouse, chapel: buildChapel, lighthouse: buildLighthouse, sawmill: buildSawmill,
-  shop: buildShop, firehall: buildFirehall, barn: buildBarn, sugarshack: buildSugarShack, gazebo: buildGazebo, lifeguard: buildLifeguard, rink: buildRink,
+  shop: buildShop, firehall: buildFirehall, barn: buildBarn, sugarshack: buildSugarShack, gazebo: buildGazebo, lifeguard: buildLifeguard, rink: buildRink, coveredBridge: buildCoveredBridge,
 };
 
 export function buildVoxelBuilding(spec = {}) {
@@ -2897,4 +2953,5 @@ export const PREVIEW = {};
 const lifted = (r) => ({ ...r, origin: [r.origin[0], 0, r.origin[2]] });
 for (const b of BUILDINGS) PREVIEW[b.id] = () => lifted(buildVoxelBuilding({ ...b, stilt: b.stilts ? 3.6 : 0 }));
 PREVIEW.house5_plain = () => lifted(buildVoxelBuilding({ ...BUILDINGS.find((b) => b.id === 'house5'), halloween: false }));
+PREVIEW.covered_bridge = () => lifted(buildVoxelBuilding({ id: 'bridge', kind: 'coveredBridge', w: 5.2, d: 24 }));
 PREVIEW.cafe_plain = () => lifted(buildVoxelBuilding({ ...BUILDINGS.find((b) => b.id === 'cafe'), stilt: 3.6, halloween: false }));

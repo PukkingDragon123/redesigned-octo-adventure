@@ -6,6 +6,7 @@ import { buildingMatrix, toWorld, pumpkin, TILESIZE } from './buildings.js';
 import { RNG } from '../core/noise.js';
 import { decor, DECOR } from './decor.js';
 import { nearestRoad } from './terrain.js';
+import { Builder } from '../render/builder.js';
 
 const TRIM = 0xf2ece0;
 const WOOD = 0x7a5232;
@@ -119,6 +120,9 @@ function coveredBridge(ctx, B) {
   const h0 = terrain.heightAt(ax, az), h1 = terrain.heightAt(bx, bz);
   const deck = Math.max(2.6, (h0 + h1) / 2);
   const M = buildingMatrix(c.x, deck, c.z, yaw);
+  // the voxel bridge stands in for this geometry (physics below still applies)
+  const voxel = DECOR.on && decor('bridge', c.x, deck, c.z, { yaw, len, w });
+  if (voxel) B = new Builder();
   // deck & stringers
   B.box([0, -0.12, 0], [len, 0.24, w], { tile: 'planks', tileMeters: 2.5 }, [0, Math.PI / 2, 0], M);
   for (const sx of [-w / 2 + 0.3, 0, w / 2 - 0.3]) B.box([sx, -0.45, 0], [0.3, 0.45, len], { tile: 'woodDark', tileMeters: 1.25, tileMetersV: 2.5 }, null, M);
@@ -154,7 +158,7 @@ function coveredBridge(ctx, B) {
   // lanterns inside
   for (const z of [-len / 4, len / 4]) {
     B.box([0, H - 0.3, z], [0.22, 0.28, 0.22], { tile: 'lamp', keepUV: true, emissive: 2 }, null, M);
-    ctx.lights.push({ pos: toWorld(M, 0, H - 0.4, z), color: [1.0, 0.7, 0.35], radius: 8, kind: 'lamp' });
+    if (!voxel) ctx.lights.push({ pos: toWorld(M, 0, H - 0.4, z), color: [1.0, 0.7, 0.35], radius: 8, kind: 'lamp' });
   }
   physics.addPlatform({ x: c.x, z: c.z, yaw, w: w, l: len, y0: deck, surface: 'wood', kind: 'bridge' });
   ctx.bridge = { x: c.x, z: c.z, yaw, deck };
