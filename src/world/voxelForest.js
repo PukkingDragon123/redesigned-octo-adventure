@@ -63,7 +63,10 @@ varying float vEmit;
 varying vec3 vWorldPos;
 varying vec3 vNormal;
 void main() {
-  mat4 M = modelMatrix * instanceMatrix;
+  mat4 M = modelMatrix;
+  #ifdef USE_INSTANCING
+  M = modelMatrix * instanceMatrix;
+  #endif
   vec4 worldPosition = M * vec4(position, 1.0);
   float leaf = step(0.5, aColor.a);
   float fall = leaf * (1.0 - step(0.8, aColor.a));
@@ -122,7 +125,10 @@ const TREE_DEPTH_VERT = /* glsl */ `
 ${LIGHT_PARS_VERT}
 ${SWAY_GLSL}
 void main() {
-  mat4 M = modelMatrix * instanceMatrix;
+  mat4 M = modelMatrix;
+  #ifdef USE_INSTANCING
+  M = modelMatrix * instanceMatrix;
+  #endif
   vec4 wp = M * vec4(position, 1.0);
   float leaf = step(0.5, aColor.a);
   wp.xyz = treeSway(wp.xyz, M[3].xyz, leaf, leaf * (1.0 - step(0.8, aColor.a)));
@@ -577,6 +583,22 @@ export class VoxelForest {
     this.stats.models = this.models.length;
     this.stats.faces = this.models.map((M) => `${M.key} ${M.geos.map((g) => g.userData.faces).join('/')}`);
     return this.group;
+  }
+
+  // A standalone copy of one forest model (for cutscenes and set dressing): pivot
+  // at the trunk base, metres, same material and wind as the forest.
+  // makeTree('maple', 2) ; makeTree('stump', 1) is the stump with the axe in it.
+  makeTree(species, seed = 0, { lod = 0 } = {}) {
+    const M = this.models.find((m) => m.species === species && m.seed === seed) || this.models.find((m) => m.species === species);
+    if (!M) return null;
+    const l = Math.min(lod, M.geos.length - 1);
+    const mesh = new THREE.Mesh(M.geos[l], this.material);
+    mesh.scale.setScalar(M.sizes[l]);
+    mesh.castShadow = mesh.receiveShadow = true;
+    mesh.customDepthMaterial = this.material.userData.depth;
+    mesh.name = `${M.key}/single`;
+    mesh.userData.meta = M.meta;
+    return mesh;
   }
 
   isReflection(cam) {

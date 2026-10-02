@@ -190,8 +190,7 @@ export class Forest {
     this.colliders.insert({ type: 'circle', x, z, r: trunkR * 1.25 + 0.15, tree }, x, z, 1);
   }
 
-  addBush(species, x, y, z, rng) {
-    rng.next();
+  addBush(species, x, y, z) {
     this.trees.push({ species, x, y, z, H: 1.2, trunk: null, bush: true });
   }
 
