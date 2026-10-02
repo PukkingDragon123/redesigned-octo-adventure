@@ -111,6 +111,14 @@ export class UI {
     this.toasts = el('div', 'toasts');
     this.root.appendChild(this.toasts);
     this.skipHint = el('div', 'skiphint', `<span class="key">Esc</span> skip`);
+    this.skipHint.addEventListener('pointerdown', (e) => {
+      e.stopPropagation();
+      const sc = this.game.currentScene;
+      if (sc) {
+        sc.skip = true;
+        this.hideDialogue();
+      }
+    });
     this.root.appendChild(this.skipHint);
     this.overlay = null;
     this.menuStack = [];

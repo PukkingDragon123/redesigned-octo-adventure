@@ -18,6 +18,7 @@ import { Story } from './story.js';
 import { Menus } from './menus.js';
 import { UI } from '../ui/ui.js';
 import { sound } from './sound.js';
+import { TouchControls } from '../ui/touch.js';
 import { computeStats } from './upgrades.js';
 import { newState, saveGame, loadGame, loadSettings, saveSettings } from './state.js';
 import { riverInfo, forestNoise } from '../world/terrain.js';
@@ -65,6 +66,7 @@ export class Game {
     this.wildlife = new Wildlife(this);
     this.sfx = (name, pos, vol = 1) => this.spatial(name, pos, vol);
     this.ui = new UI(this);
+    this.touch = new TouchControls(this);
     this.menus = new Menus(this);
     this.orders = new Orders(this);
     this.story = new Story(this);
@@ -503,9 +505,35 @@ export class Game {
     }
   }
 
+  // Steps graphics down when real frame rate stays low while riding (unless the
+  // player picked their own settings). Swiftshader test runs pass ?frames and skip this.
+  governQuality() {
+    const now = performance.now();
+    const pf = this.perf || (this.perf = { t: 0, n: 0, last: now, steps: 0 });
+    const real = (now - pf.last) / 1000;
+    pf.last = now;
+    if (!this.settings.autoQuality || this.params.has('frames') || this.mode !== 'ride' || real > 0.5 || document.hidden) return;
+    pf.t += real;
+    pf.n++;
+    if (pf.t < 5) return;
+    const fps = pf.n / pf.t;
+    pf.t = pf.n = 0;
+    if (fps >= 38 || pf.steps >= 4) return;
+    const s = this.settings;
+    if (s.quality === 'high') s.quality = 'medium';
+    else if (s.quality === 'medium') s.quality = 'low';
+    else if (s.pixel < 4) s.pixel++;
+    else return;
+    pf.steps++;
+    this.applySettings();
+    this.saveSettings();
+    this.ui.toast('Eased the graphics a little for smoother riding (Settings to change).', 'gears', 3500);
+  }
+
   // ---------------------------------------------------------------- per frame
   update(dt) {
     input.update();
+    this.governQuality();
     this.time += dt;
     for (const t of this.timers) t.t -= dt;
     const due = this.timers.filter((t) => t.t <= 0);
@@ -519,6 +547,7 @@ export class Game {
     }
     this.tweens = this.tweens.filter((tw) => tw.t < tw.dur);
     this.ui.update(dt);
+    this.touch.update();
 
     const busy = this.ui.dialogueTick || this.ui.menuStack.length;
     if (this.mode === 'ride' && !busy) {

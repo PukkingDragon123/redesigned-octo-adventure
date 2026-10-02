@@ -103,6 +103,8 @@ export class Menus {
       show();
       b.addEventListener('click', () => {
         s[key] = opts[(opts.indexOf(s[key]) + 1) % opts.length];
+        // a hand-picked look wins over the automatic quality governor
+        if (key === 'pixel' || key === 'quality') s.autoQuality = false;
         show();
         g.applySettings();
       });

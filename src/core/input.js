@@ -44,7 +44,8 @@ class Input {
     this.prev = new Set();
     this.now = new Set();
     this.pad = null;
-    this.touch = { steer: 0, throttle: 0, brake: 0, buttons: new Set() };
+    this.touch = { steer: 0, throttle: 0, brake: 0, stickThrottle: 0, stickBrake: 0, buttons: new Set() };
+    this.tappedActions = new Set(); // on-screen button taps, latched like key taps
     this.lastDevice = 'keyboard';
     this.enabled = true;
     this.mouse = { dx: 0, dy: 0, down: false };
@@ -107,7 +108,16 @@ class Input {
       if ((this.pad.axes[1] || 0) > 0.6) this.now.add('menuDown');
     }
     for (const t of this.touch.buttons) this.now.add(t);
+    for (const a of this.tappedActions) {
+      this.now.add(a);
+      this.fresh.add(a);
+    }
+    this.tappedActions.clear();
     if (!this.enabled) this.now.clear();
+  }
+
+  tapAction(action) {
+    this.tappedActions.add(action);
   }
 
   down(action) {
@@ -141,7 +151,7 @@ class Input {
       const ay = this.pad.axes[1] || 0;
       if (ay < -0.3) t = Math.max(t, Math.min(1, -ay));
     }
-    t = Math.max(t, this.touch.throttle);
+    t = Math.max(t, this.touch.throttle, this.touch.stickThrottle);
     return this.enabled ? t : 0;
   }
   brake() {
@@ -152,7 +162,7 @@ class Input {
       const ay = this.pad.axes[1] || 0;
       if (ay > 0.5) t = Math.max(t, ay);
     }
-    t = Math.max(t, this.touch.brake);
+    t = Math.max(t, this.touch.brake, this.touch.stickBrake);
     return this.enabled ? t : 0;
   }
   // right stick / mouse for camera orbit

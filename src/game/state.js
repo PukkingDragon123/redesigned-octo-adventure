@@ -57,13 +57,19 @@ export function clearSave() {
   }
 }
 
-export const DEFAULT_SETTINGS = { pixel: 3, master: 0.8, music: 0.55, sfx: 0.85, quality: 'high', camDist: 1, fps: false };
+export const DEFAULT_SETTINGS = { pixel: 3, master: 0.8, music: 0.55, sfx: 0.85, quality: 'high', camDist: 1, fps: false, autoQuality: true };
+
+// phones and small tablets start one notch lower; the governor in game.js steps further if needed
+function deviceDefaults() {
+  const coarse = typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches;
+  return coarse ? { quality: 'medium' } : {};
+}
 
 export function loadSettings() {
   try {
-    return { ...DEFAULT_SETTINGS, ...(JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}')) };
+    return { ...DEFAULT_SETTINGS, ...deviceDefaults(), ...(JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}')) };
   } catch {
-    return { ...DEFAULT_SETTINGS };
+    return { ...DEFAULT_SETTINGS, ...deviceDefaults() };
   }
 }
 export function saveSettings(s) {
