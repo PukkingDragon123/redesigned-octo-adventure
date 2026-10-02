@@ -376,11 +376,14 @@ export class Bubbles {
       }
     }
     const m = 12;
+    // keep clear of the cutscene letterbox bars and leave room for the name tag
+    const box = this.ui.root.classList.contains('letterbox') ? H * 0.09 : 0;
+    const top = m + box + (A.b.querySelector('.b-name') ? 34 : 0);
     const tailH = A.tl.offsetHeight || 30;
     let bx = sx - bw * 0.42;
     let by = sy - bh - tailH + 6;
     bx = Math.max(m, Math.min(W - bw - m, bx));
-    by = Math.max(m, Math.min(H - bh - tailH - m, by));
+    by = Math.max(top, Math.min(H - bh - tailH - m - box, by));
     A.wrap.style.transform = `translate(${Math.round(bx)}px, ${Math.round(by)}px)`;
     const tx = Math.max(14, Math.min(bw - 50, sx - bx - 14));
     A.tl.style.left = `${Math.round(tx)}px`;

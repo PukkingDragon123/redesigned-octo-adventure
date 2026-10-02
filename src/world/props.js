@@ -354,10 +354,10 @@ function graveyard(ctx, B) {
   }
   fencePosts(ctx, B, pts, { color: 0x2a2a30, height: 1.3, spacing: 2.4, rails: 2, iron: true });
   // headstones
-  for (let i = 0; i < 16; i++) {
+  for (let i = 0; i < 26; i++) {
     const a = rng.range(0, Math.PI * 2), d = rng.range(4, R - 2.5);
     const x = g.x + Math.cos(a) * d, z = g.z + Math.sin(a) * d;
-    if (Math.hypot(x - L.POI.grave.x, z - L.POI.grave.z) < 3.5) continue;
+    if (Math.hypot(x - L.POI.grave.x, z - L.POI.grave.z) < 8.5) continue; // the intro is staged here
     const y = terrain.heightAt(x, z) - 0.1;
     const yaw = rng.range(-0.3, 0.3) + Math.PI * 0.75;
     const M = buildingMatrix(x, y, z, yaw);
