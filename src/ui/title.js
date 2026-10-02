@@ -95,42 +95,6 @@ function drawMug() {
   return c;
 }
 
-// ---------------------------------------------------------------- menu plates
-// a leather plate with an ink outline, stitched trim and brass corner brackets
-function drawPlate(w, h, state) {
-  const [c, g] = pixCanvas(w, h);
-  const R = (x, y, ww, hh, col) => { g.fillStyle = col; g.fillRect(x, y, ww, hh); };
-  const base = state === 'sel' ? '#8a5030' : state === 'down' ? '#4e2c18' : '#6b3d22';
-  const hi = state === 'sel' ? '#a86a40' : '#8a5432';
-  const lo = state === 'down' ? '#3a2010' : '#3e2214';
-  R(1, 0, w - 2, h, INK); R(0, 1, w, h - 2, INK);
-  R(1, 1, w - 2, h - 2, base);
-  R(2, 1, w - 4, 1, hi); R(1, h - 3, w - 2, 2, lo);
-  // grain
-  for (let x = 4; x < w - 4; x += 7) R(x, 4 + ((x * 7) % (h - 9)), 3, 1, lo);
-  // stitching
-  for (let x = 4; x < w - 4; x += 3) { R(x, 3, 1, 1, state === 'sel' ? '#f2c443' : '#b8875a'); R(x, h - 5, 1, 1, state === 'sel' ? '#f2c443' : '#b8875a'); }
-  // brass corners
-  const gold = state === 'sel' ? ['#ffe08a', '#f2c443', '#a86d1c'] : ['#f2c443', '#c8962e', '#7a4e14'];
-  for (const [cx, cy, fx, fy] of [[1, 1, 1, 1], [w - 2, 1, -1, 1], [1, h - 2, 1, -1], [w - 2, h - 2, -1, -1]]) {
-    for (let k = 0; k < 5; k++) { R(cx + fx * k, cy, 1, 1, gold[1]); R(cx, cy + fy * k, 1, 1, gold[1]); }
-    R(cx + fx, cy + fy, 1, 1, gold[0]); R(cx + fx * 2, cy + fy, 1, 1, gold[2]); R(cx + fx, cy + fy * 2, 1, 1, gold[2]);
-    R(cx + fx * 3, cy + fy * 2, 1, 1, gold[1]); R(cx + fx * 2, cy + fy * 3, 1, 1, gold[1]);
-  }
-  return c;
-}
-
-// a bony pointing hand
-function drawHand() {
-  const [c, g] = pixCanvas(14, 9);
-  const rows = ['....##........', '...#oo#.......', '...#oo#######.', '####oooooooo#.', '#oooooo####o#.', '#ooooo#oooo#..', '#ooooooo##o#..', '.#oooooooo#...', '..########....'];
-  rows.forEach((r, y) => [...r].forEach((ch, x) => {
-    if (ch === '#') { g.fillStyle = INK; g.fillRect(x, y, 1, 1); }
-    else if (ch === 'o') { g.fillStyle = y > 5 ? '#cdbb98' : '#f2e6cc'; g.fillRect(x, y, 1, 1); }
-  }));
-  return c;
-}
-
 const el = (tag, css = '', html = '') => {
   const e = document.createElement(tag);
   e.style.cssText = css;
@@ -155,7 +119,7 @@ export class TitleScreen {
     // logo
     const logo = drawLogo();
     const mug = drawMug();
-    const ls = Math.max(1, Math.min(5, Math.floor(Math.min((innerWidth * 0.62) / logo.width, (innerHeight * 0.22) / logo.height))));
+    const ls = Math.max(1, Math.min(5, Math.floor(Math.min((innerWidth * 0.62) / logo.width, (innerHeight * 0.3) / logo.height))));
     const lw = logo.width * ls, lh = logo.height * ls;
     const logoBox = el('div', `position:absolute;left:50%;top:${Math.round(innerHeight * 0.05)}px;width:${lw + 30 * ls}px;margin-left:${-Math.round((lw + 30 * ls) / 2)}px;height:${lh}px;`);
     const li = el('img', `position:absolute;left:0;top:0;width:${lw}px;height:${lh}px;image-rendering:pixelated;`);
@@ -165,7 +129,7 @@ export class TitleScreen {
     this.mugEl = mi;
     this.ls = ls;
     const ss = Math.max(1, ls - 1);
-    const sub = el('div', `position:absolute;left:0;width:${lw}px;top:${lh - 4 * ls}px;text-align:center;font-size:${12 * ss}px;line-height:1;color:#ffe8c8;text-shadow:${ss}px ${ss}px 0 ${INK};`, 'a cozy undead cocoa-delivery tale');
+    const sub = el('div', `position:absolute;left:0;width:${lw}px;top:${lh - 4 * ls}px;text-align:center;font-size:${16 * ss}px;line-height:1;color:#ffe8c8;text-shadow:${ss}px ${ss}px 0 ${INK};`, 'a cozy undead cocoa-delivery tale');
     logoBox.append(li, mi, sub);
     this.logoEl = li;
     // menu
@@ -175,28 +139,18 @@ export class TitleScreen {
     items.push({ label: save ? 'New Game' : 'Start', small: save ? 'starts over' : '', fn: () => this.close(onNew) });
     items.push({ label: 'Settings', fn: () => onSettings?.() });
     items.push({ label: 'Controls', fn: () => onControls?.() });
-    const PW = 92, PH = 18;
-    const plates = { idle: drawPlate(PW, PH, 'idle').toDataURL(), sel: drawPlate(PW, PH, 'sel').toDataURL(), down: drawPlate(PW, PH, 'down').toDataURL() };
-    const hand = drawHand().toDataURL();
+    // menu: the shared leather & brass kit buttons
     const narrow = innerWidth < innerHeight;
-    const menu = el('div', `position:absolute;${narrow ? `left:50%;margin-left:${-PW * s / 2}px;bottom:${16 * s}px` : `left:${Math.round(innerWidth * 0.08)}px;bottom:${Math.round(innerHeight * 0.1)}px`};display:flex;flex-direction:column;gap:${4 * s}px;pointer-events:auto;`);
+    const menu = el('div', `position:absolute;${narrow ? 'left:50%;transform:translateX(-50%);bottom:calc(var(--u) * 18)' : `left:${Math.round(innerWidth * 0.07)}px;bottom:${Math.round(innerHeight * 0.1)}px`};display:flex;flex-direction:column;gap:calc(var(--u) * 3);pointer-events:auto;min-width:calc(var(--u) * 104);`);
+    menu.className = 'title-menu-k';
     const buttons = items.map((it, i) => {
-      const b = el('button', `position:relative;width:${PW * s}px;height:${PH * s}px;border:0;padding:0;background:url(${plates.idle}) 0 0/100% 100%;image-rendering:pixelated;cursor:pointer;font-family:BoldPixels,Monogram,monospace;font-size:${16 * s}px;line-height:1;color:#fff4e0;text-shadow:${s}px ${s}px 0 ${INK};text-align:left;padding-left:${10 * s}px;outline:none;`);
-      b.className = 'title-btn';
-      b.innerHTML = `<span>${it.label}</span>${it.small ? `<span style="position:absolute;right:${7 * s}px;top:${6 * s}px;font-family:Monogram,monospace;font-size:${(s > 1 ? 6 : 12) * s}px;color:#e8c890;">${it.small}</span>` : ''}`;
-      const ptr = el('img', `position:absolute;left:${-17 * s}px;top:${4 * s}px;width:${14 * s}px;height:${9 * s}px;image-rendering:pixelated;display:none;`);
-      ptr.src = hand;
-      b.appendChild(ptr);
-      b._ptr = ptr;
+      const b = g.ui.button(it.label, it.fn, { small: it.small || '' });
       b.addEventListener('pointerenter', () => this.select(i));
-      b.addEventListener('pointerdown', () => (b.style.backgroundImage = `url(${plates.down})`));
-      b.addEventListener('click', () => { g.sound?.play?.('click'); it.fn(); });
       menu.appendChild(b);
       return b;
     });
-    this.plates = plates;
     this.buttons = buttons;
-    const foot = el('div', `position:absolute;right:${4 * s}px;bottom:${3 * s}px;font-size:${(s > 2 ? 6 : 12) * Math.max(1, Math.round(s / 2))}px;line-height:1.1;text-align:right;color:#e8d0b0;text-shadow:${Math.max(1, s >> 1)}px ${Math.max(1, s >> 1)}px 0 ${INK};`,
+    const foot = el('div', `position:absolute;right:8px;bottom:6px;font-size:16px;line-height:1;text-align:right;color:#e8d0b0;text-shadow:1px 1px 0 ${INK};`,
       'Autumn in Maple Cove<br>fonts: monogram by datagoblin (CC0) &middot; BoldPixels by YukiPixels (CC BY-SA 4.0)');
     root.append(logoBox, menu, foot);
     document.body.appendChild(root);
@@ -211,13 +165,9 @@ export class TitleScreen {
   }
 
   select(i) {
-    if (!this.buttons) return;
-    this.m && (this.m.sel = i);
-    this.buttons.forEach((b, k) => {
-      b.style.backgroundImage = `url(${k === i ? this.plates.sel : this.plates.idle})`;
-      b._ptr.style.display = k === i ? 'block' : 'none';
-      b.style.color = k === i ? '#ffe08a' : '#fff4e0';
-    });
+    if (!this.buttons || !this.m) return;
+    this.m.sel = i;
+    this.g.ui.highlight(this.m);
     this.selI = i;
   }
 
@@ -239,8 +189,6 @@ export class TitleScreen {
     if (!this.root) return;
     const g = this.g;
     this.t += dt;
-    // keep the menu highlight in sync with keyboard/gamepad navigation
-    if (this.m && this.m.sel !== this.selI) this.select(this.m.sel);
     // camera: a slow, low push-in on Hank with the cabin glowing behind him
     const b = g.bike.pos;
     const k = this.t * 0.05;
