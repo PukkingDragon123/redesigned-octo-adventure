@@ -29,7 +29,7 @@ export class Keepsakes {
 
   update(dt) {
     const g = this.game;
-    const p = g.bike.pos;
+    const p = g.playerPos;
     for (const it of this.items) {
       if (it.taken) continue;
       it.t += dt;

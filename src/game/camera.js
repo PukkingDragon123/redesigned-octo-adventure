@@ -90,12 +90,14 @@ export class ChaseCamera {
       want = backwards ? bike.yaw : bike.yaw + wrapAngle(va - bike.yaw) * (bike.drifting ? 0.55 : 0.3);
     }
     if (bike.crash > 0) want = this.yaw;
-    this.yaw = instant ? want : angleDamp(this.yaw, want, bike.grounded ? 3.2 : 1.6, dt);
+    if (this.walk) want = speed > 0.5 ? bike.yaw : this.yaw;
+    this.yaw = instant ? want : angleDamp(this.yaw, want, this.walk ? 1.1 : bike.grounded ? 3.2 : 1.6, dt);
     const yaw = this.yaw + this.orbitYaw;
-    const dist = (5.1 + clamp(speed, 0, 25) * 0.085) * this.distScale;
-    const hgt = 1.95 + clamp(speed, 0, 25) * 0.025 + this.orbitPitch * 3;
+    const walk = this.walk ? 1 : 0;
+    const dist = (5.1 + clamp(speed, 0, 25) * 0.085 - walk * 1.3) * this.distScale;
+    const hgt = 1.95 + clamp(speed, 0, 25) * 0.025 + this.orbitPitch * 3 - walk * 0.35;
     const target = _t.copy(bike.pos);
-    target.y += 1.15;
+    target.y += 1.15 - walk * 0.2;
     // look ahead in the direction of travel
     target.x += Math.sin(this.yaw) * clamp(speed * 0.12, 0, 2.2);
     target.z += Math.cos(this.yaw) * clamp(speed * 0.12, 0, 2.2);

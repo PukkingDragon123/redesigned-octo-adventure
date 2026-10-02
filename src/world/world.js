@@ -17,6 +17,10 @@ import { createSky, createMountains } from '../render/sky.js';
 import { createWater } from './water.js';
 import { Atmosphere } from './atmosphere.js';
 import { G } from '../render/shaderlib.js';
+import { DECOR } from './decor.js';
+import { VoxelWorld } from './voxelWorld.js';
+import { VoxelForest } from './voxelForest.js';
+import { PhysProps } from './physprops.js';
 
 export class World {
   constructor(pipeline, progress = () => {}) {
@@ -44,10 +48,16 @@ export class World {
     this.forest.place(riverInfo);
     this.scene.add(this.forest.buildMeshes());
     console.log('forest', JSON.stringify(this.forest.stats));
+    if (!this.noVoxelTrees) {
+      this.voxelForest = new VoxelForest(this.forest);
+      const t0 = performance.now();
+      this.scene.add(await this.voxelForest.build((k) => this.progress(0.32 + k * 0.06, 'growing voxel trees')));
+      console.log(`voxel trees in ${(performance.now() - t0).toFixed(0)}ms`);
+    }
 
     await step(0.4, 'raising the village');
     this.physics = new PhysicsWorld(this.terrain, this.forest.colliders);
-    this.buildTown();
+    await this.buildTown(step);
 
     await step(0.45, 'growing the grass');
     const blockers = L.BUILDINGS.map((b) => ({ x: b.x, z: b.z, w: b.w + (b.porch ? 3 : 0.5), d: b.d + (b.porch ? 3 : 0.5), yaw: b.facing || 0 }));
@@ -83,7 +93,7 @@ export class World {
     this.atmosphere = new Atmosphere(this.pipeline, sun);
   }
 
-  buildTown() {
+  async buildTown(step = async () => {}) {
     const atlas = buildWorldAtlas();
     this.worldAtlasTex = pixTexture(atlas.pix, { repeat: false, mips: true });
     this.propMat = createPropMaterial(this.worldAtlasTex);
@@ -98,8 +108,28 @@ export class World {
     const groups = {};
     for (const b of L.BUILDINGS) (groups[byArea(b.x, b.z)] ||= []).push(b);
     this.buildings = {};
-    for (const [area, list] of Object.entries(groups)) Object.assign(this.buildings, buildBuildings(ctx, areas[area], list));
+    // the old low-poly buildings still provide collision, porches, smoke & lamps;
+    // their geometry is thrown away and voxel buildings stand in their place
+    const voxel = !this.noVoxelTown;
+    const scrap = new Builder();
+    for (const [area, list] of Object.entries(groups)) Object.assign(this.buildings, buildBuildings(ctx, voxel ? scrap : areas[area], list));
+    DECOR.on = voxel;
+    DECOR.list = [];
     buildProps(ctx, areas);
+    DECOR.on = false;
+    if (voxel) {
+      const t0 = performance.now();
+      this.voxel = new VoxelWorld(this);
+      this.physprops = new PhysProps(null, this.scene, ctx.lights);
+      await step(0.41, 'building voxel houses');
+      this.voxel.buildings(this.buildings);
+      await step(0.43, 'carving pumpkins');
+      this.voxel.decor(DECOR.list, this.physprops);
+      this.voxel.halloween(this.physprops);
+      this.voxel.buildStatic();
+      for (const l of this.voxel.lights) ctx.lights.push(l);
+      console.log(`voxel town in ${(performance.now() - t0).toFixed(0)}ms, ${this.physprops.list.length} physics props`);
+    }
     this.townMeshes = [];
     for (const [name, B] of Object.entries(areas)) {
       if (!B.count) continue;
@@ -187,6 +217,7 @@ export class World {
     G.uTime.value += dt;
     this.atmosphere.update(dt);
     this.sky.position.copy(camera.position);
+    this.voxelForest?.update(focus);
     this.forest?.updateVisibility(camera.position);
     this.grass?.update(camera.position);
     this.updateShadow(focus);

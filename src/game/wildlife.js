@@ -92,7 +92,7 @@ export class Wildlife {
 
   update(dt) {
     const g = this.game;
-    const player = g.bike.pos;
+    const player = g.playerPos;
     const speed = g.bike.speed;
     const rng = this.rng;
     for (const c of this.list) {
@@ -117,7 +117,7 @@ export class Wildlife {
   }
 
   deer(c, dt, d) {
-    const player = this.game.bike.pos;
+    const player = this.game.playerPos;
     if (c.state !== 'flee' && d < 16 + this.game.bike.speed * 0.8) {
       c.state = 'flee';
       c.timer = 6 + this.rng.range(0, 3);

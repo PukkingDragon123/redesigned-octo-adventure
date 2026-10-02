@@ -149,6 +149,12 @@ export class BikeModel {
     this.basketAnchor = new THREE.Object3D();
     this.basketAnchor.position.set(0, by + 0.03, bz);
     steerG.add(this.basketAnchor);
+    // where the rider's hands go (+x is the rider's left)
+    this.gripL = new THREE.Object3D();
+    this.gripL.position.set(0.34, 0.39, -0.18);
+    this.gripR = new THREE.Object3D();
+    this.gripR.position.set(-0.34, 0.39, -0.18);
+    steerG.add(this.gripL, this.gripR);
     // bell
     const bell = new Builder();
     const dome = new THREE.SphereGeometry(0.035, 6, 4, 0, Math.PI * 2, 0, Math.PI / 2);
@@ -250,8 +256,10 @@ export class BikeModel {
     this.lampLight.position.set(0, 0.95, 1.4);
     g.add(this.lampLight);
     this.riderAnchor = new THREE.Object3D();
-    this.riderAnchor.position.set(0, 0.98, -0.2);
+    this.riderAnchor.position.set(0, 0.96, -0.22);
     g.add(this.riderAnchor);
+    // chibi riders: the roadster is scaled to fit the voxel villagers
+    g.scale.setScalar(0.86);
   }
 
   buildMotor() {
@@ -299,8 +307,9 @@ export class BikeModel {
     this.mWheelS.position.set(-1.02, 0.3, -0.05);
     g.add(this.mWheelF, this.mWheelR, this.mWheelS);
     this.mRiderAnchor = new THREE.Object3D();
-    this.mRiderAnchor.position.set(0, 0.92, -0.32);
+    this.mRiderAnchor.position.set(0, 0.9, -0.32);
     g.add(this.mRiderAnchor);
+    g.scale.setScalar(0.9);
     this.mBasketAnchor = new THREE.Object3D();
     this.mBasketAnchor.position.set(-0.75, 0.66, -0.15);
     g.add(this.mBasketAnchor);

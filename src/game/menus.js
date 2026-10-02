@@ -361,7 +361,7 @@ export class Menus {
     for (const o of g.orders.carried()) { const c2 = CUSTOMERS[o.spot]; pin(c2.x, c2.z, 'cocoa'); }
     for (const k of KEEPSAKES) if (g.state.keepsakes[k.id]) pin(k.x, k.z, KEEPSAKE_ICON[k.id]);
     if (g.catEventActive) pin(POI.catLog.x, POI.catLog.z, 'cat');
-    pin(g.bike.pos.x, g.bike.pos.z, 'star', 'me');
+    pin(g.playerPos.x, g.playerPos.z, 'star', 'me');
     p.appendChild(wrap);
     let m;
     const close = () => ui.closeOverlay(m);

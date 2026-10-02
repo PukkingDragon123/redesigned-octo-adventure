@@ -187,9 +187,18 @@ const POSES = {
     T.lean += 0.04 + wob(t, 1.7) * 0.01;
   },
   ride(c, t, T) {
+    const st = c.rideStyle || 'pedal';
     leg(T, 'L', 1.2, 0.1, 1.4); leg(T, 'R', 1.2, 0.1, 1.4);
     arm(T, 'L', 1.15, 0.2, 0.35); arm(T, 'R', 1.15, 0.2, 0.35);
-    T.lean += 0.32;
+    T.lean += st === 'stand' ? 0.55 : st === 'brake' ? 0.08 : st === 'coast' || st === 'idle' ? 0.2 : st === 'drift' ? 0.4 : 0.32;
+    if (st === 'stand') T.bodyY += 0.09 + Math.abs(S(c.rideCrank || 0)) * 0.03, T.tilt += S(c.rideCrank || 0) * 0.08;
+    if (st === 'pedal') T.tilt += S(c.rideCrank || 0) * 0.04, T.bodyY += Math.abs(S(c.rideCrank || 0)) * 0.01;
+    if (st === 'drift') { T.tilt -= (c.rideLean || 0) * 0.5; T.headZ += (c.rideLean || 0) * 0.3; }
+    if (st === 'brake') T.headX -= 0.1;
+    if (st === 'air') { T.headX -= 0.18; T.bodyY += 0.04; }
+    if (st === 'glide') { arm(T, 'L', 0.2, 2.75, 0.2); arm(T, 'R', 0.2, 2.75, 0.2); leg(T, 'L', 0.3 + S(t * 6) * 0.25, 0.1, 0.4); leg(T, 'R', 0.3 - S(t * 6) * 0.25, 0.1, 0.4); T.lean = 0.05; }
+    if (st === 'motor') { leg(T, 'L', 1.35, 0.25, 1.35); leg(T, 'R', 1.35, 0.25, 1.35); arm(T, 'L', 1.3, 0.35, 0.5); arm(T, 'R', 1.3, 0.35, 0.5); T.lean += 0.05; }
+    if (c.trickPose) c.trickPose(c, t, T);
   },
   hold(c, t, T) {
     arm(T, 'L', 0.95, 0.04, 1.15, 0.25); arm(T, 'R', 0.95, 0.04, 1.15, 0.25);
@@ -424,7 +433,7 @@ let SEED = 1;
 export class VoxelCharacter {
   constructor(game, charId, { x = 0, z = 0, y = null, yaw = 0, anim = 'idle', expr = 'neutral', shadow = true, cloth = true, parent = null } = {}) {
     this.game = game;
-    this.char = charId;
+    this._char = charId;
     this.P = partsFor(charId);
     this.spec = this.P.spec;
     this.persona = PERSONA[charId] || PERSONA.hank;
@@ -474,6 +483,29 @@ export class VoxelCharacter {
     this.apply();
   }
 
+  get char() { return this._char; }
+  set char(id) { if (id !== this._char) this.rebuild(id); }
+  // swap to another character spec in place (e.g. muddy Hank -> clean Hank)
+  rebuild(id) {
+    const parent = this.root.parent;
+    const held = this.held;
+    this.remove();
+    this.mat.dispose(); this.faceMat.dispose(); this.faceTex.tex.dispose();
+    for (const c of this.cloths) c.dispose();
+    this._char = id;
+    this.P = partsFor(id);
+    this.spec = this.P.spec;
+    this.persona = PERSONA[id] || PERSONA.hank;
+    this.mat = createVoxelMaterial();
+    this.buildRig(true);
+    this.buildCloth();
+    this.held = { L: null, R: null };
+    for (const s of ['L', 'R']) if (held[s]) this.hold(held[s], s);
+    parent?.add(this.root);
+    for (const cl of this.cloths) parent?.add(cl.group);
+    this.apply();
+  }
+
   // ------------------------------------------------------------ construction
   buildRig(shadow) {
     const P = this.P, G = P.geo;
@@ -507,8 +539,8 @@ export class VoxelCharacter {
     this.head = mk(G.head, this.headPiece);
     // face decal
     const fr = P.head.face, o = P.head.origin;
-    this.face = new FaceTex(this.spec, fr);
-    this.faceMat = createFlatMaterial(this.face.tex);
+    this.faceTex = new FaceTex(this.spec, fr);
+    this.faceMat = createFlatMaterial(this.faceTex.tex);
     const fw = (fr.x1 - fr.x0) * VS, fh = (fr.y1 - fr.y0) * VS;
     const fm = new THREE.Mesh(new THREE.PlaneGeometry(fw, fh), this.faceMat);
     fm.position.set(((fr.x0 + fr.x1) / 2 - o[0]) * VS, ((fr.y0 + fr.y1) / 2 - o[1]) * VS, (fr.z - o[2]) * VS + 0.003);
@@ -606,6 +638,13 @@ export class VoxelCharacter {
     return this;
   }
   setExpr(e) { this.expr = e; return this; }
+  // old sprite Actor compatibility (cutscenes poke these)
+  get bb() {
+    const self = this;
+    return { set fade(v) { self.setFade(v); }, get fade() { return self.mat.uniforms.uFade.value; } };
+  }
+  get lockView() { return null; }
+  set lockView(v) {}
   tempExpr(e, s = 1.2) { this.tmpExpr = { e, t: s }; }
   face(yaw) { this.targetYaw = yaw; return this; }
   faceTowards(x, z) { this.targetYaw = Math.atan2(x - this.pos.x, z - this.pos.z); return this; }
@@ -670,7 +709,7 @@ export class VoxelCharacter {
   }
   dispose() {
     this.remove();
-    this.mat.dispose(); this.faceMat.dispose(); this.face.tex.dispose();
+    this.mat.dispose(); this.faceMat.dispose(); this.faceTex.tex.dispose();
     for (const c of this.cloths) c.dispose();
   }
   snapGround() {
@@ -1020,12 +1059,14 @@ export class VoxelCharacter {
   solveRide(dt) {
     const R = this.ride;
     if (!R || this.broken) return;
-    const w = R.ikW ?? 1;
-    if (w <= 0) return;
+    const wA = (R.ikW ?? 1) * (R.armW ?? 1), wL = (R.ikW ?? 1) * (R.legW ?? 1);
+    if (wA <= 0 && wL <= 0) return;
     this.root.updateMatrixWorld(true);
     const P = this.P;
     const solve = (parent, joint, target, l1, l2, isArm, s, side) => {
       if (!target) return;
+      const w = isArm ? wA : wL;
+      if (w <= 0) return;
       target.updateWorldMatrix(true, false);
       _v.setFromMatrixPosition(target.matrixWorld);
       if (!isArm) _v.y += 2.5 * VS;
@@ -1050,8 +1091,8 @@ export class VoxelCharacter {
     };
     for (const side of ['L', 'R']) {
       const s = side === 'L' ? 1 : -1;
-      if ((R.armW ?? 1) > 0) solve(this.spine, this.arms[side].sh, R['grip' + side], P.upperL, P.foreL + 1.5 * VS, true, s, side);
-      if ((R.legW ?? 1) > 0) solve(this.body, this.legs[side].hip, R['pedal' + side], P.thighL, P.shinL, false, s, side);
+      solve(this.spine, this.arms[side].sh, R['grip' + side], P.upperL, P.foreL + 1.5 * VS, true, s, side);
+      solve(this.body, this.legs[side].hip, R['pedal' + side], P.thighL, P.shinL, false, s, side);
     }
   }
 
@@ -1067,7 +1108,7 @@ export class VoxelCharacter {
       talk = n > 0.9 ? 1 : n > 0.2 ? 0.67 : n > -0.4 ? 0.33 : 0;
     }
     this.mouthOpen = this.P.skull ? talk : 0;
-    this.face.update({ expr, blink, talk: this.P.skull ? 0 : talk, look: this.look || [0, 0], t: this.t });
+    this.faceTex.update({ expr, blink, talk: this.P.skull ? 0 : talk, look: this.look || [0, 0], t: this.t });
   }
 }
 

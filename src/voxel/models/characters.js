@@ -7,7 +7,7 @@ import { Vox, EMIT, tone, mixc, vhash } from '../vox.js';
 export const VS = 0.05; // metres per voxel for characters
 
 const SKIN = {
-  fair: 0xf2c8a2, rosy: 0xf4c2a6, tan: 0xd8a274, brown: 0x9c6844, deep: 0x6e4630, bone: 0xf1e6cc,
+  fair: 0xf2c8a2, rosy: 0xf4c2a6, tan: 0xd8a274, brown: 0x9c6844, deep: 0x6e4630, bone: 0xe4d6b6,
 };
 
 // ---------------------------------------------------------------- character specs
@@ -15,7 +15,7 @@ const SKIN = {
 export const CHARACTERS = {
   hank: {
     name: 'Hank', kind: 'skeleton', skin: SKIN.bone,
-    head: { w: 12, h: 11, d: 11 }, torso: { w: 10, h: 12, d: 6 }, arm: { len: 13, t: 2 }, leg: { len: 15, t: 2 },
+    head: { w: 12, h: 11, d: 11 }, torso: { w: 10, h: 11, d: 6 }, arm: { len: 12, t: 2 }, leg: { len: 12, t: 2 },
     hat: { type: 'toque', color: 0xc8361f, band: 0xf2e6cc, pom: 0xfff4e0 },
     scarf: { color: 0xc8361f, stripe: 0xf2e6cc },
     bag: { color: 0x8a5432, strap: 0x5a3420 },
@@ -23,7 +23,7 @@ export const CHARACTERS = {
   },
   hankBuried: {
     name: 'Hank', kind: 'skeleton', skin: 0xe2d6b8, dirty: true,
-    head: { w: 12, h: 11, d: 11 }, torso: { w: 10, h: 12, d: 6 }, arm: { len: 13, t: 2 }, leg: { len: 15, t: 2 },
+    head: { w: 12, h: 11, d: 11 }, torso: { w: 10, h: 11, d: 6 }, arm: { len: 12, t: 2 }, leg: { len: 12, t: 2 },
     eyes: 'skull', voice: 'hank',
   },
   grandma: {
@@ -250,46 +250,47 @@ function hair(spec, v, x0, y0, z0, x1, y1, z1) {
   const H = spec.hair;
   if (!H) return;
   const c = H.color;
-  const w = x1 - x0 + 1, d = z1 - z0 + 1;
-  const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
+  const w = x1 - x0 + 1, h = y1 - y0 + 1, d = z1 - z0 + 1;
+  const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2, cy = (y0 + y1) / 2;
   const strand = (x, y, z) => ((x + z * 2 + y) % 4 === 0 ? dark(c, 0.12) : (x + y) % 5 === 0 ? lite(c, 0.1) : c);
-  const cap = (depthTop = 2) => {
-    v.fill(x0 - 1, y1 - 1, z0 - 1, x1 + 1, y1 + depthTop - 1, z1 - 1, strand);
-    v.fill(x0 - 1, y1 - 3, z0 - 1, x1 + 1, y1 - 1, z0 + 2, strand); // back
+  // a rounded helmet of hair around the skull; the face stays clear below `fringe`
+  const helmet = (yLow, fringe, grow = 1.3, back = 0) => {
+    v.ellipsoid(cx, cy + 0.9, cz - 0.5 - back * 0.5, w / 2 + grow, h / 2 + grow, d / 2 + grow + back * 0.5, (x, y, z) => {
+      if (y < yLow) return 0;
+      const front = z >= z1 - 1 && x >= x0 && x <= x1;
+      if (front && y < fringe) return 0;
+      // sides below the temples stay behind the cheeks
+      if (y < y1 - 2 && z > z1 - 3 && (x === x0 - 1 || x === x1 + 1) && yLow > 3) return 0;
+      return strand(x, y, z);
+    });
   };
   switch (H.style) {
     case 'short':
-      cap(1);
-      v.fill(x0 - 1, y1 - 4, z0 - 1, x1 + 1, y1 - 1, z0 + Math.floor(d * 0.45), strand);
-      v.fill(x0, y1, z1 - 1, x1, y1, z1, strand); // fringe line
+      helmet(5, y1, 1.1);
+      v.fill(x0 - 1, 3, z0 - 1, x1 + 1, 5, z0 + 2, (x, y, z) => (v.get(x, y, z) ? strand(x, y, z) : 0)); // nape
       break;
     case 'bob':
-      cap(2);
-      v.fill(x0 - 1, 1, z0 - 1, x1 + 1, y1 + 1, z0 + Math.floor(d * 0.55), strand);
-      v.fill(x0 - 1, 2, z0, x0 - 1, y1, z1 - 2, strand);
-      v.fill(x1 + 1, 2, z0, x1 + 1, y1, z1 - 2, strand);
-      // swoopy fringe
+      helmet(1, y1 - 1, 1.6, 1);
+      // swoopy side-parted fringe
       for (let x = x0; x <= x1; x++) for (let y = y1 - 2 + Math.round(((x - x0) / w) * 2); y <= y1 + 1; y++) v.set(x, y, z1 + 1, strand(x, y, z1));
+      v.clear(x0, 0, z1 + 1, x1, y1 - 3, z1 + 3);
       break;
     case 'bun':
-      cap(2);
-      v.fill(x0 - 1, 3, z0 - 1, x1 + 1, y1, z0 + 2, strand);
-      v.fill(x0 - 1, 4, z0, x0 - 1, y1, z1 - 3, strand);
-      v.fill(x1 + 1, 4, z0, x1 + 1, y1, z1 - 3, strand);
+      helmet(4, y1, 1.2);
       v.ellipsoid(cx, y1 + 3.5, cz - 1, 3.2, 2.6, 3.2, strand);
       v.fill(Math.round(cx) - 1, y1 + 2, Math.round(cz) + 2, Math.round(cx), y1 + 2, Math.round(cz) + 2, 0x8a3a5a); // hair pin
-      // little fringe waves
-      for (let x = x0; x <= x1; x += 2) v.set(x, y1, z1 + 1, strand(x, y1, z1));
+      for (let x = x0; x <= x1; x += 2) v.set(x, y1, z1 + 1, strand(x, y1, z1)); // little fringe waves
       break;
     case 'braid':
-      cap(2);
-      v.fill(x0 - 1, 3, z0 - 1, x1 + 1, y1, z0 + 2, strand);
-      v.fill(x0 - 1, 4, z0, x0 - 1, y1, z1 - 3, strand);
-      v.fill(x1 + 1, 4, z0, x1 + 1, y1, z1 - 3, strand);
-      for (let y = -6; y < 4; y++) v.fill(Math.round(cx) - 1, y + pad0(), z0 - 2, Math.round(cx), y + pad0(), z0 - 2, (y & 1) ? dark(c, 0.15) : c);
+      helmet(3, y1, 1.2);
+      for (let k = 0; k < 9; k++) {
+        const y = y1 - 3 - k * 1.2;
+        v.ellipsoid(cx + (k % 2 ? 0.4 : -0.4), y, z0 - 2 - k * 0.1, 1.3, 0.9, 1.1, (k & 1) ? dark(c, 0.12) : c);
+      }
+      v.fill(Math.round(cx) - 1, y1 - 3 - 9 * 1.2, z0 - 3, Math.round(cx), y1 - 3 - 9 * 1.2 + 1, z0 - 2, 0x3a7ac8); // ribbon
       break;
     case 'curly':
-      for (let k = 0; k < 26; k++) {
+      for (let k = 0; k < 30; k++) {
         const a = vhash(k, 1, 2, 9) * Math.PI * 2, b = vhash(k, 3, 4, 9) * Math.PI * 0.55;
         const r = w / 2 + 0.6;
         v.ellipsoid(cx + Math.cos(a) * Math.cos(b) * r, y1 - 1 + Math.sin(b) * 4, cz - 1 + Math.sin(a) * Math.cos(b) * (d / 2), 1.8, 1.6, 1.8, strand);
@@ -297,14 +298,11 @@ function hair(spec, v, x0, y0, z0, x1, y1, z1) {
       v.clear(x0, 0, z1 - 1, x1, y1 - 2, z1 + 2); // keep the face clear
       break;
     case 'messy':
-      cap(2);
+      helmet(5, y1, 1.2);
       for (let x = x0 - 1; x <= x1 + 1; x += 2) v.set(x, y1 + 2, z0 + ((x * 3) % d), strand(x, y1, 0));
       break;
     default:
       break;
-  }
-  function pad0() {
-    return y1 - 3;
   }
 }
 
@@ -343,9 +341,12 @@ function hat(spec, v, x0, y0, z0, x1, y1, z1) {
   switch (H.type) {
     case 'toque': {
       const knit = (x, y, z) => ((x + y) % 2 === 0 ? c : dark(c, 0.1));
-      v.fill(x0 - 1, y1 - 2, z0 - 1, x1 + 1, y1, z1 + 1, (x, y, z) => (y === y1 - 2 ? H.band : (x % 2 ? H.band : tone(H.band, -0.1))));
-      v.ellipsoid(cx, y1 + 1, cz, w / 2 + 0.6, 4, (z1 - z0) / 2 + 1, (x, y, z) => (y > y1 ? knit(x, y, z) : 0));
-      v.ellipsoid(cx + 0.5, y1 + 6, cz - 0.5, 2.2, 2.2, 2.2, (x, y, z) => ((x + y + z) % 2 ? H.pom : tone(H.pom, -0.08)));
+      const lift = spec.kind === 'skeleton' ? 1 : 0;
+      v.fill(x0 - 1, y1 - 2 + lift, z0 - 1, x1 + 1, y1 + lift, z1 + 1, (x, y, z) => (y === y1 - 2 + lift ? tone(H.band, -0.06) : (x % 2 ? H.band : tone(H.band, -0.1))));
+      v.ellipsoid(cx, y1 + 1 + lift, cz, w / 2 + 0.6, 4, (z1 - z0) / 2 + 1, (x, y, z) => (y > y1 + lift ? knit(x, y, z) : 0));
+      // floppy tip leaning back, then the pompom
+      v.ellipsoid(cx + 0.5, y1 + 4.5 + lift, cz - 1.2, 2.4, 1.6, 2.4, (x, y, z) => (y > y1 + 3 + lift ? knit(x, y, z) : 0));
+      v.ellipsoid(cx + 1, y1 + 6.5 + lift, cz - 2, 2.2, 2.2, 2.2, (x, y, z) => ((x + y + z) % 2 ? H.pom : tone(H.pom, -0.08)));
       break;
     }
     case 'trapper': {
@@ -611,12 +612,17 @@ export function buildLimb(spec, part) {
   }
   const sCol = (y) => (typeof sleeve === 'function' ? sleeve(y) : sleeve);
   if (skel && !(spec.kind === 'reaper' && isArm)) {
-    // thin bone with knobbly joint ends
-    const cx = x0 + (t - 1) / 2;
-    const B = (x, y, z) => (spec.dirty && vhash(x, y, z, 8) < 0.14 ? mixc(bone, 0x6a4a2a, 0.5) : bone);
-    v.fill(Math.floor(cx), top - len + 1, z0, Math.ceil(cx), top, z1, B);
-    v.fill(x0 - 1, top - 1, z0 - 1, x1 + 1, top, z1 + 1, tone(bone, -0.04)); // joint knob
-    v.fill(x0 - 1, top - len + 1, z0 - 1, x1 + 1, top - len + 2, z1 + 1, tone(bone, 0.04));
+    // slim bone: a 2x2 shaft with a rounded knob only at the top joint
+    const B = (x, y, z) => {
+      let c = (y + x) % 3 === 0 ? tone(bone, -0.05) : bone;
+      if (spec.dirty && vhash(x, y, z, 8) < 0.14) c = mixc(bone, 0x6a4a2a, 0.5);
+      return c;
+    };
+    v.fill(x0, top - len + 1, z0, x1, top, z1, B);
+    const kh = upper ? 2 : 1;
+    v.fill(x0 - 1, top - kh + 1, z0, x1 + 1, top, z1, tone(bone, 0.05));
+    v.fill(x0, top - kh + 1, z0 - 1, x1, top, z1 + 1, tone(bone, 0.05));
+    if (upper) v.fill(x0 - 1, top - len + 1, z0, x1 + 1, top - len + 1, z1, tone(bone, -0.03)); // condyle
   } else {
     for (let y = top - len + 1; y <= top; y++) {
       const c = cuff && y === top - len + 1 ? cuff : sCol(y);
@@ -627,12 +633,18 @@ export function buildLimb(spec, part) {
   }
   const yb = top - len + 1;
   if (part === 'forearm') {
-    // a chunky mitten hand
     const hand = skel ? bone : spec.skin;
     const hy0 = yb - 3;
-    v.fill(x0 - (t < 3 ? 1 : 0), hy0, z0 - 0, x1 + (t < 3 ? 1 : 0), yb - 1, z1 + 1, (x, y, z) => (y === hy0 ? dark(hand, 0.08) : hand));
-    v.set(x0 - 1 - (t < 3 ? 1 : 0), yb - 2, z1, hand); // thumb
-    if (skel) v.clear(x0, hy0, z1 + 1, x1, hy0, z1 + 1);
+    if (skel && !(spec.kind === 'reaper' && false)) {
+      // bony hand: a little palm and three finger bones + thumb
+      v.fill(x0 - 1, yb - 1, z0, x1 + 1, yb - 1, z1 + 1, hand);
+      for (let k = 0; k < 3; k++) v.fill(x0 - 1 + k * 1.5, hy0, z0 + 1, x0 - 1 + k * 1.5, yb - 2, z0 + 1, k === 1 ? hand : tone(hand, -0.05));
+      v.fill(x0 - 1, hy0 + 1, z1 + 1, x0 - 1, yb - 2, z1 + 1, tone(hand, 0.04)); // thumb
+    } else {
+      // a chunky mitten hand
+      v.fill(x0 - (t < 3 ? 1 : 0), hy0, z0 - 0, x1 + (t < 3 ? 1 : 0), yb - 1, z1 + 1, (x, y, z) => (y === hy0 ? dark(hand, 0.08) : hand));
+      v.set(x0 - 1 - (t < 3 ? 1 : 0), yb - 2, z1, hand); // thumb
+    }
   }
   if (part === 'shin') {
     // boot / foot pointing forward (+z)
@@ -642,8 +654,12 @@ export function buildLimb(spec, part) {
     v.fill(x0 - (t < 3 ? 1 : 0), fy0, z0 - 1, x1 + (t < 3 ? 1 : 0), yb - 1, fz1, (x, y, z) => (y === fy0 ? dark(sh, 0.25) : z === fz1 && y === yb - 1 ? lite(sh, 0.1) : sh));
     if (spec.boots && !skel) v.fill(x0, yb, z0, x1, yb + 2, z1, sh);
     if (skel) {
-      v.clear(x0 - 1, yb - 1, z0 - 1, x1 + 1, yb - 1, z0); // toe bones look
-      for (let x = x0 - 1; x <= x1 + 1; x += 2) v.set(x, fy0, fz1 + 1, bone);
+      // heel + separate toe bones
+      v.clear(x0 - 1, yb - 1, z0 - 1, x1 + 1, yb - 1, z1 + 2);
+      v.fill(x0, yb - 1, z0, x1, yb - 1, z1, bone);
+      v.clear(x0 - 1, fy0 + 1, fz1 - 1, x1 + 1, fy0 + 1, fz1);
+      for (let x = x0 - 1; x <= x1 + 1; x += 2) v.fill(x, fy0, fz1 - 1, x, fy0, fz1 + 1, x === x0 - 1 ? tone(bone, -0.06) : bone);
+      v.clear(x0, fy0, fz1 - 1, x0, fy0, fz1 + 1);
     }
   }
   return { vox: v, origin: [x0 + t / 2, top + 1, z0 + t / 2], size: VS, len: len * VS };

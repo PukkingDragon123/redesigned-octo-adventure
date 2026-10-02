@@ -1,0 +1,142 @@
+/* Hand-made paper, books and B&W pixel speech bubbles */
+@font-face {
+  font-family: 'Monogram';
+  src: url('./fonts/monogram-extended.ttf') format('truetype');
+  font-display: block;
+}
+/* BoldPixels by YukiPixels (CC BY-SA 4.0) */
+@font-face {
+  font-family: 'BoldPixels';
+  src: url('./fonts/boldpixels.woff2') format('woff2');
+  font-display: block;
+}
+:root {
+  --ink2: #1e1418;
+  --paperA: #f3e3c3;
+  --paperB: #e6cfa2;
+  --pencil: #3a2a24;
+  --redpen: #b8321e;
+  --tf: 24px; /* monogram is crisp at multiples of 12px */
+}
+@media (min-width: 1700px) and (min-height: 900px) { :root { --tf: 36px; } }
+
+.bubble-layer { position: absolute; inset: 0; pointer-events: none; z-index: 30; }
+.bubble-layer > * { pointer-events: auto; }
+.bubble-wrap { position: absolute; left: 0; top: 0; will-change: transform; }
+.bubble {
+  position: relative;
+  border-style: solid;
+  border-width: calc(var(--u) * 8);
+  border-image-slice: 8 fill;
+  border-image-repeat: round;
+  image-rendering: pixelated;
+  padding: 0 calc(var(--u) * 1);
+  margin: calc(var(--u) * -2);
+  min-width: calc(var(--u) * 40);
+  max-width: min(600px, 72vw);
+  color: var(--ink2);
+  text-shadow: none;
+  font-family: 'Monogram', monospace;
+  font-size: var(--tf);
+  line-height: 1;
+  letter-spacing: 0;
+  transform-origin: 30% 110%;
+}
+.b-text { white-space: pre-wrap; word-break: normal; }
+.b-text span { display: inline-block; white-space: pre; }
+.b-text .tb, .n-text .tb { text-shadow: 1px 0 0 currentColor, 2px 0 0 currentColor; transform: scale(1.08); }
+.b-text .tsm { font-size: 0.75em; }
+.tw { animation: twave 0.9s ease-in-out infinite; }
+.ts { animation: tshake 0.12s steps(2) infinite; }
+@keyframes twave { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(calc(var(--u) * -1.5)); } }
+@keyframes tshake { 0% { transform: translate(1px, -1px); } 50% { transform: translate(-1px, 1px); } 100% { transform: translate(1px, 1px); } }
+
+.b-tail {
+  position: absolute; width: calc(var(--u) * 14); height: calc(var(--u) * 12);
+  background-size: 100% 100%; image-rendering: pixelated;
+}
+.b-name {
+  position: absolute; left: calc(var(--u) * -3); top: calc(var(--u) * -13);
+  background: var(--ink2); color: #fffaf0; padding: calc(var(--u) * 1) calc(var(--u) * 3) calc(var(--u) * 1.5);
+  font-family: 'BoldPixels', 'Monogram', monospace; font-size: calc(var(--u) * 5.4); line-height: 1;
+  transform: rotate(-3deg); box-shadow: calc(var(--u) * 1) calc(var(--u) * 1) 0 rgba(30, 20, 24, 0.35);
+  white-space: nowrap;
+}
+.b-next {
+  position: absolute; right: calc(var(--u) * -3); bottom: calc(var(--u) * -4);
+  width: calc(var(--u) * 5); height: calc(var(--u) * 4); opacity: 0;
+  background: var(--ink2); clip-path: polygon(0 0, 100% 0, 50% 100%);
+}
+.b-next.on { opacity: 1; animation: nextbob 0.6s steps(2) infinite; }
+@keyframes nextbob { 50% { transform: translateY(calc(var(--u) * 1)); } }
+.b-mark {
+  position: absolute; width: calc(var(--u) * 16); height: calc(var(--u) * 16);
+  background-size: 100% 100%; image-rendering: pixelated; pointer-events: none;
+  animation: markpop 1.1s ease-in-out infinite;
+}
+.b-mark.m0 { right: calc(var(--u) * -14); top: calc(var(--u) * -14); }
+.b-mark.m1 { left: calc(var(--u) * -14); top: calc(var(--u) * -6); animation-delay: -0.5s; }
+@keyframes markpop { 0%, 100% { transform: scale(1) rotate(-6deg); } 50% { transform: scale(1.2) rotate(8deg) translateY(calc(var(--u) * -2)); } }
+
+/* entrance + mood animations */
+.bubble.anim-pop { animation: bpop 0.28s cubic-bezier(.2, 1.6, .4, 1); }
+.bubble.anim-bounce { animation: bpop 0.28s cubic-bezier(.2, 1.6, .4, 1), bbounce 0.7s 0.3s ease-in-out infinite; }
+.bubble.anim-shake { animation: bpop 0.2s cubic-bezier(.2, 2, .4, 1), bshake 0.09s 0.2s steps(2) infinite; }
+.bubble.anim-tremble { animation: bpop 0.3s ease-out, btremble 0.16s 0.3s steps(2) infinite; }
+.bubble.anim-float { animation: bpop 0.4s ease-out, bfloat 2.2s 0.4s ease-in-out infinite; }
+.bubble.anim-droop { animation: bdroop 0.6s cubic-bezier(.3, 1.4, .5, 1); }
+@keyframes bpop { 0% { transform: scale(0.2, 0.1); } 100% { transform: scale(1); } }
+@keyframes bbounce { 0%, 100% { transform: translateY(0) scale(1); } 50% { transform: translateY(calc(var(--u) * -2)) scale(1.02, 0.98); } }
+@keyframes bshake { 0% { transform: translate(calc(var(--u) * 1), 0) rotate(0.6deg); } 100% { transform: translate(calc(var(--u) * -1), calc(var(--u) * 0.5)) rotate(-0.6deg); } }
+@keyframes btremble { 0% { transform: translate(1px, 0); } 100% { transform: translate(-1px, 1px); } }
+@keyframes bfloat { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(calc(var(--u) * -3)); } }
+@keyframes bdroop { 0% { transform: translateY(calc(var(--u) * -12)) scale(0.6); } 100% { transform: none; } }
+
+/* reply bubbles (Hank's choices) */
+.reply-stack { position: absolute; left: 0; top: 0; display: flex; flex-direction: column; gap: calc(var(--u) * 2); align-items: flex-start; }
+.reply {
+  border-style: solid; border-width: calc(var(--u) * 8); border-image-slice: 8 fill; border-image-repeat: round;
+  image-rendering: pixelated; margin: calc(var(--u) * -3) 0; padding: 0 calc(var(--u) * 2) 0 calc(var(--u) * 9);
+  font-family: 'Monogram', monospace; font-size: var(--tf); line-height: 1; color: var(--ink2);
+  position: relative; cursor: pointer; animation: rin 0.25s cubic-bezier(.2, 1.5, .4, 1) both; white-space: nowrap;
+}
+.reply.sel { filter: invert(1) contrast(1.1); transform: translateX(calc(var(--u) * 3)) rotate(-1deg); }
+.reply .hand {
+  position: absolute; left: calc(var(--u) * -1); top: 50%; width: calc(var(--u) * 8); height: calc(var(--u) * 6);
+  margin-top: calc(var(--u) * -3); opacity: 0;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 6' shape-rendering='crispEdges'%3E%3Cpath d='M0 2h5v-1h2v1h1v2h-1v1h-2v1h-5z' fill='%231e1418'/%3E%3Cpath d='M1 3h4v-1h2v2h-2v1h-4z' fill='%23fffaf0'/%3E%3C/svg%3E") center/100% 100% no-repeat;
+  image-rendering: pixelated;
+}
+.reply.sel .hand { opacity: 1; animation: handpoke 0.5s steps(2) infinite; }
+@keyframes handpoke { 50% { transform: translateX(calc(var(--u) * 1.5)); } }
+@keyframes rin { 0% { transform: translateX(calc(var(--u) * 20)) scale(0.6); opacity: 0; } 100% { opacity: 1; } }
+
+/* narration: a strip of torn paper */
+.narr-paper {
+  position: absolute; left: 50%; top: calc(var(--u) * 10); transform: translateX(-50%) rotate(-0.6deg);
+  max-width: min(760px, 86vw); padding: calc(var(--u) * 6) calc(var(--u) * 10) calc(var(--u) * 7);
+  background:
+    repeating-linear-gradient(0deg, transparent 0 calc(var(--tf) - 2px), rgba(120, 90, 60, 0.18) calc(var(--tf) - 2px) var(--tf)),
+    linear-gradient(180deg, var(--paperA), var(--paperB));
+  color: var(--pencil); font-family: 'Monogram', monospace; font-size: var(--tf); line-height: 1;
+  text-shadow: none; animation: npaper 0.5s cubic-bezier(.2, 1.3, .4, 1);
+  clip-path: polygon(0% 6%, 3% 0%, 8% 4%, 14% 1%, 21% 5%, 29% 0%, 37% 4%, 46% 1%, 55% 5%, 63% 0%, 71% 4%, 80% 1%, 88% 5%, 95% 0%, 100% 5%, 99% 50%, 100% 95%, 94% 100%, 86% 96%, 77% 100%, 68% 95%, 59% 100%, 50% 96%, 41% 100%, 32% 95%, 23% 100%, 14% 96%, 6% 100%, 0% 94%, 1% 50%);
+  filter: drop-shadow(calc(var(--u) * 1) calc(var(--u) * 2) 0 rgba(20, 10, 10, 0.4));
+}
+.narr-paper .b-next { right: calc(var(--u) * 5); bottom: calc(var(--u) * 3); background: var(--pencil); }
+.n-text span { display: inline-block; white-space: pre; }
+@keyframes npaper { 0% { transform: translateX(-50%) translateY(calc(var(--u) * -30)) rotate(-6deg); } 100% { transform: translateX(-50%) rotate(-0.6deg); } }
+
+/* comic stamps for tricks & trick shots */
+.stamp {
+  position: absolute; left: 0; top: 0; pointer-events: none; white-space: nowrap;
+  font-family: 'BoldPixels', 'Monogram', monospace; font-size: calc(var(--u) * 9); line-height: 1;
+  color: #fffaf0; padding: calc(var(--u) * 2) calc(var(--u) * 4);
+  background: var(--ink2); transform-origin: 50% 100%; transform: translate(-50%, -100%); rotate: -3deg;
+  box-shadow: calc(var(--u) * 1.5) calc(var(--u) * 1.5) 0 #e8701e;
+  clip-path: polygon(0 8%, 4% 0, 96% 4%, 100% 0, 98% 92%, 100% 100%, 3% 96%, 0 100%);
+}
+.stamp.trick-bail { background: #b8321e; box-shadow: calc(var(--u) * 1.5) calc(var(--u) * 1.5) 0 var(--ink2); }
+.stamp.trick-shot { background: #e8701e; color: var(--ink2); box-shadow: calc(var(--u) * 1.5) calc(var(--u) * 1.5) 0 var(--ink2); }
+.stamp.pop { animation: stamppop 0.45s cubic-bezier(.2, 1.8, .4, 1); }
+@keyframes stamppop { 0% { scale: 2.4; rotate: -12deg; opacity: 0; } 60% { opacity: 1; } 100% { scale: 1; rotate: -3deg; } }

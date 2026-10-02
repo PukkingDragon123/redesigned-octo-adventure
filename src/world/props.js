@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import * as L from './layout.js';
 import { buildingMatrix, toWorld, pumpkin, TILESIZE } from './buildings.js';
 import { RNG } from '../core/noise.js';
+import { decor, DECOR } from './decor.js';
 
 const TRIM = 0xf2ece0;
 const WOOD = 0x7a5232;
@@ -23,6 +24,11 @@ function signAt(B, M, text, x, y, z, scale = 1.2, post = true) {
 }
 
 function lampPost(ctx, B, x, y, z, { lantern = true } = {}) {
+  if (decor('lamp', x, y, z, { yaw: Math.PI / 2 })) {
+    ctx.lights.push({ pos: new THREE.Vector3(x, y + 2.9, z), color: [1.0, 0.72, 0.38], radius: 11, kind: 'street' });
+    ctx.physics.addCircle({ x, z, r: 0.18, y0: y - 1, y1: y + 3.3, kind: 'post' });
+    return;
+  }
   const M = buildingMatrix(x, y, z, 0);
   B.box([0, 1.6, 0], [0.12, 3.2, 0.12], { tile: 'metal', tileMeters: 1 }, null, M);
   B.box([0, 0.12, 0], [0.3, 0.24, 0.3], { tile: 'metal', tileMeters: 1 }, null, M);
@@ -36,6 +42,7 @@ function lampPost(ctx, B, x, y, z, { lantern = true } = {}) {
 }
 
 function bench(ctx, B, x, y, z, yaw) {
+  if (decor('bench', x, y, z, { yaw })) return ctx.physics.addBox({ x, z, yaw, w: 1.6, l: 0.5, y0: y - 0.5, y1: y + 0.9, kind: 'bench' });
   const M = buildingMatrix(x, y, z, yaw);
   B.box([0, 0.45, 0], [1.6, 0.06, 0.45], { tile: 'planks', tileMeters: 2.5 }, null, M);
   B.box([0, 0.75, -0.2], [1.6, 0.35, 0.05], { tile: 'planks', tileMeters: 2.5 }, [-0.12, 0, 0], M);
@@ -44,12 +51,14 @@ function bench(ctx, B, x, y, z, yaw) {
 }
 
 function crateStack(ctx, B, x, y, z, yaw, n = 2) {
+  if (decor('crates', x, y, z, { yaw, n })) return ctx.physics.addBox({ x, z, yaw, w: 1.2, l: 0.8, y0: y - 0.5, y1: y + 1.2, kind: 'crate' });
   const M = buildingMatrix(x, y, z, yaw);
   for (let i = 0; i < n; i++) B.box([i % 2 ? 0.45 : 0, 0.3 + Math.floor(i / 2) * 0.6, i % 2 ? 0.1 : 0], [0.6, 0.6, 0.6], { tile: 'crate', keepUV: true }, [0, i * 0.3, 0], M);
   ctx.physics.addBox({ x, z, yaw, w: 1.2, l: 0.8, y0: y - 0.5, y1: y + 1.2, kind: 'crate' });
 }
 
 function barrelAt(ctx, B, x, y, z) {
+  if (decor('barrel', x, y, z)) return ctx.physics.addCircle({ x, z, r: 0.35, y0: y - 0.5, y1: y + 1, kind: 'barrel' });
   const M = buildingMatrix(x, y, z, 0);
   B.geom(new THREE.CylinderGeometry(0.32, 0.32, 0.9, 8), [0, 0.45, 0], null, [1, 1, 1], { tile: 'barrel', keepUV: true }, M);
   B.geom(new THREE.CylinderGeometry(0.3, 0.3, 0.02, 8), [0, 0.91, 0], null, [1, 1, 1], { color: 0x6a4224 }, M);
@@ -57,6 +66,7 @@ function barrelAt(ctx, B, x, y, z) {
 }
 
 function hayBale(ctx, B, x, y, z, yaw) {
+  if (decor('hay', x, y, z, { yaw })) return ctx.physics.addBox({ x, z, yaw, w: 1.1, l: 0.6, y0: y - 0.5, y1: y + 0.7, kind: 'hay' });
   const M = buildingMatrix(x, y, z, yaw);
   B.box([0, 0.35, 0], [1.1, 0.7, 0.6], { tile: 'hay', keepUV: true }, null, M);
   ctx.physics.addBox({ x, z, yaw, w: 1.1, l: 0.6, y0: y - 0.5, y1: y + 0.7, kind: 'hay' });
@@ -352,7 +362,9 @@ function graveyard(ctx, B) {
     const yaw = rng.range(-0.3, 0.3) + Math.PI * 0.75;
     const M = buildingMatrix(x, y, z, yaw);
     const t = rng.int(0, 3);
-    if (t === 0) {
+    if (DECOR.on) {
+      decor('tomb', x, y + 0.1, z, { yaw: yaw + Math.PI, v: (i * 3 + t) % 7 });
+    } else if (t === 0) {
       B.box([0, 0.5, 0], [0.75, 1.0, 0.18], { tile: 'gravestone', keepUV: true }, [rng.range(-0.15, 0.15), 0, rng.range(-0.12, 0.12)], M);
       B.geom(new THREE.CylinderGeometry(0.375, 0.375, 0.18, 8, 1, false, 0, Math.PI), [0, 1.0, 0], [Math.PI / 2, Math.PI / 2, 0], [1, 1, 1], { color: 0x8a8a8c }, M);
     } else if (t === 1) {
@@ -443,9 +455,11 @@ function homestead(ctx, B) {
   }
   // mailbox at the drive
   const mx = -150, mz = 69, my = terrain.heightAt(mx, mz);
-  B.box([mx, my + 0.6, mz], [0.1, 1.2, 0.1], { color: WOOD });
+  if (!decor('mailbox', mx, my, mz, { yaw: -Math.PI / 2 })) B.box([mx, my + 0.6, mz], [0.1, 1.2, 0.1], { color: WOOD });
+  if (!DECOR.on) {
   B.box([mx, my + 1.25, mz], [0.3, 0.3, 0.55], { color: 0x2f6e52 });
   B.box([mx + 0.16, my + 1.32, mz + 0.1], [0.02, 0.25, 0.05], { color: 0xc8361f });
+  }
   // fire pit with stones and stumps
   const px = -164, pz = 84, py = terrain.heightAt(px, pz);
   for (let k = 0; k < 9; k++) {
@@ -462,11 +476,13 @@ function homestead(ctx, B) {
   // wheelbarrow full of pumpkins
   const bx = -168, bz = 54, by = terrain.heightAt(bx, bz);
   const Mb = buildingMatrix(bx, by, bz, 1.0);
+  if (decor('wheelbarrow', bx, by, bz, { yaw: 1.0 })) {} else {
   B.box([0, 0.55, 0], [0.7, 0.35, 1.0], { color: 0x5a7a8a }, null, Mb);
   B.geom(new THREE.TorusGeometry(0.2, 0.06, 4, 8), [0, 0.22, 0.6], [0, Math.PI / 2, 0], [1, 1, 1], { color: 0x2a2a2a }, Mb);
   for (const sx of [-0.25, 0.25]) B.tube([sx, 0.5, -0.4], [sx, 0.7, -1.2], 0.03, 0.03, { color: WOOD }, 3, Mb);
   pumpkin(B, Mb, 0, 0.6, 0, 0.25);
   pumpkin(B, Mb, 0.15, 0.6, 0.25, 0.18);
+  }
   // road sign to the village
   const sx = -146, sz = 76, sy = terrain.heightAt(sx, sz);
   const Ms = buildingMatrix(sx, sy, sz, -Math.PI / 2);
@@ -549,6 +565,7 @@ function village(ctx, B) {
   for (const [x, z, yaw] of [[156, 76, 0.2], [214, 76, -0.3], [184, 76, 0.1]]) {
     const y = terrain.heightAt(x, z);
     const M = buildingMatrix(x, y, z, yaw);
+    if (decor('picnic', x, y, z, { yaw })) { ctx.physics.addBox({ x, z, yaw, w: 1.9, l: 1.6, y0: y - 1, y1: y + 0.8, kind: 'table' }); continue; }
     B.box([0, 0.75, 0], [1.8, 0.06, 0.8], { tile: 'planks', tileMeters: 2.5 }, null, M);
     for (const sz of [-0.65, 0.65]) B.box([0, 0.45, sz], [1.8, 0.05, 0.3], { tile: 'planks', tileMeters: 2.5 }, null, M);
     for (const sx of [-0.7, 0.7]) B.box([sx, 0.38, 0], [0.08, 0.75, 1.5], { color: WOOD }, null, M);

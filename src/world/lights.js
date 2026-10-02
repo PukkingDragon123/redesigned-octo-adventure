@@ -19,6 +19,7 @@ export class LightPool {
     const cand = [];
     const dusk = Math.min(1, Math.max(0, night * 1.6));
     for (const l of this.lights) {
+      if (l.on === false) continue;
       let k = 0;
       if (l.kind === 'fire') k = 0.55 + dusk * 0.6;
       else if (l.kind === 'window') k = dusk * 0.9;

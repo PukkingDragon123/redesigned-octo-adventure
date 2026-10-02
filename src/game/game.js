@@ -8,7 +8,11 @@ import { ChaseCamera } from './camera.js';
 import { G } from '../render/shaderlib.js';
 import { SpriteAtlas, Billboard } from '../render/sprites.js';
 import { buildSheets } from '../art/sheets.js';
-import { Rider } from './actor.js';
+import { VoxelRider } from './rider3d.js';
+import { Emotes3D } from './emotes3d.js';
+import { Walker } from './walker.js';
+import { Interactables } from './interact.js';
+import { Tricks } from './tricks.js';
 import { Effects } from './effects.js';
 import { Wildlife } from './wildlife.js';
 import { Villagers } from './npcs.js';
@@ -59,7 +63,12 @@ export class Game {
     this.bikeModel = new BikeModel();
     this.scene.add(this.bikeModel.root);
     this.chase = new ChaseCamera(this.camera, this.physics);
-    this.rider = new Rider(this, 'hank');
+    this.emotes = new Emotes3D(this);
+    this.rider = new VoxelRider(this, 'hank');
+    this.walker = new Walker(this);
+    this.onFoot = false;
+    this.interact = new Interactables(this);
+    this.tricks = new Tricks(this);
     this.effects = new Effects(this);
     this.listeners.push((e) => this.effects.onBikeEvent(e));
     this.listeners.push((e) => this.onBikeEvent(e));
@@ -132,6 +141,39 @@ export class Game {
     this.chase.snap(this.bike);
     this.mode = 'ride';
     this.ui.showHUD(true);
+  }
+
+  // where Hank is, on foot or on the bike
+  get playerPos() {
+    return this.onFoot ? this.walker.pos : this.bike.pos;
+  }
+  get playerChar() {
+    return this.rider.ch;
+  }
+
+  // hop off the bike and walk around
+  hopOff() {
+    if (this.onFoot || this.bike.speed > 3 || this.bike.crash > 0 || !this.bike.grounded) return false;
+    const b = this.bike;
+    const side = 0.75;
+    const x = b.pos.x + Math.cos(b.yaw) * side, z = b.pos.z - Math.sin(b.yaw) * side;
+    const y = this.physics.groundAt(x, z, b.pos.y + 1).h;
+    this.walker.place(x, y, z, b.yaw);
+    this.onFoot = true;
+    this.rider.hopOff(this.walker.pos);
+    sound.play('bike_dismount');
+    return true;
+  }
+  hopOn() {
+    if (!this.onFoot) return false;
+    this.onFoot = false;
+    this.rider.hopOn(this.bikeModel);
+    this.chase.yaw = this.bike.yaw;
+    sound.play('bike_mount');
+    return true;
+  }
+  nearBike(r = 2.4) {
+    return this.onFoot && Math.hypot(this.walker.pos.x - this.bike.pos.x, this.walker.pos.z - this.bike.pos.z) < r;
   }
 
   peekSave() {
@@ -345,7 +387,7 @@ export class Game {
   // ---------------------------------------------------------------- controls & interactions
   controls() {
     const zero = { throttle: 0, brake: 0, steer: 0, jump: false, jumpPressed: false, drift: false, boostPressed: false };
-    if (this.mode !== 'ride' || this.ui.dialogueTick || this.ui.menuStack.length) return zero;
+    if (this.mode !== 'ride' || this.ui.dialogueTick || this.ui.menuStack.length || this.onFoot) return zero;
     if (this.auto) {
       const [thr = 1, steer = 0, jumpEvery = 0, drift = 0] = this.auto;
       const t = this.time;
@@ -370,8 +412,8 @@ export class Game {
   interactions() {
     const ui = this.ui;
     const b = this.bike;
-    const p = b.pos;
-    const slow = b.speed < 4;
+    const p = this.playerPos;
+    const slow = this.onFoot || b.speed < 4;
     let action = null;
     const near = (x, z, r) => Math.hypot(p.x - x, p.z - z) < r;
     if (near(L.HOME_SPOTS.porch.x, L.HOME_SPOTS.porch.z, L.HOME_SPOTS.porch.r + 1.5) && slow) action = { text: 'Talk to Nana', fn: () => this.story.homeTalk() };
@@ -387,7 +429,11 @@ export class Game {
       }
     }
     if (!action && this.catEventActive && near(L.POI.catLog.x, L.POI.catLog.z, 7) && slow) action = { text: 'Investigate the meowing', fn: () => this.story.catRescue() };
-    ui.prompt(action ? action.text : null);
+    if (!action && this.world.interactables) action = this.world.interactables.nearestAction(this) || null;
+    if (!action && this.onFoot && this.nearBike()) action = { text: 'Hop on the bike', fn: () => this.hopOn() };
+    if (!action && !this.onFoot && b.speed < 2.5 && b.grounded && b.crash <= 0) action = { text: 'Hop off', fn: () => this.hopOff(), quiet: true };
+    ui.prompt(action && !(action.quiet && b.speed > 0.6) ? action.text : null, action?.key || 'E');
+    if (action?.passive) return;
     if (action && input.pressed('interact') && !ui.inputSwallowed()) {
       ui.prompt(null);
       action.fn();
@@ -406,7 +452,7 @@ export class Game {
     }
     if (!this.orders.carried().length) m.push({ id: 'home', x: L.POI.cabin.x + 8, z: L.POI.cabin.z, icon: 'home' });
     if (this.catEventActive) m.push({ id: 'cat', x: L.POI.catLog.x, z: L.POI.catLog.z, icon: 'cat' });
-    const k = this.keepsakes.nearest(this.bike.pos);
+    const k = this.keepsakes.nearest(this.playerPos);
     if (k && k.d < 80) m.push({ id: 'ks', x: k.it.x, z: k.it.z, icon: 'star' });
     return m;
   }
@@ -438,13 +484,12 @@ export class Game {
         break;
       case 'crash':
         sound.play('crash');
-        sound.play('bones');
         this.orders.slosh(st.upgrades.thermos ? 8 : 15);
         st.stats.crashes++;
         st.stats.dayCrashes = (st.stats.dayCrashes || 0) + 1;
         this.crashGag();
         break;
-      case 'reassemble': sound.play('reassemble'); break;
+      case 'reassemble': break;
       case 'bonk': sound.play('wobble', { volume: 0.6 }); this.orders.slosh(1); break;
       case 'gear': sound.play(e.dir > 0 ? 'gear_up' : 'gear_down', { volume: 0.5 }); break;
       case 'boost': sound.play('boost'); sound.play('fizz'); break;
@@ -460,57 +505,11 @@ export class Game {
     }
   }
 
-  // body parts pop off and fly, then zip back together
+  // Hank bursts into bones, which zip back together beside the bike
   crashGag() {
-    const b = this.bike;
-    const parts = ['head', 'torso', 'arm', 'arm', 'leg', 'leg', 'hat'];
-    if (!this.partBBs) {
-      this.partBBs = parts.map(() => {
-        const bb = new Billboard(this.atlas, null, { castShadow: true });
-        this.scene.add(bb.mesh);
-        bb.mesh.visible = false;
-        return bb;
-      });
-    }
-    this.gag = {
-      t: 0,
-      parts: parts.map((p, i) => {
-        const bb = this.partBBs[i];
-        bb.setFrame(`${this.rider.char}:part:${p}`);
-        bb.mesh.visible = p !== 'hat' || this.rider.char === 'hank';
-        const a = Math.random() * Math.PI * 2;
-        return { bb, pos: b.pos.clone().setY(b.pos.y + 1.0), vel: new THREE.Vector3(Math.cos(a) * (2 + Math.random() * 3), 3 + Math.random() * 3, Math.sin(a) * (2 + Math.random() * 3)), spin: (Math.random() - 0.5) * 14 };
-      }),
-    };
+    this.rider.crash(this.bike);
   }
-  updateGag(dt) {
-    const g = this.gag;
-    if (!g) return;
-    g.t += dt;
-    const b = this.bike;
-    const home = b.pos.clone().setY(b.pos.y + 1.0);
-    for (const p of g.parts) {
-      if (g.t < 1.35) {
-        p.vel.y -= 12 * dt;
-        p.pos.addScaledVector(p.vel, dt);
-        const h = this.physics.groundAt(p.pos.x, p.pos.z, p.pos.y + 1).h + 0.15;
-        if (p.pos.y < h) {
-          p.pos.y = h;
-          p.vel.multiplyScalar(0.4);
-          p.vel.y = Math.abs(p.vel.y) * 0.5;
-        }
-        p.bb.roll += p.spin * dt;
-      } else {
-        p.pos.lerp(home, 1 - Math.exp(-dt * 10));
-        p.bb.roll *= 0.9;
-      }
-      p.bb.mesh.position.copy(p.pos);
-    }
-    if (b.crash <= 0 || g.t > 2.2) {
-      for (const p of g.parts) p.bb.mesh.visible = false;
-      this.gag = null;
-    }
-  }
+  updateGag() {}
 
   // Steps graphics down when real frame rate stays low while riding (unless the
   // player picked their own settings). Swiftshader test runs pass ?frames and skip this.
@@ -583,6 +582,7 @@ export class Game {
     if (this.mode !== 'ride') this.ui.prompt(null);
 
     const c = this.controls();
+    if (this.onFoot) this.updateWalker(dt);
     this.acc = Math.min(this.acc + dt, 0.1);
     let first = true;
     const events = [];
@@ -600,13 +600,18 @@ export class Game {
     }
     if (this.mode === 'ride' && !busy) this.orders.update(dt);
 
+    this.tricks.update(dt);
     this.bikeModel.update(dt, this.bike, c.steer);
-    G.uPlayer.value.copy(this.bike.pos);
+    G.uPlayer.value.copy(this.playerPos);
     if (this.mode === 'title') this.titleCamera(dt);
-    else this.chase.update(dt, this.bike, this.mode === 'ride' && !busy ? input.look() : { x: 0, y: 0 });
+    else {
+      this.chase.walk = this.onFoot;
+      this.chase.update(dt, this.onFoot ? this.walker : this.bike, this.mode === 'ride' && !busy ? input.look() : { x: 0, y: 0 });
+    }
     this.bikeModel.root.updateMatrixWorld(true);
     this.rider.update(dt, this.bike, this.bikeModel, this.camera.position);
-    this.updateGag(dt);
+    this.emotes.update(dt);
+    this.interact.update(dt);
     this.effects.ps.setViewport(this.pipeline.h, this.camera.fov);
     this.effects.update(dt, this.camera);
     this.wildlife.update(dt);
@@ -628,6 +633,23 @@ export class Game {
         this.fpsFrames = 0;
         this.fpsT = 0;
       }
+    }
+  }
+
+  updateWalker(dt) {
+    const free = this.mode === 'ride' && !(this.ui.dialogueTick || this.ui.menuStack.length);
+    const sw = this.ui.inputSwallowed();
+    const wc = free ? {
+      mx: input.steer(), mz: input.throttle() - input.brake(), run: input.down('drift'),
+      jumpPressed: input.pressed('jump') && !sw, kickPressed: input.pressed('boost') && !sw,
+    } : { mx: 0, mz: 0 };
+    const W = this.walker;
+    const ev = W.update(dt, wc, this.chase.yaw + this.chase.orbitYaw);
+    const ch = this.rider.ch;
+    for (const e of ev) {
+      if (e.type === 'jump') { sound.play('jump_foot'); ch.kick('sq', 1.25); }
+      if (e.type === 'land') { sound.play('land_foot', { volume: Math.min(1, e.impact / 8) }); ch.kick('sq', 0.75); }
+      if (e.type === 'kick') { ch.play('kick'); ch.animT = 0; this.world.interactables?.kick(W.pos, W.yaw, this); }
     }
   }
 
@@ -723,6 +745,6 @@ export class Game {
   }
 
   focus() {
-    return this.mode === 'title' ? this.camera.position.clone().add(new THREE.Vector3(0, 0, -30).applyQuaternion(this.camera.quaternion)) : this.bike.pos;
+    return this.mode === 'title' ? this.camera.position.clone().add(new THREE.Vector3(0, 0, -30).applyQuaternion(this.camera.quaternion)) : this.playerPos;
   }
 }

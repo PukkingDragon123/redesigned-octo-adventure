@@ -591,7 +591,8 @@ export class Story {
     const lines = DELIVERY_LINES[o.customer] || DELIVERY_LINES.marie;
     const pool = r.quality > 55 ? lines.hot : lines.cold;
     const line = pool[Math.floor(Math.random() * pool.length)];
-    actor.faceTowards(g.bike.pos.x, g.bike.pos.z);
+    actor.faceTowards(g.playerPos.x, g.playerPos.z);
+    actor.lookAt(g.playerChar);
     actor.play('sip', r.quality > 55 ? 'happy' : 'sad');
     actor.jump(2);
     g.effects.coins(actor.pos.x, actor.pos.y + 1.4, actor.pos.z, 8 + Math.round(r.tip / 2));
@@ -612,7 +613,8 @@ export class Story {
     const g = this.g;
     const st = this.st;
     const N = g.villagers.get('grandma');
-    N.faceTowards(g.bike.pos.x, g.bike.pos.z);
+    N.faceTowards(g.playerPos.x, g.playerPos.z);
+    N.lookAt(g.playerChar);
     g.mode = 'menu';
     try {
       // homecoming after the first day's rescue
@@ -776,7 +778,7 @@ export class Story {
     for (const f of this.followers || []) f.onTick?.();
     if (g.mode !== 'ride') return;
     const st = this.st;
-    const p = g.bike.pos;
+    const p = g.playerPos;
     // first visit to Maple Cove
     if (!st.flags.village1 && Math.hypot(p.x - 130, p.z - 62) < 22) this.villagePanic();
     // Poutine's rescue after the first day's deliveries

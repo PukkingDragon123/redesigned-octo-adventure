@@ -1,5 +1,7 @@
 // HUD, dialogue, toasts, banners, prompts and menu plumbing.
 import './ui.css';
+import './paper.css';
+import { Bubbles } from './bubbles.js';
 import { frameURL, slotURL } from './frames.js';
 import { iconURL } from '../art/icons.js';
 import { portraitURL } from '../art/portraits.js';
@@ -108,6 +110,7 @@ export class UI {
     this.root.innerHTML = '';
     this.buildHUD();
     this.dialogue = this.buildDialogue();
+    this.bubbles = new Bubbles(this);
     this.toasts = el('div', 'toasts');
     this.root.appendChild(this.toasts);
     this.skipHint = el('div', 'skiphint', `<span class="key">Esc</span> skip`);
@@ -324,13 +327,14 @@ export class UI {
   }
 
   // floating text tags over world positions (e.g. "!!" shouts)
-  tag(id, text, pos, ms = 1500) {
+  tag(id, text, pos, ms = 1500, cls = '') {
     let t = this.tags.get(id);
     if (!t) {
-      t = { e: frameStyle(el('div', 'panel wtag'), 'paper') };
+      t = { e: cls ? el('div', `stamp ${cls}`) : frameStyle(el('div', 'panel wtag'), 'paper') };
       this.root.appendChild(t.e);
       this.tags.set(id, t);
     }
+    if (cls) { t.e.classList.remove('pop'); void t.e.offsetWidth; t.e.classList.add('pop'); }
     t.e.textContent = text;
     t.pos = pos;
     t.until = performance.now() + ms;
@@ -369,6 +373,7 @@ export class UI {
     const D = this.dialogue;
     const spec = who ? CHARACTERS[who] : null;
     const name = opts.name ?? (who === 'cat' ? 'Poutine' : spec?.name ?? '');
+    if (!opts.classic) return this.bubbles.say(who, text, opts, name, VOICE[who] || 'narrator');
     D.root.classList.add('on');
     // narration gets a dark storybook caption instead of the parchment speech box
     const narr = !who && !opts.choices;
@@ -481,6 +486,7 @@ export class UI {
   }
 
   hideDialogue() {
+    this.bubbles.clear();
     this.dialogue.root.classList.remove('on');
     this.dialogueTick = null;
     const r = this._dlgResolve;

@@ -231,6 +231,16 @@ export class Effects {
   dirtBurst(x, y, z, n = 20) {
     for (let k = 0; k < n; k++) this.ps.spawn({ x, y, z, vx: this.rng.range(-2, 2), vy: this.rng.range(2, 5), vz: this.rng.range(-2, 2), life: 1.6, size: 0.12, sprite: P.dirt, color: [1, 1, 1], gravity: 10, drag: 0.4, ground: true, rest: 0.8 });
   }
+  // pumpkin guts, seeds and candle sparks when a prop is smashed
+  burst(x, y, z, kind = 'pumpkin') {
+    const pumpkin = kind === 'pumpkin' || kind === 'jack';
+    for (let k = 0; k < 26; k++) {
+      const seed = k % 3 === 0;
+      this.ps.spawn({ x, y, z, vx: this.rng.range(-3, 3), vy: this.rng.range(2, 6), vz: this.rng.range(-3, 3), life: this.rng.range(0.9, 1.6), size: seed ? 0.07 : 0.13, sprite: seed ? P.chip : P.dirt, color: pumpkin ? (seed ? [1, 0.95, 0.8] : [1, 0.55, 0.15]) : [0.9, 0.8, 0.7], gravity: 11, drag: 0.4, spin: this.rng.range(-12, 12), ground: true, rest: 0.6 });
+    }
+    for (let k = 0; k < 8; k++) this.ps.spawn({ x, y, z, vx: this.rng.range(-1, 1), vy: this.rng.range(0.5, 1.5), vz: this.rng.range(-1, 1), life: 0.9, size: 0.35, size1: 0.7, sprite: P.puff, color: [1, 0.85, 0.7], drag: 2 });
+    if (kind === 'jack') for (let k = 0; k < 10; k++) this.ps.spawn({ x, y, z, vx: this.rng.range(-2, 2), vy: this.rng.range(1, 4), vz: this.rng.range(-2, 2), life: 0.8, size: 0.1, sprite: P.ember, color: [1, 0.7, 0.3], emissive: 1, gravity: 2, drag: 1, blink: 8 });
+  }
   frost(x, y, z, n = 10) {
     for (let k = 0; k < n; k++) this.ps.spawn({ x: x + this.rng.range(-0.4, 0.4), y: y + this.rng.range(0, 1.6), z: z + this.rng.range(-0.4, 0.4), vx: this.rng.range(-0.3, 0.3), vy: this.rng.range(0.1, 0.5), vz: this.rng.range(-0.3, 0.3), life: 1.5, size: 0.14, sprite: P.frost, color: [0.8, 0.95, 1], emissive: 0.6, drag: 1 });
   }

@@ -635,6 +635,7 @@ export class Forest {
         m.geometry.boundingSphere = new THREE.Sphere(center.clone(), radius);
       }
       chunkGroup.userData.center = center;
+      chunkGroup.userData.key = `${b.ci},${b.cj}`;
       this.chunks.push(chunkGroup);
       this.group.add(chunkGroup);
     }
@@ -646,7 +647,7 @@ export class Forest {
   updateVisibility(camPos, maxDist = 430) {
     for (const c of this.chunks) {
       const d = Math.hypot(c.userData.center.x - camPos.x, c.userData.center.z - camPos.z);
-      c.visible = d < maxDist;
+      c.visible = d < maxDist && !this.hiddenChunks?.has(c.userData.key);
       if (!c.visible) continue;
       for (const m of c.children) {
         if (m.userData.kind !== 'foliage') continue;

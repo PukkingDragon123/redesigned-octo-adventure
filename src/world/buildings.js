@@ -1,6 +1,7 @@
 // Procedural buildings for Maple Cove and the homestead, built from atlas tiles.
 import * as THREE from 'three';
 import * as L from './layout.js';
+import { decor } from './decor.js';
 
 const TM = 2.5; // metres per wall/roof tile
 const TRIM = 0xf2ece0;
@@ -424,12 +425,14 @@ function sawmill(ctx, B, b) {
 
 // ---------------------------------------------------------------- little props shared with props.js
 export function pumpkin(B, M, x, y, z, s = 0.3) {
+  { const w = M ? toWorld(M, x, y, z) : { x, y, z }; if (decor('pumpkin', w.x, w.y, w.z, { s })) return; }
   B.geom(new THREE.SphereGeometry(s, 8, 6), [x, y + s * 0.8, z], null, [1.15, 0.85, 1.15], { color: 0xe8701e }, M);
   for (let k = 0; k < 4; k++) B.geom(new THREE.SphereGeometry(s * 0.98, 6, 5), [x, y + s * 0.8, z], [0, (k * Math.PI) / 4, 0], [0.4, 0.86, 1.18], { color: 0xd05a14 }, M);
   B.tube([x, y + s * 1.45, z], [x + 0.03, y + s * 1.8, z], 0.035, 0.03, { color: 0x4a6a2a }, 4, M);
 }
 
 export function rockingChair(B, M, x, y, z) {
+  if (M) { const w = toWorld(M, x, y, z); const e = new THREE.Euler().setFromRotationMatrix(M); if (decor('rocker', w.x, w.y, w.z, { yaw: e.y })) return; }
   const c = { color: 0x7a4a24 };
   B.box([x, y + 0.45, z], [0.55, 0.06, 0.5], c, null, M);
   B.box([x, y + 0.85, z - 0.25], [0.55, 0.8, 0.06], c, [-0.15, 0, 0], M);

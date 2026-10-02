@@ -1,6 +1,6 @@
 // Tiny async scripting helpers for cutscenes.
 import * as THREE from 'three';
-import { Actor } from './actor.js';
+import { VoxelCharacter } from './vchar.js';
 import { Billboard } from '../render/sprites.js';
 
 const v3 = (a) => (a.isVector3 ? a.clone() : new THREE.Vector3(a[0], a[1], a[2]));
@@ -69,7 +69,7 @@ export class Scene {
     return this.say(null, text, { name: '', ...opts });
   }
   actor(char, x, z, yaw = 0, anim = 'idle') {
-    const a = new Actor(this.g, char, { x, z, yaw, anim });
+    const a = new VoxelCharacter(this.g, char, { x, z, yaw, anim });
     a.scripted = true;
     this.temp.push(a);
     this.actors.push(a);
