@@ -271,11 +271,12 @@ export class Menus {
     const p = ui.panel('wood');
     p.appendChild(el('h2', '', 'Controls'));
     const lines = [
-      ['W / ↑ / RT', 'Pedal'], ['S / ↓ / LT', 'Brake / reverse'], ['A D / ← → / stick', 'Steer'],
-      ['Space / A', 'Hop (hold in the air to glide)'], ['Shift / RB', 'Drift (release for a mini-boost)'],
-      ['F or Q / B', 'Maple-Cola boost'], ['E / X', 'Talk · deliver · interact'], ['R / Y', 'Ring the bell'],
+      ['W / ↑ / RT', 'Pedal (tap in a steady rhythm to sprint)'], ['S / ↓ / LT', 'Brake / reverse'], ['A D / ← → / stick', 'Steer · spin in the air'],
+      ['Space / A', 'Hold to crouch, let go to hop'], ['Q / right Ctrl / stick down', 'Lean back: wheelie, manual, backflip'],
+      ['F / stick up', 'Lean forward: stoppie (with brake), nose manual, frontflip'], ['Shift / RB', 'Drift · in the air with a direction: poses'],
+      ['E / X', 'Talk · deliver · interact'], ['R / Y', 'Ring the bell'],
       ['M', 'Map'], ['Tab', "Harold's keepsakes"], ['Mouse drag / right stick', 'Look around'], ['Esc / Start', 'Journal'],
-      ['E (stopped)', 'Hop off / on the bike'], ['WASD on foot', 'Walk (Shift runs)'], ['F on foot', 'Kick!'], ['Shift + dir in the air', 'Tricks'], ['C', 'Camera (once you have one)'],
+      ['E (stopped)', 'Hop off / on the bike'], ['WASD on foot', 'Walk (Shift runs)'], ['F on foot', 'Kick!'], ['C', 'Camera (once you have one)'],
     ];
     for (const [k, v] of lines) {
       const r = el('div', 'row');
@@ -322,7 +323,7 @@ export class Menus {
             ui.toast(`Nana: "We're out of <b>${miss.map((k) => FOOD_INFO[k]?.label || k).join(' & ')}</b>! Could you pop over to Moose & Goose?"`, 'basket', 3600);
             const q = g.quests.q('groceries');
             if (q.state !== 'active') { q.state = 'active'; g.sound.play('quest_new'); }
-          } else ui.toast(`Your bike only holds ${O.capacity()} cocoas. Upgrade in the garage!`, 'basket');
+          } else ui.toast(`Bessie only holds ${O.capacity()} cocoas: two in the basket, one in the crate.`, 'basket');
         } else {
           g.sound.play('cup');
           packed = true;

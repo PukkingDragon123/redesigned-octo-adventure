@@ -78,8 +78,9 @@ export class Orders {
     return this.list.filter((o) => o.state === 'board' || o.state === 'carried');
   }
 
+  // Bessie carries three: two cups in the basket, one in the crate
   capacity() {
-    return this.game.bike.stats.capacity;
+    return this.game.bike.stats.capacity || 3;
   }
 
   // which of Nana's ingredients this cup still needs (empty = can brew)
@@ -108,10 +109,9 @@ export class Orders {
   }
 
   update(dt) {
-    const th = this.game.bike.stats.thermos;
     for (const o of this.carried()) {
-      // ~3 minutes from piping hot to stone cold (6 with the thermos)
-      o.quality = Math.max(0, o.quality - (dt * 100) / (180 * th));
+      // ~3 minutes from piping hot to stone cold
+      o.quality = Math.max(0, o.quality - (dt * 100) / 180);
     }
   }
 
@@ -159,18 +159,14 @@ export class Orders {
       B.geom(new THREE.TorusGeometry(0.03, 0.01, 3, 6), [0.055, 0.055, 0], null, [1, 1, 1], { color: 0xf4ecdc });
       const m = propMesh(B.build(), g.world.propMat, { cast: false });
       let parent, x, z;
-      if (model.isMotor) {
-        parent = model.mBasketAnchor;
-        x = (i % 3) * 0.12 - 0.12;
-        z = Math.floor(i / 3) * 0.14 - 0.1;
-      } else if (i < 2) {
+      if (i < 2) {
         parent = model.basketAnchor;
         x = i === 0 ? -0.08 : 0.08;
         z = 0.02;
       } else {
         parent = model.rearAnchor;
-        x = ((i - 2) % 2) * 0.14 - 0.07;
-        z = Math.floor((i - 2) / 2) * 0.13 - 0.07;
+        x = 0;
+        z = 0;
       }
       m.position.set(x, 0, z);
       parent.add(m);

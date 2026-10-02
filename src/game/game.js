@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { input } from '../core/input.js';
 import { PhysicsWorld } from '../world/collide.js';
-import { Bike } from './bike.js';
+import { Bike, STATS } from './bike.js';
 import { BikeModel } from './bikeModel.js';
 import { ChaseCamera } from './camera.js';
 import { G } from '../render/shaderlib.js';
@@ -25,7 +25,7 @@ import { Menus } from './menus.js';
 import { UI } from '../ui/ui.js';
 import { sound } from './sound.js';
 import { TouchControls } from '../ui/touch.js';
-import { computeStats } from './upgrades.js';
+import { Skills, SKILLS } from './skills.js';
 import { newState, saveGame, loadGame, loadSettings, saveSettings } from './state.js';
 import { riverInfo, forestNoise } from '../world/terrain.js';
 import { Grass } from '../world/grass.js';
@@ -73,8 +73,14 @@ export class Game {
     this.tricks = new Tricks(this);
     this.quests = new Quests(this);
     this.effects = new Effects(this);
+    this.skills = new Skills(this);
     this.listeners.push((e) => this.effects.onBikeEvent(e));
     this.listeners.push((e) => this.onBikeEvent(e));
+    this.listeners.push((e) => this.tricks.onBikeEvent(e));
+    this.listeners.push((e) => this.skills.event(e));
+    this.listeners.push((e) => this.rider.onBikeEvent(e));
+    this.hitStop = 0;
+    if (this.params.has('assist')) this.assist = this.params.get('assist') !== '0';
     this.wildlife = new Wildlife(this);
     this.sfx = (name, pos, vol = 1) => this.spatial(name, pos, vol);
     this.ui = new UI(this);
@@ -132,10 +138,16 @@ export class Game {
     if (this.params.has('cat')) this.state.cat = true;
     if (this.params.has('day')) this.state.day = parseInt(this.params.get('day'));
     if (this.params.has('money')) this.state.money = parseInt(this.params.get('money'));
-    if (this.params.has('upgrades')) for (const id of this.params.get('upgrades').split(',')) this.state.upgrades[id] = true;
+    // &skills=max (or a number of tiers per skill) pre-fills Harold's riding notes for testing
+    if (this.params.has('skills')) {
+      const n = this.params.get('skills') === 'max' ? 3 : parseInt(this.params.get('skills')) || 1;
+      const best = {};
+      for (const sk of SKILLS) for (const [stat, need] of sk.tiers.slice(0, n)) best[stat] = Math.max(best[stat] || 0, need);
+      this.state.skills = { best, tiers: Object.fromEntries(SKILLS.map((sk) => [sk.id, Math.min(n, sk.tiers.length)])), poses: {} };
+    }
     this.villagers.scaredOfHank = !this.state.flags.village1;
     this.orders.makeBoard(this.state.day, this.params.has('panic') ? ['gus', 'marie'] : null);
-    this.applyUpgrades();
+    this.applyBike();
     for (const o of this.orders.board().slice(0, this.bike.stats.capacity)) this.orders.pack(o);
     this.setOutfit(this.state.outfit);
     this.rider.enableCat(!!this.state.cat);
@@ -206,7 +218,7 @@ export class Game {
     this.state = newState();
     this.villagers.scaredOfHank = true;
     this.keepsakes.sync();
-    this.applyUpgrades();
+    this.applyBike();
     this.setOutfit('hankBuried');
     this.rider.enableCat(false);
     this.orders.makeBoard(1, ['gus', 'marie']);
@@ -232,7 +244,7 @@ export class Game {
     this.orders.restore(s.orders);
     this.villagers.scaredOfHank = !s.flags.village1;
     this.keepsakes.sync();
-    this.applyUpgrades();
+    this.applyBike();
     this.setOutfit(s.outfit || 'hank');
     this.rider.enableCat(!!s.cat);
     this.world.atmosphere.hour = clamp(s.hour || 8, 7.5, 21);
@@ -265,7 +277,6 @@ export class Game {
     st.weather = this.pickWeather(st.day);
     this.world.atmosphere.setWeather(st.weather, true);
     this.orders.makeBoard(st.day);
-    this.refillBoosts();
     this.story.nanaCalled = false;
     this.catEventActive = false;
     this.save();
@@ -308,17 +319,29 @@ export class Game {
     this.state.outfit = id;
     this.rider.setOutfit(id);
   }
-  applyUpgrades() {
-    const before = this.bike.stats.boostCharges;
-    this.bike.stats = computeStats(this.state.upgrades);
-    // newly bought boosters come filled
-    if (this.bike.stats.boostCharges > before) this.bike.boostCharges = this.bike.stats.boostCharges;
-    this.bike.boostCharges = Math.min(this.bike.boostCharges ?? 0, this.bike.stats.boostCharges);
-    this.bikeModel.applyUpgrades(this.bike.stats);
+  // Bessie is the same bike every day (old saves may still carry `upgrades`; they're ignored)
+  applyBike() {
+    this.bike.stats = { ...STATS };
+    this.bike.boostCharges = 0;
     this.orders.syncCups();
   }
-  refillBoosts() {
-    this.bike.boostCharges = this.bike.stats.boostCharges;
+  // old names some callers still use
+  applyUpgrades() { this.applyBike(); }
+  refillBoosts() {}
+
+  // the garage: Harold's riding notes (the Skill Book)
+  openSkillBook() {
+    if (this.state.flags.masteryReady && !this.state.flags.ending) {
+      this.story.ending();
+      return;
+    }
+    if (typeof this.menus.skillBook === 'function') {
+      this.openMenu(() => this.menus.skillBook(() => this.resumeFromMenu()));
+      sound.play('book_open');
+    } else {
+      const t = this.skills.total();
+      this.ui.toast(`<b>Harold's riding notes</b> (${t} marks): ${this.skills.summary()}. Next: ${this.skills.list().find((s) => s.tier < s.maxTier)?.goal || 'all mastered!'}`, 'books', 6000);
+    }
   }
   save() {
     this.state.hour = this.world.atmosphere.hour;
@@ -395,18 +418,20 @@ export class Game {
 
   // ---------------------------------------------------------------- controls & interactions
   controls() {
-    const zero = { throttle: 0, brake: 0, steer: 0, jump: false, jumpPressed: false, drift: false, boostPressed: false };
+    const zero = { throttle: 0, brake: 0, steer: 0, jump: false, jumpPressed: false, drift: false, leanBack: 0, leanFwd: 0, trick: false, assist: false };
     if (this.mode !== 'ride' || this.ui.dialogueTick || this.ui.menuStack.length || this.onFoot) return zero;
+    // riding assists on touch screens: steadier balance, forgiving landings, no slide-outs
+    const assist = this.assist ?? (!!this.touch?.on || input.lastDevice === 'touch');
     if (this.auto) {
       const [thr = 1, steer = 0, jumpEvery = 0, drift = 0] = this.auto;
       const t = this.time;
       return {
-        throttle: thr, brake: 0, steer: steer * Math.sin(t * 0.7),
-        jump: false, jumpPressed: jumpEvery > 0 && Math.floor(t / jumpEvery) !== Math.floor((t - 1 / 30) / jumpEvery),
-        drift: drift > 0 && Math.sin(t * 0.7) > 0.5, boostPressed: false,
+        ...zero, throttle: thr, steer: steer * Math.sin(t * 0.7), assist,
+        jump: jumpEvery > 0 && t % jumpEvery < 0.3, drift: drift > 0 && Math.sin(t * 0.7) > 0.5,
       };
     }
     const swallowed = this.ui.inputSwallowed();
+    const lean = input.lean();
     return {
       throttle: input.throttle(),
       brake: input.brake(),
@@ -414,7 +439,10 @@ export class Game {
       jump: input.down('jump') && !swallowed,
       jumpPressed: input.pressed('jump') && !swallowed,
       drift: input.down('drift'),
-      boostPressed: input.pressed('boost') && !swallowed,
+      leanBack: lean.back,
+      leanFwd: lean.fwd,
+      trick: input.down('drift') || !!input.touch.trick,
+      assist,
     };
   }
 
@@ -426,7 +454,7 @@ export class Game {
     let action = null;
     const near = (x, z, r) => Math.hypot(p.x - x, p.z - z) < r;
     if (near(L.HOME_SPOTS.porch.x, L.HOME_SPOTS.porch.z, L.HOME_SPOTS.porch.r + 1.5) && slow) action = { text: 'Talk to Nana', fn: () => this.story.homeTalk() };
-    else if (near(L.HOME_SPOTS.garage.x, L.HOME_SPOTS.garage.z, L.HOME_SPOTS.garage.r + 1) && slow) action = { text: "Harold's garage (upgrades)", fn: () => this.openMenu(() => this.menus.garage(() => this.resumeFromMenu())) };
+    else if (near(L.HOME_SPOTS.garage.x, L.HOME_SPOTS.garage.z, L.HOME_SPOTS.garage.r + 1) && slow) action = { text: "Harold's riding notes", fn: () => this.openSkillBook() };
     if (!action) {
       for (const o of this.orders.carried()) {
         const a = this.villagers.get(o.spot);
@@ -491,11 +519,17 @@ export class Game {
   onBikeEvent(e) {
     const st = this.state;
     const b = this.bike;
+    const ch = this.chase;
     switch (e.type) {
-      case 'jump': sound.play('jump', { pitch: 0.9 + Math.random() * 0.2 }); st.stats.jumps++; break;
+      case 'jump':
+        sound.play('jump', { pitch: 0.85 + (e.power || 1) * 0.2 + Math.random() * 0.1 });
+        if (e.perfect) { sound.play('pop', { volume: 0.5, pitch: 1.3 }); ch.punch(3); }
+        st.stats.jumps++;
+        break;
       case 'land':
         if (e.impact > 6) { sound.play('land_hard'); this.orders.slosh(3); }
         else if (e.impact > 2) sound.play('land', { volume: clamp(e.impact / 6, 0.3, 1) });
+        if (e.impact > 7) { ch.shake(Math.min(0.9, e.impact * 0.06)); this.freeze(0.05); }
         if (e.airTime > 0.6) {
           st.stats.bestAir = Math.max(st.stats.bestAir, e.airTime);
           st.stats.dayAir = Math.max(st.stats.dayAir || 0, e.airTime);
@@ -503,12 +537,35 @@ export class Game {
           if (e.airTime > 1.0) sound.play('squish');
         }
         break;
+      case 'perfectLand':
+        this.freeze(0.06);
+        ch.punch(-6);
+        ch.shake(0.25);
+        sound.play('combo_ding', { volume: 0.6, pitch: 1.5 + Math.min(6, e.streak) * 0.05 });
+        break;
+      case 'sketchyLand': sound.play('wobble', { volume: 0.8 }); this.orders.slosh(4); break;
+      case 'flip': sound.play('trick_whoosh', { pitch: 0.8 + e.count * 0.1 }); ch.punch(5); break;
+      case 'spin': if (e.deg % 360 === 0) sound.play('trick_whoosh', { pitch: 1.1, volume: 0.6 }); break;
+      case 'wheelieStart': case 'stoppieStart': sound.play('whoosh', { volume: 0.25, pitch: 0.7 }); break;
+      case 'frontSlam': case 'rearSlam':
+        sound.play('land', { volume: clamp(e.power / 6, 0.2, 0.7) });
+        if (e.power > 4) { this.freeze(0.03); ch.shake(0.2); this.orders.slosh(2); }
+        break;
+      case 'bump':
+        if (!e.rough) { sound.play('wobble', { volume: clamp(e.size * 3, 0.2, 0.7) }); this.orders.slosh(Math.min(3, e.size * 8)); }
+        if (e.size > 0.15) ch.shake(0.2);
+        break;
+      case 'pedalSlip': sound.play('bone_rattle'); sound.play('whoosh', { volume: 0.4, pitch: 1.4 }); break;
+      case 'pedalStroke': if (e.rhythm > 0.3) sound.play('footstep_wood', { volume: 0.08 + e.rhythm * 0.14, pitch: 1.5 + e.rhythm * 0.3 }); break;
+      case 'dab': sound.play('footstep_stone', { volume: 0.45 }); break;
       case 'crash':
         sound.play('crash');
-        this.orders.slosh(st.upgrades.thermos ? 8 : 15);
+        this.orders.slosh(e.soft ? 8 : 15);
         st.stats.crashes++;
         st.stats.dayCrashes = (st.stats.dayCrashes || 0) + 1;
-        this.crashGag();
+        this.freeze(e.soft ? 0.07 : 0.12);
+        ch.punch(-8);
+        this.crashGag(e);
         // onlookers gasp... then can't help laughing
         for (const a of Object.values(this.villagers.actors)) {
           if (!a.visible || a.scripted || a.pos.distanceTo(b.pos) > 16) continue;
@@ -518,12 +575,9 @@ export class Game {
         }
         break;
       case 'reassemble': break;
-      case 'bonk': sound.play('wobble', { volume: 0.6 }); this.orders.slosh(1); break;
+      case 'bonk': sound.play('wobble', { volume: 0.6 }); this.orders.slosh(1); if (e.impact > 4) this.freeze(0.04); break;
       case 'gear': sound.play(e.dir > 0 ? 'gear_up' : 'gear_down', { volume: 0.5 }); break;
-      case 'boost': sound.play('boost'); sound.play('fizz'); break;
-      case 'noBoost': if (b.stats.boostCharges) this.ui.toast('Out of Maple-Cola! It refills at home.', 'cola', 1800); break;
       case 'driftBoost': sound.play('drift_boost'); break;
-      case 'glideStart': sound.play('glider'); break;
       case 'splash': sound.play('splash', { volume: 0.5 }); break;
       case 'sink':
         sound.play('splash');
@@ -533,9 +587,15 @@ export class Game {
     }
   }
 
+  // impact frames: the action freezes for a few frames on big moments
+  freeze(s) {
+    if (this.params.has('nofreeze')) return;
+    this.hitStop = Math.max(this.hitStop, s);
+  }
+
   // Hank bursts into bones, which zip back together beside the bike
-  crashGag() {
-    this.rider.crash(this.bike);
+  crashGag(e) {
+    this.rider.crash(this.bike, e);
   }
   updateGag() {}
 
@@ -610,13 +670,18 @@ export class Game {
     if (this.mode !== 'ride') this.ui.prompt(null);
 
     const c = this.controls();
+    this.ctl = c;
     if (this.onFoot) this.updateWalker(dt);
-    this.acc = Math.min(this.acc + dt, 0.1);
+    // hit-stop: bike, rider and particles hold still for a few frames (the camera keeps shaking)
+    const frozen = this.hitStop > 0;
+    if (frozen) this.hitStop -= dt;
+    const sdt = frozen ? 0 : dt;
+    this.acc = Math.min(this.acc + sdt, 0.1);
     let first = true;
     const events = [];
     while (this.acc >= STEP) {
       this.acc -= STEP;
-      if (this.mode !== 'title') this.bike.update(STEP, first ? c : { ...c, jumpPressed: false, boostPressed: false });
+      if (this.mode !== 'title') this.bike.update(STEP, first ? c : { ...c, jumpPressed: false });
       for (const e of this.bike.events) events.push(e);
       first = false;
     }
@@ -628,8 +693,9 @@ export class Game {
     }
     if (this.mode === 'ride' && !busy) this.orders.update(dt);
 
-    this.tricks.update(dt);
-    this.bikeModel.update(dt, this.bike, c.steer);
+    this.tricks.update(sdt);
+    this.skills.update(dt);
+    this.bikeModel.update(sdt, this.bike, c.steer);
     G.uPlayer.value.copy(this.playerPos);
     if (this.mode === 'title') this.titleCamera(dt);
     else {
@@ -637,7 +703,7 @@ export class Game {
       this.chase.update(dt, this.onFoot ? this.walker : this.bike, this.mode === 'ride' && !busy ? input.look() : { x: 0, y: 0 });
     }
     this.bikeModel.root.updateMatrixWorld(true);
-    this.rider.update(dt, this.bike, this.bikeModel, this.camera.position);
+    this.rider.update(sdt, this.bike, this.bikeModel, this.camera.position);
     this.emotes.update(dt);
     this.interact.update(dt);
     // the porch TV ticks over twice a second
@@ -652,7 +718,8 @@ export class Game {
     this.quests.update(dt);
     if (this.mode === 'ride') this.quests.updateHints(this.villagers);
     this.effects.ps.setViewport(this.pipeline.h, this.camera.fov);
-    this.effects.update(dt, this.camera);
+    this.effects.update(sdt, this.camera);
+    this.updateSpeedLines();
     this.wildlife.update(dt);
     this.villagers.update(dt);
     this.currentScene?.update(dt);
@@ -679,7 +746,7 @@ export class Game {
     const free = this.mode === 'ride' && !(this.ui.dialogueTick || this.ui.menuStack.length);
     const sw = this.ui.inputSwallowed();
     const wc = free ? {
-      mx: input.steer(), mz: input.throttle() - input.brake(), run: input.down('drift') || input.touch.run,
+      mx: input.steer(), mz: input.moveY(), run: input.down('drift') || input.touch.run,
       jumpPressed: input.pressed('jump') && !sw, kickPressed: input.pressed('boost') && !sw,
     } : { mx: 0, mz: 0 };
     const W = this.walker;
@@ -729,8 +796,20 @@ export class Game {
     this.chase.apply(dt);
   }
 
+  // anime speed lines when Bessie is really flying (or flipping)
+  updateSpeedLines() {
+    const b = this.bike;
+    const riding = this.mode === 'ride' && !this.onFoot && b.crash <= 0;
+    const k = riding ? clamp((b.speed - 8.5) / 4, 0, 1) + (b.boostTime > 0 ? 0.35 : 0) + (!b.grounded && Math.abs(b.airPitchVel) > 3 ? 0.4 : 0) : 0;
+    const on = k > 0.04;
+    if (on || this._lines) this.effects.speedLines?.(on, clamp(k, 0, 1));
+    this._lines = on;
+  }
+
   updateLamp() {
-    const on = !!this.bike.stats.light && G.uNight.value > 0.25 && this.bikeModel.root.visible;
+    const night = G.uNight.value > 0.25;
+    this.bikeModel.setLamp?.(night);
+    const on = !!this.bike.stats.light && night && this.bikeModel.root.visible;
     this.headlamp.on = on;
     if (on) {
       // a point light thrown ~4 m ahead reads as a beam pooling on the road
@@ -738,16 +817,14 @@ export class Game {
       const fx = Math.sin(b.yaw), fz = Math.cos(b.yaw);
       const ax = b.pos.x + fx * 4.2, az = b.pos.z + fz * 4.2;
       this.headlamp.pos.set(ax, Math.max(this.physics.groundAt(ax, az, b.pos.y + 2).h, b.pos.y - 1) + 1.3, az);
-      this.headlamp.intensity = (this.bikeModel.isMotor ? 2.2 : 1.7) * G.uNight.value;
+      this.headlamp.intensity = 1.7 * G.uNight.value;
     }
   }
 
   updateAudio(dt) {
     const b = this.bike;
     const riding = this.mode === 'ride' || this.mode === 'menu';
-    if (!b.stats.motor) sound.bike({ speed: riding && b.crash <= 0 ? b.speed : 0, cadence: b.cadence, surface: b.surface, grounded: b.grounded, drifting: b.drifting, freewheel: b.throttleIn < 0.1 && b.speed > 1 });
-    else sound.bike({ speed: 0 });
-    sound.motor({ active: !!b.stats.motor && riding && this.bikeModel.root.visible, rpm: clamp(b.speed / b.stats.topSpeed, 0, 1), throttle: b.throttleIn });
+    sound.bike({ speed: riding && b.crash <= 0 ? b.speed : 0, cadence: b.cadence, surface: b.surface, grounded: b.grounded && b.stoppie < 0.1, drifting: b.drifting || b.skidding, freewheel: b.throttleIn < 0.1 && b.speed > 1 });
     const p = this.mode === 'title' ? this.camera.position : b.pos;
     const A = this.world.atmosphere;
     const night = G.uNight.value;

@@ -1,4 +1,4 @@
-// Chase camera with springy lag, speed FOV, look-ahead, shake, and cinematic shots.
+// Chase camera with springy lag, speed FOV, look-ahead, shake, anime punch-ins, and cinematic shots.
 import * as THREE from 'three';
 import { clamp, damp, angleDamp, lerp, wrapAngle, easeInOut } from '../core/math.js';
 
@@ -23,6 +23,9 @@ export class ChaseCamera {
     this.distScale = 1;
     this.time = 0;
     this.roll = 0;
+    this.kick = 0; // FOV punch (degrees): negative zooms in on a big moment, positive widens
+    this.kickVel = 0;
+    this.lift = 0;
   }
 
   snap(bike) {
@@ -32,6 +35,12 @@ export class ChaseCamera {
 
   shake(a) {
     this.shakeAmt = Math.max(this.shakeAmt, a);
+  }
+
+  // a springy FOV kick for impact frames, flips and perfect landings
+  punch(deg) {
+    this.kick = Math.abs(deg) > Math.abs(this.kick) ? deg : this.kick + deg * 0.3;
+    this.kickVel = 0;
   }
 
   // cinematic: move to (pos, look) over `dur` seconds
@@ -88,6 +97,8 @@ export class ChaseCamera {
       const va = Math.atan2(bike.vel.x, bike.vel.z);
       const backwards = bike.fwdSpeed < -0.5;
       want = backwards ? bike.yaw : bike.yaw + wrapAngle(va - bike.yaw) * (bike.drifting ? 0.55 : 0.3);
+      // in the air follow the flight, not the spinning bike
+      if (!bike.grounded && !this.walk && bike.airTime > 0.1) want = va;
     }
     if (bike.crash > 0) want = this.yaw;
     if (this.walk) want = speed > 0.5 ? bike.yaw : this.yaw;
@@ -95,7 +106,9 @@ export class ChaseCamera {
     const yaw = this.yaw + this.orbitYaw;
     const walk = this.walk ? 1 : 0;
     const dist = (5.1 + clamp(speed, 0, 25) * 0.085 - walk * 1.3) * this.distScale;
-    const hgt = 1.95 + clamp(speed, 0, 25) * 0.025 + this.orbitPitch * 3 - walk * 0.35;
+    // a wheelie or stoppie lifts the boom a touch so the whole bike stays in frame
+    this.lift = damp(this.lift, walk ? 0 : clamp((bike.wheelie || 0) + (bike.stoppie || 0), 0, 1) * 0.5, 4, dt);
+    const hgt = 1.95 + clamp(speed, 0, 25) * 0.025 + this.orbitPitch * 3 - walk * 0.35 + this.lift;
     const target = _t.copy(bike.pos);
     target.y += 1.15 - walk * 0.2;
     // look ahead in the direction of travel
@@ -128,9 +141,13 @@ export class ChaseCamera {
     // upright phones get a taller field of view so the road ahead still fits
     const aspect = this.cam.aspect || 1.6;
     const base = aspect < 1 ? Math.min(80, 55 / Math.pow(aspect, 0.55)) : 55;
-    const fovT = (base + clamp(speed - 4, 0, 22) * 0.75 + (bike.boostTime > 0 ? 8 : 0)) * (this.zoom ?? 1);
+    const fovT = (base + clamp(speed - 4, 0, 22) * 0.75 + (bike.boostTime > 0 ? 6 : 0)) * (this.zoom ?? 1);
     this.fov = instant ? fovT : damp(this.fov, fovT, 3, dt);
-    this.roll = damp(this.roll, bike.lean * 0.12, 4, dt);
+    // the punch springs back with a little overshoot
+    this.kickVel += (-90 * this.kick - 9 * this.kickVel) * dt;
+    this.kick += this.kickVel * dt;
+    if (instant) this.kick = this.kickVel = 0;
+    this.roll = damp(this.roll, (bike.lean || 0) * 0.14, 4, dt);
     this.apply(dt);
   }
 
@@ -147,8 +164,9 @@ export class ChaseCamera {
     c.up.set(0, 1, 0);
     c.lookAt(this.look);
     if (this.mode === 'chase') c.rotateZ(this.roll);
-    if (Math.abs(c.fov - this.fov) > 0.01) {
-      c.fov = this.fov;
+    const fov = this.mode === 'chase' ? this.fov + this.kick : this.fov;
+    if (Math.abs(c.fov - fov) > 0.01) {
+      c.fov = fov;
       c.updateProjectionMatrix();
     }
   }

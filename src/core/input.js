@@ -8,7 +8,11 @@ const BINDINGS = {
   jump: ['Space'],
   drift: ['ShiftLeft', 'ShiftRight'],
   interact: ['KeyE', 'Enter'],
-  boost: ['KeyF', 'KeyQ'],
+  // on the bike: lean back (wheelie, manual, backflip) and forward (stoppie, nose manual, frontflip).
+  // Left Ctrl is left out on purpose: Ctrl+W closes the browser tab mid-wheelie.
+  leanBack: ['KeyQ', 'ControlRight'],
+  leanFwd: ['KeyF'],
+  boost: ['KeyF', 'KeyQ'], // kick, on foot
   bell: ['KeyR'],
   map: ['KeyM'],
   pause: ['Escape', 'KeyP'],
@@ -25,7 +29,7 @@ const PAD = {
   jump: [0], // A
   drift: [5, 7], // RB, RT? (RT used for pedal below)
   interact: [2], // X
-  boost: [1], // B
+  boost: [1], // B (kick on foot); the left stick's up/down leans on the bike
   bell: [3], // Y
   pause: [9], // start
   map: [8], // back/select
@@ -143,27 +147,39 @@ class Input {
     if (Math.abs(this.touch.steer) > 0.05) s = this.touch.steer;
     return Math.max(-1, Math.min(1, s));
   }
+  // pedal: W / Up, RT, the touch pedal (the gamepad stick leans instead)
   throttle() {
     let t = this.now.has('up') ? 1 : 0;
-    if (this.pad) {
-      const rt = this.pad.buttons[7]?.value || 0;
-      t = Math.max(t, rt);
-      const ay = this.pad.axes[1] || 0;
-      if (ay < -0.3) t = Math.max(t, Math.min(1, -ay));
-    }
+    if (this.pad) t = Math.max(t, this.pad.buttons[7]?.value || 0);
     t = Math.max(t, this.touch.throttle, this.touch.stickThrottle);
     return this.enabled ? t : 0;
   }
   brake() {
     let t = this.now.has('down') ? 1 : 0;
-    if (this.pad) {
-      const lt = this.pad.buttons[6]?.value || 0;
-      t = Math.max(t, lt);
-      const ay = this.pad.axes[1] || 0;
-      if (ay > 0.5) t = Math.max(t, ay);
-    }
+    if (this.pad) t = Math.max(t, this.pad.buttons[6]?.value || 0);
     t = Math.max(t, this.touch.brake, this.touch.stickBrake);
     return this.enabled ? t : 0;
+  }
+  // rider lean 0..1 each: keys, touch hold-buttons, or the left stick pulled down (back) / pushed up (forward)
+  lean() {
+    let back = this.now.has('leanBack') ? 1 : 0;
+    let fwd = this.now.has('leanFwd') ? 1 : 0;
+    if (this.pad) {
+      const ay = this.pad.axes[1] || 0;
+      if (ay > 0.25) back = Math.max(back, Math.min(1, (ay - 0.25) / 0.6));
+      if (ay < -0.25) fwd = Math.max(fwd, Math.min(1, (-ay - 0.25) / 0.6));
+    }
+    return this.enabled ? { back, fwd } : { back: 0, fwd: 0 };
+  }
+  // walking: forward/back from keys, the gamepad stick or the touch stick (-1..1)
+  moveY() {
+    let y = (this.now.has('up') ? 1 : 0) - (this.now.has('down') ? 1 : 0);
+    if (this.pad) {
+      const ay = this.pad.axes[1] || 0;
+      if (Math.abs(ay) > 0.15) y = -Math.sign(ay) * (Math.abs(ay) - 0.15) / 0.85;
+    }
+    if (this.touch.stickThrottle || this.touch.stickBrake) y = this.touch.stickThrottle - this.touch.stickBrake;
+    return this.enabled ? Math.max(-1, Math.min(1, y)) : 0;
   }
   // right stick / mouse for camera orbit
   look() {
