@@ -192,7 +192,7 @@ export class UI {
     const night = hr < 6.5 || hr > 19.6;
     const todIcon = night ? 'moon' : 'sun';
     if (this.elTod.dataset.i !== todIcon) { this.elTod.src = iconURL(todIcon); this.elTod.dataset.i = todIcon; }
-    const wx = { clear: 'sun', breezy: 'leaf', misty: 'fog', overcast: 'fog', rain: 'rain', snow: 'snowflake' }[g.world.atmosphere.weatherTarget] || 'sun';
+    const wx = { clear: night ? 'star' : 'sun', breezy: 'leaf', misty: 'fog', overcast: 'fog', rain: 'rain', snow: 'snowflake' }[g.world.atmosphere.weatherTarget] || 'sun';
     if (this.elWx.dataset.i !== wx) { this.elWx.src = iconURL(wx); this.elWx.dataset.i = wx; }
     const money = `$${Math.floor(st.money)}`;
     if (this.elMoney.textContent !== money) this.elMoney.textContent = money;

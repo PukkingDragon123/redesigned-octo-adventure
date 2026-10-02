@@ -97,7 +97,7 @@ export class Effects {
         if (f.distanceToSquared(cam.position) > 80 * 80) continue;
         const kind = rng.next();
         if (kind < 0.08) ps.spawn({ x: f.x, y: f.y + 0.25, z: f.z, life: 0.35, size: 1.5, size1: 1.2, sprite: P.glow, color: [1, 0.55, 0.2], emissive: 1, alpha: 0.35 });
-        else if (kind < 0.62) ps.spawn({ x: f.x + rng.range(-0.3, 0.3), y: f.y, z: f.z + rng.range(-0.3, 0.3), vy: rng.range(0.7, 1.3), life: rng.range(0.45, 0.8), size: rng.range(0.4, 0.75), size1: 0.1, sprite: P.flame, color: [1, 0.9, 0.7], emissive: 1, drag: 1 });
+        else if (kind < 0.62) ps.spawn({ x: f.x + rng.range(-0.3, 0.3), y: f.y, z: f.z + rng.range(-0.3, 0.3), vy: rng.range(0.7, 1.3), life: rng.range(0.45, 0.8), size: rng.range(0.4, 0.75), size1: 0.1, sprite: P.flame, color: [1, 0.9, 0.7], emissive: 1, drag: 1, phase: 0 });
         else if (kind < 0.85) ps.spawn({ x: f.x, y: f.y + 0.2, z: f.z, vx: rng.range(-0.5, 0.5), vy: rng.range(1.5, 3), vz: rng.range(-0.5, 0.5), life: rng.range(0.8, 1.6), size: 0.06, sprite: P.ember, color: [1, 0.7, 0.3], emissive: 1, drag: 0.8, wind: 0.5, blink: 12 });
         else ps.spawn({ x: f.x, y: f.y + 0.6, z: f.z, vy: 0.8, life: 3, size: 0.3, size1: 1.2, sprite: P.smoke, color: [0.6, 0.58, 0.6], drag: 0.3, wind: 0.5, alpha: 0.6 });
       }
@@ -105,11 +105,15 @@ export class Effects {
     // --- weather
     const rain = atm.weather.rain, snow = atm.weather.snow;
     if (rain > 0.05) {
-      this.acc.rain += dt * 700 * rain;
+      // most drops fall in front of the lens, where they're actually seen
+      cam.getWorldDirection(this._fwd || (this._fwd = cam.position.clone()));
+      const fx = this._fwd.x, fz = this._fwd.z;
+      this.acc.rain += dt * 1300 * rain;
       while (this.acc.rain > 1) {
         this.acc.rain -= 1;
-        const x = cam.position.x + rng.range(-18, 18), z = cam.position.z + rng.range(-18, 18);
-        ps.spawn({ x, y: cam.position.y + rng.range(4, 12), z, vx: W.x * 2, vy: -15, vz: W.y * 2, life: 1.4, size: 0.32, sprite: P.rain, color: [0.75, 0.8, 0.9], drag: 0, ground: true, rest: 0.03, alpha: 0.7 });
+        const ahead = rng.range(-4, 22), side = rng.range(-14, 14);
+        const x = cam.position.x + fx * ahead - fz * side, z = cam.position.z + fz * ahead + fx * side;
+        ps.spawn({ x, y: cam.position.y + rng.range(2, 10), z, vx: W.x * 2, vy: -15, vz: W.y * 2, life: 1.3, size: 0.46, sprite: P.rain, color: [0.78, 0.84, 0.95], drag: 0, ground: true, rest: 0.03, alpha: 0.85, phase: 0 });
       }
     }
     if (snow > 0.05) {
@@ -152,13 +156,14 @@ export class Effects {
     }
     // cola boost: foamy jets + fizz
     if (b.boostTime > 0 && b.stats.boostCharges > 0) {
-      this.acc.boost += dt * 60;
+      this.acc.boost += dt * 150;
+      g.chase.shake(0.12);
       const m = g.bikeModel;
       while (this.acc.boost > 1) {
         this.acc.boost -= 1;
         const n = m.nozzles[Math.floor(rng.next() * 2)];
         const w = n.clone().applyMatrix4(m.bicycle.matrixWorld);
-        ps.spawn({ x: w.x, y: w.y, z: w.z, vx: -fx * rng.range(3, 6) + b.vel.x * 0.5, vy: rng.range(-0.2, 0.8), vz: -fz * rng.range(3, 6) + b.vel.z * 0.5, life: rng.range(0.4, 0.8), size: 0.18, size1: 0.6, sprite: rng.next() < 0.5 ? P.foam : P.bubble, color: rng.next() < 0.5 ? [0.55, 0.32, 0.18] : [0.95, 0.88, 0.75], drag: 2.5, gravity: 1 });
+        ps.spawn({ x: w.x, y: w.y, z: w.z, vx: -fx * rng.range(3, 6) + b.vel.x * 0.5, vy: rng.range(-0.2, 0.8), vz: -fz * rng.range(3, 6) + b.vel.z * 0.5, life: rng.range(0.5, 0.95), size: 0.24, size1: 0.95, sprite: rng.next() < 0.55 ? P.foam : P.bubble, color: rng.next() < 0.5 ? [0.55, 0.32, 0.18] : [0.97, 0.9, 0.78], drag: 2.2, gravity: 1, ground: true });
         if (rng.next() < 0.3) ps.spawn({ x: w.x, y: w.y, z: w.z, vx: rng.range(-1, 1), vy: rng.range(0.5, 2), vz: rng.range(-1, 1), life: 0.5, size: 0.12, sprite: P.star, color: [1, 0.9, 0.6], emissive: 1, drag: 1 });
       }
     }

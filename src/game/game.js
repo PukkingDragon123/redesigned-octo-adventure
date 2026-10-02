@@ -660,9 +660,12 @@ export class Game {
     const on = !!this.bike.stats.light && G.uNight.value > 0.25 && this.bikeModel.root.visible;
     this.headlamp.on = on;
     if (on) {
-      const src = this.bikeModel.isMotor ? this.bikeModel.mLampLight : this.bikeModel.lampLight;
-      src.getWorldPosition(this.headlamp.pos);
-      this.headlamp.intensity = 1.6 * G.uNight.value;
+      // a point light thrown ~4 m ahead reads as a beam pooling on the road
+      const b = this.bike;
+      const fx = Math.sin(b.yaw), fz = Math.cos(b.yaw);
+      const ax = b.pos.x + fx * 4.2, az = b.pos.z + fz * 4.2;
+      this.headlamp.pos.set(ax, Math.max(this.physics.groundAt(ax, az, b.pos.y + 2).h, b.pos.y - 1) + 1.3, az);
+      this.headlamp.intensity = (this.bikeModel.isMotor ? 2.2 : 1.7) * G.uNight.value;
     }
   }
 
