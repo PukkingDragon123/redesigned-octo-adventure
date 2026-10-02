@@ -19,6 +19,11 @@ export function newState() {
     stats: { deliveries: 0, tips: 0, crashes: 0, jumps: 0, bestAir: 0, distance: 0, dayEarned: 0, dayTips: 0, dayDeliveries: 0 },
     cat: false,
     lastSafe: null,
+    quests: {},
+    pantry: { milk_bottle: 4, cocoa_powder: 6, sugar: 6, marshmallows: 2, maple_syrup: 1, cinnamon: 1, mint: 0, pumpkin: 0, nutmeg: 1, cream: 1, coffee_beans: 0, dark_chocolate: 1 },
+    bag: {},
+    photos: {},
+    candy: 0,
   };
 }
 

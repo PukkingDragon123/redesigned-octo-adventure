@@ -4,6 +4,7 @@ import { CUSTOMERS, POI } from '../world/layout.js';
 import { RNG } from '../core/noise.js';
 import { Builder } from '../render/builder.js';
 import { propMesh } from '../render/propMaterial.js';
+import { RECIPES, STARTER_PANTRY } from './quests.js';
 
 export const COCOAS = [
   { id: 'classic', label: 'Classic Cocoa', price: 8, color: 0x6a3a1e },
@@ -81,9 +82,18 @@ export class Orders {
     return this.game.bike.stats.capacity;
   }
 
+  // which of Nana's ingredients this cup still needs (empty = can brew)
+  missing(o) {
+    const st = this.state;
+    if (!st.pantry) return [];
+    return (RECIPES[o.cocoa] || []).filter((k) => !(st.pantry[k] > 0));
+  }
   pack(o) {
     if (o.state !== 'board') return false;
     if (this.carried().length >= this.capacity()) return false;
+    const miss = this.missing(o);
+    if (miss.length) { this.lastMissing = miss; return false; }
+    if (this.state.pantry) for (const k of RECIPES[o.cocoa] || []) this.state.pantry[k]--;
     o.state = 'carried';
     o.quality = 100;
     o.pickedAt = this.game.world.atmosphere.hour;
@@ -92,6 +102,7 @@ export class Orders {
   }
   unpack(o) {
     if (o.state !== 'carried') return;
+    if (this.state.pantry) for (const k of RECIPES[o.cocoa] || []) this.state.pantry[k] = (this.state.pantry[k] || 0) + 1;
     o.state = 'board';
     this.syncCups();
   }

@@ -44,7 +44,7 @@ class Input {
     this.prev = new Set();
     this.now = new Set();
     this.pad = null;
-    this.touch = { steer: 0, throttle: 0, brake: 0, stickThrottle: 0, stickBrake: 0, buttons: new Set() };
+    this.touch = { steer: 0, throttle: 0, brake: 0, stickThrottle: 0, stickBrake: 0, buttons: new Set(), run: false, trick: false };
     this.tappedActions = new Set(); // on-screen button taps, latched like key taps
     this.lastDevice = 'keyboard';
     this.enabled = true;

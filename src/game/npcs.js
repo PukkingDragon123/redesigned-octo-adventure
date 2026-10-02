@@ -34,6 +34,11 @@ export class Villagers {
     // Doug walks a little beat along the street
     this.actors.doug.patrol = [new THREE.Vector3(150, 0, 60), new THREE.Vector3(186, 0, 60)];
     this.actors.doug.patrolIdx = 0;
+    // Mo minds the grocery on the boardwalk
+    const mo = new Actor(game, 'mo', { x: 189.5, z: 94.6, yaw: 0 });
+    mo.homePos = mo.pos.clone();
+    mo.homeYaw = 0;
+    this.actors.mo = mo;
     // Nana lives on the porch
     const nana = new Actor(game, 'grandma', { x: -169.5, z: 66.5, yaw: Math.PI / 2 });
     nana.homePos = nana.pos.clone();

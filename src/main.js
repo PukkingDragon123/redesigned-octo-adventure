@@ -45,6 +45,8 @@ async function boot() {
   const bootEl = document.getElementById('boot');
   if (params.has('frames')) bootEl.style.display = 'none';
   bootEl.classList.add('gone');
+  clearInterval(window.__bootTips);
+  setTimeout(() => (bootEl.style.display = 'none'), 900);
   let last = performance.now();
   const maxFrames = params.has('frames') ? parseInt(params.get('frames')) : Infinity;
   // deterministic warm-up for tests: simulate N seconds before the first frame

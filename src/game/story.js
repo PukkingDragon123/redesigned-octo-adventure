@@ -617,6 +617,7 @@ export class Story {
     N.lookAt(g.playerChar);
     g.mode = 'menu';
     try {
+      await g.quests.turnIns(N);
       // homecoming after the first day's rescue
       if (st.flags.catRescued && !st.flags.catIntro) {
         st.flags.catIntro = true;
@@ -650,6 +651,7 @@ export class Story {
       const opts = [];
       if (board > 0) opts.push(['Show me the order board', 'board']);
       if (pending === 0 || g.world.atmosphere.hour > 18) opts.push(['Call it a day', 'sleep']);
+      opts.push(['Need anything from the store?', 'shop']);
       opts.push(['How are you, Nana?', 'chat']);
       opts.push(['See you later!', 'bye']);
       const greet = pending === 0 && board === 0 ? 'All done for today? Wonderful work, dear.' : board > 0 ? 'Back for more? There are still orders on the board.' : 'Hello, dear! Remember — hot cocoa makes happy customers.';
@@ -662,6 +664,16 @@ export class Story {
       } else if (what === 'sleep') {
         await this.endDay();
         return;
+      } else if (what === 'shop') {
+        const low = Object.entries(st.pantry || {}).filter(([, n]) => n < 2).map(([k]) => k);
+        const names = { milk_bottle: 'milk', cocoa_powder: 'cocoa powder', sugar: 'sugar', marshmallows: 'marshmallows', maple_syrup: 'maple syrup', cinnamon: 'cinnamon', mint: 'fresh mint', pumpkin: 'a pumpkin', nutmeg: 'nutmeg', cream: 'cream', coffee_beans: 'coffee beans', dark_chocolate: 'dark chocolate' };
+        if (!low.length) await g.ui.say('grandma', "The pantry's full, dear! But thank you for asking.", { expr: 'happy' });
+        else {
+          await g.ui.say('grandma', `Oh, would you? We're low on ${low.slice(0, 4).map((k) => names[k] || k).join(', ')}. Mo at Moose & Goose will sort you out. Here's my list!`, { expr: 'happy' });
+          g.quests.q('groceries').state = 'active';
+          g.sound.play('quest_new');
+          g.ui.toast("Nana's shopping list is pinned to your note. Moose & Goose is on the boardwalk.", 'basket', 3200);
+        }
       } else if (what === 'chat') {
         const chats = [
           ['grandma', 'My knees are singing the song of their people today. Thank you for running about for me.', 'happy'],

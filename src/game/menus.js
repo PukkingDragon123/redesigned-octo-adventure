@@ -8,6 +8,8 @@ import { UPGRADES, canBuy } from './upgrades.js';
 import { KEEPSAKES, POI, CUSTOMERS, WORLD_HALF, BUILDINGS } from '../world/layout.js';
 import { KEEPSAKE_ICON } from './keepsakes.js';
 import { hasSave } from './state.js';
+import { foodIconURL, FOOD_INFO } from '../art/foodsprites.js';
+import { QUESTS, SHOP, RECIPES, CATS, LOST, BIRDS, BIRD_NAMES } from './quests.js';
 
 export class Menus {
   constructor(game) {
@@ -46,34 +48,140 @@ export class Menus {
     return m;
   }
 
-  // ---------------------------------------------------------------- pause
+  // ---------------------------------------------------------------- pause: Hank's journal
   pause() {
     const g = this.game;
     const ui = this.ui;
-    const p = ui.panel('wood');
-    p.appendChild(el('h2', '', 'Paused'));
     const st = g.state;
-    p.appendChild(el('p', '', `Day ${st.day} · $${Math.floor(st.money)} · ${st.stats.deliveries} cocoas delivered`));
+    const p = ui.panel('paper', 'menu journal');
+    p.appendChild(el('h2', '', "Hank's Journal"));
+    const book = el('div', 'jbook');
+    const left = el('div', 'jpage');
+    const right = el('div', 'jpage');
+    book.append(left, right);
+    p.appendChild(book);
+    // left page: today + favours
+    left.innerHTML = `<div class="jdate">Day ${st.day} · $${Math.floor(st.money)} · ${st.stats.deliveries} cocoas delivered${st.candy ? ` · ${st.candy} candies` : ''}</div><h3>Favours & errands</h3>`;
+    const Q = st.quests || {};
+    const lines = [];
+    for (const [id, def] of Object.entries(QUESTS)) {
+      const q = Q[id];
+      if (q?.state === 'active') lines.push(`<div class="jq">☐ ${def.title}</div>`);
+      else if (q?.state === 'done') lines.push(`<div class="jq done">☑ ${def.title}</div>`);
+    }
+    for (const L of LOST) {
+      const q = Q[`lost_${L.id}`];
+      if (q?.state === 'active') lines.push(`<div class="jq">☐ ${q.found ? 'Return' : 'Find'} the ${L.name}</div>`);
+      else if (q?.state === 'done') lines.push(`<div class="jq done">☑ Found the ${L.name}</div>`);
+    }
+    left.innerHTML += lines.length ? lines.join('') : '<p class="hint">Nothing yet. Stop and chat with folks around town — someone always needs a hand. Or a skeleton.</p>';
+    if (st.photos && Object.keys(st.photos).length) {
+      left.innerHTML += '<h3>Photos</h3><div class="polaroids">' + Object.keys(st.photos).map((k, i) => `<div class="polaroid" style="--r:${(i % 3) - 1}deg"><span>${BIRD_NAMES[k] || k}</span></div>`).join('') + '</div>';
+    }
+    // right page: where to go
     let m;
     const close = () => {
       ui.closeOverlay(m);
       g.resumeFromMenu();
     };
-    p.appendChild(ui.button('Resume', close));
-    p.appendChild(ui.button('Map', () => this.map()));
-    p.appendChild(ui.button("Harold's Keepsakes", () => this.keepsakes()));
-    p.appendChild(ui.button('Settings', () => this.settings()));
-    p.appendChild(ui.button('Controls', () => this.controls()));
-    p.appendChild(ui.button('Save & Quit to Title', () => {
+    right.appendChild(ui.button('Back to the road', close));
+    right.appendChild(ui.button('Unfold the map', () => this.map()));
+    right.appendChild(ui.button("Harold's keepsakes", () => this.keepsakes()));
+    right.appendChild(ui.button("Nana's recipe book", () => this.recipes()));
+    right.appendChild(ui.button('Settings', () => this.settings()));
+    right.appendChild(ui.button('Controls', () => this.controls()));
+    right.appendChild(ui.button('Save & quit to title', () => {
       g.save();
-      // back to a clean title screen (drops any debug parameters)
       location.href = location.pathname;
     }));
+    g.sound.play('book_open');
+    m = ui.openOverlay(p, { onBack: close });
+    const old = m.onBack;
+    m.onBack = () => { g.sound.play('book_close'); old(); };
+    return m;
+  }
+
+  // ---------------------------------------------------------------- Nana's recipes & pantry
+  recipes() {
+    const g = this.game;
+    const ui = this.ui;
+    const st = g.state;
+    const pantry = st.pantry || {};
+    const p = ui.panel('paper', 'menu recipes');
+    p.appendChild(el('h2', '', "Nana's Recipe Book"));
+    const names = { classic: 'Classic Cocoa', maple: 'Maple Marshmallow', cinnamon: 'Cinnamon Fire', mint: 'Peppermint Swirl', pumpkin: 'Pumpkin Spice', mocha: 'Lumberjack Mocha' };
+    const grid = el('div', 'rgrid');
+    for (const [id, ing] of Object.entries(RECIPES)) {
+      const can = ing.every((k) => (pantry[k] || 0) > 0);
+      const card = el('div', `rcard${can ? '' : ' short'}`);
+      card.innerHTML = `<img class="big" src="${foodIconURL('cocoa_' + id)}"><div class="rn">${names[id]}</div><div class="ri">${ing.map((k) => `<span class="${(pantry[k] || 0) > 0 ? '' : 'out'}"><img src="${foodIconURL(k)}">${pantry[k] || 0}</span>`).join('')}</div>`;
+      grid.appendChild(card);
+    }
+    p.appendChild(grid);
+    p.appendChild(el('p', 'hint', 'Each cup uses one of everything listed. Running low? Mo at Moose & Goose has it all — bring the groceries home to Nana.'));
+    let m;
+    const close = () => ui.closeOverlay(m);
+    p.appendChild(ui.button('Close the book', close));
+    g.sound.play('page_flip');
     m = ui.openOverlay(p, { onBack: close });
     return m;
   }
 
-  settings(onClose) {
+  // ---------------------------------------------------------------- Moose & Goose
+  shop(onDone) {
+    const g = this.game;
+    const ui = this.ui;
+    const st = g.state;
+    st.bag = st.bag || {};
+    const p = ui.panel('paper', 'menu shop');
+    p.appendChild(el('h2', '', 'Moose & Goose · Price List'));
+    const money = el('p', '');
+    p.appendChild(money);
+    const grid = el('div', 'shopgrid');
+    p.appendChild(grid);
+    const cart = {};
+    const total = () => Object.entries(cart).reduce((s, [k, n]) => s + n * (FOOD_INFO[k]?.price || 3), 0);
+    const items = [];
+    const render = () => {
+      money.innerHTML = `In your pocket: <b>$${Math.floor(st.money)}</b> · basket: <b>$${total()}</b>`;
+      items.forEach((e) => e.sync());
+    };
+    for (const k of SHOP) {
+      const info = FOOD_INFO[k] || { label: k, price: 3 };
+      const e = el('div', 'slip shopitem');
+      e.innerHTML = `<img src="${foodIconURL(k)}"><span class="nm">${info.label}</span><span class="pr">$${info.price}</span><span class="qty"></span>`;
+      e.sync = () => { e.querySelector('.qty').textContent = cart[k] ? `×${cart[k]}` : ''; e.classList.toggle('taken', !!cart[k]); };
+      e.addEventListener('click', () => {
+        if (total() + info.price > st.money) { g.sound.play('ui_error'); ui.toast("Mo: 'That's a little more than you've got, Hank!'", 'coin', 1800); return; }
+        cart[k] = (cart[k] || 0) + 1;
+        g.sound.play('register', { volume: 0.5 });
+        render();
+      });
+      grid.appendChild(e);
+      items.push(e);
+    }
+    let m;
+    const done = (pay) => {
+      if (pay && total() > 0) {
+        st.money -= total();
+        for (const [k, n] of Object.entries(cart)) st.bag[k] = (st.bag[k] || 0) + n * 2;
+        g.sound.play('cash_coins');
+        ui.toast('Groceries bagged! Bring them home to Nana.', 'basket', 2400);
+        g.save();
+      }
+      ui.closeOverlay(m);
+      onDone?.();
+    };
+    const pay = ui.button('Pay & bag it', () => done(true), { small: 'each item makes two cups' });
+    const leave = ui.button('Never mind', () => done(false));
+    p.append(pay, leave);
+    render();
+    g.sound.play('shop_bell');
+    m = ui.openOverlay(p, { onBack: () => done(false), items: [...items, pay, leave], grid: 4 });
+    return m;
+  }
+
+    settings(onClose) {
     const g = this.game;
     const ui = this.ui;
     const s = g.settings;
@@ -179,7 +287,12 @@ export class Menus {
         if (o.state === 'carried') O.unpack(o);
         else if (!O.pack(o)) {
           g.sound.play('ui_error');
-          ui.toast(`Your bike only holds ${O.capacity()} cocoas. Upgrade in the garage!`, 'basket');
+          const miss = O.missing(o);
+          if (miss.length) {
+            ui.toast(`Nana: "We're out of <b>${miss.map((k) => FOOD_INFO[k]?.label || k).join(' & ')}</b>! Could you pop over to Moose & Goose?"`, 'basket', 3600);
+            const q = g.quests.q('groceries');
+            if (q.state !== 'active') { q.state = 'active'; g.sound.play('quest_new'); }
+          } else ui.toast(`Your bike only holds ${O.capacity()} cocoas. Upgrade in the garage!`, 'basket');
         } else {
           g.sound.play('cup');
           packed = true;

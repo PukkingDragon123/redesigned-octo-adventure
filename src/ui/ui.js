@@ -2,6 +2,7 @@
 import './ui.css';
 import './paper.css';
 import { Bubbles } from './bubbles.js';
+import { buildPaperHUD, updatePaperHUD } from './paperhud.js';
 import { frameURL, slotURL } from './frames.js';
 import { iconURL } from '../art/icons.js';
 import { portraitURL } from '../art/portraits.js';
@@ -131,50 +132,8 @@ export class UI {
 
   // ---------------------------------------------------------------- HUD
   buildHUD() {
-    const h = el('div');
-    h.id = 'hud';
-    this.hud = h;
-    // clock + money
-    const clock = frameStyle(el('div', 'panel dark hud-clock'), 'dark');
-    clock.innerHTML = `
-      <div class="hud-row hud-day"><span class="d">DAY 1</span><img class="wx" src="${iconURL('sun')}"></div>
-      <div class="hud-row hud-time"><img class="tod" src="${iconURL('sun')}"><span class="t">8:00 AM</span></div>
-      <div class="hud-row hud-money"><img src="${iconURL('coin')}"><span class="m">$0</span></div>`;
-    h.appendChild(clock);
-    this.elDay = clock.querySelector('.d');
-    this.elTime = clock.querySelector('.t');
-    this.elMoney = clock.querySelector('.m');
-    this.elTod = clock.querySelector('.tod');
-    this.elWx = clock.querySelector('.wx');
-    // compass
-    const comp = el('div', 'hud-compass');
-    comp.appendChild(el('div', 'center'));
-    this.compass = comp;
-    this.compassTicks = [];
-    for (const [deg, label] of [[0, 'N'], [45, 'NE'], [90, 'E'], [135, 'SE'], [180, 'S'], [225, 'SW'], [270, 'W'], [315, 'NW']]) {
-      const t = el('div', `tick ${label.length === 1 ? 'major' : ''}`, label);
-      comp.appendChild(t);
-      this.compassTicks.push({ deg, e: t });
-    }
-    this.compassMarks = new Map();
-    h.appendChild(comp);
-    this.objective = el('div', 'hud-objective');
-    h.appendChild(this.objective);
-    // orders
-    this.ordersEl = el('div', 'hud-orders');
-    h.appendChild(this.ordersEl);
-    this.orderCards = new Map();
-    // gauge
-    const g = el('div', 'hud-gauge');
     this.gauge = new Gauge();
-    g.appendChild(this.gauge.canvas);
-    this.boosts = el('div', 'hud-boosts');
-    g.appendChild(this.boosts);
-    h.appendChild(g);
-    // prompt
-    this.promptEl = frameStyle(el('div', 'panel dark hud-prompt'), 'dark');
-    h.appendChild(this.promptEl);
-    this.root.appendChild(h);
+    buildPaperHUD(this);
   }
 
   showHUD(on) {
@@ -182,109 +141,7 @@ export class UI {
   }
 
   updateHUD(dt) {
-    const g = this.game;
-    const st = g.state;
-    if (!st || !g.bike) return;
-    this.elDay.textContent = `DAY ${st.day}`;
-    const hr = g.world.atmosphere.hour;
-    const hh = Math.floor(hr), mm = Math.floor((hr - hh) * 60 / 5) * 5;
-    const ampm = hh >= 12 ? 'PM' : 'AM';
-    const h12 = ((hh + 11) % 12) + 1;
-    const ts = `${h12}:${String(mm).padStart(2, '0')} ${ampm}`;
-    if (this.elTime.textContent !== ts) this.elTime.textContent = ts;
-    const night = hr < 6.5 || hr > 19.6;
-    const todIcon = night ? 'moon' : 'sun';
-    if (this.elTod.dataset.i !== todIcon) { this.elTod.src = iconURL(todIcon); this.elTod.dataset.i = todIcon; }
-    const wx = { clear: night ? 'star' : 'sun', breezy: 'leaf', misty: 'fog', overcast: 'fog', rain: 'rain', snow: 'snowflake' }[g.world.atmosphere.weatherTarget] || 'sun';
-    if (this.elWx.dataset.i !== wx) { this.elWx.src = iconURL(wx); this.elWx.dataset.i = wx; }
-    const money = `$${Math.floor(st.money)}`;
-    if (this.elMoney.textContent !== money) this.elMoney.textContent = money;
-    this.gauge.draw(g.bike, dt);
-    // boost bottles
-    const total = g.bike.stats.boostCharges;
-    if (this.boosts.childElementCount !== total) {
-      this.boosts.innerHTML = '';
-      for (let i = 0; i < total; i++) this.boosts.appendChild(el('img')).src = iconURL('cola');
-    }
-    [...this.boosts.children].forEach((img, i) => img.classList.toggle('used', i >= g.bike.boostCharges));
-    this.updateOrders();
-    this.updateCompass();
-  }
-
-  updateOrders() {
-    const orders = this.game.orders?.carried() || [];
-    const seen = new Set();
-    for (const o of orders) {
-      seen.add(o.id);
-      let c = this.orderCards.get(o.id);
-      if (!c) {
-        c = frameStyle(el('div', 'panel order-card'), 'order');
-        c.innerHTML = `<div class="pt"></div><div><div class="nm"></div><div class="ty"></div><div class="thermo"><i></i></div></div>`;
-        c.querySelector('.pt').style.backgroundImage = `url(${portraitURL(o.customer)})`;
-        c.querySelector('.nm').textContent = CHARACTERS[o.customer]?.name || o.customer;
-        c.querySelector('.ty').textContent = o.label;
-        this.ordersEl.appendChild(c);
-        this.orderCards.set(o.id, c);
-      }
-      c.querySelector('i').style.width = `${Math.round(o.quality)}%`;
-      c.classList.toggle('done', o.state === 'delivered');
-    }
-    for (const [id, c] of this.orderCards) if (!seen.has(id)) { c.remove(); this.orderCards.delete(id); }
-  }
-
-  // markers: [{id, x, z, icon, label}]
-  updateCompass() {
-    const g = this.game;
-    const cam = g.camera;
-    const dir = cam.getWorldDirection(this._dir || (this._dir = new cam.position.constructor()));
-    // heading: 0 = north (-z), clockwise
-    const heading = (Math.atan2(dir.x, -dir.z) * 180) / Math.PI;
-    const W = this.compass.clientWidth || 390;
-    const fov = 160;
-    const place = (deg, e) => {
-      let d = ((deg - heading + 540) % 360) - 180;
-      const vis = Math.abs(d) < fov / 2;
-      e.style.display = vis ? '' : 'none';
-      if (vis) e.style.left = `${W / 2 + (d / (fov / 2)) * (W / 2)}px`;
-      return vis;
-    };
-    for (const t of this.compassTicks) place(t.deg, t.e);
-    const marks = (g.compassMarkers ? g.compassMarkers() : []).map((m) => {
-      const dx = m.x - g.bike.pos.x, dz = m.z - g.bike.pos.z;
-      return { ...m, d: Math.hypot(dx, dz), deg: (Math.atan2(dx, -dz) * 180) / Math.PI };
-    });
-    marks.sort((a, b) => a.d - b.d);
-    const seen = new Set();
-    const placed = [];
-    if (!(this._uAt > g.time - 2)) {
-      this._u = parseFloat(getComputedStyle(this.root).getPropertyValue('--u')) || 3;
-      this._uAt = g.time;
-    }
-    const u = this._u;
-    for (const m of marks) {
-      seen.add(m.id);
-      let e = this.compassMarks.get(m.id);
-      if (!e) {
-        e = el('div', 'mk', `<img src="${iconURL(m.icon)}"><span></span>`);
-        this.compass.appendChild(e);
-        this.compassMarks.set(m.id, e);
-      }
-      if (!place(m.deg, e)) continue;
-      // nearer markers win: farther ones that would overlap step aside and drop their label
-      let x = parseFloat(e.style.left);
-      let crowded = false;
-      for (const px of placed) {
-        if (Math.abs(x - px) < u * 16) crowded = true;
-        if (Math.abs(x - px) < u * 7) x = px + (x >= px ? u * 7 : -u * 7);
-      }
-      e.style.left = `${x}px`;
-      placed.push(x);
-      const span = e.querySelector('span');
-      span.textContent = `${Math.round(m.d)}m`;
-      span.style.visibility = crowded ? 'hidden' : '';
-      e.style.zIndex = String(10 - placed.length);
-    }
-    for (const [id, e] of this.compassMarks) if (!seen.has(id)) { e.remove(); this.compassMarks.delete(id); }
+    updatePaperHUD(this, dt);
   }
 
   setObjective(text) {
@@ -298,12 +155,13 @@ export class UI {
       this.promptEl.classList.remove('on');
       return;
     }
-    this.promptEl.innerHTML = `<span class="key">${key}</span><span>${text}</span>`;
+    this.promptEl.innerHTML = `<span class="ink-key">${key}</span><span class="pt">${text}</span>`;
     this.promptEl.classList.add('on');
   }
 
   toast(text, icon = null, ms = 3200) {
-    const t = frameStyle(el('div', 'panel toast'), 'wood');
+    const t = el('div', 'toast paper-note');
+    t.style.setProperty('--rot', `${(Math.random() * 4 - 2).toFixed(1)}deg`);
     t.innerHTML = `${icon ? `<img src="${iconURL(icon)}">` : ''}<span>${text}</span>`;
     this.toasts.appendChild(t);
     setTimeout(() => {

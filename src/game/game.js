@@ -13,6 +13,7 @@ import { Emotes3D } from './emotes3d.js';
 import { Walker } from './walker.js';
 import { Interactables } from './interact.js';
 import { Tricks } from './tricks.js';
+import { Quests } from './quests.js';
 import { Effects } from './effects.js';
 import { Wildlife } from './wildlife.js';
 import { Villagers } from './npcs.js';
@@ -69,6 +70,7 @@ export class Game {
     this.onFoot = false;
     this.interact = new Interactables(this);
     this.tricks = new Tricks(this);
+    this.quests = new Quests(this);
     this.effects = new Effects(this);
     this.listeners.push((e) => this.effects.onBikeEvent(e));
     this.listeners.push((e) => this.onBikeEvent(e));
@@ -141,6 +143,7 @@ export class Game {
     this.chase.snap(this.bike);
     this.mode = 'ride';
     this.ui.showHUD(true);
+    this.quests?.sync();
   }
 
   // where Hank is, on foot or on the bike
@@ -240,6 +243,7 @@ export class Game {
   }
 
   beginRide() {
+    this.quests?.sync();
     this.mode = 'ride';
     this.setBikeVisible(true);
     this.rider.visible = true;
@@ -429,6 +433,17 @@ export class Game {
       }
     }
     if (!action && this.catEventActive && near(L.POI.catLog.x, L.POI.catLog.z, 7) && slow) action = { text: 'Investigate the meowing', fn: () => this.story.catRescue() };
+    if (!action) action = this.quests.action(this);
+    // stop for a chat with whoever is nearby
+    if (!action && slow) {
+      let best = null, bd = 3.2;
+      for (const a of Object.values(this.villagers.actors)) {
+        if (!a.visible || a.scripted || !this.quests.canTalk(a)) continue;
+        const d = Math.hypot(a.pos.x - p.x, a.pos.z - p.z);
+        if (d < bd && Math.abs(a.pos.y - p.y) < 2.5) { bd = d; best = a; }
+      }
+      if (best && best.char !== 'grandma') action = { text: `Chat with ${this.villagerName(best.char)}`, fn: () => this.quests.talk(best) };
+    }
     if (!action && this.world.interactables) action = this.world.interactables.nearestAction(this) || null;
     if (!action && this.onFoot && this.nearBike()) action = { text: 'Hop on the bike', fn: () => this.hopOn() };
     if (!action && !this.onFoot && b.speed < 2.5 && b.grounded && b.crash <= 0) action = { text: 'Hop off', fn: () => this.hopOff(), quiet: true };
@@ -441,7 +456,7 @@ export class Game {
   }
 
   villagerName(char) {
-    return { gus: 'Gus', marie: 'Marie-Claude', birdie: 'Captain Birdie', agnes: 'Agnes', doug: 'Constable Doug', ingrid: 'Dr. Ingrid', lou: 'Big Lou', ollie: 'Old Ollie' }[char] || char;
+    return { gus: 'Gus', marie: 'Marie-Claude', birdie: 'Captain Birdie', agnes: 'Agnes', doug: 'Constable Doug', ingrid: 'Dr. Ingrid', lou: 'Big Lou', ollie: 'Old Ollie', mo: 'Mo', pip: 'Pip', pop: 'Pop', grandma: 'Nana' }[char] || char;
   }
 
   compassMarkers() {
@@ -452,6 +467,7 @@ export class Game {
     }
     if (!this.orders.carried().length) m.push({ id: 'home', x: L.POI.cabin.x + 8, z: L.POI.cabin.z, icon: 'home' });
     if (this.catEventActive) m.push({ id: 'cat', x: L.POI.catLog.x, z: L.POI.catLog.z, icon: 'cat' });
+    for (const q of this.quests?.markers() || []) m.push(q);
     const k = this.keepsakes.nearest(this.playerPos);
     if (k && k.d < 80) m.push({ id: 'ks', x: k.it.x, z: k.it.z, icon: 'star' });
     return m;
@@ -558,7 +574,7 @@ export class Game {
     }
     this.tweens = this.tweens.filter((tw) => tw.t < tw.dur);
     this.ui.update(dt);
-    this.touch.update();
+    this.touch.update(dt);
 
     const busy = this.ui.dialogueTick || this.ui.menuStack.length;
     if (this.mode === 'ride' && !busy) {
@@ -612,6 +628,8 @@ export class Game {
     this.rider.update(dt, this.bike, this.bikeModel, this.camera.position);
     this.emotes.update(dt);
     this.interact.update(dt);
+    this.quests.update(dt);
+    if (this.mode === 'ride') this.quests.updateHints(this.villagers);
     this.effects.ps.setViewport(this.pipeline.h, this.camera.fov);
     this.effects.update(dt, this.camera);
     this.wildlife.update(dt);
@@ -640,7 +658,7 @@ export class Game {
     const free = this.mode === 'ride' && !(this.ui.dialogueTick || this.ui.menuStack.length);
     const sw = this.ui.inputSwallowed();
     const wc = free ? {
-      mx: input.steer(), mz: input.throttle() - input.brake(), run: input.down('drift'),
+      mx: input.steer(), mz: input.throttle() - input.brake(), run: input.down('drift') || input.touch.run,
       jumpPressed: input.pressed('jump') && !sw, kickPressed: input.pressed('boost') && !sw,
     } : { mx: 0, mz: 0 };
     const W = this.walker;

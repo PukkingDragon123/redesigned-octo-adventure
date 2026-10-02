@@ -209,10 +209,17 @@ export class Bubbles {
       const speed = opts.speed ?? 40;
       const items = [];
       const A = (this.active = { wrap, b, tl, speaker, resolve: null, choiceEls: items });
+      let word = null;
       const addChar = (p) => {
-        const sp = el('span', `${p.b ? 'tb' : ''}${p.w ? ' tw' : ''}${p.s ? ' ts' : ''}${p.sm ? ' tsm' : ''}`, p.ch === ' ' ? ' ' : p.ch.replace('<', '&lt;'));
+        if (p.ch === ' ' || p.ch === '\n') {
+          txt.appendChild(p.ch === ' ' ? document.createTextNode(' ') : document.createElement('br'));
+          word = null;
+          return;
+        }
+        if (!word) { word = el('span', 'tword'); txt.appendChild(word); }
+        const sp = el('span', `${p.b ? 'tb' : ''}${p.w ? ' tw' : ''}${p.s ? ' ts' : ''}${p.sm ? ' tsm' : ''}`, p.ch.replace('<', '&lt;'));
         if (p.w || p.s) sp.style.animationDelay = `${(i % 12) * -0.06}s`;
-        txt.appendChild(sp);
+        word.appendChild(sp);
       };
       const finish = () => {
         while (i < parts.length) addChar(parts[i++]);
@@ -303,7 +310,12 @@ export class Bubbles {
     return new Promise((resolve) => {
       let i = 0, acc = 0, done = false;
       this.active = { wrap: p, narr: true };
-      const add = (q) => txt.appendChild(el('span', `${q.b ? 'tb' : ''}${q.w ? ' tw' : ''}${q.s ? ' ts' : ''}`, q.ch === ' ' ? ' ' : q.ch));
+      let word = null;
+      const add = (q) => {
+        if (q.ch === ' ') { txt.appendChild(document.createTextNode(' ')); word = null; return; }
+        if (!word) { word = el('span', 'tword'); txt.appendChild(word); }
+        word.appendChild(el('span', `${q.b ? 'tb' : ''}${q.w ? ' tw' : ''}${q.s ? ' ts' : ''}`, q.ch));
+      };
       const close = () => {
         this.ui.dialogueTick = null;
         this.ui._dlgResolve = null;
