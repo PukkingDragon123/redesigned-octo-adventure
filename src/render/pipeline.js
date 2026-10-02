@@ -1,0 +1,370 @@
+// Low-resolution pixel render pipeline:
+//   scene -> HDR target (with depth) -> bloom -> composite (fog, god rays,
+//   grading, outlines, ordered dithering) -> canvas, upscaled with nearest.
+import * as THREE from 'three';
+import { G, NOISE_GLSL } from './shaderlib.js';
+import { SKY } from './sky.js';
+
+const FS_VERT = /* glsl */ `
+varying vec2 vUv;
+void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }
+`;
+
+const BRIGHT_FRAG = /* glsl */ `
+uniform sampler2D tColor;
+uniform vec2 uTexel;
+uniform float uThreshold;
+varying vec2 vUv;
+void main() {
+  vec3 c = vec3(0.0);
+  for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) c += texture2D(tColor, vUv + vec2(x, y) * uTexel).rgb;
+  c /= 9.0;
+  float l = max(max(c.r, c.g), c.b);
+  float k = smoothstep(uThreshold, uThreshold + 0.6, l);
+  gl_FragColor = vec4(c * k, 1.0);
+}
+`;
+
+const BLUR_FRAG = /* glsl */ `
+uniform sampler2D tColor;
+uniform vec2 uDir;
+varying vec2 vUv;
+void main() {
+  vec3 c = texture2D(tColor, vUv).rgb * 0.227027;
+  c += texture2D(tColor, vUv + uDir * 1.3846).rgb * 0.316216;
+  c += texture2D(tColor, vUv - uDir * 1.3846).rgb * 0.316216;
+  c += texture2D(tColor, vUv + uDir * 3.2308).rgb * 0.070270;
+  c += texture2D(tColor, vUv - uDir * 3.2308).rgb * 0.070270;
+  gl_FragColor = vec4(c, 1.0);
+}
+`;
+
+const COMP_FRAG = /* glsl */ `
+${NOISE_GLSL}
+uniform sampler2D tColor;
+uniform sampler2D tDepth;
+uniform sampler2D tBloom;
+uniform vec2 uRes;
+uniform mat4 uInvProj;
+uniform mat4 uInvView;
+uniform vec3 uCamPos;
+uniform vec3 uSunDir;
+uniform vec3 uSunColor;
+uniform vec3 uFogColor;
+uniform vec3 uSunGlow;
+uniform vec2 uSunScreen;
+uniform float uSunVisible;
+uniform float uFogDensity;
+uniform float uFogHeight;
+uniform float uFogMax;
+uniform float uRays;
+uniform float uBloom;
+uniform float uExposure;
+uniform float uSaturation;
+uniform float uContrast;
+uniform vec3 uShadowTint;
+uniform vec3 uHighTint;
+uniform float uVignette;
+uniform float uLevels;
+uniform float uOutline;
+uniform float uFade;
+uniform vec3 uFadeColor;
+uniform float uFlash;
+uniform float uTime;
+uniform float uCold;
+varying vec2 vUv;
+
+vec3 worldFromDepth(vec2 uv, float d) {
+  vec4 ndc = vec4(uv * 2.0 - 1.0, d * 2.0 - 1.0, 1.0);
+  vec4 v = uInvProj * ndc;
+  v /= v.w;
+  return (uInvView * v).xyz;
+}
+
+vec3 aces(vec3 x) {
+  const float a = 2.51, b = 0.03, c = 2.43, d = 0.59, e = 0.14;
+  return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
+}
+
+void main() {
+  vec2 uv = vUv;
+  vec3 col = texture2D(tColor, uv).rgb;
+  float depth = texture2D(tDepth, uv).r;
+  bool sky = depth >= 0.99999;
+
+  // --- atmospheric fog with sun in-scattering
+  vec3 wp = worldFromDepth(uv, sky ? 0.9999 : depth);
+  vec3 ray = wp - uCamPos;
+  float dist = length(ray);
+  vec3 rd = ray / max(dist, 1e-3);
+  float sunAmt = pow(max(dot(rd, uSunDir), 0.0), 6.0);
+  vec3 fogCol = mix(uFogColor, uSunGlow * 1.2 + uFogColor * 0.6, sunAmt);
+  if (!sky) {
+    float hgt = exp(-max(wp.y - 2.0, 0.0) * uFogHeight);
+    float f = 1.0 - exp(-dist * uFogDensity * (0.55 + 0.45 * hgt));
+    f = min(f, uFogMax);
+    col = mix(col, fogCol, f);
+  }
+
+  // --- outlines from depth discontinuities (pixel-art edge darkening)
+  if (uOutline > 0.0 && !sky) {
+    float ld = dist;
+    vec2 px = 1.0 / uRes;
+    float dmin = 1.0;
+    for (int i = 0; i < 4; i++) {
+      vec2 o = i == 0 ? vec2(px.x, 0.0) : i == 1 ? vec2(-px.x, 0.0) : i == 2 ? vec2(0.0, px.y) : vec2(0.0, -px.y);
+      float nd = texture2D(tDepth, uv + o).r;
+      vec3 nwp = worldFromDepth(uv + o, min(nd, 0.9999));
+      float ndist = length(nwp - uCamPos);
+      // neighbour is much further away -> we're on a silhouette edge
+      if (ndist > ld * 1.18 + 0.6) dmin = min(dmin, 0.0);
+    }
+    float edgeK = (1.0 - dmin) * uOutline * (1.0 - smoothstep(30.0, 140.0, ld));
+    col *= 1.0 - edgeK * 0.42;
+  }
+
+  // --- god rays: radial march of the bright sky towards the sun
+  if (uRays > 0.0 && uSunVisible > 0.0) {
+    vec2 delta = (uSunScreen - uv);
+    float dl = length(delta);
+    const int N = 40;
+    vec2 stepv = delta / float(N) * min(1.0, 0.85 / max(dl, 1e-3));
+    vec2 p = uv;
+    float acc = 0.0, w = 1.0;
+    float jit = bayer4(gl_FragCoord.xy);
+    p += stepv * jit;
+    for (int i = 0; i < N; i++) {
+      p += stepv;
+      if (p.x < 0.0 || p.y < 0.0 || p.x > 1.0 || p.y > 1.0) break;
+      float sd = texture2D(tDepth, p).r;
+      if (sd >= 0.99999) {
+        vec3 sc = texture2D(tColor, p).rgb;
+        acc += w * smoothstep(0.6, 2.2, dot(sc, vec3(0.33)));
+      }
+      w *= 0.965;
+    }
+    acc /= float(N);
+    float aspectFix = 1.0 - smoothstep(0.0, 1.1, dl);
+    col += uSunColor * uSunGlow * acc * uRays * 2.6 * aspectFix * uSunVisible;
+  }
+
+  // --- bloom
+  col += texture2D(tBloom, uv).rgb * uBloom;
+
+  // --- exposure & tonemap
+  col *= uExposure;
+  col = aces(col);
+
+  // --- grading: split toning, contrast, saturation
+  float l = dot(col, vec3(0.299, 0.587, 0.114));
+  col = mix(col, col * uShadowTint * 1.4, (1.0 - smoothstep(0.0, 0.45, l)) * 0.55);
+  col = mix(col, col * uHighTint, smoothstep(0.45, 1.0, l) * 0.6);
+  col = (col - 0.5) * uContrast + 0.5;
+  l = dot(col, vec3(0.299, 0.587, 0.114));
+  col = mix(vec3(l), col, uSaturation);
+  // cold, desaturated blue for the freezing intro
+  col = mix(col, vec3(l * 0.75, l * 0.85, l * 1.15), uCold);
+
+  // vignette
+  vec2 vc = uv - 0.5;
+  col *= 1.0 - dot(vc, vc) * uVignette;
+
+  // fade & flash
+  col = mix(col, uFadeColor, uFade);
+  col = mix(col, vec3(1.0), uFlash);
+
+  // --- linear -> sRGB, then ordered dither + quantise (pixel-art palette feel)
+  col = clamp(col, 0.0, 1.0);
+  col = pow(col, vec3(1.0 / 2.2));
+  float b = bayer4(gl_FragCoord.xy) - 0.5;
+  col = floor(col * uLevels + 0.5 + b * 0.85) / uLevels;
+  gl_FragColor = vec4(col, 1.0);
+}
+`;
+
+export class Pipeline {
+  constructor(canvas) {
+    this.canvas = canvas;
+    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance', alpha: false, stencil: false });
+    this.renderer.setPixelRatio(1);
+    this.renderer.autoClear = true;
+    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.type = THREE.BasicShadowMap;
+    this.renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
+    this.renderer.toneMapping = THREE.NoToneMapping;
+    this.pixelScale = 3;
+    this.reflections = true;
+    this.fsCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+    this.fsGeo = new THREE.PlaneGeometry(2, 2);
+    this.fsMesh = new THREE.Mesh(this.fsGeo);
+    this.fsMesh.frustumCulled = false;
+    this.fsScene = new THREE.Scene();
+    this.fsScene.add(this.fsMesh);
+
+    this.brightMat = new THREE.ShaderMaterial({
+      uniforms: { tColor: { value: null }, uTexel: { value: new THREE.Vector2() }, uThreshold: { value: 0.95 } },
+      vertexShader: FS_VERT, fragmentShader: BRIGHT_FRAG, depthTest: false, depthWrite: false,
+    });
+    this.blurMat = new THREE.ShaderMaterial({
+      uniforms: { tColor: { value: null }, uDir: { value: new THREE.Vector2() } },
+      vertexShader: FS_VERT, fragmentShader: BLUR_FRAG, depthTest: false, depthWrite: false,
+    });
+    this.post = {
+      uRes: { value: new THREE.Vector2() },
+      uInvProj: { value: new THREE.Matrix4() },
+      uInvView: { value: new THREE.Matrix4() },
+      uCamPos: { value: new THREE.Vector3() },
+      uSunDir: G.uSunDir,
+      uSunColor: G.uSunColor,
+      uFogColor: { value: new THREE.Color(0.8, 0.6, 0.7) },
+      uSunGlow: SKY.uSunGlow,
+      uSunScreen: { value: new THREE.Vector2(0.5, 0.5) },
+      uSunVisible: { value: 0 },
+      uFogDensity: { value: 0.006 },
+      uFogHeight: { value: 0.04 },
+      uFogMax: { value: 0.85 },
+      uRays: { value: 1 },
+      uBloom: { value: 0.6 },
+      uExposure: { value: 1.0 },
+      uSaturation: { value: 1.12 },
+      uContrast: { value: 1.06 },
+      uShadowTint: { value: new THREE.Color(0.75, 0.62, 0.95) },
+      uHighTint: { value: new THREE.Color(1.06, 0.98, 0.88) },
+      uVignette: { value: 0.9 },
+      uLevels: { value: 40 },
+      uOutline: { value: 1 },
+      uFade: { value: 0 },
+      uFadeColor: { value: new THREE.Color(0, 0, 0) },
+      uFlash: { value: 0 },
+      uTime: G.uTime,
+      uCold: { value: 0 },
+      tColor: { value: null },
+      tDepth: { value: null },
+      tBloom: { value: null },
+    };
+    this.compMat = new THREE.ShaderMaterial({
+      uniforms: this.post, vertexShader: FS_VERT, fragmentShader: COMP_FRAG, depthTest: false, depthWrite: false,
+    });
+    this.reflCam = new THREE.PerspectiveCamera();
+    this.reflUniforms = {
+      tRefl: { value: null },
+      uReflMatrix: { value: new THREE.Matrix4() },
+    };
+    this.resize();
+  }
+
+  makeTargets() {
+    const { w, h } = this;
+    this.sceneRT?.dispose();
+    this.reflRT?.dispose();
+    this.bloomA?.dispose();
+    this.bloomB?.dispose();
+    const depthTexture = new THREE.DepthTexture(w, h);
+    depthTexture.type = THREE.UnsignedIntType;
+    this.sceneRT = new THREE.WebGLRenderTarget(w, h, {
+      type: THREE.HalfFloatType, minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, depthTexture, depthBuffer: true,
+    });
+    const rw = Math.max(2, Math.floor(w * 0.75)), rh = Math.max(2, Math.floor(h * 0.75));
+    this.reflRT = new THREE.WebGLRenderTarget(rw, rh, { type: THREE.HalfFloatType, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, depthBuffer: true });
+    const bw = Math.max(2, Math.floor(w / 4)), bh = Math.max(2, Math.floor(h / 4));
+    this.bloomA = new THREE.WebGLRenderTarget(bw, bh, { type: THREE.HalfFloatType, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, depthBuffer: false });
+    this.bloomB = this.bloomA.clone();
+    this.reflUniforms.tRefl.value = this.reflRT.texture;
+  }
+
+  resize() {
+    const W = window.innerWidth, H = window.innerHeight;
+    const s = this.pixelScale;
+    this.w = Math.ceil(W / s);
+    this.h = Math.ceil(H / s);
+    this.renderer.setSize(this.w, this.h, false);
+    this.canvas.style.width = `${this.w * s}px`;
+    this.canvas.style.height = `${this.h * s}px`;
+    this.post.uRes.value.set(this.w, this.h);
+    this.makeTargets();
+  }
+
+  setPixelScale(s) {
+    this.pixelScale = s;
+    this.resize();
+  }
+
+  fs(material, target) {
+    this.fsMesh.material = material;
+    this.renderer.setRenderTarget(target);
+    this.renderer.render(this.fsScene, this.fsCam);
+  }
+
+  renderReflection(scene, camera, waterY = 0) {
+    const rc = this.reflCam;
+    rc.copy(camera);
+    // mirror camera across the water plane (same construction as three's Reflector)
+    const p = camera.position.clone();
+    const target = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion).add(p);
+    p.y = 2 * waterY - p.y;
+    target.y = 2 * waterY - target.y;
+    rc.position.copy(p);
+    rc.up.set(0, 1, 0).applyQuaternion(camera.quaternion);
+    rc.up.y = -rc.up.y;
+    rc.lookAt(target);
+    rc.scale.set(1, 1, 1);
+    rc.updateMatrixWorld();
+    rc.projectionMatrix.copy(camera.projectionMatrix);
+    rc.projectionMatrixInverse.copy(camera.projectionMatrixInverse);
+    // texture matrix: world -> refl uv
+    const m = this.reflUniforms.uReflMatrix.value;
+    m.set(0.5, 0, 0, 0.5, 0, 0.5, 0, 0.5, 0, 0, 0.5, 0.5, 0, 0, 0, 1);
+    m.multiply(rc.projectionMatrix).multiply(rc.matrixWorldInverse);
+    G.uClipY.value = waterY - 0.05;
+    const prevMask = rc.layers.mask;
+    rc.layers.set(0);
+    rc.layers.enable(2); // reflection-visible extras
+    rc.layers.disable(1); // no water, no grass in reflections
+    this.renderer.setRenderTarget(this.reflRT);
+    this.renderer.render(scene, rc);
+    rc.layers.mask = prevMask;
+    G.uClipY.value = -1e5;
+  }
+
+  render(scene, camera) {
+    const r = this.renderer;
+    camera.updateMatrixWorld();
+    G.uCamPos.value.copy(camera.position);
+    r.shadowMap.autoUpdate = false;
+    if (this.reflections) {
+      r.shadowMap.needsUpdate = false;
+      this.renderReflection(scene, camera, 0);
+    }
+    r.shadowMap.needsUpdate = true;
+    r.setRenderTarget(this.sceneRT);
+    r.render(scene, camera);
+
+    // bloom
+    this.brightMat.uniforms.tColor.value = this.sceneRT.texture;
+    this.brightMat.uniforms.uTexel.value.set(1 / this.w, 1 / this.h);
+    this.fs(this.brightMat, this.bloomA);
+    const bw = this.bloomA.width, bh = this.bloomA.height;
+    for (let i = 0; i < 2; i++) {
+      this.blurMat.uniforms.tColor.value = this.bloomA.texture;
+      this.blurMat.uniforms.uDir.value.set((1 + i) / bw, 0);
+      this.fs(this.blurMat, this.bloomB);
+      this.blurMat.uniforms.tColor.value = this.bloomB.texture;
+      this.blurMat.uniforms.uDir.value.set(0, (1 + i) / bh);
+      this.fs(this.blurMat, this.bloomA);
+    }
+
+    // composite
+    const P = this.post;
+    P.tColor.value = this.sceneRT.texture;
+    P.tDepth.value = this.sceneRT.depthTexture;
+    P.tBloom.value = this.bloomA.texture;
+    P.uInvProj.value.copy(camera.projectionMatrixInverse);
+    P.uInvView.value.copy(camera.matrixWorld);
+    P.uCamPos.value.copy(camera.position);
+    const sp = camera.position.clone().addScaledVector(G.uSunDir.value, 1000).project(camera);
+    P.uSunScreen.value.set(sp.x * 0.5 + 0.5, sp.y * 0.5 + 0.5);
+    const facing = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion).dot(G.uSunDir.value);
+    P.uSunVisible.value = Math.max(0, Math.min(1, (facing + 0.1) * 3)) * Math.max(0, Math.min(1, G.uSunDir.value.y * 8 + 0.4));
+    this.fs(this.compMat, null);
+  }
+}

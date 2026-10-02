@@ -1,0 +1,109 @@
+@import '@fontsource/pixelify-sans/400.css';
+@import '@fontsource/pixelify-sans/600.css';
+@import '@fontsource/pixelify-sans/700.css';
+@import '@fontsource/silkscreen/400.css';
+
+:root {
+  --ink: #2a1a14;
+  --paper: #f6e7c8;
+  --paper-2: #ead2a4;
+  --wood: #6b3d22;
+  --wood-dark: #3e2214;
+  --gold: #f2c443;
+  --gold-dark: #a86d1c;
+  --cocoa: #5a2e1c;
+  --cream: #fff4dc;
+  --red: #c8361f;
+  --orange: #e2622a;
+  --teal: #2f6d68;
+  --shadow: rgba(20, 8, 10, 0.55);
+  --px: 3px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #120a10;
+  color: var(--cream);
+  font-family: 'Pixelify Sans', 'Silkscreen', monospace;
+  -webkit-font-smoothing: none;
+  font-smooth: never;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+
+#stage {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+}
+
+#game {
+  position: absolute;
+  left: 0;
+  top: 0;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  display: block;
+}
+
+#ui {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 5;
+}
+
+#boot {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(ellipse at center, #3a1e22 0%, #120a10 70%);
+  transition: opacity 0.8s;
+}
+#boot.gone {
+  opacity: 0;
+  pointer-events: none;
+}
+.boot-inner {
+  text-align: center;
+}
+.boot-title {
+  font-family: 'Pixelify Sans', monospace;
+  font-weight: 700;
+  font-size: 56px;
+  letter-spacing: 4px;
+  color: #ffb347;
+  text-shadow: 4px 4px 0 #6b2414, 8px 8px 0 #2a0e0a;
+}
+.boot-sub {
+  margin-top: 12px;
+  font-size: 20px;
+  color: #e8c8a0;
+}
+.boot-bar {
+  margin: 22px auto 0;
+  width: 300px;
+  height: 18px;
+  border: 3px solid #e8c8a0;
+  background: #2a1414;
+  padding: 3px;
+}
+.boot-fill {
+  height: 100%;
+  width: 0%;
+  background: repeating-linear-gradient(90deg, #ff9a3c 0 9px, #ffb347 9px 18px);
+  transition: width 0.2s;
+}
