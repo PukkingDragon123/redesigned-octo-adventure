@@ -20,9 +20,9 @@ import { G, worldUniforms, LIGHT_PARS_VERT, SHADOW_VERT, LIGHT_PARS_FRAG, NOISE_
 const POLICY = {
   tree: { d: [18, 40, 80], imp: Infinity, cast: [1, 1, 0], far: 3 },
   dead: { d: [18, 40, 80], imp: Infinity, cast: [1, 1, 0], far: 3 },
-  bush: { d: [16, 34, 70], imp: 200, cast: [1, 1, 0], far: 4 },
-  sapling: { d: [12, 28, 56], imp: 130, cast: [1, 0, 0], far: 4 },
-  fern: { d: [12, 26, 50], imp: 0, cast: [1, 0, 0], far: 4 },
+  bush: { d: [16, 34, 70], imp: 200, cast: [1, 1, 0], far: 6 },
+  sapling: { d: [12, 28, 56], imp: 130, cast: [1, 0, 0], far: 6 },
+  fern: { d: [12, 26, 50], imp: 0, cast: [1, 0, 0], far: 6 },
   stump: { d: [12, 28, 56], imp: 0, cast: [1, 1, 0], far: 3 },
   log: { d: [15, 34, 70], imp: 0, cast: [1, 1, 0], far: 3 },
   mushroom: { d: [7, 15, 28], imp: 0, cast: [1, 0, 0], far: 4 },
@@ -266,13 +266,18 @@ function bakeAll(jobs, onProgress) {
   });
 }
 
+// static model buffers live on the GPU only (bounds are set by hand below)
+function releaseArray() {
+  this.array = null;
+}
 function makeGeometry(L) {
   const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.BufferAttribute(L.pos, 3));
-  g.setAttribute('normal', new THREE.BufferAttribute(L.nor, 3, true));
-  g.setAttribute('aColor', new THREE.BufferAttribute(L.col, 4, true));
-  g.setAttribute('aSway', new THREE.BufferAttribute(L.sway, 1, true));
-  g.setIndex(new THREE.BufferAttribute(L.index, 1));
+  const attr = (a, n, norm) => new THREE.BufferAttribute(a, n, norm).onUpload(releaseArray);
+  g.setAttribute('position', attr(L.pos, 3, false));
+  g.setAttribute('normal', attr(L.nor, 3, true));
+  g.setAttribute('aColor', attr(L.col, 4, true));
+  g.setAttribute('aSway', attr(L.sway, 1, true));
+  g.setIndex(attr(L.index, 1, false));
   const [x0, y0, z0, x1, y1, z1] = L.bounds;
   g.boundingBox = new THREE.Box3(new THREE.Vector3(x0, y0, z0), new THREE.Vector3(x1, y1, z1));
   g.boundingSphere = g.boundingBox.getBoundingSphere(new THREE.Sphere());
@@ -460,6 +465,27 @@ export class VoxelForest {
       c.ymax = Math.max(c.ymax, this.Y[i]);
     }
     this.cells = [...cells.values()].map((c) => ({ ...c, list: Int32Array.from(c.list), y: (c.ymin + c.ymax) / 2, r: CELL * 0.7072 + c.rmax + (c.ymax - c.ymin) / 2 }));
+    // far cells copy ready-made impostor lists: every tree (impT), or every
+    // tree, bush and sapling while closer than the nearest such cut-off (impA)
+    for (const c of this.cells) {
+      const pick = (f) => {
+        const ids = [...c.list].filter(f);
+        const pos = new Float32Array(ids.length * 3), info = new Float32Array(ids.length * 4);
+        ids.forEach((i, k) => {
+          const M = this.models[this.MOD[i]];
+          pos.set([this.X[i], this.MAT[i * 16 + 13], this.Z[i]], k * 3);
+          info.set([M.far.index, this.YAW[i], this.SC[i], this.TINT[i]], k * 4);
+        });
+        return { pos, info, n: ids.length };
+      };
+      const imps = [...c.list].map((i) => this.models[this.MOD[i]].policy.imp);
+      c.impT = pick((i) => this.models[this.MOD[i]].policy.imp === Infinity);
+      c.impA = pick((i) => this.models[this.MOD[i]].policy.imp > 0);
+      const finite = imps.filter((v) => v > 0 && v < Infinity);
+      c.impMin = finite.length ? Math.min(...finite) : Infinity;
+      c.impMax = finite.length ? Math.max(...finite) : 0;
+    }
+    this.farD = Math.max(...Object.values(POLICY).map((P) => P.d[2]));
 
     // ---- instance pools: [model][lod]
     const counts = this.models.map(() => [0, 0, 0]);
@@ -620,6 +646,15 @@ export class VoxelForest {
       if (wide) return a > -r || b > -r;
       return a > -r && b > -r && px * fx + pz * fz > -r;
     };
+    // the whole sphere inside the view wedge
+    const inside = (x, z, r) => {
+      if (all) return true;
+      const px = x - cx, pz = z - cz;
+      const a = px * N1x + pz * N1z, b = px * N2x + pz * N2z;
+      if (wide) return a > r || b > r;
+      return a > r && b > r;
+    };
+    const farD = this.farD * S * (1 + HYST);
     for (const row of this.pools) for (const p of row) if (p) p.n = 0;
     for (const p of this.proxies) if (p) p.n = 0;
     // shadows fall away from the sun: out-of-view trees only matter when theirs can reach the view
@@ -637,6 +672,18 @@ export class VoxelForest {
       const cd = Math.hypot(ddx, ddz, c.y - cy);
       const cellIn = inView(c.x, c.z, c.r);
       if (!cellIn && cd - c.r > SHADOW_R) continue;
+      if (cellIn && iPos && cd - c.r > farD && inside(c.x, c.z, c.r)) {
+        const src = cd + c.r < c.impMin * S ? c.impA : cd - c.r > c.impMax * S ? c.impT : null;
+        if (src) {
+          iPos.set(src.pos, ni * 3);
+          iInfo.set(src.info, ni * 4);
+          ni += src.n;
+          c.bulk = true;
+          continue;
+        }
+      }
+      const wasBulk = c.bulk;
+      c.bulk = false;
       const list = c.list;
       for (let q = 0; q < list.length; q++) {
         const i = list[q];
@@ -647,7 +694,7 @@ export class VoxelForest {
         const d = Math.sqrt(ex * ex + ey * ey + ez * ez);
         const vis = d < r + 3 || (cellIn && inView(x, z, r));
         // lod with hysteresis around the current one
-        const cur = LOD[i];
+        const cur = wasBulk ? 3 : LOD[i];
         let lod = 0;
         const D = P.d;
         for (let k = 0; k < 3; k++) {

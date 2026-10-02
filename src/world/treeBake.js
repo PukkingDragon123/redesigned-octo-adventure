@@ -10,7 +10,6 @@
 // }
 // col alpha: 255 leaf, 160 loose falling leaf, 64 glowing, 0 wood.
 import { buildTreeLods, LEAF, FALL } from '../voxel/models/trees.js';
-import { meshVox } from '../voxel/mesh.js';
 import { EMIT } from '../voxel/vox.js';
 
 export const SWAY_MAX = 0.4; // metres of sway at aSway = 1
@@ -36,42 +35,133 @@ function crop(vox, origin) {
   return { vox: out, origin: [origin[0] - b.x0, origin[1] - b.y0, origin[2] - b.z0] };
 }
 
-function pack(vox, size, origin, meta) {
-  const geo = meshVox(vox, { size, origin, greedy: true });
-  const P = geo.attributes.position.array, N = geo.attributes.normal.array, C = geo.attributes.color4.array;
-  const I = geo.index.array;
-  const nv = P.length / 3;
-  const pos = new Int16Array(nv * 3), nor = new Int8Array(nv * 3), col = new Uint8Array(nv * 4), sway = new Uint8Array(nv);
-  const inv = 1 / size;
-  const y0 = meta.swayY0 ?? 0, top = Math.max(y0 + 0.5, meta.height ?? 1);
-  const amp = (meta.sway ?? 0) / SWAY_MAX;
+// AO levels as in mesh.js, folded into sRGB lookup tables per channel value
+const AO = [0.48, 0.66, 0.83, 1.0];
+const SR = [];
+for (let k = 0; k < 4; k++) {
+  const t = new Uint8Array(256);
+  for (let i = 0; i < 256; i++) {
+    const c = i / 255;
+    t[i] = toSrgb((c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4)) * AO[k]);
+  }
+  SR.push(t);
+}
+
+const TRI = [[0, 1, 2, 0, 2, 3], [1, 2, 3, 1, 3, 0], [3, 2, 0, 2, 1, 0], [0, 3, 1, 3, 2, 1]];
+
+// growable typed buffer
+class Buf {
+  constructor(T, n) { this.T = T; this.a = new T(n); this.n = 0; }
+  need(k) { if (this.n + k > this.a.length) { const b = new this.T(Math.max(this.a.length * 2, this.n + k)); b.set(this.a); this.a = b; } }
+  get out() { return this.a.slice(0, this.n); }
+}
+
+// Greedy voxel mesher writing the forest's compact vertex format directly. Same
+// faces, per-corner AO, merge rule and diagonal flip as mesh.js; positions are
+// integer voxel corners relative to the (integer) origin.
+function meshPacked(vox, size, origin, meta) {
+  const W = vox.w, H = vox.h, D = vox.d, data = vox.data;
+  const dims = [W, H, D], stride = [1, W, W * H];
   const [ox, oy, oz] = origin;
-  const D = vox.data, W = vox.w, H = vox.h;
+  const pos = new Buf(Int16Array, 1 << 14), nor = new Buf(Int8Array, 1 << 14), col = new Buf(Uint8Array, 1 << 15), sw = new Buf(Uint8Array, 1 << 12), idx = new Buf(Uint32Array, 1 << 14);
+  const y0 = meta.swayY0 ?? 0, top = Math.max(y0 + 0.5, meta.height ?? 1);
+  const amp = Math.min(1, (meta.sway ?? 0) / SWAY_MAX);
+  const swayT = new Uint8Array(H + 1);
+  for (let iy = 0; iy <= H; iy++) {
+    const t = Math.max(0, Math.min(1, ((iy - oy) * size - y0) / (top - y0)));
+    swayT[iy] = Math.round(Math.min(1, Math.pow(t, 1.4) * amp) * 255);
+  }
+  let nv = 0;
   let bx0 = 1e9, by0 = 1e9, bz0 = 1e9, bx1 = -1e9, by1 = -1e9, bz1 = -1e9;
-  for (let q = 0; q < nv; q += 4) {
-    // the voxel behind this quad (its flags decide leaf / glow)
-    let cx = 0, cy = 0, cz = 0;
-    for (let k = 0; k < 4; k++) { cx += P[(q + k) * 3]; cy += P[(q + k) * 3 + 1]; cz += P[(q + k) * 3 + 2]; }
-    const nx = N[q * 3], ny = N[q * 3 + 1], nz = N[q * 3 + 2];
-    const vx = Math.floor(cx * 0.25 * inv + ox - nx * 0.5), vy = Math.floor(cy * 0.25 * inv + oy - ny * 0.5), vz = Math.floor(cz * 0.25 * inv + oz - nz * 0.5);
-    const c = D[vx + W * (vy + H * vz)] | 0;
-    const flag = c & FALL ? 160 : c & LEAF ? 255 : c & EMIT ? 64 : 0;
-    for (let k = q; k < q + 4; k++) {
-      const x = P[k * 3], y = P[k * 3 + 1], z = P[k * 3 + 2];
-      const ix = Math.round(x * inv), iy = Math.round(y * inv), iz = Math.round(z * inv);
-      pos[k * 3] = ix; pos[k * 3 + 1] = iy; pos[k * 3 + 2] = iz;
-      if (ix < bx0) bx0 = ix; if (ix > bx1) bx1 = ix;
-      if (iy < by0) by0 = iy; if (iy > by1) by1 = iy;
-      if (iz < bz0) bz0 = iz; if (iz > bz1) bz1 = iz;
-      nor[k * 3] = nx * 127; nor[k * 3 + 1] = ny * 127; nor[k * 3 + 2] = nz * 127;
-      col[k * 4] = toSrgb(C[k * 4]); col[k * 4 + 1] = toSrgb(C[k * 4 + 1]); col[k * 4 + 2] = toSrgb(C[k * 4 + 2]);
-      col[k * 4 + 3] = flag;
-      const t = Math.max(0, Math.min(1, (y - y0) / (top - y0)));
-      sway[k] = Math.round(Math.min(1, Math.pow(t, 1.4) * amp) * 255);
+  const pt = [0, 0, 0];
+  for (let a = 0; a < 3; a++) {
+    const u = (a + 1) % 3, v = (a + 2) % 3;
+    const du = dims[u], dv = dims[v], da = dims[a];
+    const sa = stride[a], su = stride[u], sv = stride[v];
+    const maskC = new Uint32Array(du * dv), maskA = new Uint8Array(du * dv);
+    for (let s = -1; s <= 1; s += 2) {
+      for (let sl = 0; sl < da; sl++) {
+        const front = sl + s;
+        const hasFront = front >= 0 && front < da;
+        let any = false;
+        for (let j = 0; j < dv; j++) {
+          for (let i = 0; i < du; i++) {
+            const m = i + j * du;
+            const p = sl * sa + i * su + j * sv;
+            const c = data[p];
+            maskC[m] = 0;
+            if (!c) continue;
+            if (hasFront && data[p + s * sa]) continue;
+            let ao = 0;
+            if (hasFront && !(c & EMIT)) {
+              const f = p + s * sa;
+              const um = i > 0, up = i < du - 1, vm = j > 0, vp = j < dv - 1;
+              const s1m = um && data[f - su] ? 1 : 0, s1p = up && data[f + su] ? 1 : 0;
+              const s2m = vm && data[f - sv] ? 1 : 0, s2p = vp && data[f + sv] ? 1 : 0;
+              const cmm = um && vm && data[f - su - sv] ? 1 : 0, cpm = up && vm && data[f + su - sv] ? 1 : 0;
+              const cpp = up && vp && data[f + su + sv] ? 1 : 0, cmp = um && vp && data[f - su + sv] ? 1 : 0;
+              const v0 = s1m && s2m ? 0 : 3 - (s1m + s2m + cmm);
+              const v1 = s1p && s2m ? 0 : 3 - (s1p + s2m + cpm);
+              const v2 = s1p && s2p ? 0 : 3 - (s1p + s2p + cpp);
+              const v3 = s1m && s2p ? 0 : 3 - (s1m + s2p + cmp);
+              ao = v0 | (v1 << 2) | (v2 << 4) | (v3 << 6);
+            } else ao = 255;
+            maskC[m] = c;
+            maskA[m] = ao;
+            any = true;
+          }
+        }
+        if (!any) continue;
+        const plane = s > 0 ? sl + 1 : sl;
+        for (let j = 0; j < dv; j++) {
+          for (let i = 0; i < du;) {
+            const m = i + j * du, c = maskC[m];
+            if (!c) { i++; continue; }
+            const ao = maskA[m];
+            let w = 1, h = 1;
+            while (i + w < du && maskC[m + w] === c && maskA[m + w] === ao) w++;
+            outer: for (; j + h < dv; h++) {
+              for (let k = 0; k < w; k++) {
+                const mm = i + k + (j + h) * du;
+                if (maskC[mm] !== c || maskA[mm] !== ao) break outer;
+              }
+            }
+            for (let jj = 0; jj < h; jj++) maskC.fill(0, i + (j + jj) * du, i + w + (j + jj) * du);
+            // emit the quad
+            pos.need(12); nor.need(12); col.need(16); sw.need(4); idx.need(6);
+            const flag = c & FALL ? 160 : c & LEAF ? 255 : c & EMIT ? 64 : 0;
+            const r = (c >> 16) & 255, g = (c >> 8) & 255, b = c & 255;
+            for (let k = 0; k < 4; k++) {
+              pt[a] = plane;
+              pt[u] = k === 1 || k === 2 ? i + w : i;
+              pt[v] = k >= 2 ? j + h : j;
+              const x = pt[0] - ox, y = pt[1] - oy, z = pt[2] - oz;
+              const po = pos.n;
+              pos.a[po] = x; pos.a[po + 1] = y; pos.a[po + 2] = z; pos.n += 3;
+              if (x < bx0) bx0 = x; if (x > bx1) bx1 = x;
+              if (y < by0) by0 = y; if (y > by1) by1 = y;
+              if (z < bz0) bz0 = z; if (z > bz1) bz1 = z;
+              const no = nor.n;
+              nor.a[no] = a === 0 ? s * 127 : 0; nor.a[no + 1] = a === 1 ? s * 127 : 0; nor.a[no + 2] = a === 2 ? s * 127 : 0; nor.n += 3;
+              const lv = ao === 255 ? 3 : (ao >> (k * 2)) & 3;
+              const T = SR[lv], co = col.n;
+              col.a[co] = T[r]; col.a[co + 1] = T[g]; col.a[co + 2] = T[b]; col.a[co + 3] = flag; col.n += 4;
+              sw.a[sw.n++] = swayT[pt[1]];
+            }
+            // flip the diagonal so AO gradients don't crease
+            const a0 = (ao >> 0) & 3, a1 = (ao >> 2) & 3, a2 = (ao >> 4) & 3, a3 = (ao >> 6) & 3;
+            const flip = ao !== 255 && a0 + a2 < a1 + a3;
+            const t = TRI[(flip ? 1 : 0) + (s < 0 ? 2 : 0)];
+            for (let q = 0; q < 6; q++) idx.a[idx.n++] = nv + t[q];
+            nv += 4;
+            i += w;
+          }
+        }
+      }
     }
   }
-  const index = nv > 65535 ? new Uint32Array(I) : new Uint16Array(I);
-  return { size, pos, nor, col, sway, index, faces: I.length / 6, bounds: [bx0, by0, bz0, bx1, by1, bz1] };
+  const index = nv > 65535 ? idx.out : Uint16Array.from(idx.a.subarray(0, idx.n));
+  return { size, pos: pos.out, nor: nor.out, col: col.out, sway: sw.out, index, faces: idx.n / 6, bounds: [bx0, by0, bz0, bx1, by1, bz1] };
 }
 
 // Impostor views of a grid, looking at the model from +z, +x, -z and -x.
@@ -136,7 +226,7 @@ export function bakeTree({ species, seed, lods = 3, impostor = false }) {
   const out = { key: `${species}:${seed}`, species, seed, meta: r.meta, lods: [], views: null };
   for (const L of r.lods) {
     const c = crop(L.vox, L.origin);
-    out.lods.push(pack(c.vox, L.size, c.origin, r.meta));
+    out.lods.push(meshPacked(c.vox, L.size, c.origin, r.meta));
   }
   if (impostor) {
     const L = r.lods[Math.min(1, r.lods.length - 1)];

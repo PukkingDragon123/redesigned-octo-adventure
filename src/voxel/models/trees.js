@@ -88,8 +88,8 @@ const LEAF_P = {
   birchLime: [0x6a721e, 0x909826, 0xb6b432, 0xd6ce46, 0xeee870],
   aspen: [0x9a7414, 0xc49a1e, 0xe2bc2c, 0xf4d644, 0xfff07c],
   aspenGold: [0xa8601a, 0xd08222, 0xeca630, 0xf8c848, 0xffe480],
-  spruce: [0x12261e, 0x1c3a2a, 0x2a5234, 0x3c6c40, 0x5a8c50],
-  spruceBlue: [0x10282c, 0x1a3c3c, 0x28544c, 0x3a6e5e, 0x5a8c78],
+  spruce: [0x14261c, 0x1e3a26, 0x2c522e, 0x406c3a, 0x5e8c4a],
+  spruceBlue: [0x14282a, 0x1e3c36, 0x2c5442, 0x406e52, 0x5e8c68],
   spruceWarm: [0x1a2c1a, 0x284222, 0x3a5c2a, 0x507a36, 0x6c9844],
   pine: [0x1c3018, 0x2a4420, 0x3c5e28, 0x527a32, 0x6e9842],
   pineDeep: [0x162e1e, 0x224228, 0x325c32, 0x48783c, 0x64964a],
@@ -107,12 +107,12 @@ const LEAF_P = {
 };
 // bark: [fissure, dark, main, light, highlight]
 const BARK = {
-  maple: [0x3a2c26, 0x544238, 0x6c5646, 0x846e58, 0x9a866c],
-  oak: [0x30261e, 0x463a2e, 0x5e4c3c, 0x76624e, 0x8c7860],
+  maple: [0x2e221e, 0x4e3c32, 0x6a5444, 0x86705a, 0xa08a70],
+  oak: [0x261e18, 0x42362a, 0x5c4a3a, 0x78644e, 0x927e64],
   birch: [0x2a2422, 0xc6c0b2, 0xdcd6c8, 0xece6d8, 0xf8f2e4],
   aspen: [0x34322a, 0xb8bea6, 0xd0d4bc, 0xe0e4ce, 0xeef0de],
-  spruce: [0x38221a, 0x50321f, 0x684430, 0x80583e, 0x946a4a],
-  pine: [0x44281a, 0x663a24, 0x865032, 0xa26840, 0xb87c4e],
+  spruce: [0x2e1c16, 0x4a301e, 0x64422e, 0x7e583e, 0x946c4c],
+  pine: [0x3a2218, 0x5c3622, 0x7a4a30, 0x96603e, 0xae744c],
   tamarack: [0x3c261a, 0x563828, 0x704c36, 0x886044, 0x9e7452],
   dead: [0x2a2224, 0x443a3a, 0x5c524e, 0x746862, 0x8a7e76],
   stem: [0x3a2618, 0x523822, 0x6a4a2e, 0x82603c, 0x98744a],
@@ -224,32 +224,35 @@ function ball(g, c, r, col) {
   if (r < g.s * 0.6) g.put(c[0], c[1], c[2], col(c[0], c[1], c[2], 0), true);
 }
 
-// A clump of leaves: a lumpy ellipsoid with a darker belly and a sunlit cap,
-// see-through holes in its outer shell and a few stray leaves past the edge.
-// b: { c, rx, ry, base (tone 0..4), P (palette), seed }
-const DBG = globalThis.__treeDbg || {};
+// A clump of leaves: a lumpy ellipsoid broken into leaf-sized bumps. Bumps
+// catch the light, crevices between them go dark, the belly is shaded, a few
+// see-through holes open in the outer shell and stray leaves stick out.
+// b: { c, rx, ry, rz?, base (tone 0..4), P (palette), seed }
 function leafClump(g, b, o = {}) {
-  o = { ...o, ...DBG };
   const { c, rx, ry, P, seed } = b;
   const rz = b.rz ?? rx;
-  const lump = o.lump ?? 0.22, lf = (o.lf ?? 1.3) / Math.max(0.5, Math.min(rx, 1.4)), holes = o.holes ?? 0.3, hf = o.hf ?? 2.4;
-  const rag = o.rag ?? 0.015, belly = o.belly ?? 1.1, patch = o.patch ?? 1.3, spark = o.spark ?? 0.05;
-  const hthr = 1 - holes * 0.5;
-  const k = 1 + lump + 0.2;
+  const lump = o.lump ?? 0.2, lf = (o.lf ?? 1.3) / Math.max(0.5, Math.min(rx, 1.4));
+  const bump = o.bump ?? 0.16, bf = o.bf ?? 2.9;
+  const holes = o.holes ?? 0.3, hf = o.hf ?? 1.7;
+  const rag = o.rag ?? 0.012, belly = o.belly ?? 1.1, patch = o.patch ?? 1.0, spark = o.spark ?? 0.03;
+  const hthr = 1 - holes * 0.42;
+  const k = 1 + lump + bump + 0.16;
   const s = g.s;
   g.each(c[0] - rx * k, c[1] - ry * k, c[2] - rz * k, c[0] + rx * k, c[1] + ry * k, c[2] + rz * k, (x, y, z, i, j, kk) => {
     const dx = (x - c[0]) / rx, dy = (y - c[1]) / ry, dz = (z - c[2]) / rz;
     const e = Math.sqrt(dx * dx + dy * dy + dz * dz);
     if (e > k) return 0;
     const n1 = vnoise(x * lf, y * lf, z * lf, seed);
-    const thr = 1 + lump * (n1 * 2 - 1);
+    const n2 = bump ? vnoise(x * bf + 17.3, y * bf, z * bf, seed + 11) : 0.5;
+    const thr = 1 + lump * (n1 * 2 - 1) + bump * (n2 * 2 - 1);
     if (e > thr) {
       if (e < thr + 0.14 && dy > -0.5 && vhash(i, j, kk, seed) < rag) return P[ci(b.base + dy + 0.5)] | LEAF;
       return 0;
     }
-    if (holes && e > 0.45 && vnoise(x * hf + 31.7, y * hf, z * hf, seed + 7) > hthr) return 0;
-    let t = b.base + dy * belly + (n1 - 0.5) * patch;
-    if (dy > 0.2 && vhash(i, j, kk, seed + 3) < spark) t += 1;
+    if (holes && e > 0.5 && vnoise(x * hf + 31.7, y * hf, z * hf, seed + 7) > hthr) return 0;
+    // shade: belly dark, bumps lit, crevices dark
+    let t = b.base + dy * belly + (n1 - 0.5) * patch + (n2 - 0.5) * 2.2;
+    if (dy > 0.15 && vhash(i, j, kk, seed + 3) < spark) t += 1;
     return P[ci(t)] | LEAF;
   });
   if (Math.min(rx, ry) < s * 0.7) g.put(c[0], c[1], c[2], P[ci(b.base)] | LEAF, true);
@@ -319,17 +322,17 @@ function rootPlan(rng, trunkR, n, reach = 1) {
   const a0 = rng.range(0, TAU);
   for (let i = 0; i < n; i++) {
     const a = a0 + (i / n) * TAU + rng.range(-0.35, 0.35);
-    const L = (trunkR * 2.2 + rng.range(0.4, 1.0)) * reach;
-    const b = rng.range(-0.5, 0.5);
-    const r0 = trunkR * rng.range(0.38, 0.5);
+    const L = (trunkR * 1.5 + rng.range(0.25, 0.7)) * reach;
+    const b = rng.range(-0.45, 0.45);
+    const r0 = trunkR * rng.range(0.5, 0.62);
     out.push({
       pts: [
-        [Math.cos(a) * trunkR * 0.4, trunkR * 0.9, Math.sin(a) * trunkR * 0.4],
-        [Math.cos(a) * (trunkR + L * 0.35), r0 * 0.6, Math.sin(a) * (trunkR + L * 0.35)],
-        [Math.cos(a + b * 0.5) * (trunkR + L * 0.7), r0 * 0.15, Math.sin(a + b * 0.5) * (trunkR + L * 0.7)],
-        [Math.cos(a + b) * (trunkR + L), -r0 * 0.6, Math.sin(a + b) * (trunkR + L)],
+        [Math.cos(a) * trunkR * 0.3, trunkR * 1.1, Math.sin(a) * trunkR * 0.3],
+        [Math.cos(a) * (trunkR + L * 0.3), r0 * 0.75, Math.sin(a) * (trunkR + L * 0.3)],
+        [Math.cos(a + b * 0.5) * (trunkR + L * 0.65), r0 * 0.25, Math.sin(a + b * 0.5) * (trunkR + L * 0.65)],
+        [Math.cos(a + b) * (trunkR + L), -r0 * 0.7, Math.sin(a + b) * (trunkR + L)],
       ],
-      r: [r0, r0 * 0.7, r0 * 0.45, r0 * 0.25],
+      r: [r0, r0 * 0.8, r0 * 0.62, r0 * 0.48],
     });
   }
   return out;
@@ -354,7 +357,7 @@ function fallPlan(rng, n, R, y0, y1) {
 // ---------------------------------------------------------------- species
 // Variants i and i + 3 share a palette (the far LODs only keep variants 0-2).
 const SPECS = {
-  maple: { h: [7, 11], kind: 'broad', bark: 'maple', trunkK: 0.022, fork: 0.42, crownY: 0.66, crown: [0.36, 0.3], limbs: [3, 4], clumps: 24, clumpR: [0.26, 0.34], squash: 0.82, variants: [
+  maple: { h: [7, 10.5], kind: 'broad', bark: 'maple', trunkK: 0.022, fork: 0.42, crownY: 0.66, crown: [0.36, 0.3], limbs: [3, 4], clumps: 20, clumpR: [0.27, 0.35], squash: 0.82, variants: [
     { leaf: 'mapleRed', alt: 'mapleCrimson' },
     { leaf: 'mapleOrange', alt: 'mapleRed' },
     { leaf: 'mapleMix', alt: 'mapleGreen' },
@@ -362,7 +365,7 @@ const SPECS = {
     { leaf: 'mapleOrange', alt: 'mapleMix' },
     { leaf: 'mapleMix', alt: 'mapleCrimson' },
   ] },
-  maple2: { h: [6.5, 10], kind: 'broad', bark: 'maple', trunkK: 0.022, fork: 0.38, crownY: 0.64, crown: [0.4, 0.28], limbs: [3, 5], clumps: 22, clumpR: [0.27, 0.35], squash: 0.8, variants: [
+  maple2: { h: [6.5, 9.5], kind: 'broad', bark: 'maple', trunkK: 0.022, fork: 0.38, crownY: 0.64, crown: [0.4, 0.28], limbs: [3, 5], clumps: 19, clumpR: [0.28, 0.36], squash: 0.8, variants: [
     { leaf: 'sugarOrange', alt: 'sugarGold' },
     { leaf: 'sugarGold', alt: 'sugarOrange' },
     { leaf: 'scarlet', alt: 'mapleCrimson' },
@@ -370,7 +373,7 @@ const SPECS = {
     { leaf: 'sugarGold', alt: 'mapleGreen' },
     { leaf: 'scarlet', alt: 'sugarOrange' },
   ] },
-  oak: { h: [7, 10], kind: 'broad', bark: 'oak', trunkK: 0.032, fork: 0.32, crownY: 0.64, crown: [0.46, 0.27], limbs: [4, 5], clumps: 26, clumpR: [0.24, 0.32], squash: 0.72, oak: true, variants: [
+  oak: { h: [7, 9], kind: 'broad', bark: 'oak', trunkK: 0.032, fork: 0.32, crownY: 0.64, crown: [0.42, 0.27], limbs: [4, 5], clumps: 18, clumpR: [0.26, 0.34], squash: 0.72, oak: true, variants: [
     { leaf: 'oakRusset', alt: 'oakBronze' },
     { leaf: 'oakBronze', alt: 'oakOlive' },
     { leaf: 'oakRed', alt: 'oakRusset' },
@@ -420,23 +423,29 @@ const SPECS = {
     { leaf: 'bushScarlet', alt: 'bushOrange' },
     { leaf: 'bushPlum', alt: 'bushRed', berries: 0x3a3a8a },
     { leaf: 'bushRed', alt: 'bushPlum' },
+    { leaf: 'bushScarlet', alt: 'bushPlum', berries: 0xe8323a },
+    { leaf: 'bushPlum', alt: 'bushScarlet' },
   ] },
   bushOrange: { h: [1, 1.7], kind: 'bush', variants: [
     { leaf: 'bushOrange', alt: 'bushAmber' },
     { leaf: 'bushAmber', alt: 'bushOrange', berries: 0xd02a2a },
     { leaf: 'bushOrange', alt: 'bushRed' },
     { leaf: 'bushAmber', alt: 'bracken' },
+    { leaf: 'bushOrange', alt: 'bushAmber', berries: 0x3a3a8a },
+    { leaf: 'bushAmber', alt: 'bushRed' },
   ] },
-  fern: { h: [0.55, 0.9], kind: 'fern', variants: [
+  fern: { h: [0.7, 1.1], kind: 'fern', variants: [
     { leaf: 'bracken' }, { leaf: 'brackenGold' }, { leaf: 'bracken', alt: 'fernGreen' }, { leaf: 'fernGreen', alt: 'brackenGold' },
+    { leaf: 'brackenGold', alt: 'bracken' }, { leaf: 'fernGreen' },
   ] },
-  mushroom: { h: [0.2, 0.35], kind: 'mushroom', variants: [
+  mushroom: { h: [0.3, 0.48], kind: 'mushroom', variants: [
     { type: 'agaric' }, { type: 'bolete' }, { type: 'mixed' }, { type: 'tiny' },
   ] },
   stump: { h: [0.4, 0.7], kind: 'stump', variants: [{}, { axe: true }, { hollow: true }] },
   log: { h: [2.6, 3.8], kind: 'log', variants: [{}, { ferns: true }, { broken: true }] },
   sapling: { h: [1.2, 2.2], kind: 'sapling', variants: [
     { type: 'maple', leaf: 'mapleRed' }, { type: 'birch', leaf: 'birch' }, { type: 'spruce', leaf: 'spruce' }, { type: 'maple', leaf: 'sugarOrange' },
+    { type: 'birch', leaf: 'birchGold' }, { type: 'spruce', leaf: 'spruceWarm' },
   ] },
 };
 export const TREE_SPECIES = Object.keys(SPECS);
@@ -495,7 +504,7 @@ function planBroad(spec, v, rng, H) {
   const core = [];
   for (let i = 0; i < 3; i++) {
     const a = a0 + i * 2.1;
-    core.push({ c: [cc[0] + Math.cos(a) * crx * 0.25, crownY - cry * 0.05 + i * 0.2, cc[2] + Math.sin(a) * crx * 0.25], rx: cr * 0.4, ry: cr * 0.34, base: 0.8, P: T, seed: rng.int(0, 1e6) });
+    core.push({ c: [cc[0] + Math.cos(a) * crx * 0.22, crownY + cry * 0.05 + i * 0.2, cc[2] + Math.sin(a) * crx * 0.22], rx: cr * 0.32, ry: cr * 0.28, base: 0.7, P: T, seed: rng.int(0, 1e6) });
   }
   // secondary branches from each clump's limb into the clump
   const secs = clumps.map((b) => {
@@ -537,8 +546,8 @@ function planBroad(spec, v, rng, H) {
       for (const p of prims) bough(g, p.pts, [p.r, p.r * 0.82, p.r * 0.58], bark, p.r > g.s * 2.5 ? relief : null);
       for (const k of knots) knot(g, k.p, k.n, k.r, BARK[spec.bark]);
       for (const sc of secs) bough(g, sc.pts, [sc.r, sc.r * 0.8, sc.r * 0.6], bark);
-      for (const b of core) leafClump(g, b, { holes: 0, lump: 0.15 });
-      for (const b of clumps) leafClump(g, b, { lump: 0.24, holes: 0.34 });
+      for (const b of core) leafClump(g, b, { holes: 0, lump: 0.15, bump: 0.1 });
+      for (const b of clumps) leafClump(g, b, { lump: 0.2, bump: 0.17, holes: 0.34 });
       for (const tw of twigs) limb(g, tw.s, tw.e, 0.045, 0.03, () => TWIG);
       fallingLeaves(g, falls, T);
     },
@@ -630,10 +639,13 @@ function planConifer(spec, v, rng, H) {
   const tiers = [];
   let y = top - 0.15;
   let phase = rng.range(0, 6);
+  const bend = [rng.range(-0.25, 0.25), rng.range(-0.25, 0.25)];
   while (y > base + 0.2) {
-    const R = env(y) * rng.range(0.92, 1.06) + 0.45;
+    const R = env(y) * rng.range(0.84, 1.12) + 0.45;
+    const lean = 1 - (y - base) / (top - base);
     const spacing = clamp(0.62 + R * 0.12, 0.62, 0.95) * rng.range(0.9, 1.1);
-    tiers.push({ cx: rng.range(-0.08, 0.08), cz: rng.range(-0.08, 0.08), y0: y, R, lobes: v.lobes + rng.int(-1, 1), phase, droop: Math.min(0.42, R * 0.16) * rng.range(0.85, 1.15), thick: clamp(R * 0.17, 0.25, 0.4), seed: rng.int(0, 1e6), wob: rng.range(0.08, 0.16) });
+    const sparse = rng.chance(0.22);
+    tiers.push({ cx: bend[0] * (1 - lean) + rng.range(-0.1, 0.1), cz: bend[1] * (1 - lean) + rng.range(-0.1, 0.1), y0: y, R, lobes: v.lobes + rng.int(-1, 1), phase, droop: Math.min(0.42, R * 0.16) * rng.range(0.85, 1.2), thick: clamp(R * 0.17, 0.25, 0.4), seed: rng.int(0, 1e6), wob: sparse ? rng.range(0.18, 0.26) : rng.range(0.08, 0.16), gap: sparse ? -0.35 : -0.62 });
     phase += rng.range(1.2, 2.6);
     y -= spacing;
   }
@@ -675,7 +687,7 @@ function planConifer(spec, v, rng, H) {
           if (d > Rt) return 0;
           const u = d / Rt;
           // gaps between the boughs out towards the tips
-          if (u > 0.5 && lob < -0.62 + (1 - u) * 0.5) return 0;
+          if (u > 0.5 && lob < ti.gap + (1 - u) * 0.5) return 0;
           const lift = u > 0.82 ? (u - 0.82) * 0.5 : 0; // tips turn up a little
           const yt = y0 - droop * u * u + lift;
           const yb = yt - thick * (u > 0.7 ? 0.75 : 1) - s * 0.5;
@@ -710,15 +722,15 @@ function planTamarack(spec, v, rng, H) {
   const env = (y) => R0 * Math.pow(clamp(1 - (y - base) / (top - base), 0, 1), 0.85) + 0.3;
   const branches = [], tufts = [];
   let phase = rng.range(0, TAU);
-  for (let y = base; y < top - 0.3; y += rng.range(0.5, 0.7)) {
-    const n = rng.int(4, 6), R = env(y);
+  for (let y = base; y < top - 0.3; y += rng.range(0.62, 0.85)) {
+    const n = rng.int(3, 5), R = env(y);
     for (let k = 0; k < n; k++) {
       const a = phase + (k / n) * TAU + rng.range(-0.3, 0.3);
       const L = R * rng.range(0.8, 1.05), up = rng.range(0.15, 0.4);
       const e = [Math.cos(a) * L, y + L * up, Math.sin(a) * L];
       branches.push({ s: [0, y, 0], e, r: Math.max(0.04, trunkR * 0.28) });
       const P = rng.chance(0.2) ? A : T;
-      for (let f = 0.35; f <= 1.0; f += rng.range(0.22, 0.32)) {
+      for (let f = 0.4; f <= 1.0; f += rng.range(0.28, 0.4)) {
         const c = lerp3([0, y, 0], e, f);
         const r = (0.18 + 0.2 * (1 - f * 0.5)) * Math.min(1.2, 0.6 + R * 0.25);
         tufts.push({ c: [c[0], c[1] + 0.04, c[2]], rx: r, ry: r * 0.62, base: 1.8 + f * 0.5 + (y / H) * 0.6, P, seed: rng.int(0, 1e6) });
@@ -738,7 +750,7 @@ function planTamarack(spec, v, rng, H) {
       limb(g, [0, -0.6, 0], [0, 0.5, 0], trunkR * 1.35, trunkR, bark);
       limb(g, [0, 0.4, 0], [0, H, 0], trunkR, 0.04, bark);
       for (const b of branches) limb(g, b.s, b.e, b.r, b.r * 0.6, () => TWIG);
-      for (const t of tufts) leafClump(g, t, { lump: 0.3, holes: 0.2, lf: 2.0, belly: 0.9, rag: 0.03, spark: 0.08 });
+      for (const t of tufts) leafClump(g, t, { lump: 0.3, bump: 0.08, bf: 4.5, holes: 0.15, lf: 2.0, belly: 0.9, rag: 0.02, spark: 0.06 });
       fallingLeaves(g, falls, T);
     },
     meta: { height: H, trunkR, canopyY: base + (H - base) * 0.4, canopyR: R0 + 0.4, swayY0: base * 0.6, sway: 0.13 },
@@ -899,55 +911,61 @@ function planBush(spec, v, rng, H) {
     R: W + H * 0.7 + 0.4, H: H * 1.3 + 0.4, bury: 0.3,
     draw(g) {
       for (const st of stems) limb(g, st.s, st.e, 0.05, 0.035, () => BARK.stem[1]);
-      for (const b of clumps) leafClump(g, b, { lump: 0.26, holes: 0.26, lf: 2.0, hf: 3.2, belly: 1.2, rag: 0.025, spark: 0.06 });
+      for (const b of clumps) leafClump(g, b, { lump: 0.22, bump: 0.2, bf: 4.2, holes: 0.3, lf: 2.0, hf: 2.6, belly: 1.2, rag: 0.02, spark: 0.05 });
       for (const p of berries) {
         g.put(p[0], p[1], p[2], v.berries);
-        g.put(p[0], p[1] + g.s, p[2], v.berries === 0xe8323a ? 0xff7a6a : 0x6a6ab4, true);
+        g.put(p[0], p[1] + g.s, p[2], v.berries === 0x3a3a8a ? 0x6a6ab4 : 0xff7a6a, true);
       }
     },
     meta: { height: H, trunkR: 0, canopyY: H * 0.5, canopyR: W + H * 0.4, swayY0: 0.15, sway: 0.06 },
   };
 }
 
-// Bracken: arching fronds of paired leaflets, rusty at the tips.
+// Bracken and ostrich ferns: a vase of arching blades, each a midrib lined with
+// leaflets that are longest a third of the way out, rusty towards the tips.
 function planFern(spec, v, rng, H) {
   const T = LEAF_P[v.leaf], A = LEAF_P[v.alt ?? v.leaf];
   const fronds = [];
-  const n = rng.int(6, 9);
+  const n = rng.int(8, 11);
   const a0 = rng.range(0, TAU);
   for (let i = 0; i < n; i++) {
-    const a = a0 + (i / n) * TAU + rng.range(-0.25, 0.25);
-    fronds.push({ a, L: H * rng.range(1.1, 1.5), lift: H * rng.range(0.75, 1.0), P: i % 3 === 0 ? A : T, w: rng.range(0.16, 0.24) * H * 1.4 });
+    const a = a0 + (i / n) * TAU + rng.range(-0.2, 0.2);
+    const L = H * rng.range(1.05, 1.35);
+    fronds.push({ a, L, rise: rng.range(1.55, 1.9), P: i % 3 === 0 ? A : T, w: L * rng.range(0.2, 0.26), tw: rng.range(-0.25, 0.25) });
   }
   return {
-    R: H * 1.7 + 0.3, H: H + 0.3, bury: 0.15,
+    R: H * 1.2 + 0.3, H: H * 0.9 + 0.3, bury: 0.15,
     draw(g) {
       const s = g.s;
-      ball(g, [0, 0.03, 0], 0.07, () => T[0] | LEAF);
+      ball(g, [0, 0.02, 0], 0.08, () => T[0] | LEAF);
       for (const f of fronds) {
-        const c = Math.cos(f.a), sn = Math.sin(f.a);
-        const N = Math.ceil(f.L / (s * 0.6));
+        const N = Math.ceil(f.L / (s * 0.5));
+        let px = 0, py = 0.04, pz = 0;
         for (let k = 0; k <= N; k++) {
           const t = k / N;
-          const r = 0.04 + f.L * t;
-          const y = 0.05 + f.lift * Math.sin(Math.min(1, t * 1.2) * Math.PI * 0.62) * (1 - t * 0.5);
-          const tone = t < 0.25 ? 1 : t < 0.7 ? 2 : 3;
-          g.put(c * r, y, sn * r, f.P[tone - 1] | LEAF);
-          // leaflets: widest a third of the way out, angled forward and drooping
-          const wl = f.w * Math.sin(Math.min(1, t * 1.6) * Math.PI) * (t > 0.12 ? 1 : 0);
-          if (wl < s * 0.6 || k % 2) continue;
+          // the midrib leaves the crown steeply and arches over
+          const ang = f.a + f.tw * t;
+          const c = Math.cos(ang), sn = Math.sin(ang);
+          const r = 0.03 + f.L * t * 0.66;
+          const y = 0.04 + f.L * (f.rise * t - 1.2 * t * t);
+          px = c * r; py = y; pz = sn * r;
+          const tone = t < 0.2 ? 1 : t < 0.65 ? 2 : 3;
+          g.put(px, py, pz, f.P[tone - 1] | LEAF);
+          const wl = f.w * Math.sin(Math.min(1, t * 1.5) * Math.PI) * (t > 0.08 ? 1 : 0);
+          if (wl < s * 0.5) continue;
+          const m = Math.ceil(wl / (s * 0.8));
           for (const sd of [-1, 1]) {
-            const m = Math.ceil(wl / (s * 0.7));
             for (let q = 1; q <= m; q++) {
               const u = (q / m) * wl;
-              const px = c * (r + u * 0.35) - sn * sd * u, pz = sn * (r + u * 0.35) + c * sd * u;
-              g.put(px, y - u * 0.35, pz, f.P[ci(tone + (q === m ? 1 : 0))] | LEAF, true);
+              const lx = px + c * u * 0.3 - sn * sd * u, lz = pz + sn * u * 0.3 + c * sd * u;
+              const tq = tone + (q === m ? 1 : 0) + (sd > 0 ? 0 : -0.4);
+              g.put(lx, py - u * 0.3, lz, f.P[ci(tq)] | LEAF, true);
             }
           }
         }
       }
     },
-    meta: { height: H, trunkR: 0, canopyY: H * 0.5, canopyR: H * 1.3, swayY0: 0.05, sway: 0.08 },
+    meta: { height: H * 0.62, trunkR: 0, canopyY: H * 0.4, canopyR: H * 1.1, swayY0: 0.05, sway: 0.08 },
   };
 }
 
@@ -1034,11 +1052,11 @@ function planStump(spec, v, rng, H) {
       if (v.axe) {
         // Hank's old axe, buried in the stump where he left it
         const ux = Math.cos(axeA), uz = Math.sin(axeA);
-        limb(g, [ux * 0.05, H - 0.02, uz * 0.05], [ux * 0.42, H + 0.62, uz * 0.42], 0.035, 0.03, (x, y) => (y > H + 0.5 ? 0x5a3a22 : 0x9a6a3a));
-        g.each(-0.2, H - 0.12, -0.2, 0.2, H + 0.12, 0.2, (x, y, z) => {
+        limb(g, [ux * 0.06, H - 0.02, uz * 0.06], [ux * 0.5, H + 0.72, uz * 0.5], 0.045, 0.04, (x, y) => (y > H + 0.6 ? 0x4a3020 : 0xa8743e));
+        g.each(-0.3, H - 0.16, -0.3, 0.3, H + 0.16, 0.3, (x, y, z) => {
           const along = x * ux + z * uz, side = -x * uz + z * ux;
-          if (Math.abs(side) > 0.03 || along < -0.16 || along > 0.1) return 0;
-          return along < -0.11 ? 0xd8dee2 : 0x8a949c;
+          if (Math.abs(side) > 0.045 || along < -0.24 || along > 0.12 || Math.abs(y - H) > 0.13 - (along < -0.1 ? 0 : 0.05)) return 0;
+          return along < -0.18 ? 0xe8eef0 : along < -0.1 ? 0xa8b2b8 : 0x6a747c;
         });
       }
     },
@@ -1080,7 +1098,7 @@ function planLog(spec, v, rng, H) {
         const ang = Math.atan2(dy, z);
         if (d > r - s * 1.3) {
           const m = vnoise(x * 2, y * 2, z * 2, mseed);
-          if (dy > r * 0.25 && m > 0.38 - dy) return MOSS[m > 0.6 ? 3 : m > 0.5 ? 2 : 1];
+          if (dy > r * 0.3 && m > 0.6 - (dy / r) * 0.22) return MOSS[m > 0.72 ? 2 : m > 0.64 ? 1 : 0];
           const u = (ang / TAU + 0.5) * 11 + vnoise(x * 0.8, 0.5, 0.5, bseed) * 0.8;
           if (u - Math.floor(u) < 0.2) return B[0];
           const h = vhash(Math.floor(u), Math.floor(x / 0.7), 3, bseed);
@@ -1260,6 +1278,24 @@ function simplifyFar(vox, passes = 1) {
   }
 }
 
+// Crop to the filled bounds on a 4-voxel lattice (so the pivot stays on a voxel
+// corner through two 2:1 box filters). Returns the new origin.
+function crop4(g) {
+  const v = g.vox, b = v.bounds();
+  if (b.x1 < 0) return;
+  const lo = (a) => Math.max(0, Math.floor(a / 4) * 4), hi = (a, n) => Math.min(n, Math.ceil((a + 1) / 4) * 4);
+  const x0 = lo(b.x0), y0 = lo(b.y0), z0 = lo(b.z0), x1 = hi(b.x1, v.w), y1 = hi(b.y1, v.h), z1 = hi(b.z1, v.d);
+  const w = x1 - x0, h = y1 - y0, d = z1 - z0;
+  if (w === v.w && h === v.h && d === v.d) return;
+  const out = new Vox(w, h, d);
+  for (let z = 0; z < d; z++) for (let y = 0; y < h; y++) {
+    const so = v.idx(x0, y0 + y, z0 + z);
+    out.data.set(v.data.subarray(so, so + w), out.idx(0, y, z));
+  }
+  g.vox = out;
+  g.ox = g.n - x0; g.oy = g.b - y0; g.oz = g.n - z0;
+}
+
 // ---------------------------------------------------------------- public API
 function plan(species, seed, height) {
   const spec = SPECS[species];
@@ -1278,10 +1314,14 @@ export function buildTreeLods(species, { seed = 0, height, lods = 3 } = {}) {
   const s = TREE_INFO[species].size;
   const g = new Grid(s, p.R, p.H, p.bury);
   p.draw(g);
+  const ground = g.b;
+  g.ox = g.n; g.oy = g.b; g.oz = g.n;
+  crop4(g);
   fillCavities(g.vox);
   const fine = spec.kind === 'fern' || spec.kind === 'sapling' || spec.kind === 'mushroom';
-  const out = [{ vox: g.vox, size: s, origin: g.origin }];
-  let src = g.vox, size = s, o = g.origin;
+  let o = [g.ox, g.oy, g.oz];
+  const out = [{ vox: g.vox, size: s, origin: o }];
+  let src = g.vox, size = s;
   for (let l = 1; l < lods; l++) {
     src = downsample(src, fine ? (l === 1 ? 2 : 3) : 3, l === 1);
     size *= 2;
@@ -1291,7 +1331,8 @@ export function buildTreeLods(species, { seed = 0, height, lods = 3 } = {}) {
     out.push({ vox: src, size, origin: o });
   }
   const b = g.vox.bounds();
-  const meta = { ...p.meta, height: (b.y1 + 1 - g.b) * s, variant, kind: spec.kind };
+  void ground;
+  const meta = { ...p.meta, height: (b.y1 + 1 - g.oy) * s, variant, kind: spec.kind };
   return { lods: out, meta };
 }
 
