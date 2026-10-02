@@ -382,7 +382,7 @@ export class Critters2D {
     const gr = { kind: 'bats', members: [], x: s.x, z: s.z };
     for (let i = 0, n = this.rng.int(2, 4); i < n; i++) {
       const c = this.add('bat', s.x, s.z, { y: Math.max(0, this.height(s.x, s.z)) + this.rng.range(4, 8), anim: 'fly', fps: 13, air: true, ai: batAI, group: gr, cat: 'bat', despawn: 120, maxDraw: 90 });
-      c.orbit = { a: this.rng.range(0, TAU), r: this.rng.range(3, 8), w: this.rng.range(1.2, 2.2) * this.rng.sign(), ph: this.rng.range(0, TAU), h: this.rng.range(3, 8) };
+      c.orbit = { a: this.rng.range(0, TAU), r: this.rng.range(3, 7), w: this.rng.range(1.2, 2.2) * this.rng.sign(), ph: this.rng.range(0, TAU), h: this.rng.range(2.5, 6) };
       gr.members.push(c);
     }
     this.groups.push(gr);
@@ -437,7 +437,7 @@ export class Critters2D {
     if (kind === 'fox') return this.add(kind, x, z, { anim: 'walk', fps: 6, ai: foxAI, state: 'trot', cat: 'fox', ...o });
     if (kind === 'squirrel' || kind === 'chipmunk') return this.add(kind, x, z, { anim: 'idle', fps: 1.5, ai: squirrelAI, state: 'forage', cat: 'squirrel', maxDraw: 70, despawn: 90, ...o });
     if (SONGBIRDS.includes(kind)) return this.add(kind, x, z, { anim: 'peck', fps: 3, ai: songbirdAI, state: 'ground', cat: 'songbird', maxDraw: 60, despawn: 90, ...o });
-    if (kind === 'owl') { const c = this.add(kind, x, z, { anim: 'idle', fps: 0.6, ai: owlAI, cat: 'owl', ...o }); c.perchH = c.y + 2.6; return c; }
+    if (kind === 'owl') { const c = this.add(kind, x, z, { anim: 'idle', fps: 0.6, ai: owlAI, cat: 'owl', ...o }); c.tree = this.nearestTree(x, z, 12); c.perchH = (c.tree ? this.groundY(c.tree.x, c.tree.z) : c.y) + 2.6; return c; }
     if (kind === 'wisp' || kind === 'wispBlue') { const c = this.add(kind, x, z, { anim: 'float', fps: 5, ai: wispAI, cat: 'wisp', emissive: 0.55, ...o }); c.base = c.y + 0.6; return c; }
     if (kind === 'bat') { const gr = { x, z }; const c = this.add(kind, x, z, { anim: 'fly', fps: 13, air: true, ai: batAI, group: gr, cat: 'bat', ...o }); c.orbit = { a: 0, r: 3, w: 1.6, ph: 0, h: 3 }; c.y += 3; return c; }
     if (kind === 'monarch' || kind === 'sulphur') { const c = this.add(kind, x, z, { anim: 'fly', fps: 11, air: true, ai: butterflyAI, cat: 'butterfly', ...o }); c.y += 0.8; return c; }
@@ -1040,7 +1040,7 @@ function wispAI(c, dt, M) {
   // fade with daylight and when spooked
   const want = (1 - Math.min(1, M.night * 1.6)) * 0.9 + (d < 4 ? 0.45 : 0);
   if (!c.fadeIn && !c.dying) c.fade = damp(c.fade, Math.min(0.85, want), 2, dt);
-  c.emissive = 0.45 + Math.sin(c.t * 3) * 0.1;
+  c.emissive = 0.6 + Math.sin(c.t * 3) * 0.12;
 }
 
 // the raccoon raids a bin, freezes when you show up, then waddles off fast
