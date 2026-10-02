@@ -279,17 +279,17 @@ export class Critters2D {
     for (let i = 0, n = this.rng.int(3, 6); i < n; i++) gr.members.push(this.place(kind, s.x + this.rng.range(-2.5, 2.5), s.z + this.rng.range(-2.5, 2.5), { group: gr }));
     this.groups.push(gr);
   }
-  spawnGeese() {
+  spawnGeese(o = {}) {
     const p = this.p;
     const a = this.rng.range(0, TAU);
-    const dir = { x: -Math.sin(a), z: -Math.cos(a) };
+    const dir = o.dir || { x: -Math.sin(a), z: -Math.cos(a) };
     const side = this.rng.range(-30, 30);
-    const start = { x: p.x + Math.sin(a) * 170 + dir.z * side, z: p.z + Math.cos(a) * 170 - dir.x * side };
-    const gr = { kind: 'geese', members: [], dir, x: start.x, z: start.z, alt: Math.max(this.height(p.x, p.z), 2) + this.rng.range(30, 42), t: 0, honk: 1 };
+    const start = o.start || { x: p.x + Math.sin(a) * 170 + dir.z * side, z: p.z + Math.cos(a) * 170 - dir.x * side };
+    const gr = { kind: 'geese', members: [], dir, x: start.x, z: start.z, alt: o.alt ?? Math.max(this.height(p.x, p.z), 2) + this.rng.range(30, 42), t: 0, honk: 1 };
     const n = this.rng.int(7, 13);
     for (let i = 0; i < n; i++) {
       const row = Math.ceil(i / 2), sd = i % 2 ? 1 : -1;
-      const c = this.add('goose', start.x, start.z, { y: gr.alt, air: true, anim: 'fly', fps: 3.2, ai: gooseAI, group: gr, despawn: 400, cat: 'goose', yaw: Math.atan2(dir.x, dir.z) });
+      const c = this.add('goose', start.x, start.z, { y: gr.alt, air: true, anim: 'fly', fps: 3.2, ai: gooseAI, group: gr, despawn: 400, cat: 'goose', yaw: Math.atan2(dir.x, dir.z), scale: 1.5, maxDraw: 320 });
       c.off = { side: sd * row * 2.6, back: row * 2.9 };
       gr.members.push(c);
     }
@@ -302,15 +302,15 @@ export class Critters2D {
     };
     this.groups.push(gr);
   }
-  spawnCrows() {
+  spawnCrows(at = null) {
     // a swirl of crows over an open field or the old cemetery
     const gy = L.POI.graveyard;
     const nearYard = Math.hypot(this.p.x - gy.x, this.p.z - gy.z) < 110;
-    const s = nearYard ? { x: gy.x + this.rng.range(-10, 10), z: gy.z + this.rng.range(-10, 10) } : this.find(40, 90, (x, z, h) => this.isMeadow(x, z, h), 8);
+    const s = at || (nearYard ? { x: gy.x + this.rng.range(-10, 10), z: gy.z + this.rng.range(-10, 10) } : this.find(40, 90, (x, z, h) => this.isMeadow(x, z, h), 8));
     if (!s) return;
-    const gr = { kind: 'crows', members: [], x: s.x, z: s.z, alt: this.height(s.x, s.z) + this.rng.range(12, 20), t: 0, caw: 2 };
+    const gr = { kind: 'crows', members: [], x: s.x, z: s.z, alt: s.alt ?? this.height(s.x, s.z) + this.rng.range(12, 20), t: 0, caw: 2 };
     for (let i = 0, n = this.rng.int(8, 14); i < n; i++) {
-      const c = this.add('crow', s.x, s.z, { y: gr.alt, air: true, anim: 'fly', fps: 9, ai: swirlAI, group: gr, despawn: 220, cat: 'crow' });
+      const c = this.add('crow', s.x, s.z, { y: gr.alt, air: true, anim: 'fly', fps: 9, ai: swirlAI, group: gr, despawn: 220, cat: 'crow', scale: 1.35 });
       c.orbit = { a: this.rng.range(0, TAU), r: this.rng.range(5, 14), w: this.rng.range(0.35, 0.7) * this.rng.sign(), ph: this.rng.range(0, TAU), h: this.rng.range(-3, 3) };
       gr.members.push(c);
     }
@@ -329,7 +329,7 @@ export class Critters2D {
     if (!s) return;
     const gr = { kind: 'gulls', members: [], x: s.x, z: s.z, alt: 6, t: 0 };
     for (let i = 0, n = this.rng.int(2, 4); i < n; i++) {
-      const c = this.add('gull', s.x, s.z, { y: this.rng.range(7, 16), air: true, anim: 'glide', fps: 8, ai: swirlAI, group: gr, cat: 'gull' });
+      const c = this.add('gull', s.x, s.z, { y: this.rng.range(7, 16), air: true, anim: 'glide', fps: 8, ai: swirlAI, group: gr, cat: 'gull', scale: 1.3 });
       c.orbit = { a: this.rng.range(0, TAU), r: this.rng.range(7, 16), w: this.rng.range(0.2, 0.4) * this.rng.sign(), ph: this.rng.range(0, TAU), h: this.rng.range(3, 10), glide: true };
       gr.members.push(c);
     }
@@ -454,6 +454,11 @@ export class Critters2D {
     let k = 0;
     for (const part of this.debug.split(',')) {
       const [kind, n = 1, dist = 12] = part.split(':');
+      // flocks: geese cross the view, crows swirl ahead
+      const fwd = { x: Math.sin(yaw), z: Math.cos(yaw) };
+      const ahead = { x: g.playerPos.x + fwd.x * +dist, z: g.playerPos.z + fwd.z * +dist };
+      if (kind === 'geese') { this.spawnGeese({ start: { x: ahead.x - fwd.z * 25, z: ahead.z + fwd.x * 25 }, dir: { x: fwd.z, z: -fwd.x }, alt: g.playerPos.y + +n }); continue; }
+      if (kind === 'crows') { this.spawnCrows({ ...ahead, alt: g.playerPos.y + +n }); continue; }
       for (let i = 0; i < +n; i++, k++) {
         const a = yaw + ((k % 5) - 2) * 0.22 + this.rng.range(-0.08, 0.08);
         const d = +dist + this.rng.range(-1.5, 2);

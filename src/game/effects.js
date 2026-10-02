@@ -678,14 +678,16 @@ class SpeedLines {
     c.clearRect(0, 0, W, H);
     const cx = W * 0.5, cy = H * 0.56;
     const R = Math.hypot(W, H) * 0.55;
-    const n = Math.round(14 + 46 * level);
+    const n = Math.round(18 + 72 * level);
     for (let i = 0; i < n; i++) {
       const a = Math.random() * Math.PI * 2;
-      const r0 = R * (0.78 - 0.3 * level + Math.random() * 0.16);
-      const w = (1 + Math.random() * 3.2) * (0.6 + level * 0.8) * (W / 480);
+      const r0 = R * (0.74 - 0.34 * level + Math.random() * 0.18);
+      const w = (1.4 + Math.random() * 4) * (0.55 + level * 0.9) * (W / 480);
       const ca = Math.cos(a), sa = Math.sin(a);
       const r1 = R * 1.05;
-      c.fillStyle = `rgba(255, 249, 238, ${(0.3 + Math.random() * 0.45) * Math.min(1, level * 1.4)})`;
+      const k = (0.35 + Math.random() * 0.5) * Math.min(1, level * 1.4);
+      // mostly cream streaks, a few dark plum ones so they read on bright skies too
+      c.fillStyle = i % 6 === 0 ? `rgba(46, 30, 42, ${k * 0.55})` : `rgba(255, 249, 238, ${k})`;
       c.beginPath();
       c.moveTo(cx + ca * r0, cy + sa * r0);
       c.lineTo(cx + ca * r1 - sa * w, cy + sa * r1 + ca * w);

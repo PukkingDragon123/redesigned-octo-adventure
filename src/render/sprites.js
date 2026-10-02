@@ -268,12 +268,13 @@ void main() {
   vec3 albedo = tx.rgb * vTint.rgb;
   vec3 n = normalize(vNormal);
   float shadow = getShadowMask();
-  float ndl = max(dot(n, uSunDir), 0.0) * 0.6 + 0.4;
-  vec3 light = hemiAmbient(n) * 1.15 + uSunColor * shadow * ndl * 0.75 + pointLightsAt(vWorldPos, n, 0.7);
+  // the sprites carry their own banded shading, so the scene light is kept flatter than on voxels
+  float ndl = max(dot(n, uSunDir), 0.0) * 0.5 + 0.5;
+  vec3 light = hemiAmbient(n) * 1.0 + uSunColor * shadow * ndl * 0.62 + pointLightsAt(vWorldPos, n, 0.7);
   vec3 col = albedo * light;
   vec3 v = normalize(uCamPos - vWorldPos);
   float back = pow(max(dot(-v, uSunDir), 0.0), 3.0) * shadow;
-  col += albedo * uSunColor * back * 0.35;
+  col += albedo * uSunColor * back * 0.3;
   if (uNight > 0.05) {
     vec2 t = vec2(uTexel, 0.0);
     float e = step(texture2D(tAtlas, vUv + t.xy).a, 0.3) + step(texture2D(tAtlas, vUv - t.xy).a, 0.3)
