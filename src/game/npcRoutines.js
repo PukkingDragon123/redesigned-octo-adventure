@@ -16,7 +16,7 @@ const chat = (meet) => ({ k: 'chat', meet });
 
 // meet-ups: where, and who stands round
 export const MEETS = {
-  cafeGossip: { x: 218.2, z: LANE_N + 0.2, r: 0.8 },
+  cafeGossip: { x: 225.6, z: LANE_N + 0.2, r: 0.8 },
   clinicVisit: { x: 243.8, z: LANE_N + 0.1, r: 0.65 },
 };
 
@@ -56,7 +56,7 @@ export const PEOPLE = {
   agnes: {
     house: 'agnes', fear: 'faint', run: 2.3, scream: 1.4, umbrella: 'agnes',
     scare: ['Oh my stars...', 'Oh! Oh my! Oh dear!', 'Heavens to Betsy!'],
-    peek: ['Is the bony gentleman still there?', 'Oh, I do hope it eats cats food. I mean - not cats!'],
+    peek: ['Is the bony gentleman still there?', 'Oh, I do hope it doesn\'t eat cats...'],
     wary: ['H-hello, dear... are you eating well? Oh. Right.', 'Please don\'t haunt my cats.', 'My, what... big bones you have.'],
     hello: ['Hello, dear!', 'Yoo-hoo, Hank!', 'Mind the cats, dear!'],
     day: [

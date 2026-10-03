@@ -369,7 +369,7 @@ export class Villagers {
       return null;
     }
     if (a.visible && near(a.pos.x, a.pos.z, a.pos.y, 7.5)) return { text: `Hold out the cocoa for ${name}`, fn: () => b.snatch(o) };
-    if (b.door && near(b.door.x, b.door.z, a.pos.y, 4)) return { text: `Leave the cocoa on ${name}'s step`, fn: () => b.leaveOnStep(o) };
+    if (b.door && near(b.door.x, b.door.z, a.pos.y, 4.6)) return { text: `Leave the cocoa on ${name}'s step`, fn: () => b.leaveOnStep(o) };
     return null;
   }
   async deliver(o, a) {
