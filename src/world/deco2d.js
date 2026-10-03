@@ -137,12 +137,21 @@ export function placeDeco2D(vw) {
       }
     }
   };
-  fenceRoad('main', { from: -138, to: 96, cover: -0.4 });
-  fenceRoad('northLoop', { cover: 0.15, phase: 1.3 });
-  fenceRoad('sawmillRoad', { cover: -0.6 });
+  fenceRoad('main', { from: -138, to: 96, cover: -0.65 });
+  fenceRoad('main', { from: -138, to: 96, cover: -0.65, offset: 7.4, phase: 2.6 }); // a second try a little further out where the first did not fit
+  fenceRoad('northLoop', { cover: -0.25, phase: 1.3 });
+  fenceRoad('coastRoad', { cover: -0.2, phase: 0.7, from: 240 });
+  fenceRoad('sawmillRoad', { cover: -0.8 });
   fenceRoad('farmLane', { cover: -0.9, offset: 4.4 });
+  fenceRoad('graveRoad', { cover: 0.2, offset: 3.6, phase: 0.4 });
   fenceRoad('cabinDrive', { kind: 'picket', step: 2, cover: -0.9, offset: 4.2, sides: [1] });
   fenceRoad('lighthouseLane', { kind: 'picket', step: 2, cover: -0.5, offset: 3.6 });
+  fenceRoad('parkLane', { kind: 'picket', step: 2, cover: -0.9, offset: 3.4 });
+  // a white picket fence along the green's Main Street edge, open at the paths
+  for (let x = 169.2; x < 203.5; x += 2) {
+    if (Math.abs(x - 186) < 2.2 || Math.abs(x - L.BOWLING.x) < 2.4 || Math.abs(x - 170) < 1.6 || Math.abs(x - 202) < 1.6) continue;
+    put('picket', x, M.z - M.road / 2 - M.walk - 0.5, 0);
+  }
   // Wharf Street: white pickets down both sides between the houses, the market at the bottom
   for (const sd of [-1, 1]) for (let z = 58.4; z < 69; z += 2) put('picket', 166 + sd * 3.6, z, sd * Math.PI / 2 * -1, { road: true });
   // white pickets round the front yards of the houses out in the country
@@ -194,8 +203,8 @@ export function placeDeco2D(vw) {
     for (const [dx, dz] of [[4.6, 0.6], [5.4, 0.9], [-5.4, 0.7]]) put('crate', b.x + dx, b.z + b.d / 2 + dz, rng.range(-0.2, 0.2), sidewalk);
   }
 
-  // ------------------------------------------------------------ the market at the bottom of Wharf Street
-  const stall = tryAt('fishstall', [[171.4, 74.2, -Math.PI / 2], [171.4, 72.4, -Math.PI / 2], [160.6, 74.2, Math.PI / 2]]);
+  // ------------------------------------------------------------ the market on the boardwalk, either side of the Wharf Street gangway
+  const stall = tryAt('fishstall', [[172.4, 85.1, Math.PI], [176.4, 85.1, Math.PI], [171.4, 74.2, -Math.PI / 2]]);
   if (stall) {
     const goods = [['cod', 0.1, -0.62], ['salmon', -0.16, -0.25], ['cod', 0.14, 0.05], ['mackerel', -0.14, 0.32], ['mackerel', 0.15, 0.5], ['salmon', -0.1, 0.72], ['lobster', 0.22, -0.3], ['lobster', 0.2, 0.78], ['mackerel', 0.02, -0.85]];
     for (const [k, fx, fz] of goods) {
@@ -206,7 +215,7 @@ export function placeDeco2D(vw) {
     }
     for (const [k, fx, fz] of [['trap', -0.1, -2.0], ['trap', 0.25, -2.6], ['buoy', 0.9, 1.6], ['barrel', -0.2, 1.9]]) { const [x, z] = local(stall, fx, fz); put(k, x, z, stall.yaw + rng.range(-0.4, 0.4)); }
   }
-  const stand = tryAt('syrupstand', [[160.6, 74.2, Math.PI / 2], [160.6, 72.2, Math.PI / 2], [171.4, 70.4, -Math.PI / 2]]);
+  const stand = tryAt('syrupstand', [[159.6, 85.1, Math.PI], [156.6, 85.1, Math.PI], [160.6, 74.2, Math.PI / 2]]);
   if (stand) {
     const goods = [['bit_apple', 0.14, -0.55], ['bit_appleG', 0.08, -0.02], ['bit_apple', 0.16, 0.5], ['bit_apple', 0.05, 0.6], ['bit_jar', -0.3, -0.44], ['bit_jar', -0.3, 0.0], ['bit_jar', -0.3, 0.44]];
     for (const [k, fx, fz] of goods) {
