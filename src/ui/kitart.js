@@ -41,7 +41,7 @@ export function tone(ramp, lit) {
 const LX = -0.55, LY = -0.835; // light comes from the top left (y down)
 
 // ---------------------------------------------------------------- distance field
-const RMAX = 9;
+const RMAX = 12;
 const OFF = [];
 for (let dy = -RMAX; dy <= RMAX; dy++) for (let dx = -RMAX; dx <= RMAX; dx++) {
   const d = Math.hypot(dx, dy);
@@ -178,6 +178,49 @@ export const TEX = {
   },
 };
 
+// ---------------------------------------------------------------- wood
+// 6-tone wood ramps: hi, light, mid, dark, darkest, deepest
+export const WOOD = {
+  oak: [0xf4c07a, 0xd8914e, 0xb87036, 0x8e4e24, 0x643418, 0x42210e],
+  walnut: [0xb47a4a, 0x8e5632, 0x6e4024, 0x522e1a, 0x3a1e12, 0x26140c],
+  dark: [0x7a5238, 0x5e3c28, 0x4a2e1e, 0x382216, 0x28180f, 0x1a0e09],
+  grey: [0xc8bca4, 0xb0a48c, 0x968a74, 0x746a5a, 0x564e44, 0x3e3830],
+};
+export const BRASS = [0xfff0b0, 0xf2cc6a, 0xd8a038, 0xb87e26, 0x8e5a1a, 0x5e3410];
+const pick6 = (r, t) => r[t < 0 ? 0 : t > 5 ? 5 : t];
+// Wood grain: a tone offset (-1 lighter, 0, +1 darker) for a pixel `u` along the board
+// (repeats every P, P a multiple of 4) on grain row `v`. Rows drift against each
+// other so the streaks read as long fibres, not a grid.
+export function grain(u, v, P = 32, seed = 0) {
+  const o = Math.floor(hash(v, 7, seed) * P);
+  const s = ((((u + o) % P) + P) % P) >> 2;
+  const h = hash(s, v, seed + 1);
+  return h < 0.2 ? 1 : h > 0.9 ? -1 : 0;
+}
+// a tileable wood-plank texture (period px across, py down; planks `ph` rows tall)
+export function plankTex(ramp, px = 32, py = 16, ph = 8, seed = 31, base = 2) {
+  return (x, y) => {
+    const X = ((x % px) + px) % px, Y = ((y % py) + py) % py;
+    const row = Y % ph, plank = Math.floor(Y / ph);
+    if (row === ph - 1) return ramp[base + 2];
+    if (row === 0) return ramp[base - 1];
+    // a knot on every other plank, grain bending around it
+    // one knot per tile, the grain rings around it
+    const kx = (plank * 13 + 9) % px, kd = Math.hypot((X - kx) * 0.55, row + 0.5 - ph / 2);
+    if (plank === 1 && ph >= 6 && kd < 3) return kd < 1 ? ramp[base + 2] : kd < 1.9 ? ramp[base + 1] : (X + row) % 2 ? ramp[base - 1] : ramp[base];
+    return pick6(ramp, base + grain(X, Y + plank * 5, px, seed));
+  };
+}
+// grain only, no plank seams (for small plates and buttons)
+export function grainTex(ramp, px = 24, py = 8, seed = 47, base = 2) {
+  return (x, y) => pick6(ramp, base + grain(((x % px) + px) % px, ((y % py) + py) % py, px, seed));
+}
+// a 2x2 nail head (+ its shadow) at x, y
+export function nail(p, x, y, r = BRASS, shadow = 0x1e1418) {
+  p.set(x, y, r[0]); p.set(x + 1, y, r[2]); p.set(x, y + 1, r[2]); p.set(x + 1, y + 1, r[4]);
+  if (shadow != null) { p.set(x + 2, y + 1, shadow, 110); p.set(x + 1, y + 2, shadow, 110); }
+}
+
 // ---------------------------------------------------------------- painters
 // paint a mask with a band recipe: bands = [fn(lit, x, y) => colour | null, ...], last band repeats
 export function paintBands(p, f, bands, ox = 0, oy = 0) {
@@ -278,57 +321,102 @@ export function mixC(a, b, t) {
 }
 
 // ---------------------------------------------------------------- 9-slice panels
-// The big framed panel from the reference inventory: ink outline, a polished gold
-// band, an ink groove, a shaded inner bevel and a tiling fill. 48x48, slice 16.
+// A carved wooden picture frame: ink outline, a moulded oak frame with grain
+// that follows each side (mitred at the corners), a carved bead, brass corner
+// plates and nails, an inner bevel and a tiling fill. 64x64, slice 16 (so the
+// edges and the fill repeat every 32 px).
 export const FILLS = {
   leather: { tex: TEX.leather, r: RAMP.leather },
-  dark: { tex: TEX.dark, r: [0x5a3828, 0x462a1e, 0x34201a, 0x24140e, 0x170c09] },
+  dark: { tex: plankTex(WOOD.dark, 32, 32, 8, 37), r: [0x5a3828, 0x462a1e, 0x34201a, 0x24140e, 0x170c09] },
   parchment: { tex: TEX.parchment, r: RAMP.parchment },
   paper: { tex: TEX.paperLight, r: RAMP.parchment },
-  wood: { tex: TEX.wood, r: RAMP.wood },
+  wood: { tex: plankTex(WOOD.walnut, 32, 32, 8, 41), r: [0x8e5632, 0x6e4024, 0x522e1a, 0x3a1e12, 0x26140c] },
   cork: { tex: TEX.cork, r: [0xd8a868, 0xc08a50, 0xb27a44, 0x8a5a30, 0x5e3a1e] },
   cream: { tex: TEX.cream, r: RAMP.cream },
 };
-export function panelArt(fill = 'leather', { ornate = true, rim = RAMP.gold } = {}) {
-  const S = 48;
+// which side of an S x S frame a pixel belongs to (0 top, 1 left, 2 bottom, 3 right) and whether it sits on a mitre
+function side(x, y, W, H) {
+  const e = [y, x, H - 1 - y, W - 1 - x];
+  let k = 0;
+  for (let j = 1; j < 4; j++) if (e[j] < e[k]) k = j;
+  return { k, mitre: Math.min(e[0], e[2]) === Math.min(e[1], e[3]) };
+}
+// brass corner plates: L-shaped, following the frame's own outline
+function cornerPlates(p, W, H, outer, arm = 16, w = 7) {
+  for (const [fx, fy] of [[0, 0], [1, 0], [0, 1], [1, 1]]) {
+    const m = (x, y) => {
+      const cx = fx ? W - 1 - x : x, cy = fy ? H - 1 - y : y;
+      return outer(x, y) && ((cx < arm && cy < w) || (cx < w && cy < arm)) && !(cx >= w && cy >= w);
+    };
+    paintMetal(p, W, H, m, RAMP.gold);
+    const at = (cx, cy) => [fx ? W - 2 - cx : cx, fy ? H - 2 - cy : cy];
+    for (const [cx, cy] of [[3, 3], [arm - 5, 3], [3, arm - 5]]) {
+      const [x, y] = at(cx, cy);
+      nail(p, x, y, [0xe0e6ee, 0xaab2bc, 0x6e7680, 0x6e7680, 0x2e3440], null);
+    }
+  }
+}
+export function panelArt(fill = 'leather', { ornate = true, rim = WOOD.oak } = {}) {
+  const S = 64;
   const F = FILLS[fill] || FILLS.leather;
-  const p = new Pix(S, S);
-  const f = field(S, S, stepRect(0, 0, S, S, [3, 2, 1]));
   const R = F.r;
-  paintBands(p, f, [
-    () => C.ink,
-    (l) => (l > 0.5 ? rim[0] : l > 0 ? rim[1] : l > -0.55 ? rim[2] : rim[3]),
-    (l) => (l > 0.3 ? rim[1] : l > -0.45 ? rim[2] : rim[3]),
-    (l) => (l > 0.25 ? rim[3] : l > -0.4 ? rim[2] : rim[1]),
-    () => C.ink,
-    (l) => (l > 0.15 ? R[4] : l < -0.45 ? R[1] : R[3]),
-    (l, x, y) => (l > 0.15 ? R[3] : F.tex(x, y)),
-    (l, x, y) => F.tex(x, y),
-  ]);
-  if (ornate) corners(p, true, 0, rim);
+  const p = new Pix(S, S);
+  const outer = stepRect(0, 0, S, S, [3, 2, 1]);
+  const f = field(S, S, outer, 12);
+  // the moulding profile across the frame (tone when lit / in shade, grain?):
+  // lip, broad face, carved groove, round bead, inner face, a shadowed step down
+  const PROFILE = [null, [0, 3], [1, 2, 1], [1, 2, 1], [4, 4], [0, 2], [1, 2, 1], [2, 3, 1], [4, 1]];
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+    const i = y * S + x, d = f.D[i];
+    if (!d) continue;
+    const b = band(d), l = f.L[i], lit = l > 0.1;
+    let c;
+    if (b === 0 || b === 9) c = C.ink;
+    else if (b < 9) {
+      const { k, mitre } = side(x, y, S, S);
+      const u = k === 0 || k === 2 ? x : y;
+      const P = PROFILE[b];
+      let t = P[lit ? 0 : 1] + (P[2] ? grain(u, b + k * 9, 32, 61) : 0);
+      if (mitre && b > 1 && b < 8) t++;
+      // a knot every 32 px on the broad face, the grain rings round it
+      const ku = ((u % 32) + 32) % 32, kc = k % 2 ? 21 : 10, kd = Math.hypot((ku - kc) * 0.5, b - 2.5);
+      if (!mitre && b >= 2 && b <= 3 && kd < 1.2) t = 4 + (kd < 0.6 ? 1 : 0);
+      else if (!mitre && b >= 1 && b <= 4 && kd < 2.2 && b !== 4) t = (lit ? 1 : 2) + ((ku + b) % 2);
+      c = pick6(rim, t);
+    } else if (b === 10) c = l > 0.15 ? R[4] : l < -0.45 ? R[1] : R[3];
+    else if (b === 11) c = l > 0.15 ? R[3] : F.tex(x, y);
+    else c = F.tex(x, y);
+    p.set(x, y, c);
+  }
+  // brass nails holding the frame together, one per 32 px along each side
+  for (const [x, y] of [[31, 2], [31, S - 5], [2, 31], [S - 5, 31]]) nail(p, x, y, BRASS, pick6(rim, 4));
+  if (ornate) cornerPlates(p, S, S, outer);
   return p;
 }
 
-// a small frame for plates, toasts, prompts and labels: 24x24, slice 8
-export function plateArt(fill = 'leather', { rim = RAMP.gold, rivets = true } = {}) {
-  const S = 24;
-  const F = FILLS[fill] || FILLS.leather;
+// a small frame for plates, toasts, prompts and labels: a wooden rim with brass
+// nails. 40x24, slice 8 (edges repeat every 24 px across, 8 down).
+export function plateArt(fill = 'leather', { rim = WOOD.oak, rivets = true } = {}) {
+  const W = 40, H = 24;
+  const F = fill === 'dark' ? { tex: grainTex(WOOD.dark, 24, 8, 43), r: FILLS.dark.r } : FILLS[fill] || FILLS.leather;
   const R = F.r;
-  const p = new Pix(S, S);
-  const f = field(S, S, stepRect(0, 0, S, S, [2, 1]));
-  paintBands(p, f, [
-    () => C.ink,
-    (l) => (l > 0.5 ? rim[0] : l > -0.2 ? rim[1] : rim[3]),
-    (l) => (l > 0.25 ? rim[3] : rim[2]),
-    () => C.ink,
-    (l, x, y) => (l > 0.15 ? R[4] : l < -0.45 ? R[1] : F.tex(x, y)),
-    (l, x, y) => F.tex(x, y),
-  ]);
-  if (rivets) {
-    for (const [x, y] of [[4, 4], [S - 6, 4], [4, S - 6], [S - 6, S - 6]]) {
-      p.set(x, y, rim[0]); p.set(x + 1, y, rim[2]); p.set(x, y + 1, rim[2]); p.set(x + 1, y + 1, rim[4]);
-    }
+  const p = new Pix(W, H);
+  const f = field(W, H, stepRect(0, 0, W, H, [2, 1]));
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const i = y * W + x, d = f.D[i];
+    if (!d) continue;
+    const b = band(d), l = f.L[i], lit = l > 0.1;
+    let c;
+    if (b === 0 || b === 3) c = C.ink;
+    else if (b < 3) {
+      const { k } = side(x, y, W, H);
+      const u = k === 0 || k === 2 ? x : y;
+      c = b === 1 ? pick6(rim, lit ? 0 : 3) : pick6(rim, (lit ? 1 : 2) + grain(u, k, k % 2 ? 8 : 24, 67));
+    } else if (b === 4) c = l > 0.15 ? R[4] : l < -0.45 ? R[1] : F.tex(x, y);
+    else c = F.tex(x, y);
+    p.set(x, y, c);
   }
+  if (rivets) for (const [x, y] of [[4, 4], [W - 6, 4], [4, H - 6], [W - 6, H - 6]]) nail(p, x, y, BRASS, null);
   return p;
 }
 
@@ -359,14 +447,15 @@ export function paperArt(kind = 'note') {
 }
 
 // ---------------------------------------------------------------- buttons
-// 40x30 9-slice (slice 10 top, 10 right, 12 bottom, 10 left): face + a 4px lip; pressed sinks 3px.
+// 40x30 9-slice (slice 11 top, 10 right, 12 bottom, 10 left): an oak plank face
+// with grain, a walnut rim (brass when hot), brass nails and a 4px lip; pressed sinks 3px.
 export const BTN_SLICE = [11, 10, 12, 10];
 const FACES = {
-  leather: [C.leaHi, C.leaL, C.lea, C.leaD, C.leaDD],
-  red: RAMP.red,
-  green: RAMP.green,
-  gold: RAMP.gold,
-  cream: RAMP.cream,
+  leather: WOOD.oak,
+  red: [C.redHi, C.redL, C.red, C.redD, C.redDD, 0x3e0a08],
+  green: [C.greenHi, C.greenL, C.green, C.greenD, C.greenDD, 0x0e2a12],
+  gold: [...RAMP.gold, C.goldDD],
+  cream: [...RAMP.cream, C.greyDD],
 };
 export function buttonArt(state = 'normal', face = 'leather') {
   const W = 40, H = 30;
@@ -375,32 +464,39 @@ export function buttonArt(state = 'normal', face = 'leather') {
   const lip = pressed ? 1 : 4;
   const top = pressed ? 3 : 0;
   let Fr = FACES[face] || FACES.leather;
-  let rim = RAMP.gold;
+  let rim = WOOD.walnut;
   if (state === 'hover') {
-    Fr = [mixC(Fr[0], 0xffffff, 0.35), mixC(Fr[1], 0xfff0c0, 0.28), mixC(Fr[2], 0xffd890, 0.22), Fr[2], Fr[3]];
-    rim = [C.goldHi, C.goldHi, C.goldL, C.gold, C.goldD];
+    Fr = Fr.map((c, i) => (i < 3 ? mixC(c, 0xfff4d0, 0.22 - i * 0.04) : c));
+    rim = BRASS;
   }
-  if (state === 'disabled') { Fr = [0xb0a494, 0x968a7a, 0x7c7266, 0x625a52, 0x4a443e]; rim = [0xc8bca4, 0xb0a48c, 0x968a74, 0x746a5a, 0x564e44]; }
-  if (pressed) Fr = [Fr[1], Fr[2], Fr[3], Fr[3], Fr[4]];
+  if (state === 'disabled') { Fr = WOOD.grey; rim = [0xb0a48c, 0x968a74, 0x7c705e, 0x625848, 0x4a4238, 0x342e28]; }
+  if (pressed) Fr = [Fr[1], Fr[2], Fr[3], Fr[3], Fr[4], Fr[5]];
   const faceM = stepRect(0, top, W, H - lip - top, [3, 1]);
   const all = stepRect(0, top, W, H - top, [3, 1]);
   const f = field(W, H, faceM);
   const fa = field(W, H, all);
-  // the lip (the button's side): rim colour going darker, ink outline
+  // the lip (the plank's edge): end grain going darker, ink outline
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
     const d = fa.D[y * W + x];
     if (!d || f.D[y * W + x]) continue;
-    p.set(x, y, band(d) === 0 ? C.ink : y >= H - 2 ? rim[4] : rim[3]);
+    p.set(x, y, band(d) === 0 ? C.ink : y >= H - 2 ? rim[4] : x % 3 === 0 ? rim[4] : rim[3]);
   }
-  paintBands(p, f, [
-    () => C.ink,
-    (l) => (l > 0.45 ? rim[0] : l > -0.15 ? rim[1] : l > -0.6 ? rim[2] : rim[3]),
-    (l) => (l > 0.2 ? rim[3] : rim[2]),
-    () => C.ink,
-    (l) => (l > 0.15 ? Fr[0] : l < -0.45 ? Fr[3] : Fr[1]),
-    (l, x, y) => (y < 11 ? Fr[1] : Fr[2]),
-  ]);
-  if (state !== 'disabled') { p.set(5, top + 5, 0xffffff); p.set(6, top + 5, Fr[0]); p.set(5, top + 6, Fr[0]); }
+  // grain repeats with the 9-slice middle (20 px across, 7 down)
+  const gx = (x) => (((x - 10) % 20) + 20) % 20, gy = (y) => (((y - 11) % 7) + 7) % 7;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const i = y * W + x, d = f.D[i];
+    if (!d) continue;
+    const b = band(d), l = f.L[i], lit = l > 0.1;
+    let c;
+    if (b === 0 || b === 3) c = C.ink;
+    else if (b === 1) c = l > 0.45 ? rim[0] : l > -0.15 ? rim[1] : l > -0.6 ? rim[2] : rim[3];
+    else if (b === 2) c = lit ? rim[3] : rim[2];
+    else if (b === 4) c = l > 0.15 ? Fr[0] : l < -0.45 ? Fr[3] : Fr[1];
+    else c = pick6(Fr, (y < 11 ? 1 : 2) + grain(gx(x), gy(y) + (y < 11 ? 0 : 9), 20, face === 'leather' ? 71 : 73));
+    p.set(x, y, c);
+  }
+  // brass nails in the face corners
+  if (state !== 'disabled') for (const [x, y] of [[5, top + 5], [W - 7, top + 5]]) nail(p, x, y, BRASS, Fr[4]);
   return p;
 }
 
@@ -438,7 +534,7 @@ export function tabArt(on = false) {
   const W = 24, H = 20;
   const p = new Pix(W, H);
   const fillR = on ? RAMP.leather : [0x8a5a34, 0x6e4224, 0x5a341c, 0x46281a, 0x341c10];
-  const rim = on ? RAMP.gold : [0xd8b46a, 0xc0964a, 0x9a7036, 0x6e4c22, 0x4a3016];
+  const rim = on ? WOOD.oak : WOOD.walnut;
   const shape = stepRect(0, 0, W, H + 8, [3, 2, 1]);
   const f = field(W, H + 8, shape);
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
@@ -461,7 +557,7 @@ export function tabArt(on = false) {
 export function wellArt(fill = 'dark') {
   const S = 24;
   const p = new Pix(S, S);
-  const F = FILLS[fill] || FILLS.dark;
+  const F = fill === 'dark' ? { tex: TEX.dark, r: FILLS.dark.r } : FILLS[fill] || FILLS.leather;
   const R = F.r;
   const f = field(S, S, stepRect(0, 0, S, S, [2, 1]));
   paintBands(p, f, [
@@ -715,5 +811,240 @@ export function pageArt(side = 'l') {
   }
   // the edges of the page stack on the outer side
   for (let y = 2; y < S - 2; y++) p.set(side === 'l' ? 1 : S - 2, y, y % 2 ? C.parD : C.par);
+  return p;
+}
+
+// ---------------------------------------------------------------- wood-burned sign (titles): 64x24, slice 6 18 8 18
+// An oak plank nailed on with two brass nails, edges scorched dark like a
+// pyrography sign; the middle repeats every 28 px.
+export const SIGN_SLICE = [6, 18, 8, 18];
+export function signArt(ramp = WOOD.oak) {
+  const W = 64, H = 24;
+  const p = new Pix(W, H);
+  const body = stepRect(2, 1, W - 4, 20, [2, 1]);
+  const f = field(W, H, body);
+  // hard drop shadow under the plank
+  for (let y = 2; y < H; y++) for (let x = 3; x < W - 1; x++) if (!body(x, y) && body(x - 1, y - 2)) p.set(x, y, C.shadow, 110);
+  const u = (x) => (((x - 18) % 28) + 28) % 28;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const i = y * W + x, d = f.D[i];
+    if (!d) continue;
+    const b = band(d), l = f.L[i], lit = l > 0.1;
+    let c;
+    if (b === 0) c = C.ink;
+    else if (b === 1) c = lit ? ramp[1] : ramp[4];
+    else if (b === 2) c = ramp[3]; // the scorched rim
+    else c = pick6(ramp, (b === 3 && lit ? 1 : 2) + grain(u(x), y, 28, 79));
+    // end grain darkens towards the plank's ends
+    if (b > 0 && (x < 6 || x > W - 7)) c = mixC(c, ramp[4], 0.35);
+    p.set(x, y, c);
+  }
+  for (const x of [7, W - 9]) nail(p, x, 9, BRASS, ramp[5]);
+  return p;
+}
+
+// ---------------------------------------------------------------- book straps: a 14x16 tile (repeats down) + a brass buckle 22x18
+export function strapArt() {
+  const W = 14, H = 16;
+  const p = new Pix(W, H);
+  const R = [0x8e5634, 0x6e3e22, 0x5a3018, 0x42220f, 0x2e1709];
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    let c = x === 0 || x === W - 1 ? C.ink : x === 1 ? R[0] : x === W - 2 ? R[3] : hash(x, y, 83) < 0.08 ? R[3] : R[1 + (x > W / 2 ? 1 : 0)];
+    if ((x === 3 || x === W - 4) && y % 4 < 2) c = 0xe8d4a8; // saddle stitching
+    if ((x === 3 || x === W - 4) && y % 4 === 2) c = R[3];
+    p.set(x, y, c);
+  }
+  return p;
+}
+export function buckleArt() {
+  const W = 22, H = 18;
+  const p = new Pix(W, H);
+  // the strap passing under
+  for (let y = 0; y < H; y++) for (let x = 4; x < 18; x++) p.set(x, y, x === 4 || x === 17 ? C.ink : x === 5 ? 0x8e5634 : 0x6e3e22);
+  const frame = minus(stepRect(0, 2, W, 14, [2, 1]), stepRect(4, 5, W - 8, 8, [1]));
+  paintMetal(p, W, H, frame, RAMP.gold);
+  // the prong
+  for (let x = 6; x < 15; x++) { p.set(x, 8, C.goldHi); p.set(x, 9, C.goldD); p.set(x, 10, C.ink); }
+  p.set(5, 8, C.ink); p.set(5, 9, C.ink);
+  return p;
+}
+
+// ---------------------------------------------------------------- the spiral notebook
+export const NB_INK = { pencil: 0x5e5a66, pencilL: 0x9a96a2, blue: 0x2e4c9e, red: 0xc8302a, redL: 0xe88070 };
+// cream notebook paper, 32x32 tile with a few fibres
+export function nbPaperArt() {
+  const S = 32;
+  const p = new Pix(S, S);
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+    const n = hash(x, y, 89);
+    p.set(x, y, n < 0.03 ? 0xefe4c8 : n > 0.985 ? 0xffffff : hash(x >> 3, y, 97) < 0.05 ? 0xf6eed8 : 0xfbf5e4);
+  }
+  return p;
+}
+// metal coils: the binding down the gutter of an open notebook (24x10 tile, repeats
+// down) or one coil over the top edge of a notepad (10x14 tile, repeats across)
+export function spiralArt(kind = 'v') {
+  const top = kind === 'top';
+  const W = top ? 10 : 24, H = top ? 14 : 10;
+  const p = new Pix(W, H);
+  const hole = (cx, cy) => {
+    for (let y = -2; y <= 2; y++) for (let x = -2; x <= 2; x++) {
+      const d = Math.hypot(x * 0.9, y);
+      if (d < 1.9) p.set(cx + x, cy + y, y < 0 ? 0x2a1c16 : 0x4a382c);
+      else if (d < 2.6 && y > 0) p.set(cx + x, cy + y, 0xd8ccb0);
+    }
+  };
+  const silver = [0xffffff, 0xdfe4ea, 0xaab2bc, 0x6e7680, 0x3e444c];
+  if (top) {
+    hole(4, 10);
+    paintMetal(p, W, H, roundRect(2, 0, 5, 12, 2.4), silver);
+  } else {
+    hole(4, 5);
+    hole(19, 5);
+    paintMetal(p, W, H, roundRect(3, 2, 18, 5, 2.4), silver);
+  }
+  return p;
+}
+// a yellow pencil lying on the page, 62x10 (tip on the left)
+export function pencilArt() {
+  const W = 62, H = 10;
+  const p = new Pix(W, H);
+  const Y = [0xfff4b0, 0xf8d048, 0xe8b030, 0xc88a1a, 0x9a6410];
+  const rows = [0, 1, 1, 2, 3, 4];
+  for (let x = 1; x < 58; x++) {
+    for (let r = 0; r < 6; r++) {
+      const y = 1 + r;
+      const half = x < 10 ? (x - 1) * 0.36 + 0.3 : 3;
+      if (Math.abs(y + 0.5 - 4) > half + 0.01) continue;
+      let c;
+      if (x < 4) c = r < 3 ? 0x6a6a78 : 0x3a3a44; // graphite
+      else if (x < 10) c = r < 2 ? 0xf6d8a8 : r < 4 ? 0xe0b47a : 0xb88650; // shaved wood
+      else if (x < 46) c = Y[rows[r]];
+      else if (x < 52) c = (x - 46) % 2 ? (r < 2 ? 0xdfe4ea : r < 4 ? 0xaab2bc : 0x6e7680) : r < 3 ? 0x8a929e : 0x5e6674; // ferrule
+      else c = r < 2 ? 0xffc8d0 : r < 4 ? 0xf08a98 : 0xc85a6a; // eraser
+      p.set(x, y, c);
+    }
+  }
+  // a printed stripe and the tip's glint
+  for (let x = 14; x < 44; x += 2) p.set(x, 4, Y[3]);
+  p.set(2, 3, 0xa8a8b4);
+  inkOutline(p);
+  for (let x = 2; x < W; x++) if (p.alpha(x - 1, H - 2) > 200 && !p.alpha(x, H - 1)) p.set(x, H - 1, C.shadow, 70);
+  return p;
+}
+// a coffee-mug ring someone left on the page, 30x30
+export function stainArt() {
+  const S = 30;
+  const p = new Pix(S, S);
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+    const dx = x + 0.5 - 15, dy = y + 0.5 - 15, d = Math.hypot(dx, dy);
+    const a = Math.atan2(dy, dx);
+    const gap = hash(Math.floor((a + Math.PI) * 4), 1, 101) < 0.14;
+    const r = 11.6 + Math.sin(a * 3) * 0.4;
+    // raw writes: these pixels are see-through on purpose
+    if (d > r - 3 && d <= r && !gap) p.put(x, y, d > r - 1 ? 0x7a3e18 : d > r - 2 ? 0x9a5a28 : 0xb07a46, d > r - 1 ? 200 : d > r - 2 ? 140 : 90);
+    else if (d < r - 3) p.put(x, y, 0xb07a46, 34);
+  }
+  p.put(27, 9, 0x7a4422, 110); p.put(28, 10, 0x9a6232, 80); p.put(4, 25, 0x7a4422, 100);
+  return p;
+}
+// a strip of masking tape, 22x9
+export function tapeArt() {
+  const W = 22, H = 9;
+  const p = new Pix(W, H);
+  for (let y = 0; y < H - 1; y++) for (let x = 0; x < W; x++) {
+    const e = Math.min(x, W - 1 - x);
+    if (e < (y % 3 === 1 ? 0 : 1)) continue;
+    p.put(x, y, y === 0 ? 0xfff8dc : hash(x, y, 103) < 0.12 ? 0xe2d4a0 : 0xf0e4b4, 215);
+  }
+  for (let x = 1; x < W; x++) p.put(x, H - 1, C.shadow, 50);
+  return p;
+}
+// pencil tick boxes (12x12): empty, pencil check (packed), red-ink tick (done)
+export function nbBoxArt(state = 'box') {
+  const S = 12;
+  const p = new Pix(S, S);
+  const g = NB_INK.pencil, gl = NB_INK.pencilL;
+  // a hand-drawn square: a little wobbly, corners overshooting
+  for (let x = 1; x < 10; x++) { p.set(x, 3, g); p.set(x, 11, x === 9 ? gl : g); }
+  for (let y = 3; y < 12; y++) { p.set(1, y, y === 7 ? gl : g); p.set(10, y, g); }
+  p.set(0, 3, gl); p.set(11, 11, gl); p.set(10, 2, gl);
+  if (state === 'check') for (const [x, y] of [[3, 7], [4, 8], [5, 9], [6, 8], [7, 7], [8, 6], [9, 5]]) p.set(x, y, g);
+  if (state === 'tick') {
+    const R = NB_INK.red;
+    for (const [x, y] of [[2, 6], [3, 7], [4, 8], [5, 9], [6, 8], [7, 7], [8, 6], [9, 5], [10, 4], [11, 3], [11, 2]]) { p.set(x, y, R); p.set(x, y + 1, R); }
+    p.set(11, 1, NB_INK.redL);
+  }
+  return p;
+}
+// little pen doodles for the margins (24x16)
+function pen(p, pts, c) {
+  for (let i = 1; i < pts.length; i++) p.line(pts[i - 1][0], pts[i - 1][1], pts[i][0], pts[i][1], c);
+}
+function penRing(p, cx, cy, r, c, a0 = 0, a1 = Math.PI * 2) {
+  const n = Math.ceil(r * 8);
+  let last = null;
+  for (let k = 0; k <= n; k++) {
+    const a = a0 + ((a1 - a0) * k) / n;
+    const q = [Math.round(cx + Math.cos(a) * r), Math.round(cy + Math.sin(a) * r)];
+    if (last) p.line(last[0], last[1], q[0], q[1], c);
+    last = q;
+  }
+}
+export const DOODLES = ['bike', 'mug', 'leaf', 'heart', 'star', 'swirl'];
+export function doodleArt(kind) {
+  const b = NB_INK.blue, g = NB_INK.pencil;
+  const p = new Pix(24, 16);
+  switch (kind) {
+    case 'bike':
+      penRing(p, 5, 10, 4, b); penRing(p, 18, 10, 4, b);
+      pen(p, [[5, 10], [9, 5], [16, 5], [18, 10]], b); pen(p, [[9, 5], [11, 10], [16, 5]], b);
+      pen(p, [[8, 3], [11, 3]], b); pen(p, [[16, 5], [16, 2], [18, 2]], b);
+      break;
+    case 'mug':
+      pen(p, [[6, 6], [6, 14], [14, 14], [14, 6], [6, 6]], g); penRing(p, 15, 10, 2.5, g, -Math.PI / 2, Math.PI / 2);
+      pen(p, [[8, 4], [9, 3], [8, 2], [9, 1]], g); pen(p, [[11, 4], [12, 3], [11, 2], [12, 1]], g);
+      break;
+    case 'leaf':
+      pen(p, [[12, 15], [12, 6]], b);
+      pen(p, [[12, 2], [14, 5], [17, 4], [16, 7], [20, 8], [16, 10], [12, 9], [8, 10], [4, 8], [8, 7], [7, 4], [10, 5], [12, 2]], b);
+      break;
+    case 'heart':
+      pen(p, [[11, 14], [6, 9], [5, 6], [6, 4], [8, 3], [10, 4], [11, 6], [12, 4], [14, 3], [16, 4], [17, 6], [16, 9], [11, 14]], NB_INK.red);
+      break;
+    case 'star':
+      pen(p, [[11, 1], [13, 6], [19, 6], [14, 9], [16, 15], [11, 11], [6, 15], [8, 9], [3, 6], [9, 6], [11, 1]], g);
+      break;
+    default: // a curly pen swirl
+      penRing(p, 12, 8, 6, b, 0, Math.PI * 1.5); penRing(p, 12, 8, 3.5, b, Math.PI * 1.5, Math.PI * 3); penRing(p, 12, 8, 1.4, b, 0, Math.PI * 1.6);
+  }
+  return p;
+}
+// the HUD clipboard: an oak 9-slice board (32x32, slice 10) and its steel clip (34x14)
+export function clipboardArt() {
+  const S = 32;
+  const p = new Pix(S, S);
+  const f = field(S, S, stepRect(0, 0, S, S, [3, 2, 1]));
+  const R = WOOD.oak;
+  const t = (v) => (((v - 10) % 12) + 12) % 12;
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+    const i = y * S + x, d = f.D[i];
+    if (!d) continue;
+    const b = band(d), lit = f.L[i] > 0.1;
+    const c = b === 0 ? C.ink : b === 1 ? R[lit ? 0 : 4] : b === 2 ? R[lit ? 1 : 3] : pick6(R, 2 + grain(t(x), t(y), 12, 107));
+    p.set(x, y, c);
+  }
+  return p;
+}
+export function clipArt() {
+  const W = 34, H = 14;
+  const p = new Pix(W, H);
+  const steel = [0xffffff, 0xdfe4ea, 0xaab2bc, 0x6e7680, 0x3e444c];
+  // the lever (a rolled wire loop) behind, then the jaw plate
+  paintMetal(p, W, H, minus(roundRect(9, 0, 16, 7, 3), roundRect(12, 2, 10, 3, 1)), steel);
+  paintMetal(p, W, H, stepRect(2, 4, W - 4, 9, [3, 2, 1]), steel);
+  for (let x = 6; x < W - 6; x++) { p.set(x, 7, steel[3]); p.set(x, 8, steel[1]); }
+  for (const x of [5, W - 7]) nail(p, x, 9, [0xfff0b0, 0xdfe4ea, 0x6e7680, 0x6e7680, 0x2e3440], null);
+  for (let x = 3; x < W - 2; x++) p.set(x, H - 1, C.shadow, 90);
   return p;
 }

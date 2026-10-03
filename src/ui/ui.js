@@ -4,6 +4,7 @@ import './kit.css';
 import './ui.css';
 import './paper.css';
 import './menus.css';
+import './notebook.css';
 import { Bubbles } from './bubbles.js';
 import { buildPaperHUD, updatePaperHUD, Gauge } from './paperhud.js';
 import { installKit, kitReady, kButton, kPanel, el, snap, snapBox, scale } from './kit.js';
@@ -16,10 +17,9 @@ import { sound } from '../game/sound.js';
 import { loadSettings } from '../game/state.js';
 
 // a pixel icon by name: the UI set first, then the food sprites
-const ICON_ALIAS = { candy: 'candy_corn' };
 export function anyIcon(name) {
   if (hasIcon(name)) return { src: iconURL(name), size: 32 };
-  const f = FOOD_INFO[name] ? name : ICON_ALIAS[name];
+  const f = FOOD_INFO[name] ? name : null;
   return f ? { src: foodIconURL(f), size: 48 } : { src: iconURL(name), size: 32 };
 }
 
