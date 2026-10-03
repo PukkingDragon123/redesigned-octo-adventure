@@ -328,11 +328,11 @@ export const KEEPSAKES = [
   { id: 'bottles', x: 56, z: -44, name: 'Maple Syrup Bottles', note: 'Grade A Amber. Vintage 1979. Do not drink. (Hank drank it.)' },
 ];
 
-// Gameplay spots used by voxelWorld.halloween() / quests
-export const BOWLING = { x: 174.5, z: 41.6 }; // kick pumpkins north up the green's gravel path at the pins
-export const HOOPS = [[-6, 32.4], [62, 42.8], [-120, 60.2]]; // flaming trick hoops standing over the main road
+// Gameplay spots used by voxelWorld.dress() / quests
+export const BOWLING = { x: 174.5, z: 41.6 }; // lawn bowling: kick the ball north up the green's gravel path at the pins
+export const HOOPS = [[-6, 32.4], [62, 42.8], [-120, 60.2]]; // harvest hoops standing over the main road
 export const PLANT_SPOTS = [[-150, 40], [-138, 50], [-128, 62], [-60, 46], [80, 58], [100, 62]]; // Gus's saplings
-// kickable pumpkins & jack-o'-lanterns (a few by the café for Marie-Claude's pumpkin errand)
+// kickable harvest pumpkins (a few by the café for Marie-Claude's pumpkin errand)
 export const LOOSE_PUMPKINS = [
   [205.6, 41.2], [207.2, 40.2], [203.8, 39.4], [160.5, 43.8], [148, 56.3], [176.5, 56.2], [221.5, 43.8], [238, 56.3], [126, 43.8],
   [-160, 76], [-158, 77.5], [-176, 76], [-210, -26], [-206, -27], [46, 44.8], [47.5, 45.6],

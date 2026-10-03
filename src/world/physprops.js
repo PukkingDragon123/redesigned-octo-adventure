@@ -1,5 +1,5 @@
-// Kickable, rollable, smashable voxel props (pumpkins, jack-o'-lanterns,
-// bowling pins, crates...). Each prop is a voxel mesh with a tiny rigid-body:
+// Kickable, rollable, smashable voxel props (harvest pumpkins, the lawn-bowling
+// pins and ball, crates...). Each prop is a voxel mesh with a tiny rigid-body:
 // gravity, bounces, rolling on the ground, pushes from Hank and the bike, and
 // a satisfying burst into voxel chunks when it takes too much punishment.
 import * as THREE from 'three';

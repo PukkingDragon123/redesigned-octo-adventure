@@ -1,6 +1,6 @@
-// Side quests & Halloween mini-games: lost cats, lost things, tree planting,
-// bird photos, letters, helping the café, pumpkin bowling, trick-or-treating,
-// the grocery run for Nana. Villagers offer them when Hank stops to chat.
+// Side quests & fall-fair games: lost cats, lost things, tree planting, bird
+// photos, letters, helping the café, lawn bowling, harvest-supper invitations,
+// the harvest hoops, the grocery run for Nana. Villagers offer them when Hank stops to chat.
 import * as THREE from 'three';
 import { Vox, tone } from '../voxel/vox.js';
 import { meshVox } from '../voxel/mesh.js';
@@ -49,7 +49,7 @@ export function voxelPoutine(g) {
 const CATS = [
   { id: 'mittens', owner: 'agnes', name: 'Mittens', color: 0x8a8a92, belly: 0xf6f0e6, x: -96, z: -60, hint: 'She loves the long grass in the west meadow.' },
   { id: 'pumpkin', owner: 'ollie', name: 'Pumpkin', color: 0xd8782a, belly: 0xf6e0c0, x: 62, z: -112, hint: 'He likes watching the sunset from the lookout.' },
-  { id: 'shadow', owner: 'doug', name: 'Sergeant Shadow', color: 0x2a2228, belly: 0x3a3238, x: -219, z: -34, hint: 'Probably hunting ghosts at the old cemetery.' },
+  { id: 'shadow', owner: 'doug', name: 'Sergeant Shadow', color: 0x2a2228, belly: 0x3a3238, x: -219, z: -34, hint: 'Probably hunting mice among the old headstones at the cemetery.' },
 ];
 const LOST = [
   { id: 'glasses', owner: 'agnes', item: 'glasses', name: 'reading glasses', x: 178, z: 6, build: () => PR.compass(), say: 'My reading glasses! I put them down somewhere by the chapel steps, up past the green...' },
@@ -69,9 +69,9 @@ export const QUESTS = {
   birds: { title: "Birdie's bird book", giver: 'birdie', reward: 35 },
   letter: { title: 'Special delivery', giver: 'doug', reward: 12 },
   cafe: { title: 'Pumpkins for the café', giver: 'marie', reward: 25 },
-  bowling: { title: 'Pumpkin bowling', giver: 'pip', reward: 20 },
-  treat: { title: 'Trick-or-treat!', giver: 'pop', reward: 0 },
-  hoops: { title: 'Ring of fire', giver: 'lou', reward: 40 },
+  bowling: { title: 'Lawn bowling', giver: 'pip', reward: 20 },
+  treat: { title: 'Harvest supper invitations', giver: 'pop', reward: 15 },
+  hoops: { title: 'The harvest hoops', giver: 'lou', reward: 40 },
 };
 
 const GREET = {
@@ -128,7 +128,7 @@ export class Quests {
     void lost;
     const letter = this.q('letter');
     if (letter.state === 'active' && !letter.picked) { /* carried from the start */ }
-    // trick-or-treat doors
+    // doors to knock on with the harvest-supper invitations
     this.doors = [];
     const W = g.world;
     for (const b of BUILDINGS) {
@@ -230,13 +230,13 @@ export class Quests {
     if (who === 'marie') add('cafe', 'My pumpkin spice is out of pumpkins! Kick three pumpkins to my café door — gently!', async () => {
       const q = this.q('cafe'); q.state = 'active'; q.n = 0;
     }, { expr: 'shock' });
-    if (who === 'pip') add('bowling', 'PUMPKIN BOWLING! Kick a pumpkin into the pins on the street! Knock down ALL SIX!', async () => {
+    if (who === 'pip') add('bowling', 'BOWLING! Kick the big ball up the path on the green into the pins! Knock down ALL SIX!', async () => {
       this.q('bowling').state = 'active';
     }, { expr: 'sparkle', yes: "Let's bowl!" });
-    if (who === 'pop' && this.game.world.atmosphere.hour > 17) add('treat', 'Trick-or-treat starts at sundown! Knock on six doors and get candy!', async () => {
+    if (who === 'pop' && this.game.world.atmosphere.hour > 14) add('treat', "Mom's harvest supper is tonight! Knock on six doors and invite the neighbours. I'm too shy.", async () => {
       const q = this.q('treat'); q.state = 'active'; q.n = 0; q.have = {};
-    }, { expr: 'sparkle', yes: 'Trick or treat!' });
-    if (who === 'lou') add('hoops', 'Bet you can\'t ride through all three flaming hoops! Five bucks says no!', async () => {
+    }, { expr: 'sheepish', yes: "I'll knock!" });
+    if (who === 'lou') add('hoops', 'Bet you can\'t ride through all three harvest hoops over the road! Five bucks says no!', async () => {
       const q = this.q('hoops'); q.state = 'active'; q.have = {};
     }, { expr: 'smug', yes: "You're on!" });
     return out;
@@ -288,10 +288,7 @@ export class Quests {
     const bowling = this.q('bowling');
     if (who === 'pip' && bowling.state === 'active' && bowling.strike) return done('bowling', 'STRIIIIKE!!! You are the BEST SKELETON EVER!!!', 'sparkle');
     const treat = this.q('treat');
-    if (who === 'pop' && treat.state === 'active' && treat.n >= 6) {
-      g.state.candy = (g.state.candy || 0) + 5;
-      return done('treat', "Six doors?! You're a trick-or-treat LEGEND! Here, have my best candy.", 'sparkle');
-    }
+    if (who === 'pop' && treat.state === 'active' && treat.n >= 6) return done('treat', "Six doors?! Everybody's coming! Mom says you get the first slice of pie.", 'sparkle');
     const hoops = this.q('hoops');
     if (who === 'lou' && hoops.state === 'active' && Object.keys(hoops.have).length >= 3) return done('hoops', 'NO WAY! All three! ...Here. Five bucks. And thirty-five more for the show.', 'shock');
     // groceries handed to Nana
@@ -337,7 +334,7 @@ export class Quests {
       const q = this.q('hoops');
       if (q.state === 'active') {
         q.have[`${Math.round(data.x)},${Math.round(data.z)}`] = true;
-        g.ui.toast(`Flaming hoops: <b>${Object.keys(q.have).length}/3</b>`, 'star', 1600);
+        g.ui.toast(`Harvest hoops: <b>${Object.keys(q.have).length}/3</b>`, 'star', 1600);
       }
     }
   }
@@ -395,7 +392,7 @@ export class Quests {
         if (!s.planted && Math.hypot(s.x - p.x, s.z - p.z) < 2) return { text: 'Plant a sapling', fn: () => this.plant(s) };
       }
     }
-    // trick-or-treat doors (after dark)
+    // harvest-supper invitations: knock on the neighbours' doors
     const treat = this.q('treat');
     if (treat.state === 'active' && g.onFoot) {
       for (const d of this.doors) if (!treat.have[d.id] && Math.hypot(d.x - p.x, d.z - p.z) < 2.2) return { text: 'Knock knock!', fn: () => this.knock(d) };
@@ -467,13 +464,11 @@ export class Quests {
     await g.wait(0.9);
     g.sound.play('door_creak');
     g.rider.ch.play('idle');
-    g.sound.play('candy_rattle');
     g.effects.confetti(d.x, d.y + 1.2, d.z, 20);
-    g.state.candy = (g.state.candy || 0) + 1;
     const owner = d.owner && CUSTOMERS[d.owner] ? (d.owner === 'kids' ? 'pip' : d.owner === 'lou_lh' ? 'ollie' : d.owner) : null;
-    const lines = ['Happy Halloween! Great costume! ...It is a costume, right?', 'Trick or treat? Treat! Definitely treat!', 'Ooh, spooky! Have two!', 'Here you go, dear. Very convincing makeup!'];
+    const lines = ["A harvest supper? We'll bring the beans!", "Pie at the Gagnons'? Count us in, dear.", "Supper! I'll dust off my good sweater.", "Tell your mother we're coming. With the casserole."];
     await g.ui.say(owner, lines[q.n % lines.length], { expr: 'happy', name: owner ? undefined : 'A voice behind the door' });
-    g.ui.toast(`Candy! <b>${q.n}/6</b> doors`, 'candy', 1500);
+    g.ui.toast(`Invitation delivered! <b>${q.n}/6</b> doors`, 'star', 1500);
     g.mode = 'ride';
   }
 
@@ -549,8 +544,8 @@ export class Quests {
     if (S.letter?.state === 'active') out.push('Letter for Dr. Ingrid');
     if (S.cafe?.state === 'active') out.push(`Pumpkins to café ${S.cafe.n}/3`);
     if (S.bowling?.state === 'active') out.push(S.bowling.strike ? 'Tell Pip: STRIKE!' : 'Bowl a strike');
-    if (S.treat?.state === 'active') out.push(`Trick-or-treat ${S.treat.n}/6`);
-    if (S.hoops?.state === 'active') out.push(`Flaming hoops ${Object.keys(S.hoops.have).length}/3`);
+    if (S.treat?.state === 'active') out.push(S.treat.n >= 6 ? 'Tell Pop: everyone is coming' : `Supper invitations ${S.treat.n}/6`);
+    if (S.hoops?.state === 'active') out.push(`Harvest hoops ${Object.keys(S.hoops.have).length}/3`);
     if (Object.keys(g.state.bag || {}).length) out.push('Groceries: bring home');
     else if (S.groceries?.state === 'active') out.push('Buy groceries at Moose & Goose');
     return out.slice(0, 5);

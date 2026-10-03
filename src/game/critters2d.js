@@ -2,7 +2,7 @@
 // bound away, hopping songbirds that flutter off, geese in Vs, crow swirls,
 // circling gulls by the sea, rabbits, foxes that pounce on mice, squirrels and
 // chipmunks that dash up trees, paddling ducks, frogs, jumping trout,
-// butterflies and dragonflies by day; bats, owls and graveyard wisps by night;
+// butterflies and dragonflies by day; bats and owls by night;
 // and a cheeky raccoon raiding a bin in the village after dark.
 // Everything is pooled: creatures spawn in suitable spots near the player,
 // react to Hank, and despawn when far away. The sprite atlas is painted over
@@ -29,7 +29,8 @@ export class Critters2D {
     this.game = game;
     this.rng = new RNG(4242);
     this.atlas = new SpriteAtlas(2048);
-    this.painter = paintCrittersGen(this.atlas);
+    // (the old graveyard wisps are not painted: the town is dressed for the harvest, not Halloween)
+    this.painter = paintCrittersGen(this.atlas, Object.keys(CRITTERS).filter((k) => !k.startsWith('wisp')));
     this.ready = false;
     this.paintMs = 0;
     this.list = [];
@@ -246,7 +247,6 @@ export class Critters2D {
     if (due('dragonfly', 3, 6) && day && this.countCat('dragonfly') < 3) this.spawnDragonfly();
     if (due('bat', 3, 6) && n > 0.45 && this.countCat('bat') < 7) this.spawnBats();
     if (due('owl', 10, 20) && n > 0.45 && this.countCat('owl') < 2) this.spawnOwl();
-    if (due('wisp', 2, 4) && n > 0.4 && this.countCat('wisp') < 6) this.spawnWisps();
     if (due('raccoon', 10, 20) && (n > 0.35 || h > 18.5) && this.countCat('raccoon') < 1) this.spawnRaccoon();
   }
 

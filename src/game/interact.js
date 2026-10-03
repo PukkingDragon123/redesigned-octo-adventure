@@ -1,7 +1,8 @@
-// Things Hank can poke at around town: kick pumpkins, sit on benches, bonk the
-// giant skeleton bobblehead, stir the witch's cauldron... plus the trick hoops.
-import * as THREE from 'three';
+// Things Hank can poke at around town: kick pumpkins and the bowling ball, sit on
+// benches, watch Nana's TV, ride through the harvest hoops, and knock over the 2D
+// street clutter (bins, fences, crates, signs, the fish stall...: see deco2d.js).
 import { input } from '../core/input.js';
+import { Deco2D } from './deco2d.js';
 
 export class Interactables {
   constructor(game) {
@@ -12,13 +13,12 @@ export class Interactables {
     this.spots = game.world.voxel?.spots || [];
     this.hoops = game.world.voxel?.hoops || [];
     this.sitting = null;
-    this.bobble = 0;
+    this.deco = new Deco2D(game);
     game.world.interactables = this;
     if (this.props) {
       this.props.onSmash = (p) => {
         game.state.stats.smashed = (game.state.stats.smashed || 0) + 1;
         game.quests?.event('smash', p);
-        if (p.kind === 'jack' && Math.random() < 0.6) game.effects?.coins(p.pivot.position.x, p.pivot.position.y + 0.4, p.pivot.position.z, 4);
       };
     }
   }
@@ -35,7 +35,9 @@ export class Interactables {
     }
     if (best) return { text: best.text, fn: () => this.use(best) };
     const pr = this.props?.nearest(p, 1.3);
-    if (pr) return { text: pr.kind === 'pin' ? 'Kick the pin' : 'Kick the pumpkin', key: 'F', fn: () => this.kickNow(), passive: true };
+    if (pr) return { text: KICK_TEXT[pr.kind] || 'Kick it', key: 'F', fn: () => this.kickNow(), passive: true };
+    const dk = this.deco.nearest(p, 1.0);
+    if (dk) return { text: dk.text, key: 'F', fn: () => this.kickNow(), passive: true };
     return null;
   }
 
@@ -53,6 +55,7 @@ export class Interactables {
     // the boot lands a beat after the wind-up
     g.wait(0.2).then(() => {
       const hit = this.props?.kick(pos, yaw, 1);
+      if (this.deco.kick(pos, yaw, 1) && !hit) g.chase.shake(0.2);
       if (hit) {
         g.chase.shake(0.25);
         g.quests?.event('kick', hit);
@@ -70,37 +73,6 @@ export class Interactables {
         ch.play('sit');
         g.sound.play('footstep_wood');
         break;
-      case 'bobble':
-        this.bobble = 1;
-        ch.play('point');
-        ch.react('laugh');
-        g.sound.play('bone_rattle');
-        g.sound.play('boing');
-        g.quests?.event('bobble');
-        break;
-      case 'cauldron': {
-        ch.react('gasp');
-        g.sound.play('cauldron_bubble');
-        g.effects.magic(s.x, g.walker.pos.y + 1.2, s.z, 24, [0.5, 1, 0.4]);
-        g.quests?.event('cauldron');
-        // the brew gives Hank a witch's hat for a while (poof!)
-        if (!this.witchHat) {
-          const r = g.world.voxel.model('witchhat-small', () => g.world.voxelProps.witchHat({}));
-          const m = new THREE.Mesh(r.geometry, ch.mat);
-          m.position.y = ch.P.headH - 0.06;
-          m.rotation.z = 0.15;
-          m.scale.setScalar(0.8);
-          ch.headPiece.add(m);
-          this.witchHat = m;
-          g.sound.play('witch_cackle');
-          g.wait(30).then(() => {
-            ch.headPiece.remove(m);
-            this.witchHat = null;
-            g.effects.magic(g.playerPos.x, g.playerPos.y + 1.8, g.playerPos.z, 14, [0.7, 0.5, 1]);
-          });
-        }
-        break;
-      }
       case 'tv': {
         const S = g.state;
         const lines = ['Good evening, Maple Cove!', `Day ${S.day}: ${g.world.atmosphere.weatherTarget} skies.`];
@@ -112,24 +84,6 @@ export class Interactables {
         })();
         break;
       }
-      case 'carve':
-        g.openMenu(() => g.menus.carve((face) => {
-          g.resumeFromMenu();
-          if (!face) return;
-          const slots = [[-167.6, 62.6], [-164.8, 62.4], [-168.6, 64.2], [-163.8, 64.4], [-166.2, 61.6]];
-          this.carved = (this.carved || 0) % slots.length;
-          const [x, z] = slots[this.carved++];
-          const PRm = g.world.voxel;
-          const r = PRm.model(`carved:${face}`, () => g.world.voxelProps.jackOLantern({ face, kind: 'medium', seed: 3, hollow: false }));
-          const y = g.physics.groundAt(x, z, 100).h;
-          g.world.physprops.add(r, x, y, z, { yaw: Math.PI / 2, kind: 'jack', hp: 3, mass: 1.2, lights: true, respawn: 0 });
-          g.sound.play('lantern_whoomp');
-          g.effects.magic(x, y + 0.5, z, 20, [1, 0.7, 0.3]);
-          ch.react('yay');
-          g.quests?.event('carve', face);
-          g.ui.toast(`You carved a <b>${face}</b> jack-o'-lantern! It's glowing on the porch.`, 'pumpkin', 2600);
-        }));
-        break;
       default:
         g.quests?.event('spot', s);
     }
@@ -155,9 +109,9 @@ export class Interactables {
       else if (g.bike.crash <= 0) actors.push({ pos: g.bike.pos, vel: g.bike.vel, r: 0.45, bike: true });
       this.props.update(dt, actors);
     }
-    // bobblehead wobble decays (purely cosmetic for now)
-    this.bobble = Math.max(0, this.bobble - dt * 0.5);
-    // trick hoops: riding through one at speed is a trick shot
+    // the 2D street clutter: knocked over by the bike and by Hank, tidied away while nobody looks
+    this.deco.update(dt);
+    // harvest hoops: riding through one at speed is a trick shot
     if (!g.onFoot && this.hoops.length) {
       const b = g.bike;
       for (const h of this.hoops) {
@@ -175,3 +129,5 @@ export class Interactables {
     }
   }
 }
+
+const KICK_TEXT = { pin: 'Kick the pin', ball: 'Kick the ball', pumpkin: 'Kick the pumpkin' };

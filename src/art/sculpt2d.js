@@ -115,6 +115,14 @@ export class Sculpt {
     }
     return this;
   }
+  // box: centre, half extents, material (name or fn(h, prim, face) -> name, h = hit point in [-1, 1]^3,
+  // face = axis * 2 + (positive side ? 1 : 0)), { rot:[yaw,pitch,roll], group }. Flat faces shade as
+  // one band each, which suits planks, crates, signs and bins.
+  box(c, h, mat, o = {}) {
+    if (typeof h === 'number') h = [h, h, h];
+    this.prims.push({ box: true, c, r: h, B: o.B || basis(o.rot), mat, group: o.group ?? this.group(), line: o.line ?? true });
+    return this;
+  }
   // decal: a 3D point and a pixel painter fn(put, x, y, view) stamped if the point is visible
   decal(p, fn, o = {}) {
     this.decals.push({ p, fn, tol: o.tol ?? 0.04, always: o.always ?? false });
@@ -137,6 +145,10 @@ export function renderSculpt(S, view, ppm, opts = {}) {
     }
     const c = mv(V, p.c);
     const B = mul(V, p.B);
+    if (p.box) {
+      const R = Math.hypot(p.r[0], p.r[1], p.r[2]);
+      return { ...p, c, B, d: [-B[6], -B[7], -B[8]], bx0: c[0] - R, bx1: c[0] + R, by0: c[1] - R, by1: c[1] + R };
+    }
     const R = Math.max(p.r[0], p.r[1], p.r[2]);
     // ray direction (0,0,-1) in unit-sphere local space
     const d = [-B[6] / p.r[0], -B[7] / p.r[1], -B[8] / p.r[2]];
@@ -164,6 +176,7 @@ export function renderSculpt(S, view, ppm, opts = {}) {
   for (const p of P) {
     p.mi = typeof p.mat === 'function' ? -1 : MI.get(p.mat) ?? badMat(p.mat);
     if (p.cone) rasterCone(p, RC);
+    else if (p.box) rasterBox(p, RC);
     else rasterEll(p, RC);
   }
   // clean up lone pixels and pinholes
@@ -376,6 +389,47 @@ function rasterEll(p, RC) {
       let nx = B[0] * lx + B[1] * ly + B[2] * lz, ny = B[3] * lx + B[4] * ly + B[5] * lz, nz = B[6] * lx + B[7] * ly + B[8] * lz;
       const nl = Math.hypot(nx, ny, nz) || 1;
       nrm[i * 3] = nx / nl; nrm[i * 3 + 1] = ny / nl; nrm[i * 3 + 2] = nz / nl;
+    }
+  }
+}
+
+// oriented box: slab test in the box's own frame (ray from z = ZF towards -z)
+function rasterBox(p, RC) {
+  const { depth, mat, nrm, grp, lineOk, W, H, gx0, gy0, ppm, V, clip, clipY, MI } = RC;
+  const hh = HH;
+  const px0 = Math.max(0, Math.floor(p.bx0 * ppm) - gx0), px1 = Math.min(W - 1, Math.ceil(p.bx1 * ppm) - gx0);
+  const py0 = Math.max(0, Math.floor(-p.by1 * ppm) - gy0), py1 = Math.min(H - 1, Math.ceil(-p.by0 * ppm) - gy0);
+  const fn = typeof p.mat === 'function' ? p.mat : null, mi = p.mi, line = p.line ? 1 : 0, group = p.group;
+  const B = p.B, r = p.r, d = p.d;
+  const oz = ZF - p.c[2];
+  for (let py = py0; py <= py1; py++) {
+    const Y = -(py + gy0 + 0.5) / ppm;
+    for (let px = px0; px <= px1; px++) {
+      const X = (px + gx0 + 0.5) / ppm;
+      const ex = X - p.c[0], ey = Y - p.c[1];
+      let t0 = -1e9, t1 = 1e9, ax = -1, sg = 0;
+      let miss = false;
+      for (let k = 0; k < 3 && !miss; k++) {
+        const o = B[k] * ex + B[3 + k] * ey + B[6 + k] * oz, dk = d[k], h = r[k];
+        if (Math.abs(dk) < 1e-9) { if (Math.abs(o) > h) miss = true; continue; }
+        let a = (-h - o) / dk, b = (h - o) / dk, s = -1;
+        if (a > b) { const tmp = a; a = b; b = tmp; s = 1; }
+        if (a > t0) { t0 = a; ax = k; sg = s; }
+        if (b < t1) t1 = b;
+        if (t1 < t0) miss = true;
+      }
+      if (miss || ax < 0 || t1 < 0) continue;
+      const t = t0;
+      const z = ZF - t;
+      const i = py * W + px;
+      if (z <= depth[i]) continue;
+      if (clip && V[1] * X + V[4] * Y + V[7] * z < clipY) continue;
+      for (let k = 0; k < 3; k++) hh[k] = (B[k] * ex + B[3 + k] * ey + B[6 + k] * oz + d[k] * t) / r[k];
+      hh[ax] = sg;
+      let k = mi;
+      if (fn) { const m = fn(hh, p, ax * 2 + (sg > 0 ? 1 : 0)); if (!m) continue; k = MI.get(m) ?? badMat(m); }
+      depth[i] = z; mat[i] = k; grp[i] = group; lineOk[i] = line;
+      nrm[i * 3] = B[ax] * sg; nrm[i * 3 + 1] = B[3 + ax] * sg; nrm[i * 3 + 2] = B[6 + ax] * sg;
     }
   }
 }

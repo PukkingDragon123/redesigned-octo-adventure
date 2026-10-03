@@ -1,7 +1,7 @@
 // Puts the voxel art into Maple Cove: every building as a detailed voxel model
 // with hand-lettered signs, the town clutter as voxel props (merged per area),
-// pumpkins & jack-o'-lanterns as kickable physics props, and a pile of extra
-// Halloween dressing (bobbleheads, cauldrons, candles, bats, trick hoops...).
+// harvest pumpkins as kickable physics props, and the fall-fair extras (lawn
+// bowling on the green, harvest hoops over the road, Nana's porch TV...).
 import * as THREE from 'three';
 import BuildWorker from './buildWorker.js?worker&inline';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
@@ -14,6 +14,7 @@ import { PhysProps } from './physprops.js';
 import { Vox } from '../voxel/vox.js';
 import { nearestRoad } from './terrain.js';
 import { dressPlaces } from './places.js';
+import { placeDeco2D } from './deco2d.js';
 
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _s = new THREE.Vector3(1, 1, 1), _p = new THREE.Vector3();
 const UP = new THREE.Vector3(0, 1, 0);
@@ -252,11 +253,8 @@ export class VoxelWorld {
         case 'pumpkin': {
           const kind = d.s < 0.22 ? 'small' : d.s < 0.33 ? 'medium' : seed % 3 ? 'big' : 'squat';
           const v = seed % 6;
-          const jack = seed % 4 === 0;
-          const r = jack
-            ? this.model(`jack:${kind}:${v}`, () => PR.jackOLantern({ face: PR.JACK_FACES[v % PR.JACK_FACES.length], kind: kind === 'squat' ? 'medium' : kind === 'big' ? 'medium' : 'small', seed: v, hollow: false }))
-            : this.model(`pumpkin:${kind}:${v}`, () => PR.pumpkin({ kind, seed: v + 10, color: v === 5 ? 'white' : v === 4 ? 'amber' : 'orange' }));
-          physprops.add(r, d.x, d.y, d.z, { yaw, kind: jack ? 'jack' : 'pumpkin', hp: kind === 'small' ? 2 : 3, mass: kind === 'big' ? 2.2 : kind === 'small' ? 0.6 : 1.2, lights: jack });
+          const r = this.model(`pumpkin:${kind}:${v}`, () => PR.pumpkin({ kind, seed: v + 10, color: v === 5 ? 'white' : v === 4 ? 'amber' : 'orange' }));
+          physprops.add(r, d.x, d.y, d.z, { yaw, kind: 'pumpkin', hp: kind === 'small' ? 2 : 3, mass: kind === 'big' ? 2.2 : kind === 'small' ? 0.6 : 1.2, lights: false });
           break;
         }
         case 'hay':
@@ -309,37 +307,28 @@ export class VoxelWorld {
     this.spots.push({ x, z, r, text, action, ...extra });
   }
 
-  // ------------------------------------------------------------ extra Halloween dressing
-  halloween(physprops) {
+  // ------------------------------------------------------------ fall-fair extras
+  dress(physprops) {
     const P = L.POI;
     const gy = (x, z) => this.ground(x, z);
     const S = (key, fn, x, z, yaw = 0, dy = 0, scale = 1) => this.addStatic(this.model(key, fn), x, gy(x, z) + dy, z, yaw, scale);
-    // plaza: a giant skeleton bobblehead, the witch's cauldron, candles and a scarecrow
+    // the green: a friendly scarecrow minding the hay bales
     const p = P.plaza;
-    S('bobble', () => PR.skeletonBobblehead({ part: 'all' }), p.x - 4.2, p.z - 5.5, 0.4, 0, 2.2);
-    this.spot(p.x - 4.2, p.z - 5.5, 2.2, 'Bonk the bobblehead', 'bobble');
-    S('cauldron', () => PR.cauldron({ fire: true }), p.x + 5.5, p.z - 3, -0.6, 0, 1.6);
-    this.spot(p.x + 5.5, p.z - 3, 2, 'Stir the cauldron', 'cauldron');
-    S('witchhat', () => PR.witchHat({}), p.x + 6.3, p.z - 1.6, 0.3, 0, 1.2);
-    S('broom', () => PR.broom({}), p.x + 4.4, p.z - 4.4, 0.9);
-    for (let i = 0; i < 4; i++) S(`candles:${i}`, () => PR.candleCluster({ seed: i, count: 3 + (i % 3) }), p.x + Math.cos(i * 1.6 + 0.4) * 5.2, p.z + Math.sin(i * 1.6 + 0.4) * 5.2, i);
     S('scarecrow', () => PR.scarecrow({ crow: true }), p.x - 8, p.z + 2.5, 1.2);
-    S('candybowl', () => PR.candyBowl({}), p.x + 1.2, p.z + 3.4, 0);
-    S('catstatue', () => PR.blackCatStatue({}), p.x - 2.5, p.z + 3.8, 0.4);
-    S('spider', () => PR.spider({}), p.x + 2.6, p.z - 3.8, 2.1);
-    // bowling pins for pumpkin bowling down the green's gravel path
+    // lawn bowling down the green's gravel path: six pins and a ball to kick at them
     const lane = L.BOWLING;
     for (const [i, j] of [[0, 0], [-1, 1], [1, 1], [-2, 2], [0, 2], [2, 2]]) {
       const x = lane.x + i * 0.32, z = lane.z - 6 - j * 0.38;
       physprops.add(this.model('pin', () => PR.bowlingPin({})), x, gy(x, z), z, { kind: 'pin', hp: 99, mass: 0.35, round: false, respawn: 25 });
     }
+    physprops.add(this.model('bowlball', () => PR.bowlingBall({})), lane.x, gy(lane.x, lane.z + 1.2), lane.z + 1.2, { kind: 'ball', hp: 99, mass: 1.1, respawn: 20 });
     S('lane-sign', () => PR.signpost({ arrows: [{ dir: 'front', color: 0xe8701e, len: 8 }] }), lane.x + 2.2, lane.z - 1, Math.PI);
-    // trick hoops for the bike, standing over the roads (turned to face along the road)
+    // harvest hoops for the bike, standing over the roads (turned to face along the road)
     this.hoops = [];
     for (const [x, z] of L.HOOPS) {
       const rd = nearestRoad(x, z);
       const yaw = Math.atan2(rd.dx, rd.dz); // the ring faces along the road
-      const r = this.model('hoop', () => PR.trickHoop({ flames: true }));
+      const r = this.model('hoop', () => PR.trickHoop({ harvest: true }));
       this.addStatic(r, x, gy(x, z) - 0.1, z, yaw);
       this.hoops.push({ x, z, yaw, y: gy(x, z), ring: r.meta.ring });
       for (const c of r.meta.colliders || []) {
@@ -348,24 +337,23 @@ export class VoxelWorld {
         this.world.physics.addCircle({ x: wx, z: wz, r: c.r ?? 0.2, kind: 'post' });
       }
     }
-    // graveyard: gargoyles, a coffin, a ghost and crooked crosses
+    // the cemetery: flowers left on the graves (nothing within ~8 m of Hank's grave: the funeral is staged there)
     const g = P.graveyard;
-    S('gargoyle', () => PR.gargoyle({}), g.x + 9, g.z + 9, -2.4);
-    S('gargoyle', () => PR.gargoyle({}), g.x - 10, g.z + 7, 2.6);
-    // (nothing within ~8 m of Hank's grave: the funeral is staged there)
-    S('coffin', () => PR.coffin({ open: true }), g.x + 7, g.z - 9.5, 0.5);
-    S('ghostpost', () => PR.ghostPost({}), g.x - 6, g.z - 11, 0.3);
-    for (let i = 0; i < 5; i++) S(`cross:${i % 2}`, () => PR.woodenCross({ seed: i % 2 }), g.x - 8 + i * 3.3, g.z + 11 - (i % 2) * 1.5, (i % 3) * 0.2 - 0.2);
-    // homestead: Nana's porch decorated, a gnome with a tiny jack, flamingo in a witch hat
+    for (let i = 0; i < 6; i++) {
+      const a = i * 1.9 + 0.6, d = 6 + (i % 3) * 2.5;
+      const x = g.x + Math.cos(a) * d, z = g.z + Math.sin(a) * d;
+      if (Math.hypot(x - P.grave.x, z - P.grave.z) < 8.5) continue;
+      S(`flowerpot:${i % 3}`, () => PR.flowerPot({ color: ['orange', 'burgundy', 'yellow'][i % 3], seed: i % 3 }), x, z, i);
+    }
+    // homestead: a garden gnome, a pink flamingo, the birdhouse and the well
     const c = P.cabin;
-    S('gnome', () => PR.gardenGnome({ hat: 'witch' }), c.x + 6, c.z - 9, 1.2);
-    S('flamingo', () => PR.lawnFlamingo({ hat: true }), c.x + 9, c.z - 11, 2.0);
+    S('gnome', () => PR.gardenGnome({}), c.x + 6, c.z - 9, 1.2);
+    S('flamingo', () => PR.lawnFlamingo({ hat: false }), c.x + 9, c.z - 11, 2.0);
     S('birdhouse', () => PR.birdhouse({}), c.x + 14, c.z + 6, 0.8);
     S('well', () => PR.well({}), c.x - 14, c.z + 12, 0.3);
-    // carving table on the porch steps
+    // a basket of apples on a little table by the porch steps
     S('carvetable', () => PR.cafeTable({ color: 'wood' }), -166.2, 63.4, 0.4);
-    S('carvepumpkin', () => PR.pumpkin({ kind: 'medium', seed: 77 }), -166.2, 63.4, 0, 0.8, 0.8);
-    this.spot(-166.2, 63.4, 1.8, 'Carve a pumpkin', 'carve');
+    S('applebasket:p', () => PR.appleBasket({ seed: 2 }), -166.2, 63.4, 0.3, 0.8, 0.9);
     this.world.physics.addCircle({ x: c.x - 14, z: c.z + 12, r: 1.1, kind: 'post' });
     // Nana's TV on the porch (news, weather and who needs a hand)
     {
@@ -392,16 +380,20 @@ export class VoxelWorld {
       this.plantSpots.push({ x, z, y: gy(x, z), planted: false });
       S(`mound:${x % 2}`, () => PR.dirtMound({ stage: 'hole', seed: Math.abs(x) % 3 }), x + 0.7, z + 0.4, x * 0.3);
     }
-    // more kickable pumpkins scattered along roads and porches
-    const extra = L.LOOSE_PUMPKINS;
-    extra.forEach(([x, z], i) => {
-      const jack = i % 2 === 0;
-      const r = jack ? this.model(`jack:medium:${i % 6}`, () => PR.jackOLantern({ face: PR.JACK_FACES[i % PR.JACK_FACES.length], kind: 'medium', seed: i, hollow: false }))
-        : this.model(`pumpkin:medium:${i % 6}`, () => PR.pumpkin({ kind: 'medium', seed: i + 30 }));
-      physprops.add(r, x, gy(x, z), z, { yaw: i * 1.3, kind: jack ? 'jack' : 'pumpkin', hp: 3, mass: 1.2, lights: jack });
+    // more kickable harvest pumpkins scattered along roads and porches
+    L.LOOSE_PUMPKINS.forEach(([x, z], i) => {
+      const r = this.model(`pumpkin:medium:${i % 6}`, () => PR.pumpkin({ kind: 'medium', seed: i + 30, color: i % 7 === 3 ? 'white' : i % 5 === 2 ? 'amber' : 'orange' }));
+      physprops.add(r, x, gy(x, z), z, { yaw: i * 1.3, kind: 'pumpkin', hp: 3, mass: 1.2, lights: false });
     });
     // the rest of the remade map: streets, green, harbour, farm, beach, campground, signposts...
     dressPlaces(this, physprops);
+    // and the 2D street clutter (fences, bins, stalls...), fitted around everything above
+    this.world.deco2d = placeDeco2D(this);
+  }
+
+  // (older name, kept for callers that still use it)
+  halloween(physprops) {
+    return this.dress(physprops);
   }
 }
 
@@ -490,7 +482,7 @@ export function drawTV(tv, info) {
   g.fillStyle = 'rgb(255, 250, 230)';
   g.fillText(String(w).toUpperCase(), 28, 28);
   // scrolling news ticker
-  const news = (info.news || []).join('   ·   ') || 'Have a spooky-cozy day, Maple Cove!';
+  const news = (info.news || []).join('   ·   ') || 'Have a cozy autumn day, Maple Cove!';
   g.fillStyle = 'rgb(20, 20, 30)';
   g.fillRect(0, 36, c.width, 12);
   g.fillStyle = 'rgb(255, 220, 120)';
