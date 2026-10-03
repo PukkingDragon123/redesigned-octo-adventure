@@ -335,6 +335,11 @@ function clearingFactor(x, z) {
   }
   return f;
 }
+// clearings marked bare (stages for scenes) keep even the undergrowth out
+function bareClearing(x, z) {
+  for (const c of L.CLEARINGS) if (c.bare && Math.hypot(x - c.x, z - c.z) < c.r) return true;
+  return false;
+}
 
 // The lookout's vista: a wedge of open hillside falling away toward Maple Cove,
 // so the bench actually looks out over something.
@@ -453,6 +458,7 @@ export class Forest {
         if (villageMask(px, pz) > 0.3) p *= 0.15;
         p *= (0.4 + 0.6 * clearingFactor(px, pz)) * (0.3 + 0.7 * vistaFactor(px, pz));
         if (rng.next() > p) continue;
+        if (bareClearing(px, pz)) continue;
         if (this.roadNear(px, pz, 1.2)) continue;
         if (T.splatAt(px, pz).sand > 0.5) continue;
         if (buildingBlocked(px, pz, 1.5)) continue;

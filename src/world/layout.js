@@ -286,7 +286,7 @@ export const CLEARINGS = [
   { x: -62, z: 22, r: 9, soft: 5 }, { x: 6, z: 2, r: 8, soft: 5 }, { x: 112, z: -82, r: 9, soft: 5 }, // houses along the roads
   { x: 250, z: -46, r: 10, soft: 6 }, // fish & chips
   { x: 180, z: -107, r: 9, soft: 5 }, // rest area & the giant goose
-  { x: -181, z: 16, r: 12, soft: 2.5, ring: 10 }, // lumber camp: open inside, thick forest right at its edge
+  { x: -181, z: 16, r: 12, soft: 2.5, ring: 10, bare: true }, // lumber camp: open inside (no undergrowth either), thick forest right at its edge
 ];
 // Trees planted on purpose (the big maple on the green, maples lining the green)
 export const PLANTED = [
