@@ -164,6 +164,8 @@ export class VoxelWorld {
       // the near meshes: right away in test runs (and waited for), otherwise once the game has
     // said which detail it wants (setBuildingDetail), or after a moment if it never does
     const P = new URLSearchParams(typeof location !== 'undefined' ? location.search : '');
+    const t0 = this.world.buildingJobs?.t0;
+    if (t0) console.log(`buildings: far meshes ready ${(performance.now() - t0).toFixed(0)}ms after the workers started`);
     if (P.has('frames') || P.has('cam')) await this.startNear();
     else setTimeout(() => { if (!this.detailSet) this.setBuildingDetail('high'); }, 2000);
   }
@@ -187,10 +189,11 @@ export class VoxelWorld {
     const from = sp.length >= 2 && !isNaN(sp[0]) ? { x: sp[0], z: P.get('cam') ? sp[2] : sp[1] } : L.POI.cabin;
     const ids = L.BUILDINGS.filter((b) => this.lodById?.[b.id] && !this.lodById[b.id].userData.near)
       .sort((a, b) => Math.hypot(a.x - from.x, a.z - from.z) - Math.hypot(b.x - from.x, b.z - from.z)).map((b) => b.id);
+    const tn = performance.now();
     this.nearDone = this.world.buildingJobs.near(ids, (id, data) => {
       const lod = this.lodById[id];
       if (lod && data.hi) this.attachNear(lod, geometryOf(data.hi));
-    });
+    }).then(() => console.log(`buildings: near meshes streamed in ${(performance.now() - tn).toFixed(0)}ms`));
     return this.nearDone;
   }
 
@@ -478,6 +481,7 @@ export function startBuildingJobs(terrain) {
   };
   const waiting = new Map(), jobs = new Map();
   for (const b of L.BUILDINGS) jobs.set(b.id, new Promise((res) => waiting.set(b.id, res)));
+  jobs.t0 = performance.now();
   // far meshes first (the loading screen waits for these), biggest first so the workers finish together
   const order = L.BUILDINGS.slice().sort((a, b) => b.w * b.d * (b.floors || 1) - a.w * a.d * (a.floors || 1)).map((b) => b.id);
   const ok = run(order, false, (d) => waiting.get(d.id)?.(d), (id, err) => waiting.get(id)?.({ id, error: err }));
