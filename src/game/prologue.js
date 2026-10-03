@@ -321,7 +321,7 @@ function funeral(story) {
     S.sfx('funeral_bell', { volume: 0.7 });
     await S.faceShot(Pa, { dist: 2.4, side: -0.9, dur: 1.0 });
     await S.say('ollie', 'Dearly beloved. We are gathered here to say farewell to Hank: lumberjack, neighbour... and champion napper.', { actor: Pa, expr: 'sad', name: 'Father Gilles' });
-    await S.faceShot(Lou, { dist: 2.4, side: 0.8 });
+    await S.faceShot(Lou, { dist: 2.8, side: 0.5 });
     await S.say('lou', 'He could drop a pine in three swings... *sniff* ...and he always shared his pickles... *HONNNK*', { actor: Lou, expr: 'cry' });
     const G2 = who.gus;
     await S.faceShot(G2, { dist: 2.2, side: 0.9, dur: 0.7 });
@@ -332,7 +332,7 @@ function funeral(story) {
     await S.faceShot(kids, { dist: 2.4, side: -0.7, dur: 0.7, fov: 44 });
     await S.say('pip', 'Can I have his axe?', { actor: kids, expr: 'happy' });
     await S.say('pip', 'Can I have his BEARD?', { actor: who.pop, expr: 'happy', name: 'Pop' });
-    await S.faceShot(N, { dist: 2.2, side: -0.7 });
+    await S.faceShot(N, { dist: 2.5, side: 1.0 });
     await S.say('grandma', "Children... Hush. He waved at my porch every single morning on his way into the woods. Every single morning.", { actor: N, expr: 'sad' });
     who.doug.react('nod');
     await S.say('doug', 'Hank. You were a credit to the forest.', { actor: who.doug, expr: 'sad' });
@@ -345,7 +345,7 @@ function funeral(story) {
     await S.wait(1.4);
     await S.narrate('Everyone cried. Hank snored.');
     // lowered on ropes
-    await S.cam(V(wide2.x, y0 + 2.6, wide2.z), V(gr.x, y0 + 0.2, gr.z), 0.8, 46);
+    await S.cam(V(wide2.x, y0 + 4.4, wide2.z), V(gr.x, y0 - 0.2, gr.z), 0.8, 44);
     Lou.play('lower', 'sad');
     who.gus.play('lower', 'sad');
     const cy0 = coffin.position.y;
