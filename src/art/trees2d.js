@@ -20,7 +20,7 @@ const OUT = 0x150c12;
 
 // ---------------------------------------------------------------- palettes
 // leaves, five tones dark -> light (the last one is the sunlit sparkle)
-const LEAF_P = {
+export const LEAF_P = {
   mapleRed: [0x6e1418, 0x9c1e1e, 0xc8301f, 0xe8532a, 0xff8a3c],
   mapleCrimson: [0x5a1020, 0x841a26, 0xae2626, 0xd6402a, 0xf26a36],
   mapleOrange: [0x9a3414, 0xc9521a, 0xec7a22, 0xffa23a, 0xffcc5e],
@@ -57,7 +57,7 @@ const LEAF_P = {
   moss: [0x2e3e18, 0x44561e, 0x5e7228, 0x7a8e34, 0x98aa46],
 };
 // bark: [fissure, dark, main, light, highlight]
-const BARK = {
+export const BARK = {
   maple: [0x2e221e, 0x4e3c32, 0x6a5444, 0x86705a, 0xa08a70],
   oak: [0x261e18, 0x42362a, 0x5c4a3a, 0x78644e, 0x927e64],
   birch: [0x2a2422, 0xbcb6a8, 0xd8d2c4, 0xeae4d6, 0xf8f2e4],

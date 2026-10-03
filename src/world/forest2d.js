@@ -17,6 +17,8 @@ import * as THREE from 'three';
 import TreeWorker from './treeWorker.js?worker&inline';
 import { SPRITES, bakeSprite } from '../art/trees2d.js';
 import { G, worldUniforms, LIGHT_PARS_VERT, SHADOW_VERT, LIGHT_PARS_FRAG, NOISE_GLSL } from '../render/shaderlib.js';
+import { Forest3D, makeTree3D, shakeUniform, SHAKES } from './forest3d.js';
+import { TREE3D, SMALL3D } from '../art/trees3d.js';
 
 const CELL = 32;
 const SHADOW_R = 60; // out-of-view cells this close still go in (their shadows)
@@ -35,7 +37,8 @@ const LEAFY = /^(maple|maple2|oak|birch|aspen|tamarack|bush|sapling)/;
 // ---------------------------------------------------------------- shaders
 const VERT = /* glsl */ `
 ${LIGHT_PARS_VERT}
-uniform vec4 uShake[8];
+uniform vec4 uShake[${SHAKES}];
+uniform vec4 uNear3; // where the 3D trees take over: tree radius, band, plant radius, band
 uniform float uLod;
 uniform vec3 uCamPos;
 #ifdef SINGLE
@@ -83,6 +86,12 @@ void main() {
   float maxD = prm.y * uLod;
   if (dist > maxD) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
   vFade = smoothstep(maxD * 0.8, maxD, dist);
+  // closer in, the 3D models (forest3d.js) draw this tree; cross-fade with their dither
+  if (prm.w > 0.5) {
+    vec2 rb = prm.w < 1.5 ? uNear3.xy : uNear3.zw;
+    vFade = max(vFade, 1.0 - smoothstep(rb.x - rb.y, rb.x, dist));
+    if (vFade > 0.999) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
+  }
   // sprites pixelled from several angles (logs): pick one by the angle to the axis
   if (prm.z > 1.5) {
     vec3 ax = vec3(cos(iInfo.z), 0.0, -sin(iInfo.z));
@@ -102,7 +111,7 @@ void main() {
   bend *= bend;
   // a springy wobble for shaken trees: sideways sway plus squash and stretch
   float sh = 0.0, sq = 0.0;
-  for (int i = 0; i < 8; i++) {
+  for (int i = 0; i < ${SHAKES}; i++) {
     vec4 S = uShake[i];
     if (abs(S.x - id) < 0.5) {
       float a = max(uTime - S.y, 0.0);
@@ -204,7 +213,8 @@ void main() {
 
 function createMaterials(extra, defines = {}) {
   const uniforms = worldUniforms({
-    uShake: { value: Array.from({ length: 8 }, () => new THREE.Vector4(-1, 0, 0, 0)) },
+    uShake: shakeUniform(),
+    uNear3: { value: new THREE.Vector4(1e5, 1, 1e5, 1) },
     uLod: { value: 1 },
     ...extra,
   });
@@ -394,7 +404,7 @@ export class Forest2D {
       const o = i * 16;
       ft.set([v.x / A.w, v.y / A.h, (v.x + v.w) / A.w, (v.y + v.h) / A.h], o);
       ft.set([v.w / v.ppm, v.h / v.ppm, v.ax / v.w, v.ay / v.h], o + 4);
-      ft.set([K.sway, K.far, v.M.views, 0], o + 8);
+      ft.set([K.sway, K.far, v.M.views, TREE3D.has(v.M.species) ? 1 : SMALL3D.has(v.M.species) ? 2 : 0], o + 8);
     });
     this.frameData = ft;
     this.views = views.map(({ x, y, w, h, ax, ay, ppm, M }) => ({ x, y, w, h, ax, ay, ppm, M })); // pixels go with the atlas
@@ -473,6 +483,11 @@ export class Forest2D {
     this.group.add(this.mesh);
     this.stats.models = this.models.size;
     this.stats.views = views.length;
+
+    // ---- the near and middle forest in 3D
+    this.f3d = new Forest3D(this.forest);
+    this.group.add(this.f3d.build(trees));
+    this.stats.f3d = this.f3d.stats;
     return this.group;
   }
 
@@ -481,6 +496,8 @@ export class Forest2D {
   // card turns about the tree's own axis to face the camera, so it still reads
   // while it falls. makeTree('maple', 1); userData.meta = { height, trunkR }.
   makeTree(species, seed = 0) {
+    const T3 = makeTree3D(species, seed);
+    if (T3) return T3;
     const M = this.models.get(`${species}:${seed}`) || [...this.models.values()].find((m) => m.species === species);
     if (!M) return null;
     const ft = this.frameData.subarray(M.frame * 16, M.frame * 16 + 16);
@@ -495,7 +512,9 @@ export class Forest2D {
 
   // A springy wobble of one tree (power 0..1+), with leaves shaken out of it.
   // Safe to call every frame: a weaker shake never cuts a stronger one short.
-  shake(tree, power = 1) {
+  // dir: the way it gets pushed (radians, x toward z); by default away from Hank.
+  // quiet: no leaves (brushing through a bush).
+  shake(tree, power = 1, dir, quiet = false) {
     const i = tree?.fi ?? this.forest.trees.indexOf(tree);
     if (i == null || i < 0 || !this.MOD?.[i]) return;
     const now = G.uTime.value;
@@ -505,21 +524,27 @@ export class Forest2D {
       const left = s.p * Math.exp(-(now - s.t0) * 2.6);
       if (left > p * 0.8) return;
     } else {
-      if (this.shakes.length >= 8) this.shakes.sort((a, b) => a.t0 - b.t0).shift();
+      if (this.shakes.length >= SHAKES) this.shakes.sort((a, b) => a.t0 - b.t0).shift();
       s = { id: i };
       this.shakes.push(s);
     }
-    s.t0 = now; s.p = p;
+    if (dir == null) {
+      const P = G.uPlayer.value, dx = tree.x - P.x, dz = tree.z - P.z;
+      dir = dx * dx + dz * dz < 64 && dx * dx + dz * dz > 1e-4 ? Math.atan2(dz, dx) : Math.random() * Math.PI * 2;
+    }
+    s.t0 = now; s.p = p; s.dir = dir;
     this.syncShakes();
     // leaves
     const fx = this.effects || globalThis.__game?.game?.effects;
-    if (!fx?.spawnLeaf || !LEAFY.test(tree.species)) return;
+    if (quiet || !fx?.spawnLeaf || !LEAFY.test(tree.species)) return;
     const M = this.MOD[i], H = M.H * (tree.vscale || 1);
-    const crown = M.kind === 'tree' ? H * 0.32 : 0.5;
-    const nl = Math.round((M.kind === 'tree' ? 5 + 16 * p : 2 + 5 * p));
+    const C = this.f3d?.crownOf(i);
+    const crown = C ? C.rx * 0.9 : M.kind === 'tree' ? H * 0.32 : 0.5;
+    const nl = Math.round((M.kind === 'tree' ? 6 + 20 * p : 2 + 5 * p));
     for (let k = 0; k < nl; k++) {
       const a = Math.random() * Math.PI * 2, d = Math.sqrt(Math.random()) * crown;
-      fx.spawnLeaf(tree.x + Math.cos(a) * d, tree.y + H * (M.kind === 'tree' ? 0.45 + Math.random() * 0.45 : 0.6), tree.z + Math.sin(a) * d, { vx: Math.cos(a) * p, vy: (Math.random() - 0.3) * p * 1.5, vz: Math.sin(a) * p });
+      const y = C ? C.y + (Math.random() - 0.5) * C.ry * 1.4 : tree.y + H * (M.kind === 'tree' ? 0.45 + Math.random() * 0.45 : 0.6);
+      fx.spawnLeaf((C?.x ?? tree.x) + Math.cos(a) * d, y, (C?.z ?? tree.z) + Math.sin(a) * d, { vx: Math.cos(a) * p + Math.cos(dir) * p, vy: (Math.random() - 0.3) * p * 1.5, vz: Math.sin(a) * p + Math.sin(dir) * p });
     }
   }
 
@@ -540,9 +565,9 @@ export class Forest2D {
 
   syncShakes() {
     const U = this.material.uniforms.uShake.value;
-    for (let k = 0; k < 8; k++) {
+    for (let k = 0; k < SHAKES; k++) {
       const s = this.shakes[k];
-      if (s) U[k].set(s.id, s.t0, s.p, 0);
+      if (s) U[k].set(s.id, s.t0, s.p, s.dir || 0);
       else U[k].set(-1, 0, 0, 0);
     }
   }
@@ -555,6 +580,14 @@ export class Forest2D {
   // ---------------------------------------------------------------- per frame
   update(pos, camera) {
     if (!this.mesh) return;
+    const now = G.uTime.value;
+    const dt = this._t == null ? 0 : Math.min(0.1, Math.max(0, now - this._t));
+    this._t = now;
+    if (this.f3d) {
+      const r = this.f3d.setLod(this.lodScale);
+      this.material.uniforms.uNear3.value.set(r.mid, r.bandFar, r.small, r.band);
+      this.f3d.update(dt, this);
+    }
     // retire finished shakes
     if (this.shakes.length) {
       const now = G.uTime.value, n0 = this.shakes.length;
@@ -624,18 +657,28 @@ export class Forest2D {
     list.sort((a, b) => a.d - b.d);
     const P = this.aPos.array, I = this.aInfo.array, SP = this.P, SI = this.I, FAR = this.FAR, HID = this.HID;
     let ni = 0;
+    const F3 = this.f3d, R3 = F3?.radii(S);
+    const cy = pos.y;
+    F3?.begin();
     for (const c of list) {
       const cut = c.d - c.r;
       const ids = c.list;
+      const near3 = F3 && cut < R3.mid + 6;
       for (let q = 0; q < ids.length; q++) {
         const i = ids[q];
-        if (HID[i] || cut > FAR[i] * S) continue;
+        if (HID[i]) continue;
+        if (near3) {
+          const j = i * 4, dx = SP[j] - cx, dy = SP[j + 1] - cy, dz = SP[j + 2] - cz;
+          if (!F3.push(i, Math.sqrt(dx * dx + dy * dy + dz * dz), R3)) continue;
+        }
+        if (cut > FAR[i] * S) continue;
         const o = ni * 4, j = i * 4;
         P[o] = SP[j]; P[o + 1] = SP[j + 1]; P[o + 2] = SP[j + 2]; P[o + 3] = SP[j + 3];
         I[o] = SI[j]; I[o + 1] = SI[j + 1]; I[o + 2] = SI[j + 2]; I[o + 3] = SI[j + 3];
         ni++;
       }
     }
+    F3?.end();
     const g = this.mesh.geometry;
     g.instanceCount = ni;
     this.mesh.visible = ni > 0;
@@ -666,9 +709,11 @@ function singleCard(texture, ft, M) {
   return mesh;
 }
 
-// A tree card that needs no forest (the loading scene, tools): pixels one
-// sprite on the spot into its own little texture. Same object as makeTree().
+// A tree that needs no forest (the loading scene, tools): the same 3D tree as
+// makeTree(), or for the rest (stumps, logs...) one sprite pixelled on the spot.
 export function makeTreeSprite(species, seed = 0) {
+  const T3 = makeTree3D(species, seed);
+  if (T3) return T3;
   const spec = SPRITES[species];
   if (!spec) return null;
   const r = bakeSprite({ species, seed });
