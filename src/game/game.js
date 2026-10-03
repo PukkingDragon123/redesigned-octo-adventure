@@ -20,6 +20,7 @@ import { Wildlife } from './wildlife.js';
 import { Villagers } from './npcs.js';
 import { Keepsakes } from './keepsakes.js';
 import { Orders } from './orders.js';
+import { Cargo } from './cargo.js';
 import { Story } from './story.js';
 import { Menus } from './menus.js';
 import { UI } from '../ui/ui.js';
@@ -88,6 +89,8 @@ export class Game {
     this.touch = new TouchControls(this);
     this.menus = new Menus(this);
     this.orders = new Orders(this);
+    this.cargo = new Cargo(this);
+    this.listeners.push((e) => this.cargo.onBikeEvent(e));
     this.story = new Story(this);
     this.settings = loadSettings();
     this.state = newState();
@@ -125,6 +128,13 @@ export class Game {
       this.villagers.scaredOfHank = true;
     }
     if (name === 'catRescue') this.state.cat = false;
+    if (name === 'loadCargo') {
+      for (const o of this.orders.carried()) o.loaded = false;
+      this.orders.syncCups();
+      await this.loadCargo();
+      if (this.mode === 'cutscene') this.beginRide();
+      return;
+    }
     const fn = this.story[name];
     if (!fn) return;
     if (name === 'morning') await this.story.morning(this.state.day);
@@ -150,6 +160,8 @@ export class Game {
     this.orders.makeBoard(this.state.day, this.params.has('panic') ? ['gus', 'marie'] : null);
     this.applyBike();
     for (const o of this.orders.board().slice(0, this.bike.stats.capacity)) this.orders.pack(o);
+    for (const o of this.orders.carried()) o.loaded = true;
+    this.orders.syncCups();
     this.setOutfit(this.state.outfit);
     this.rider.enableCat(!!this.state.cat);
     const sp = this.params.get('spawn')?.split(',').map(Number);
@@ -233,6 +245,7 @@ export class Game {
     await new Promise((res) => this.menus.orderBoard(res));
     if (!this.orders.carried().length) for (const o of this.orders.board()) this.orders.pack(o);
     await this.story.garageReveal();
+    await this.loadCargo();
     this.beginRide();
   }
 
@@ -285,9 +298,15 @@ export class Game {
       this.mode = 'menu';
       await new Promise((res) => this.menus.orderBoard(res));
       if (!this.orders.carried().length) for (const o of this.orders.board().slice(0, this.bike.stats.capacity)) this.orders.pack(o);
-      this.orders.syncCups();
+      await this.loadCargo();
       this.beginRide();
     });
+  }
+
+  // after Nana's order board: Hank carries the picked cups out and packs them into Bessie's crate
+  // (a short skippable scene; resolves at once when nothing is waiting to be loaded)
+  loadCargo() {
+    return this.cargo.load();
   }
 
   pickWeather(day) {
@@ -697,6 +716,7 @@ export class Game {
     this.tricks.update(sdt);
     this.skills.update(dt);
     this.bikeModel.update(sdt, this.bike, c.steer);
+    this.cargo.update(sdt);
     G.uPlayer.value.copy(this.playerPos);
     if (this.mode === 'title') this.title ? this.title.update(dt) : this.titleCamera(dt);
     else {

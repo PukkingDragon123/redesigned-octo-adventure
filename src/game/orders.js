@@ -1,9 +1,6 @@
 // Cocoa orders: the morning board, carrying (cooling & sloshing), delivery and pay.
-import * as THREE from 'three';
 import { CUSTOMERS, POI } from '../world/layout.js';
 import { RNG } from '../core/noise.js';
-import { Builder } from '../render/builder.js';
-import { propMesh } from '../render/propMaterial.js';
 import { RECIPES, STARTER_PANTRY } from './quests.js';
 
 export const COCOAS = [
@@ -33,7 +30,6 @@ export class Orders {
   constructor(game) {
     this.game = game;
     this.list = []; // all of today's orders (board + carried + delivered)
-    this.cupMeshes = [];
   }
 
   get state() {
@@ -78,7 +74,7 @@ export class Orders {
     return this.list.filter((o) => o.state === 'board' || o.state === 'carried');
   }
 
-  // Bessie carries three: two cups in the basket, one in the crate
+  // Bessie's crate holds three cups
   capacity() {
     return this.game.bike.stats.capacity || 3;
   }
@@ -96,6 +92,7 @@ export class Orders {
     if (miss.length) { this.lastMissing = miss; return false; }
     if (this.state.pantry) for (const k of RECIPES[o.cocoa] || []) this.state.pantry[k]--;
     o.state = 'carried';
+    o.loaded = false; // still on Nana's tray until Hank packs it into Bessie's crate (Cargo.load)
     o.quality = 100;
     o.pickedAt = this.game.world.atmosphere.hour;
     this.syncCups();
@@ -144,35 +141,9 @@ export class Orders {
     return { pay, tip, quality: o.quality };
   }
 
-  // cups in the basket / crate as tiny 3D mugs
+  // the cups themselves ride in Bessie's crate (see cargo.js)
   syncCups() {
-    const g = this.game;
-    for (const m of this.cupMeshes) m.parent?.remove(m);
-    this.cupMeshes = [];
-    g.effects.cups = [];
-    const carried = this.carried();
-    const model = g.bikeModel;
-    carried.forEach((o, i) => {
-      const B = new Builder();
-      B.tube([0, 0, 0], [0, 0.11, 0], 0.045, 0.05, { color: 0xf4ecdc }, 7);
-      B.tube([0, 0.105, 0], [0, 0.112, 0], 0.042, 0.042, { color: o.color }, 7);
-      B.geom(new THREE.TorusGeometry(0.03, 0.01, 3, 6), [0.055, 0.055, 0], null, [1, 1, 1], { color: 0xf4ecdc });
-      const m = propMesh(B.build(), g.world.propMat, { cast: false });
-      let parent, x, z;
-      if (i < 2) {
-        parent = model.basketAnchor;
-        x = i === 0 ? -0.08 : 0.08;
-        z = 0.02;
-      } else {
-        parent = model.rearAnchor;
-        x = 0;
-        z = 0;
-      }
-      m.position.set(x, 0, z);
-      parent.add(m);
-      this.cupMeshes.push(m);
-      g.effects.cups.push(m);
-    });
+    this.game.cargo?.sync();
   }
 }
 

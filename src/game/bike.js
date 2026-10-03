@@ -17,7 +17,7 @@ export const STATS = {
   gears: 3,
   grip: 1,
   jump: 4.3, // a perfectly timed bunny hop (m/s)
-  capacity: 3, // two cups in the basket, one in the crate
+  capacity: 3, // cups in the crate behind the saddle
   thermos: 1,
   light: true, // the lamp switches on by itself after dark
   bellType: 'bell',
