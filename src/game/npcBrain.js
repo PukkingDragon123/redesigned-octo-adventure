@@ -333,7 +333,7 @@ export class NpcBrain {
             await walkTo({ x: this.door.x + this.door.nx * 0.3, z: this.door.z + this.door.nz * 0.3 });
             this.goIndoors(false);
           }
-        } else this.setShown(false);
+        } else { this.inside = true; this.setShown(false); }
         while (stillOn()) await w(3);
         return;
       }

@@ -115,14 +115,14 @@ export const PEOPLE = {
     ],
   },
   kids: {
-    char: 'pip', house: null, fear: 'cool', run: 3.4, kid: true, umbrella: 'pip',
+    char: 'pip', house: 'kids', fear: 'cool', run: 3.4, kid: true, umbrella: 'pip',
     scare: ['WHOA! A REAL SKELETON!', 'SKELETON!!! COOOOL!', 'MOM! MOM! LOOK!'],
     hello: ['HANK!!!', 'Do a wheelie!', 'Hi skeleton!!'],
     fan: ['DO A BACKFLIP!', 'Can I ride on the handlebars?!', 'Hank is the COOLEST!'],
     day: [[6.5, 21, [home('hockey')]]],
   },
   pop: {
-    char: 'pop', house: null, fear: 'cool', run: 3.4, kid: true, umbrella: 'pop',
+    char: 'pop', house: 'kids', fear: 'cool', run: 3.4, kid: true, umbrella: 'pop',
     scare: ["I'm not scared. Pip is scared.", 'Whoa... are those REAL bones?', 'Is your skull detachable?!'],
     hello: ['Hey, Hank.', 'Hank! Watch this!', "Pip says hi. I mean - hi."],
     fan: ['Do a flip! Pip wants to see. Not me.', 'Can you take your head off again?'],
