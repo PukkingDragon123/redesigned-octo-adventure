@@ -521,8 +521,8 @@ export class Effects {
         if (b.grounded && b.speed < 5 && b.surface !== 'road' && !water && rng.next() < 0.5) this.dustKick(b.pos.x - fx * 0.55, y + 0.08, b.pos.z - fz * 0.55, { scale: 0.35, vx: -fx * 0.6, vz: -fz * 0.6 });
         break;
       case 'bonk': {
-        if (e.tree) {
-          // shaking a tree drops a flurry of leaves
+        // (a bonked tree shakes its own leaves loose: world.forest.shake)
+        if (e.tree && !this.game.world.forest?.shake) {
           const t = e.tree;
           for (let k = 0; k < 16; k++) this.spawnLeaf(t.x + rng.range(-2, 2), t.y + t.H * rng.range(0.5, 0.9), t.z + rng.range(-2, 2), { vy: rng.range(-0.5, 0.5) });
         }
