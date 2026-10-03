@@ -19,7 +19,7 @@ import { Atmosphere } from './atmosphere.js';
 import { G } from '../render/shaderlib.js';
 import { DECOR } from './decor.js';
 import { VoxelWorld, startBuildingJobs } from './voxelWorld.js';
-import { VoxelForest } from './voxelForest.js';
+import { Forest2D } from './forest2d.js';
 import { PhysProps } from './physprops.js';
 import * as VOXPROPS from '../voxel/models/props.js';
 import { meshVox } from '../voxel/mesh.js';
@@ -54,10 +54,11 @@ export class World {
     this.scene.add(this.forest.buildMeshes());
     console.log('forest', JSON.stringify(this.forest.stats));
     if (!this.noVoxelTrees) {
-      this.voxelForest = new VoxelForest(this.forest);
+      // pixel-art trees; voxelForest is the old name (settings and cutscenes still use it)
+      this.forest2d = this.voxelForest = new Forest2D(this.forest);
       const t0 = performance.now();
-      this.scene.add(await this.voxelForest.build((k) => this.progress(0.32 + k * 0.06, 'growing voxel trees')));
-      console.log(`voxel trees in ${(performance.now() - t0).toFixed(0)}ms`);
+      this.scene.add(await this.forest2d.build((k) => this.progress(0.32 + k * 0.06, 'growing the trees')));
+      console.log(`forest sprites in ${(performance.now() - t0).toFixed(0)}ms`, JSON.stringify(this.forest2d.stats));
     }
 
     await step(0.4, 'raising the village');
@@ -256,7 +257,7 @@ export class World {
     G.uTime.value += dt;
     this.atmosphere.update(dt);
     this.sky.position.copy(camera.position);
-    this.voxelForest?.update(camera.position, camera);
+    this.forest2d?.update(camera.position, camera);
     this.forest?.updateVisibility(camera.position);
     this.grass?.update(camera.position);
     this.updateShadow(focus);

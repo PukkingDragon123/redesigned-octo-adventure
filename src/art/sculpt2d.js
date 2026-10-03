@@ -260,7 +260,21 @@ export function renderSculpt(S, view, ppm, opts = {}) {
     const m = mat[i];
     if (glowMask[i] || outGlow[i] || (m >= 0 && m !== DEC && SP[m].glow)) glow[y * w + x] = 1;
   }
-  return { w, h, ax: -gx0 - cx0, ay: -gy0 - cy0, rgba, glow, ppm };
+  const res = { w, h, ax: -gx0 - cx0, ay: -gy0 - cy0, rgba, glow, ppm };
+  // opts.normals: also hand back each pixel's material name (null on outlines and
+  // decals) and its view-space normal (x right, y up), for sprites lit in the scene
+  if (opts.normals) {
+    const names = Object.keys(S.mats);
+    res.mats = new Array(w * h).fill(null);
+    res.nrm = new Float32Array(w * h * 2);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const i = (y + cy0) * W + (x + cx0), m = mat[i], k = y * w + x;
+      if (m < 0 || m === DEC) continue;
+      res.mats[k] = names[m];
+      res.nrm[k * 2] = nrm[i * 3]; res.nrm[k * 2 + 1] = nrm[i * 3 + 1];
+    }
+  }
+  return res;
 }
 
 // rasterise one primitive into the frame buffers (kept small so it optimises early)
