@@ -2612,8 +2612,6 @@ function buildSawmill(spec, ctx) {
   vb.fill(0, H - 4, b.z0 + 26, 0, H - 2, b.z0 + 26, P.iron);
   vb.fill(-1, H - 7, b.z0 + 25, 0, H - 5, b.z0 + 26, P.lamp);
   addLight(ctx, [0, H - 6, b.z0 + 26], [1.0, 0.75, 0.45], 9, 'lantern');
-  const Ff = F.front;
-  vb.fill(sw / 2 - 2, H - 4, b.z1, sw / 2 - 2, H - 4, b.z1, P.iron);
   ctx.door = { ...M3((px[2] + 3 + px[3]) / 2, 0, b.z1 + 0.5), face: 'front', w: 3.5 };
   // stacked logs out front-left (along z), with end grain rings
   const lr = 2.6;
