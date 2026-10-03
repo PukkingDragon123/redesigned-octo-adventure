@@ -132,7 +132,8 @@ export class Story {
       g.setBikeVisible(false);
       g.villagers.setVisible('grandma', false);
       S.music('cabin');
-      const fire = g.world.ctx.fires[0];
+      // the campfire by Nana's cabin (the village has its own fires too)
+      const fire = g.world.ctx.fires.reduce((a, f) => (Math.hypot(f.x - POI.cabin.x, f.z - POI.cabin.z) < Math.hypot(a.x - POI.cabin.x, a.z - POI.cabin.z) ? f : a));
       const fx = fire.x, fz = fire.z;
       const fy = g.physics.groundAt(fx, fz).h;
       // Hank on the stump by the fire, Nana opposite with her knitting

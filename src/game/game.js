@@ -831,14 +831,15 @@ export class Game {
     const night = G.uNight.value;
     const r = riverInfo(p.x, p.z);
     const villageD = Math.hypot(p.x - L.POI.village.x, p.z - L.POI.village.z);
-    const fire = this.world.ctx.fires[0];
+    let fireD = 1e9;
+    for (const f of this.world.ctx.fires) fireD = Math.min(fireD, f.distanceTo(p));
     sound.ambience({
       forest: clamp(forestNoise(p.x, p.z) * 1.3, 0, 1) * (1 - night * 0.7) * (1 - A.weather.rain * 0.5),
       village: clamp(1 - villageD / 110, 0, 1) * (1 - night * 0.6),
       river: clamp(1 - (r.d - r.w / 2) / 35, 0, 1),
       wind: clamp(A.weather.wind * 0.4 + b.speed * 0.02, 0, 1),
       rain: A.weather.rain,
-      fire: fire ? clamp(1 - fire.distanceTo(p) / 18, 0, 1) : 0,
+      fire: clamp(1 - fireD / 18, 0, 1),
       night,
     });
     // music follows place & time
