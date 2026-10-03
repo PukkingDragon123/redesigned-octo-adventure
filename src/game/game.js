@@ -392,7 +392,14 @@ export class Game {
     if (q !== this._quality) {
       this._quality = q;
       const sun = this.world.sun;
-      const size = q === 'low' ? 1024 : q === 'medium' ? 1536 : 2048;
+      const size = q === 'low' ? 1024 : q === 'medium' ? 2048 : 4096;
+      // sharper picture on high: supersample (desktops) and a bigger pixel budget
+      const touch = matchMedia?.('(pointer: coarse)').matches;
+      this.pipeline.supersample = q === 'high' ? (touch ? 1.25 : 1.5) : 1;
+      this.pipeline.maxPixels = q === 'low' ? 1.6e6 : touch ? 2.8e6 : 5.2e6;
+      this.pipeline.resize();
+      this.camera.aspect = this.pipeline.w / this.pipeline.h;
+      this.camera.updateProjectionMatrix();
       if (sun.shadow.mapSize.x !== size) {
         sun.shadow.mapSize.set(size, size);
         sun.shadow.map?.dispose();
