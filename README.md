@@ -79,7 +79,7 @@ now; tap it.
 - Chat with villagers for favours: Agnes's three lost cats, lost glasses, puck,
   compass, stethoscope and Mountie hat, six saplings to plant for Gus, bird
   photos for Birdie, a secret letter, pumpkins for the café, lawn bowling,
-  harvest supper invitations, and three harvest hoops to jump through.
+  harvest supper invitations, and Lou's stunt bet.
 - Crash badly and Hank bursts into bones, then zips back together.
 
 ## How it's made
@@ -137,8 +137,7 @@ now; tap it.
   a gazebo and cenotaph, a hockey rink, a harbour with docks and a lighthouse.
   Out in the country there's a red-barn farm with a pumpkin patch and corn
   maze, a sugar shack, a campground, a covered bridge, a bike park, a beach
-  with a lifeguard tower and a fish & chips shack, and signposts at every
-  junction. Buildings are meshed in Web Workers. The sea uses Gerstner waves
+  with a lifeguard tower and a fish & chips shack. Buildings are meshed in Web Workers. The sea uses Gerstner waves
   with surf that follows the shoreline, foam, swash and wet sand.
 - **Characters** (`src/game/vchar.js`): jointed voxel rigs with springy
   procedural poses, idle fidgets, cartoon reactions, pixel face decals with

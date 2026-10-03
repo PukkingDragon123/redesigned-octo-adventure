@@ -149,7 +149,6 @@ export class Loader3D {
       safe(() => mk(PR.mailbox({}))),
       safe(() => mk(PR.firewoodPile({}))),
       safe(() => mk(PR.milkChurn({}))),
-      safe(() => mk(PR.signpost({}))),
     ].filter(Boolean);
     // the same pixel-art tree cards as the forest
     this.trees = ['maple', 'spruce', 'birch', 'maple2', 'pine', 'oak'].map((sp, i) => safe(() => makeTreeSprite(sp, i))).filter(Boolean);
