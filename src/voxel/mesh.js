@@ -32,22 +32,27 @@ export function meshVox(vox, opts = {}) {
   const aoK = opts.aoStrength ?? 1;
   const W = vox.w, H = vox.h, D = vox.d;
   const dims = [W, H, D];
-  const data = vox.data;
-  const st = [1, W, W * H];
+  const data = vox.data || null;
 
   // ---- occupancy bits: word (z, y, k) holds x = 32k .. 32k+31
+  // (sparse volumes - see VB in models/buildings.js - provide get() and occRow() instead of data)
   const WW = (W + 31) >> 5;
   const rows = H * D;
   const occ = new Int32Array(rows * WW + WW); // + one zero row of slack
-  for (let r = 0, id = 0; r < rows; r++) {
-    const ob = r * WW;
-    for (let k = 0; k < WW; k++) {
-      const xe = Math.min(32, W - (k << 5));
-      let word = 0;
-      for (let b = 0; b < xe; b++, id++) if (data[id] !== 0) word |= 1 << b;
-      occ[ob + k] = word;
+  if (data) {
+    for (let r = 0, id = 0; r < rows; r++) {
+      const ob = r * WW;
+      for (let k = 0; k < WW; k++) {
+        const xe = Math.min(32, W - (k << 5));
+        let word = 0;
+        for (let b = 0; b < xe; b++, id++) if (data[id] !== 0) word |= 1 << b;
+        occ[ob + k] = word;
+      }
     }
+  } else {
+    for (let z = 0; z < D; z++) for (let y = 0; y < H; y++) vox.occRow(y, z, occ, (z * H + y) * WW);
   }
+  const at = data ? (x, y, z) => data[x + W * (y + H * z)] : (x, y, z) => vox.get(x, y, z);
 
   // ---- collect exposed faces per direction (voxel ids, in scan order: z, then y, then x)
   // dir index = axis * 2 + (s > 0 ? 1 : 0)
@@ -115,9 +120,7 @@ export function meshVox(vox, opts = {}) {
     if (!n) continue;
     const A = AX[d >> 1], a = A.a, u = A.u, v = A.v;
     const s = d & 1 ? 1 : -1;
-    const da = dims[a], du = dims[u];
-    const sa = st[a], su = st[u], sv = st[v];
-    const fo = s * sa;
+    const da = dims[a], du = dims[u], dv = dims[v];
     let L = lists[d];
     // stable counting sort by slice (z faces already come out in slice order)
     if (a !== 2) {
@@ -141,21 +144,36 @@ export function meshVox(vox, opts = {}) {
         const x = id % W, t = (id - x) / W, y = t % H, z = (t - y) / H;
         const i = u === 0 ? x : y, j = v === 2 ? z : y;
         const m = i + j * du;
-        maskC[m] = data[id];
+        maskC[m] = at(x, y, z);
         let ao = 0xff;
         if (front) {
           ao = 0;
-          const f = id + fo;
-          const iL = i > 0, iR = i < du - 1, jD = j > 0, jU = j < dims[v] - 1;
-          for (let k = 0; k < 4; k++) {
-            const ok1 = k === 1 || k === 2 ? iR : iL, ok2 = k >= 2 ? jU : jD;
-            const ou = (k === 1 || k === 2 ? 1 : -1) * su, ov = (k >= 2 ? 1 : -1) * sv;
-            const s1 = ok1 && data[f + ou] !== 0 ? 1 : 0;
-            const s2 = ok2 && data[f + ov] !== 0 ? 1 : 0;
-            const cc = ok1 && ok2 && data[f + ou + ov] !== 0 ? 1 : 0;
-            const val = s1 && s2 ? 0 : 3 - (s1 + s2 + cc);
-            ao |= val << (k * 2);
+          // the 8 cells around the one in front of the face, in its (u, v) plane
+          const fx = x + (a === 0 ? s : 0), fy = y + (a === 1 ? s : 0), fz = z + (a === 2 ? s : 0);
+          const iL = i > 0, iR = i < du - 1, jD = j > 0, jU = j < dv - 1;
+          let nL = 0, nR = 0, nD = 0, nU = 0, nLD = 0, nRD = 0, nLU = 0, nRU = 0;
+          if (u === 0) { // u = x
+            if (iL) nL = at(fx - 1, fy, fz) !== 0 ? 1 : 0;
+            if (iR) nR = at(fx + 1, fy, fz) !== 0 ? 1 : 0;
+          } else { // u = y
+            if (iL) nL = at(fx, fy - 1, fz) !== 0 ? 1 : 0;
+            if (iR) nR = at(fx, fy + 1, fz) !== 0 ? 1 : 0;
           }
+          const ux = u === 0 ? 1 : 0, uy = 1 - ux, vy = v === 1 ? 1 : 0, vz = 1 - vy;
+          if (jD) {
+            nD = at(fx, fy - vy, fz - vz) !== 0 ? 1 : 0;
+            if (iL) nLD = at(fx - ux, fy - uy - vy, fz - vz) !== 0 ? 1 : 0;
+            if (iR) nRD = at(fx + ux, fy + uy - vy, fz - vz) !== 0 ? 1 : 0;
+          }
+          if (jU) {
+            nU = at(fx, fy + vy, fz + vz) !== 0 ? 1 : 0;
+            if (iL) nLU = at(fx - ux, fy - uy + vy, fz + vz) !== 0 ? 1 : 0;
+            if (iR) nRU = at(fx + ux, fy + uy + vy, fz + vz) !== 0 ? 1 : 0;
+          }
+          // corners: 0 = (-u,-v), 1 = (+u,-v), 2 = (+u,+v), 3 = (-u,+v)
+          const c0 = nL && nD ? 0 : 3 - (nL + nD + nLD), c1 = nR && nD ? 0 : 3 - (nR + nD + nRD);
+          const c2 = nR && nU ? 0 : 3 - (nR + nU + nRU), c3 = nL && nU ? 0 : 3 - (nL + nU + nLU);
+          ao = c0 | (c1 << 2) | (c2 << 4) | (c3 << 6);
         }
         maskA[m] = ao;
         if (maskJ) { pt[0] = x; pt[1] = y; pt[2] = z; maskJ[m] = (vhash(pt[0], pt[1], pt[2], seed) - 0.5) * 2 * jitter; }
@@ -171,7 +189,6 @@ export function meshVox(vox, opts = {}) {
         let w = 1, h = 1;
         if (greedy) {
           while (i + w < du && maskC[m + w] === c && maskA[m + w] === ao) w++;
-          const dv = dims[v];
           outer: for (; j + h < dv; h++) {
             const row = m + h * du;
             for (let k = 0; k < w; k++) if (maskC[row + k] !== c || maskA[row + k] !== ao) break outer;

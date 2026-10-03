@@ -20,8 +20,9 @@
 import { Vox, EMIT, GLASS, tone, mixc, vhash } from '../vox.js';
 import { BUILDINGS } from '../../world/layout.js';
 
-export const VOXEL_SIZE = 0.125;
-const VPM = 8; // voxels per metre
+const K = 2; // fine voxels per coarse layout voxel
+export const VOXEL_SIZE = 0.125 / K; // the models are stored at 1/16 m
+const VPM = 8; // coarse (layout) voxels per metre
 const FH = 22; // floor-to-floor height (voxels)
 
 // ------------------------------------------------------------------ palette
@@ -92,31 +93,74 @@ function addLight(ctx, p, color, radius, kind) {
 }
 
 // ------------------------------------------------------------------ builder (local voxel coords, may be negative)
+// Layout coordinates are "coarse" voxels (1/8 m, VPM per metre): every builder below places walls,
+// doors and windows in them. The model itself is stored at K x that resolution (1/16 m "fine"
+// voxels): a coarse set() paints a 2x2x2 block, and the f*() calls paint single fine voxels for
+// the small stuff (lap siding, mullions, shingle butts, knobs...). Storage is a sparse grid of
+// 16^3 bricks, so the generous bounds given to the constructor cost nothing until painted.
 class VB {
   constructor(x0, y0, z0, x1, y1, z1) {
     this.x0 = Math.floor(x0); this.y0 = Math.floor(y0); this.z0 = Math.floor(z0);
-    this.W = Math.ceil(x1) - this.x0 + 1; this.H = Math.ceil(y1) - this.y0 + 1; this.D = Math.ceil(z1) - this.z0 + 1;
-    this.a = new Uint32Array(this.W * this.H * this.D);
+    this.fx0 = this.x0 * K; this.fy0 = this.y0 * K; this.fz0 = this.z0 * K;
+    this.FW = (Math.ceil(x1) - this.x0 + 1) * K; this.FH = (Math.ceil(y1) - this.y0 + 1) * K; this.FD = (Math.ceil(z1) - this.z0 + 1) * K;
+    this.bw = (this.FW + 15) >> 4; this.bh = (this.FH + 15) >> 4; this.bd = (this.FD + 15) >> 4;
+    this.bricks = new Array(this.bw * this.bh * this.bd).fill(null);
+    this.bb = null; // painted bounds (fine, local)
   }
-  idx(x, y, z) {
-    x -= this.x0; y -= this.y0; z -= this.z0;
-    if (x < 0 || y < 0 || z < 0 || x >= this.W || y >= this.H || z >= this.D) return -1;
-    return x + this.W * (y + this.H * z);
+  _grow(lx, ly, lz, ex) {
+    const bb = this.bb || (this.bb = [lx, ly, lz, lx + ex, ly + ex, lz + ex]);
+    if (lx < bb[0]) bb[0] = lx; if (ly < bb[1]) bb[1] = ly; if (lz < bb[2]) bb[2] = lz;
+    if (lx + ex > bb[3]) bb[3] = lx + ex; if (ly + ex > bb[4]) bb[4] = ly + ex; if (lz + ex > bb[5]) bb[5] = lz + ex;
   }
-  set(x, y, z, c) {
-    const lx = Math.round(x) - this.x0, ly = Math.round(y) - this.y0, lz = Math.round(z) - this.z0;
-    if (lx < 0 || ly < 0 || lz < 0 || lx >= this.W || ly >= this.H || lz >= this.D) return;
-    this.a[lx + this.W * (ly + this.H * lz)] = c >>> 0;
-    if (c) {
-      // grow the painted bounds (finish() only scans inside them)
-      const bb = this.bb || (this.bb = [lx, ly, lz, lx, ly, lz]);
-      if (lx < bb[0]) bb[0] = lx; if (ly < bb[1]) bb[1] = ly; if (lz < bb[2]) bb[2] = lz;
-      if (lx > bb[3]) bb[3] = lx; if (ly > bb[4]) bb[4] = ly; if (lz > bb[5]) bb[5] = lz;
+  // ---- fine voxels
+  fset(X, Y, Z, c) {
+    const lx = Math.round(X) - this.fx0, ly = Math.round(Y) - this.fy0, lz = Math.round(Z) - this.fz0;
+    if (lx < 0 || ly < 0 || lz < 0 || lx >= this.FW || ly >= this.FH || lz >= this.FD) return;
+    const bi = (lx >> 4) + this.bw * ((ly >> 4) + this.bh * (lz >> 4));
+    let br = this.bricks[bi];
+    if (!br) { if (!c) return; br = this.bricks[bi] = new Uint32Array(4096); }
+    br[(lx & 15) | ((ly & 15) << 4) | ((lz & 15) << 8)] = c >>> 0;
+    if (c) this._grow(lx, ly, lz, 0);
+  }
+  fget(X, Y, Z) {
+    const lx = Math.round(X) - this.fx0, ly = Math.round(Y) - this.fy0, lz = Math.round(Z) - this.fz0;
+    if (lx < 0 || ly < 0 || lz < 0 || lx >= this.FW || ly >= this.FH || lz >= this.FD) return 0;
+    const br = this.bricks[(lx >> 4) + this.bw * ((ly >> 4) + this.bh * (lz >> 4))];
+    return br ? br[(lx & 15) | ((ly & 15) << 4) | ((lz & 15) << 8)] : 0;
+  }
+  ffill(X0, Y0, Z0, X1, Y1, Z1, c) {
+    const ax = Math.round(Math.min(X0, X1)), bx = Math.round(Math.max(X0, X1));
+    const ay = Math.round(Math.min(Y0, Y1)), by = Math.round(Math.max(Y0, Y1));
+    const az = Math.round(Math.min(Z0, Z1)), bz = Math.round(Math.max(Z0, Z1));
+    const fn = typeof c === 'function';
+    for (let z = az; z <= bz; z++) for (let y = ay; y <= by; y++) for (let x = ax; x <= bx; x++) {
+      const v = fn ? c(x, y, z) : c;
+      if (v) this.fset(x, y, z, v);
     }
   }
+  fclear(X0, Y0, Z0, X1, Y1, Z1) {
+    for (let z = Math.min(Z0, Z1); z <= Math.max(Z0, Z1); z++) for (let y = Math.min(Y0, Y1); y <= Math.max(Y0, Y1); y++) for (let x = Math.min(X0, X1); x <= Math.max(X0, X1); x++) this.fset(x, y, z, 0);
+  }
+  // ---- coarse voxels (2x2x2 fine blocks)
+  set(x, y, z, c) {
+    const lx = Math.round(x) * K - this.fx0, ly = Math.round(y) * K - this.fy0, lz = Math.round(z) * K - this.fz0;
+    if (lx < 0 || ly < 0 || lz < 0 || lx >= this.FW || ly >= this.FH || lz >= this.FD) return;
+    const bi = (lx >> 4) + this.bw * ((ly >> 4) + this.bh * (lz >> 4));
+    let br = this.bricks[bi];
+    if (!br) { if (!c) return; br = this.bricks[bi] = new Uint32Array(4096); }
+    const i = (lx & 15) | ((ly & 15) << 4) | ((lz & 15) << 8), v = c >>> 0;
+    br[i] = v; br[i + 1] = v; br[i + 16] = v; br[i + 17] = v;
+    br[i + 256] = v; br[i + 257] = v; br[i + 272] = v; br[i + 273] = v;
+    if (c) this._grow(lx, ly, lz, 1);
+  }
+  // any fine voxel of the coarse cell (0 when the whole cell is empty)
   get(x, y, z) {
-    const i = this.idx(Math.round(x), Math.round(y), Math.round(z));
-    return i >= 0 ? this.a[i] : 0;
+    const lx = Math.round(x) * K - this.fx0, ly = Math.round(y) * K - this.fy0, lz = Math.round(z) * K - this.fz0;
+    if (lx < 0 || ly < 0 || lz < 0 || lx >= this.FW || ly >= this.FH || lz >= this.FD) return 0;
+    const br = this.bricks[(lx >> 4) + this.bw * ((ly >> 4) + this.bh * (lz >> 4))];
+    if (!br) return 0;
+    const i = (lx & 15) | ((ly & 15) << 4) | ((lz & 15) << 8);
+    return br[i] || br[i + 1] || br[i + 16] || br[i + 17] || br[i + 256] || br[i + 257] || br[i + 272] || br[i + 273];
   }
   fill(x0, y0, z0, x1, y1, z1, c) {
     const ax = Math.round(Math.min(x0, x1)), bx = Math.round(Math.max(x0, x1));
@@ -144,6 +188,13 @@ class VB {
       if (d2 <= r * r + 0.25 && (!ring || d2 >= (r - ring) * (r - ring) - 0.25)) { const v = typeof c === 'function' ? c(x, y, z) : c; if (v) this.set(x, y, z, v); }
     }
   }
+  // fine horizontal disc: centre/radius in fine voxels
+  fdisc(cx, Y, cz, r, c, ring = 0) {
+    for (let z = Math.floor(cz - r); z <= Math.ceil(cz + r); z++) for (let x = Math.floor(cx - r); x <= Math.ceil(cx + r); x++) {
+      const d2 = (x + 0.5 - cx) ** 2 + (z + 0.5 - cz) ** 2;
+      if (d2 <= r * r && (!ring || d2 >= (r - ring) * (r - ring))) { const v = typeof c === 'function' ? c(x, Y, z) : c; if (v) this.fset(x, Y, z, v); }
+    }
+  }
   // 3D line with integer steps; thick = extra voxels below each point (keeps diagonals face-connected)
   line(x0, y0, z0, x1, y1, z1, c, thick = 0) {
     const n = Math.max(1, Math.ceil(Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0), Math.abs(z1 - z0))));
@@ -154,39 +205,95 @@ class VB {
       for (let k = 0; k <= thick; k++) this.set(x, y - k, z, v);
     }
   }
+  // fine 3D line
+  fline(x0, y0, z0, x1, y1, z1, c, thick = 0) {
+    const n = Math.max(1, Math.ceil(Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0), Math.abs(z1 - z0))));
+    for (let i = 0; i <= n; i++) {
+      const t = i / n;
+      const x = Math.round(x0 + (x1 - x0) * t), y = Math.round(y0 + (y1 - y0) * t), z = Math.round(z0 + (z1 - z0) * t);
+      const v = typeof c === 'function' ? c(x, y, z, t) : c;
+      for (let k = 0; k <= thick; k++) this.fset(x, y - k, z, v);
+    }
+  }
+  // the painted part as a sparse volume (meshVox reads it without a dense copy)
   finish() {
-    let x0 = 1e9, y0 = 1e9, z0 = 1e9, x1 = -1, y1 = -1, z1 = -1;
-    const { W, H, a } = this;
-    const bb = this.bb || [0, 0, 0, -1, -1, -1];
-    for (let z = bb[2]; z <= bb[5]; z++) for (let y = bb[1]; y <= bb[4]; y++) {
-      const row = W * (y + H * z);
-      for (let x = bb[0]; x <= bb[3]; x++) if (a[row + x]) {
-        if (x < x0) x0 = x; if (x > x1) x1 = x;
-        if (y < y0) y0 = y; if (y > y1) y1 = y;
-        if (z < z0) z0 = z; if (z > z1) z1 = z;
+    const bb = this.bb || [0, 0, 0, 0, 0, 0];
+    const v = new BrickVol(this, bb);
+    const [x0, y0, z0, x1, y1, z1] = bb;
+    const origin = [-(x0 + this.fx0), -(y0 + this.fy0), -(z0 + this.fz0)];
+    // lo / hi in coarse units (what the meta's metres are computed from)
+    return { vox: v, origin, lo: [(x0 + this.fx0) / K, (y0 + this.fy0) / K, (z0 + this.fz0) / K], hi: [(x1 + this.fx0 + 1) / K, (y1 + this.fy0 + 1) / K, (z1 + this.fz0 + 1) / K] };
+  }
+}
+
+// A window onto a VB's bricks: w x h x d fine voxels starting at the VB-local voxel (x0, y0, z0).
+// Read-only Vox look-alike: get(), occRow() for the mesher, count(), and dense() when needed.
+class BrickVol {
+  constructor(vb, bb) {
+    this.bricks = vb.bricks; this.bw = vb.bw; this.bh = vb.bh;
+    this.x0 = bb[0]; this.y0 = bb[1]; this.z0 = bb[2];
+    this.w = bb[3] - bb[0] + 1; this.h = bb[4] - bb[1] + 1; this.d = bb[5] - bb[2] + 1;
+  }
+  get(x, y, z) {
+    if (x < 0 || y < 0 || z < 0 || x >= this.w || y >= this.h || z >= this.d) return 0;
+    const lx = x + this.x0, ly = y + this.y0, lz = z + this.z0;
+    const br = this.bricks[(lx >> 4) + this.bw * ((ly >> 4) + this.bh * (lz >> 4))];
+    return br ? br[(lx & 15) | ((ly & 15) << 4) | ((lz & 15) << 8)] : 0;
+  }
+  // occupancy bits of row (y, z) into words[o..], bit b of word k = voxel x = 32k + b
+  occRow(y, z, words, o) {
+    const ly = y + this.y0, lz = z + this.z0, W = this.w;
+    const rowB = this.bw * ((ly >> 4) + this.bh * (lz >> 4)), cell = ((ly & 15) << 4) | ((lz & 15) << 8);
+    for (let x = 0; x < W;) {
+      const lx = x + this.x0;
+      const br = this.bricks[(lx >> 4) + rowB];
+      const run = Math.min(16 - (lx & 15), W - x);
+      if (br) {
+        let c = cell | (lx & 15);
+        for (let k = 0; k < run; k++, c++) if (br[c] !== 0) words[o + ((x + k) >> 5)] |= 1 << ((x + k) & 31);
       }
+      x += run;
     }
-    const v = new Vox(x1 - x0 + 1, y1 - y0 + 1, z1 - z0 + 1);
-    for (let z = z0; z <= z1; z++) for (let y = y0; y <= y1; y++) {
-      const src = W * (y + H * z), dst = v.w * (y - y0 + v.h * (z - z0));
-      for (let x = x0; x <= x1; x++) v.data[dst + x - x0] = a[src + x];
-    }
-    const origin = [-(x0 + this.x0), -(y0 + this.y0), -(z0 + this.z0)];
-    return { vox: v, origin, lo: [x0 + this.x0, y0 + this.y0, z0 + this.z0], hi: [x1 + this.x0 + 1, y1 + this.y0 + 1, z1 + this.z0 + 1] };
+  }
+  count() {
+    let n = 0;
+    for (let z = 0; z < this.d; z++) for (let y = 0; y < this.h; y++) for (let x = 0; x < this.w; x++) if (this.get(x, y, z)) n++;
+    return n;
+  }
+  dense() {
+    const v = new Vox(this.w, this.h, this.d);
+    for (let z = 0; z < this.d; z++) for (let y = 0; y < this.h; y++) for (let x = 0; x < this.w; x++) v.data[x + this.w * (y + this.h * z)] = this.get(x, y, z);
+    return v;
   }
 }
 
 // ------------------------------------------------------------------ wall face frames
 // A frame addresses a wall face as (u, y, n): u runs left->right seen from outside,
 // n is the offset outward from the outermost body layer (n = 0 base, 1 = lips/trim, <0 inside).
+// Fine voxels on a frame: (U, Y, N) with U = 2u..2u+1 inside coarse column u, Y = 2y..2y+1, and
+// N = 0 the outermost fine layer of the body (coarse layer n covers N = 2n-1 and 2n).
 function mkFrame(vb, b, f, off = 0) {
-  let P2, umin, umax, nx = 0, nz = 0;
-  if (f === 'front') { P2 = (u, n) => [u, b.z1 + n + off]; umin = b.x0; umax = b.x1; nz = 1; }
-  else if (f === 'back') { P2 = (u, n) => [b.x0 + b.x1 - u, b.z0 - n - off]; umin = b.x0; umax = b.x1; nz = -1; }
-  else if (f === 'right') { P2 = (u, n) => [b.x1 + n + off, b.z0 + b.z1 - u]; umin = b.z0; umax = b.z1; nx = 1; }
-  else { P2 = (u, n) => [b.x0 - n - off, u]; umin = b.z0; umax = b.z1; nx = -1; }
+  let P2, FP, umin, umax, nx = 0, nz = 0;
+  if (f === 'front') { P2 = (u, n) => [u, b.z1 + n + off]; FP = (U, N) => [U, K * (b.z1 + off) + 1 + N]; umin = b.x0; umax = b.x1; nz = 1; }
+  else if (f === 'back') { P2 = (u, n) => [b.x0 + b.x1 - u, b.z0 - n - off]; FP = (U, N) => [K * (b.x0 + b.x1) + 1 - U, K * (b.z0 - off) - N]; umin = b.x0; umax = b.x1; nz = -1; }
+  else if (f === 'right') { P2 = (u, n) => [b.x1 + n + off, b.z0 + b.z1 - u]; FP = (U, N) => [K * (b.x1 + off) + 1 + N, K * (b.z0 + b.z1) + 1 - U]; umin = b.z0; umax = b.z1; nx = 1; }
+  else { P2 = (u, n) => [b.x0 - n - off, u]; FP = (U, N) => [K * (b.x0 - off) - N, U]; umin = b.z0; umax = b.z1; nx = -1; }
   const F = {
-    f, b, umin, umax, nx, nz, off, P: P2, occ: [],
+    f, b, umin, umax, nx, nz, off, P: P2, FP, occ: [],
+    fs(U, Y, N, c) { const p = FP(U, N); vb.fset(p[0], Y, p[1], c); },
+    fg(U, Y, N) { const p = FP(U, N); return vb.fget(p[0], Y, p[1]); },
+    ff(U0, Y0, N0, U1, Y1, N1, c) {
+      const fn = typeof c === 'function';
+      for (let n = Math.min(N0, N1); n <= Math.max(N0, N1); n++) for (let y = Math.min(Y0, Y1); y <= Math.max(Y0, Y1); y++) for (let u = Math.min(U0, U1); u <= Math.max(U0, U1); u++) {
+        const cc = fn ? c(u, y, n) : c;
+        if (cc) { const p = FP(u, n); vb.fset(p[0], y, p[1], cc); }
+      }
+    },
+    fc(U0, Y0, N0, U1, Y1, N1) {
+      for (let n = Math.min(N0, N1); n <= Math.max(N0, N1); n++) for (let y = Math.min(Y0, Y1); y <= Math.max(Y0, Y1); y++) for (let u = Math.min(U0, U1); u <= Math.max(U0, U1); u++) { const p = FP(u, n); vb.fset(p[0], y, p[1], 0); }
+    },
+    // centre of fine voxel (U,Y,N) in local coarse coordinates
+    fpt(U, Y, N) { const p = FP(U, N); return [(p[0] + 0.5) / K, (Y + 0.5) / K, (p[1] + 0.5) / K]; },
     set(u, y, n, c) { const p = P2(u, n); vb.set(p[0], y, p[1], c); },
     get(u, y, n) { const p = P2(u, n); return vb.get(p[0], y, p[1]); },
     fill(u0, y0, n0, u1, y1, n1, c) {
@@ -2963,6 +3070,32 @@ export function buildVoxelBuilding(spec = {}) {
   };
   return { vox, size: VOXEL_SIZE, origin, jitter: 0, meta };
 }
+// The far-away version of a building model: the 1/16 m voxels merged back into 1/8 m ones (a cell
+// is kept when at least half of it is filled, in its most common colour). Thin trim, lap lines and
+// muntins melt away, which is fine past a few dozen metres and roughly halves the triangles.
+export function lowDetail(r) {
+  const v = r.vox, [ox, oy, oz] = r.origin;
+  const at = v.data ? (x, y, z) => (x < 0 || y < 0 || z < 0 || x >= v.w || y >= v.h || z >= v.d ? 0 : v.data[x + v.w * (y + v.h * z)]) : (x, y, z) => v.get(x, y, z);
+  const c0 = [Math.floor(-ox / 2), Math.floor(-oy / 2), Math.floor(-oz / 2)];
+  const c1 = [Math.floor((v.w - 1 - ox) / 2), Math.floor((v.h - 1 - oy) / 2), Math.floor((v.d - 1 - oz) / 2)];
+  const out = new Vox(c1[0] - c0[0] + 1, c1[1] - c0[1] + 1, c1[2] - c0[2] + 1);
+  const cs = new Array(8);
+  for (let z = 0; z < out.d; z++) for (let y = 0; y < out.h; y++) for (let x = 0; x < out.w; x++) {
+    const fx = (x + c0[0]) * 2 + ox, fy = (y + c0[1]) * 2 + oy, fz = (z + c0[2]) * 2 + oz;
+    let n = 0;
+    for (let k = 0; k < 8; k++) { const c = at(fx + (k & 1), fy + ((k >> 1) & 1), fz + (k >> 2)); if (c) cs[n++] = c; }
+    if (n < 4) continue;
+    let best = cs[0], bc = 0;
+    for (let a = 0; a < n; a++) {
+      let m = 0;
+      for (let b = 0; b < n; b++) if (cs[b] === cs[a]) m++;
+      if (m > bc) { bc = m; best = cs[a]; }
+    }
+    out.data[x + out.w * (y + out.h * z)] = best;
+  }
+  return { ...r, vox: out, size: r.size * 2, origin: [-c0[0], -c0[1], -c0[2]] };
+}
+
 export const buildHouseVox = (spec) => buildVoxelBuilding({ kind: 'house', ...spec });
 export const buildCabinVox = (spec) => buildVoxelBuilding({ kind: 'cabin', ...spec });
 export const buildGarageVox = (spec) => buildVoxelBuilding({ kind: 'shed', ...spec });
