@@ -97,7 +97,7 @@ void main() {
   float lx = position.x + 0.5, ly = position.y + 0.5;
   float ax0 = flip > 0.0 ? size.z : 1.0 - size.z;
   vec2 q = vec2((lx - ax0) * size.x, (ly - (1.0 - size.w)) * size.y) * sc;
-  float hgt = max(size.y * (1.0 - size.w) * sc, 0.1);
+  float hgt = max(size.y * size.w * sc, 0.1); // height above the base
   float bend = clamp(q.y / hgt, 0.0, 1.0);
   bend *= bend;
   // a springy wobble for shaken trees: sideways sway plus squash and stretch
