@@ -1,7 +1,7 @@
 // Puts the voxel art into Maple Cove: every building as a detailed voxel model
 // with hand-lettered signs, the town clutter as voxel props (merged per area),
 // harvest pumpkins as kickable physics props, and the fall-fair extras (lawn
-// bowling on the green, harvest hoops over the road, Nana's porch TV...).
+// bowling on the green, Nana's porch TV...).
 import * as THREE from 'three';
 import BuildWorker from './buildWorker.js?worker&inline';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
@@ -12,7 +12,6 @@ import { meshVox } from '../voxel/mesh.js';
 import { voxMesh, sharedVoxelMaterial, createFlatMaterial } from '../render/voxelMaterial.js';
 import { PhysProps } from './physprops.js';
 import { Vox } from '../voxel/vox.js';
-import { nearestRoad } from './terrain.js';
 import { dressPlaces } from './places.js';
 import { placeDeco2D } from './deco2d.js';
 import { buildingSpecPure } from './foundations.js';
@@ -58,7 +57,7 @@ export class VoxelWorld {
     _s.setScalar(scale);
     const M = new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), _q.clone(), _s.clone());
     c.push({ geo: r.geometry, m: M });
-    // lettering painted on the prop (signposts, STOP signs, stands)
+    // lettering painted on the prop (STOP signs, stands)
     for (const sg of r.meta?.signs || []) this.sign(sg, M, {});
     // lights from the model meta
     for (const l of r.meta?.lights || []) {
@@ -369,21 +368,6 @@ export class VoxelWorld {
       physprops.add(this.model('pin', () => PR.bowlingPin({})), x, gy(x, z), z, { kind: 'pin', hp: 99, mass: 0.35, round: false, respawn: 25 });
     }
     physprops.add(this.model('bowlball', () => PR.bowlingBall({})), lane.x, gy(lane.x, lane.z + 1.2), lane.z + 1.2, { kind: 'ball', hp: 99, mass: 1.1, respawn: 20 });
-    S('lane-sign', () => PR.signpost({ arrows: [{ dir: 'front', color: 0xe8701e, len: 8 }] }), lane.x + 2.2, lane.z - 1, Math.PI);
-    // harvest hoops for the bike, standing over the roads (turned to face along the road)
-    this.hoops = [];
-    for (const [x, z] of L.HOOPS) {
-      const rd = nearestRoad(x, z);
-      const yaw = Math.atan2(rd.dx, rd.dz); // the ring faces along the road
-      const r = this.model('hoop', () => PR.trickHoop({ harvest: true }));
-      this.addStatic(r, x, gy(x, z) - 0.1, z, yaw);
-      this.hoops.push({ x, z, yaw, y: gy(x, z), ring: r.meta.ring });
-      for (const c of r.meta.colliders || []) {
-        const lx = c.x ?? c[0], lz = c.z ?? c[2] ?? 0;
-        const wx = x + lx * Math.cos(yaw) + lz * Math.sin(yaw), wz = z - lx * Math.sin(yaw) + lz * Math.cos(yaw);
-        this.world.physics.addCircle({ x: wx, z: wz, r: c.r ?? 0.2, kind: 'post' });
-      }
-    }
     // the cemetery: flowers left on the graves (nothing within ~8 m of Hank's grave: the funeral is staged there)
     const g = P.graveyard;
     for (let i = 0; i < 6; i++) {
@@ -432,7 +416,7 @@ export class VoxelWorld {
       const r = this.model(`pumpkin:medium:${i % 6}`, () => PR.pumpkin({ kind: 'medium', seed: i + 30, color: i % 7 === 3 ? 'white' : i % 5 === 2 ? 'amber' : 'orange' }));
       physprops.add(r, x, gy(x, z), z, { yaw: i * 1.3, kind: 'pumpkin', hp: 3, mass: 1.2, lights: false });
     });
-    // the rest of the remade map: streets, green, harbour, farm, beach, campground, signposts...
+    // the rest of the remade map: streets, green, harbour, farm, beach, campground...
     dressPlaces(this, physprops);
     // and the 2D street clutter (fences, bins, stalls...), fitted around everything above
     this.world.deco2d = placeDeco2D(this);

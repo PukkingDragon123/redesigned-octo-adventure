@@ -1,11 +1,12 @@
-// HUD, dialogue, toasts, banners, prompts and menu plumbing, all built from the
-// pixel UI kit (kit.js / kit.css).
+// HUD, dialogue, pop-ups (Hank peeking up to say things), prompts and menu
+// plumbing, all built from the pixel UI kit (kit.js / kit.css).
 import './kit.css';
 import './ui.css';
 import './paper.css';
 import './menus.css';
 import './notebook.css';
 import { Bubbles } from './bubbles.js';
+import { Popups, htmlToMarkup } from './popup.js';
 import { buildPaperHUD, updatePaperHUD, Gauge } from './paperhud.js';
 import { installKit, kitReady, kButton, kPanel, el, snap, snapBox, scale } from './kit.js';
 import { iconURL, hasIcon } from '../art/icons.js';
@@ -43,8 +44,7 @@ export class UI {
     this.buildHUD();
     this.dialogue = this.buildDialogue();
     this.bubbles = new Bubbles(this);
-    this.toasts = el('div', 'toasts');
-    this.root.appendChild(this.toasts);
+    this.popups = new Popups(this);
     this.skipHint = el('div', 'skiphint', '<span class="k-key">Esc</span><span class="k-shadow">skip</span>');
     this.skipHint.addEventListener('pointerdown', (e) => {
       e.stopPropagation();
@@ -96,43 +96,34 @@ export class UI {
     snapBox(this.promptEl);
   }
 
-  toast(text, icon = null, ms = 3200) {
-    const t = el('div', 'k-plate toast');
-    let ic = '';
-    if (icon) { const a = anyIcon(icon); ic = `<img class="ti s${a.size}" src="${a.src}">`; }
-    t.innerHTML = `${ic}<span class="tt">${text}</span>`;
-    this.toasts.appendChild(t);
-    setTimeout(() => {
-      t.classList.add('out');
-      setTimeout(() => t.remove(), 360);
-    }, ms);
-    while (this.toasts.childElementCount > 4) this.toasts.firstChild.remove();
+  // Hank (or whoever: opts.who) pops up from a bottom corner and says it. See popup.js.
+  pop(text, opts = {}) {
+    const who = opts.who || 'hank';
+    const name = who === 'hank' ? '' : opts.name ?? (who === 'cat' ? 'Poutine' : who === 'grandma' ? 'Nana' : CHARACTERS[who]?.name ?? '');
+    this.popups.push(text, { ...opts, who, name, voice: VOICE[who] || CHARACTERS[who]?.voice || 'narrator' });
   }
-
-  // big announcements arrive as the front page of the Maple Cove Gazette
-  banner(title, sub = '', ms = 2600) {
-    const b = el('div', 'k-news banner gazette', `<div class="mast k-bold">THE MAPLE COVE GAZETTE</div><div class="rule"></div><div class="b1 k-bold">${title}</div>${sub ? `<div class="b2">${sub}</div>` : ''}<div class="cols"><i></i><i></i><i></i></div>`);
-    this.root.appendChild(b);
-    snapBox(b);
-    setTimeout(() => {
-      b.classList.add('out');
-      setTimeout(() => b.remove(), 520);
-    }, ms);
+  // old-style calls still work: they become Hank saying the same words
+  toast(text, icon = null, ms) {
+    this.pop(htmlToMarkup(text), { expr: { skull: 'worried', coin: 'happy', star: 'sparkle' }[icon] || 'happy', ms });
+  }
+  banner(title, sub = '') {
+    this.pop(htmlToMarkup(sub ? `*${title}!* ${sub}` : `*${title}!*`), { expr: 'sparkle' });
   }
 
   letterbox(on) {
     this.root.classList.toggle('letterbox', on);
   }
 
-  // floating text over world positions: comic stamps (cls) or little tooltip tags
+  // little tooltip tags over world positions (villagers muttering, a dog barking);
+  // the old comic stamps (a cls) are Hank shouting it instead
   tag(id, text, pos, ms = 1500, cls = '') {
+    if (cls) { this.pop(text, { shout: true, expr: /bail/.test(cls) ? 'shock' : 'sparkle' }); return; }
     let t = this.tags.get(id);
     if (!t) {
-      t = { e: cls ? el('div', `stamp k-bold ${cls}`) : el('div', 'k-tip wtag') };
+      t = { e: el('div', 'k-tip wtag') };
       this.root.appendChild(t.e);
       this.tags.set(id, t);
     }
-    if (cls) { t.e.classList.remove('pop'); void t.e.offsetWidth; t.e.classList.add('pop'); }
     t.e.textContent = text;
     t.pos = pos;
     t.until = performance.now() + ms;
@@ -393,6 +384,7 @@ export class UI {
     if (this.dialogueTick) this.dialogueTick(dt);
     else this.menuTick();
     this.updateTags();
+    this.popups.update(dt);
   }
 }
 

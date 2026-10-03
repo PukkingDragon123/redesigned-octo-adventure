@@ -2,9 +2,11 @@
 // to strike a pose; let go before touchdown or Hank bails. Spins (A/D), flips
 // (lean back / forward), wheelie drops, long jumps and perfect landings all score, and
 // ground moves (wheelies, manuals, stoppies, nose manuals, drifts) keep a combo alive,
-// so a run can chain hop -> 360 -> manual -> hop -> backflip -> hoop.
+// so a run can chain hop -> 360 -> manual -> hop -> backflip.
 import { input } from '../core/input.js';
 import { POSES } from './vchar.js';
+
+const COMBO_LINES = ['Nice', 'Sweet', 'Bone-afide', 'Spine-tingling', 'Skele-TASTIC'];
 
 const arm = (T, s, f, o, e, i = 0) => { T['aF' + s] = f; T['aO' + s] = o; T['eB' + s] = e; T['eI' + s] = i; };
 const leg = (T, s, f, o, k) => { T['lF' + s] = f; T['lO' + s] = o; T['kB' + s] = k; };
@@ -129,7 +131,7 @@ export class Tricks {
       else if (e.sketchy) list.push({ name: 'SKETCHY', pts: 0 });
       this.add(list, 'land', mult);
     } else if (e.perfect) {
-      // a clean landing on its own still gets a little stamp, and keeps a combo going
+      // a clean landing on its own still gets a little shout, and keeps a combo going
       if (this.comboT > 0) this.comboT = COMBO_TIME;
       this.say(this.game.bike.perfectStreak > 1 ? `PERFECT x${this.game.bike.perfectStreak}` : 'PERFECT!', 'shot');
     }
@@ -139,14 +141,14 @@ export class Tricks {
     this.active = null;
     this.done = [];
     this.air = false;
-    if (this.combo > 1) this.say(`COMBO LOST x${this.combo}`, 'bail');
+    if (this.combo > 1) this.say(`Aw, bones. There goes my x${this.combo}...`, 'bail');
     this.combo = 0;
     this.comboT = 0;
     this.chain = [];
     void e;
   }
 
-  // add moves to the running combo and stamp them over the bike
+  // add moves to the running combo and shout them
   add(list, kind = 'land', mult = 1) {
     const g = this.game;
     let pts = 0;
@@ -158,24 +160,10 @@ export class Tricks {
     this.comboT = COMBO_TIME;
     if (kind === 'land') g.sound.play('trick_land');
     g.sound.play('combo_ding', { pitch: 1 + Math.min(8, this.combo) * 0.06 });
-    this.say(list.map((t) => t.name).join(' + ') + (this.combo > 1 ? `  x${this.combo}` : ''), kind === 'ground' ? 'shot' : 'land');
+    this.say(list.map((t) => t.name).join(' + ') + (this.combo > 1 ? ` x${this.combo}` : ''), kind === 'ground' ? 'shot' : 'land');
     if (kind === 'land') g.rider.ch.tempExpr('sparkle', 1);
     g.state.stats.tricks = (g.state.stats.tricks || 0) + n;
     g.quests?.event('trick', { list, combo: this.combo });
-    g.skills?.event({ type: 'combo', count: this.combo });
-  }
-
-  // flying through a harvest hoop
-  hoop(h) {
-    const g = this.game;
-    this.combo++;
-    this.comboT = COMBO_TIME + 0.3;
-    this.score += 250 * this.combo;
-    g.sound.play('lantern_whoomp');
-    g.sound.play('crowd_cheer', { volume: 0.6 });
-    g.effects.confetti(g.bike.pos.x, g.bike.pos.y + 1.5, g.bike.pos.z, 30);
-    this.say(`HOOP SHOT!${this.combo > 1 ? `  x${this.combo}` : ''}`, 'shot');
-    g.quests?.event('hoop', h);
     g.skills?.event({ type: 'combo', count: this.combo });
   }
 
@@ -184,18 +172,16 @@ export class Tricks {
     if (this.combo >= 2) {
       const tip = Math.min(25, Math.round(this.combo * 2.5));
       g.state.money += tip;
-      g.ui.toast(`Trick combo x${this.combo}! The crowd tossed you <b>$${tip}</b>`, 'star', 2200);
+      g.ui.pop(`${COMBO_LINES[Math.min(COMBO_LINES.length - 1, this.combo - 2)]} x${this.combo}! Somebody tossed me *$${tip}*!`, { expr: 'laugh', key: 'combo', ms: 2200 });
       g.sound.play('cash_coins');
     }
     this.combo = 0;
     this.chain = [];
   }
 
+  // Hank shouts the move from his corner of the screen (a new shout replaces the last)
   say(text, kind) {
-    const g = this.game;
-    const p = g.bike.pos.clone();
-    p.y += 2.6;
-    g.ui.tag(`trick${kind}`, text, p, 1500, `trick-${kind}`);
+    this.game.ui.pop(kind === 'bail' ? text : `${text}!`.replace(/!!$/, '!'), { shout: true, key: 'trick', expr: kind === 'bail' ? 'sheepish' : 'sparkle' });
   }
 
   clear() {

@@ -128,8 +128,8 @@ export class Villagers {
   moodToast(b, mood) {
     if (this.game.mode === 'title') return;
     const name = this.game.villagerName?.(b.char) || b.char;
-    const txt = { wary: `${name} isn't quite so scared of you now`, friendly: `${name} likes you now!`, fan: `${name} is your biggest fan!` }[mood];
-    if (txt) this.game.ui?.toast(txt, mood === 'wary' ? 'skull' : 'star', 2600);
+    const txt = { wary: `${name} only screamed a *little* that time. Progress!`, friendly: `${name} likes me now! Me! A skeleton!`, fan: `${name} is my *biggest fan*! Should I sign autographs?` }[mood];
+    if (txt) this.game.ui?.pop(txt, { expr: mood === 'wary' ? 'sheepish' : 'love', key: `mood:${b.char}` });
     if (mood === 'friendly' || mood === 'fan') this.game.effects?.hearts(b.a.pos.x, b.a.pos.y + 1.8, b.a.pos.z, 5);
   }
 
@@ -246,7 +246,6 @@ export class Villagers {
     if (!D) return;
     const y = g.physics.groundAt(D.x, D.z).h;
     g.effects?.poof?.(D.x + D.nx * 0.4, y + 0.3, D.z + D.nz * 0.4, { scale: 0.5, count: 3 });
-    if (b.d < 30) g.ui?.tag(`slam:${b.key}`, 'SLAM!', new THREE.Vector3(D.x + D.nx * 0.5, y + 2.2, D.z + D.nz * 0.5), 900, 'trick-bail');
     g.chase?.shake?.(b.d < 12 ? 0.12 : 0);
   }
   umbrellaMesh(color, key) {
@@ -406,11 +405,9 @@ export class Villagers {
     g.sound.play('delivered');
     setTimeout(() => g.sound.play('cash'), 300);
     const name = g.villagerName(a.char);
-    const money = `+$${r.pay}${r.tip ? ` <b>(+$${r.tip} tip)</b>` : ''}`;
-    if (how === 'step') {
-      g.ui.toast(`${money} · Left on ${name}'s step. The money was under the mat.`, 'coin', 3400);
-      g.ui.tag(`note:${b.key}`, `"Leave it on the step!! Money's under the mat. -${name}"`, new THREE.Vector3(b.door.x + b.door.nx * 0.5, a.pos.y + 1.9, b.door.z + b.door.nz * 0.5), 3800);
-    } else g.ui.toast(`${money} · ${name} snatched the cocoa and ran!`, 'coin', 3000);
+    const money = `*$${r.pay}*${r.tip ? ` (plus *$${r.tip}* tip)` : ''}`;
+    if (how === 'step') g.ui.pop(`${name}'s note says "LEAVE IT ON THE STEP!!" Fine. ${money} under the mat.`, { expr: 'sheepish', ms: 4200 });
+    else g.ui.pop(`${name} snatched the cocoa and ran! Well, I got ${money}.`, { expr: 'sheepish' });
     this.afterDelivery(null, r.quality, a);
     g.save();
     return r;
@@ -441,7 +438,7 @@ export class Villagers {
     if (!b) return;
     N._hints = (N._hints || 0) + 1;
     this._hintT = 1800;
-    g.ui?.toast(`${g.villagerName(b.char)} is peeking at you. Stay calm and slow, or ring your bell <span class="key">R</span> to say hello.`, 'bell', 6000);
+    g.ui?.pop(`${g.villagerName(b.char)} is peeking at me. Calm and slow, Hank... or ring the bell ${g.touch?.on ? '' : '[R] '}to say hi!`, { expr: 'worried', ms: 5000 });
   }
 }
 

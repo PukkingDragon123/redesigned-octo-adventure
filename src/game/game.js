@@ -266,7 +266,7 @@ export class Game {
     this.world.atmosphere.setWeather(s.weather || 'clear', true);
     this.orders.syncCups();
     this.parkBike();
-    this.ui.banner(`DAY ${s.day}`, 'Welcome back, Hank', 2200);
+    this.ui.pop(`Day ${s.day}! Back in the saddle. Well, back on the *bones*.`, { expr: 'happy' });
     this.beginRide();
   }
 
@@ -362,7 +362,7 @@ export class Game {
       sound.play('book_open');
     } else {
       const t = this.skills.total();
-      this.ui.toast(`<b>Harold's riding notes</b> (${t} marks): ${this.skills.summary()}. Next: ${this.skills.list().find((s) => s.tier < s.maxTier)?.goal || 'all mastered!'}`, 'books', 6000);
+      this.ui.pop(`Harold's notes say ${t} marks: ${this.skills.summary()}. Next: ${this.skills.list().find((s) => s.tier < s.maxTier)?.goal || 'nothing! I mastered it all!'}`, { expr: 'think', ms: 6000 });
     }
   }
   save() {
@@ -573,7 +573,7 @@ export class Game {
         if (e.airTime > 0.6) {
           st.stats.bestAir = Math.max(st.stats.bestAir, e.airTime);
           st.stats.dayAir = Math.max(st.stats.dayAir || 0, e.airTime);
-          if (e.airTime > 1.2) this.ui.tag('air', `${e.airTime.toFixed(1)}s of air!`, b.pos.clone().setY(b.pos.y + 2.4), 1300);
+          if (e.airTime > 1.2) this.ui.pop(`${e.airTime.toFixed(1)}s OF AIR!`, { shout: true, key: 'trick', expr: 'sparkle' });
           if (e.airTime > 1.0) sound.play('squish');
         }
         break;
@@ -626,7 +626,7 @@ export class Game {
       case 'sink':
         sound.play('splash');
         this.orders.slosh(25);
-        this.ui.toast("Glub glub... good thing Hank doesn't need to breathe.", null, 3000);
+        this.ui.pop("Glub glub... Good thing I don't need to breathe!", { expr: 'sheepish', key: 'sink' });
         break;
     }
   }
@@ -670,7 +670,7 @@ export class Game {
     pf.steps++;
     this.applySettings();
     this.saveSettings();
-    this.ui.toast('Eased the graphics a little for smoother riding (Settings to change).', 'gears', 3500);
+    this.ui.pop('My bones were lagging, so I eased the graphics a bit. (Settings to change.)', { expr: 'sheepish' });
   }
 
   // ---------------------------------------------------------------- per frame

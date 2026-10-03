@@ -104,10 +104,10 @@ export const SKILLS = [
   },
   {
     id: 'combo', name: 'Combos', icon: 'skill_combo', unit: 'x',
-    how: 'Chain tricks, spins, flips and hoops one after another before the combo timer runs out.',
+    how: 'Chain tricks, spins and flips one after another before the combo timer runs out.',
     desc: 'The crowd loves a show. The crowd is mostly geese.',
     tiers: [['combo', 2, 'x2 combo'], ['combo', 4, 'x4 combo'], ['combo', 7, 'x7 combo']],
-    notes: ['"Keep moving. Land and go again."', '"Hoops count. So do spins. So does showing off."', '"Seven! The geese were speechless. Honking, but speechless."'],
+    notes: ['"Keep moving. Land and go again."', '"Wheelies count. So do spins. So does showing off."', '"Seven! The geese were speechless. Honking, but speechless."'],
   },
   {
     id: 'tricks', name: 'Air Poses', icon: 'skill_tricks', unit: '',
@@ -234,14 +234,11 @@ export class Skills {
     this._cool = 2.2;
     const tip = TIP[t] || 0;
     g.state.money += tip;
-    g.ui?.toast(`<b>${sk.name} ${ROMAN[t]}</b>${tip ? ` +$${tip}` : ''} &middot; ${sk.notes[t - 1]}`, sk.icon, 5200);
+    g.ui?.pop(`*${sk.name} ${ROMAN[t]}!*${tip ? ` (+$${tip})` : ''} Harold wrote: ${sk.notes[t - 1]}`, { expr: 'sparkle', key: 'skill', ms: 5000 });
     g.sound?.play('stamp');
     g.sound?.play('combo_ding', { pitch: 0.9 + t * 0.12 });
     const p = g.bike.pos;
     g.effects?.confetti?.(p.x, p.y + 1.6, p.z, 16 + t * 10);
-    const tag = p.clone();
-    tag.y += 3.1;
-    g.ui?.tag?.('skillup', `${sk.name.toUpperCase()} ${ROMAN[t]}!`, tag, 1800, 'trick-shot');
     g.rider?.ch?.react?.('yay');
     g.story?.onMastery?.(this.total(), MAX_TIERS, ENDING_TIERS);
     g.save?.();

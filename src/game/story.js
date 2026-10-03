@@ -215,7 +215,7 @@ export class Story {
     return I.freeRoam({
       at: { x: 0.25, z: 3.1, yaw: Math.PI },
       hint: 'Sit on the sofa by the fire',
-      toast: "Have a look around Nana's cabin. When you're ready, sit on the sofa by the fire.",
+      toast: "Nana's cabin! Smells like cocoa and wool. I'll have a look around, then sit on the sofa by the fire.",
     });
   }
   // 3. on the sofa, under Harold's quilt
@@ -359,7 +359,7 @@ export class Story {
       g.parkBike();
       g.rider.visible = false;
       S.music('cabin');
-      g.ui.banner(`DAY ${day}`, weatherLine(g.state.weather, day), 2800);
+      g.ui.pop(`Day ${day}! ${weatherLine(g.state.weather, day)}`, { expr: 'happy', key: 'day' });
       S.sfx('day_start');
       const b = BREAKFAST[day];
       // breakfast on the table by the front windows, steaming hot (Hank's plate and Nana's cocoa)
@@ -472,8 +472,9 @@ export class Story {
       g.rider.visible = true;
       this.flag('bike', true);
     }).then(() => {
-      g.ui.toast('<span class="key">W</span> pedal (tap in rhythm to sprint) · <span class="key">A</span><span class="key">D</span> steer · hold <span class="key">Space</span> and let go to hop · <span class="key">Q</span> wheelie · <span class="key">Shift</span> drift', null, 8000);
-      g.ui.toast('Follow the cocoa cups on the compass', 'cocoa', 6000);
+      if (g.touch?.on) g.ui.pop('Right! Thumb on the wheel to steer, hold *PEDAL* to go, *HOP* to hop, *TRICK* to show off.', { expr: 'happy', ms: 7000 });
+      else g.ui.pop('Right! [W] pedals (tap in rhythm to sprint), [A][D] steer, hold [Space] and let go to hop, [Q] wheelie, [Shift] drift.', { expr: 'happy', ms: 8000 });
+      g.ui.pop('And I just follow the little cocoa cups on the compass. Easy!', { expr: 'sparkle' });
     });
   }
 
@@ -560,7 +561,7 @@ export class Story {
         const r = g.orders.deliver(o);
         g.effects.coins(H.pos.x, H.pos.y + 1.2, H.pos.z, 10);
         S.sfx('cash');
-        g.ui.toast(`+$${r.pay}${r.tip ? ` (+$${r.tip} tip)` : ''} from Gus`, 'coin');
+        g.ui.pop(`*$${r.pay}*${r.tip ? ` and a *$${r.tip}* tip` : ''} from Gus! I think he almost smiled.`, { expr: 'happy' });
       }
       gus.play('sip', 'happy');
       for (const a of crowd) a?.play('idle', 'surprised');
@@ -644,7 +645,7 @@ export class Story {
       g.catEventActive = false;
       g.world.atmosphere.setWeather('overcast');
       g.save();
-    }).then(() => g.ui.toast('<b>Poutine</b> joined you! She rides in the basket.', 'cat', 5000));
+    }).then(() => g.ui.pop("*Poutine* is riding in my basket now. Purr-fect!", { expr: 'love' }));
   }
 
   // ---------------------------------------------------------------- deliveries
@@ -662,7 +663,9 @@ export class Story {
     if (r.quality > 70) g.effects.hearts(actor.pos.x, actor.pos.y + 1.8, actor.pos.z, 4);
     g.sound.play('delivered');
     setTimeout(() => g.sound.play('cash'), 300);
-    g.ui.toast(`+$${r.pay}${r.tip ? ` <b>(+$${r.tip} tip!)</b>` : ''} · ${Math.round(r.quality)}% hot`, 'coin');
+    const q = Math.round(r.quality);
+    const heat = q > 80 ? 'Still piping hot!' : q > 55 ? `Cocoa ${q}% hot.` : q > 30 ? `Only ${q}% hot... oops.` : `${q}% hot. More like iced cocoa.`;
+    g.ui.pop(`*$${r.pay}*${r.tip ? ` plus a *$${r.tip}* tip` : ''}! ${heat}`, { expr: q > 55 ? 'happy' : 'sheepish' });
     g.ui.tag(`d${o.id}`, r.quality > 55 ? 'Toasty!' : 'Brr...', actor.pos.clone().setY(actor.pos.y + 2.4), 1600);
     g.mode = 'menu';
     await g.ui.say(o.customer, line, { expr: r.quality > 55 ? 'happy' : 'sad' });
@@ -697,7 +700,7 @@ export class Story {
           st.money += 20;
           g.sound.play('collect');
           await g.ui.say('grandma', LORE[k.id], { expr: 'happy' });
-          g.ui.toast(`Nana gave you <b>$20</b> for the ${k.name}.`, 'coin');
+          g.ui.pop(`Nana gave me *$20* for the ${k.name}. I'd blush if I had cheeks.`, { expr: 'sheepish' });
         }
         const given = KEEPSAKES.filter((k) => st.keepsakes[k.id] === 'given').length;
         if (given === KEEPSAKES.length && !st.flags.allKeepsakes) {
@@ -705,7 +708,7 @@ export class Story {
           await g.ui.say('grandma', "That's... all of them. Every last thing he wandered off with.", { expr: 'cry' });
           await g.ui.say('grandma', 'He would have liked you, Hank. Very much.', { expr: 'happy' });
           st.money += 100;
-          g.ui.toast('Nana slipped you <b>$100</b> and a very long hug.', 'star');
+          g.ui.pop('Nana slipped me *$100* and a very long hug. My ribs creaked.', { expr: 'love' });
         }
         g.save();
       }
@@ -725,7 +728,7 @@ export class Story {
         // the cups go out to Bessie's crate, so out of the cabin first
         if (g.orders.carried().length && g.interior?.active) await g.interior.leave();
         await g.loadCargo?.();
-        if (g.orders.carried().length) g.ui.toast(`Packed ${g.orders.carried().length} hot cocoa${g.orders.carried().length > 1 ? 's' : ''}. Go go go!`, 'cocoa');
+        if (g.orders.carried().length) g.ui.pop(`${g.orders.carried().length} hot cocoa${g.orders.carried().length > 1 ? 's' : ''} packed. Go go go!`, { expr: 'sparkle', key: 'packed' });
         g.refillBoosts();
       } else if (what === 'sleep') {
         await this.endDay();
@@ -738,7 +741,7 @@ export class Story {
           await g.ui.say('grandma', `Oh, would you? We're low on ${low.slice(0, 4).map((k) => names[k] || k).join(', ')}. Mo at Moose & Goose will sort you out. Here's my list!`, { expr: 'happy' });
           g.quests.q('groceries').state = 'active';
           g.sound.play('quest_new');
-          g.ui.toast("Nana's shopping list is pinned to your note. Moose & Goose is on the boardwalk.", 'basket', 3200);
+          g.ui.pop("Nana's list is pinned to my note. Moose & Goose is down on the boardwalk!", { expr: 'happy' });
         }
       } else if (what === 'chat') {
         const chats = [
@@ -807,8 +810,8 @@ export class Story {
       g.effects.confetti(H.pos.x, H.pos.y + 2, H.pos.z, 60);
       S.sfx('upgrade');
       await S.cam(V(-133.8, y + 6, 86), V(-144.8, y + 1, 95), 3, 50);
-      g.ui.banner('THE END', '...of the beginning. Keep delivering!', 6000);
-      await S.wait(5);
+      await S.say('hank', 'The end? Nah. The end... *of the beginning!* Keep the cocoa coming!', { actor: H, expr: 'laugh' });
+      await S.wait(1.5);
       g.villagers.setVisible('grandma', true);
       g.rider.visible = true;
       this.flag('ending', true);
@@ -821,7 +824,7 @@ export class Story {
   onMastery(total, max, need = 20) {
     if (total < need || this.flag('ending') || this.flag('masteryReady')) return;
     this.flag('masteryReady', true);
-    this.g.ui.toast('Nana (far away): “Hank, dear! Come round to the garage, I want to see you ride!”', 'home', 7000);
+    this.g.ui.pop('Hank, dear! Come round to the garage, I want to see you *ride*!', { who: 'grandma', expr: 'happy', ms: 5000 });
   }
 
   // ---------------------------------------------------------------- world triggers
@@ -877,14 +880,14 @@ export class Story {
       if (!g.catEventActive) {
         g.catEventActive = true;
         g.world.atmosphere.setWeather('rain');
-        g.ui.toast("It's starting to drizzle... and something is meowing near the road home.", 'cat', 6000);
+        g.ui.pop('Is that drizzle? ...And is something *meowing* near the road home?', { expr: 'worried', ms: 4500 });
       }
     }
     // Nana calls Hank home at night
     const hr = g.world.atmosphere.hour;
     if (hr > 20.5 && !this.nanaCalled) {
       this.nanaCalled = true;
-      g.ui.toast('Nana (far away): “Haaank! It\'s getting dark, dear! Come home!”', 'home', 6000);
+      g.ui.pop("Haaank! It's getting dark, dear! Come home!", { who: 'grandma', expr: 'worried', ms: 4500 });
     }
     if (this.pendingEnding && g.mode === 'ride') {
       this.pendingEnding = false;

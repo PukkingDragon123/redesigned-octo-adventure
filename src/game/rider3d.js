@@ -115,9 +115,7 @@ export class VoxelRider {
     const ch = this.ch;
     if (ch.broken || this.crashed) return;
     const words = BAIL_WORDS[e.why] || BAIL_WORDS.wall;
-    const p = bike.pos.clone();
-    p.y += 1.7;
-    this.game.ui?.tag('crashword', words[Math.floor(Math.random() * words.length)], p, 1200, 'trick-bail');
+    this.game.ui?.pop(words[Math.floor(Math.random() * words.length)], { shout: true, key: 'trick', expr: 'shock' });
     this.crashed = true;
     this.reassembled = false;
     if (e.soft) return this.flop(bike, e);

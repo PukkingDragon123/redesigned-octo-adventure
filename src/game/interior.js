@@ -286,7 +286,7 @@ export class Interior {
       }
       g.mode = 'ride';
       g.ui.showHUD(true);
-      if (toast) g.ui.toast(toast, 'home', 7000);
+      if (toast) g.ui.pop(toast, { expr: 'happy', ms: 6000 });
     });
   }
   finishBeat() {
@@ -394,7 +394,7 @@ export class Interior {
       this.beat.t += dt;
       if (!this.beat.nudged && this.beat.t > 40) {
         this.beat.nudged = true;
-        g.ui.toast('The sofa by the fire looks awfully cozy...', 'home', 5000);
+        g.ui.pop('That sofa by the fire looks awfully cozy...', { expr: 'sleepy' });
       }
     }
     // late at night indoors: Nana's put the kettle on, no forced trip home

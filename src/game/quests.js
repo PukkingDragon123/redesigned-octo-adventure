@@ -1,6 +1,6 @@
 // Side quests & fall-fair games: lost cats, lost things, tree planting, bird
 // photos, letters, helping the café, lawn bowling, harvest-supper invitations,
-// the harvest hoops, the grocery run for Nana. Villagers offer them when Hank stops to chat.
+// Lou's stunt bet, the grocery run for Nana. Villagers offer them when Hank stops to chat.
 import * as THREE from 'three';
 import { Vox, tone } from '../voxel/vox.js';
 import { meshVox } from '../voxel/mesh.js';
@@ -74,7 +74,7 @@ export const QUESTS = {
   cafe: { title: 'Pumpkins for the café', giver: 'marie', reward: 25 },
   bowling: { title: 'Lawn bowling', giver: 'pip', reward: 20 },
   treat: { title: 'Harvest supper invitations', giver: 'pop', reward: 15 },
-  hoops: { title: 'The harvest hoops', giver: 'lou', reward: 40 },
+  stunt: { title: "Lou's stunt bet", giver: 'lou', reward: 40 },
 };
 
 const GREET = {
@@ -200,7 +200,7 @@ export class Quests {
         V?.addTrust?.(who, 5);
         await o.start();
         g.sound.play('quest_new');
-        ui.toast(`New note in the journal: <b>${QUESTS[o.id]?.title || o.title}</b>`, 'star', 2600);
+        ui.pop(`Jotted it in my journal: *${QUESTS[o.id]?.title || o.title}*.`, { expr: 'happy', key: 'quest' });
       } else {
         a.react('sad');
         await ui.say(who, 'Oh. Okay. I will just... wait here. Forever.', { expr: 'sad' });
@@ -229,7 +229,7 @@ export class Quests {
     }
     if (who === 'gus' && day >= 1) add('trees', 'The storm knocked over half my trees. Plant these six saplings at the dirt mounds, would you? Not that I care.', async () => {
       const q = this.q('trees'); q.state = 'active'; q.n = 0;
-      this.game.ui.toast('Gus gave you <b>6 maple saplings</b>. Look for dirt mounds!', 'leaf', 3000);
+      this.game.ui.pop('Six maple saplings! Now I just look for *dirt mounds*. Not graves. Dirt mounds.', { expr: 'sheepish' });
     }, { expr: 'grumpy' });
     if (who === 'birdie') add('birds', "I'm writing a bird book! Take my old camera and snap a robin, a chickadee, a crow and a Canada goose. Press C to look through it!", async () => {
       this.q('birds').state = 'active';
@@ -247,8 +247,8 @@ export class Quests {
     if (who === 'pop' && this.game.world.atmosphere.hour > 14) add('treat', "Mom's harvest supper is tonight! Knock on six doors and invite the neighbours. I'm too shy.", async () => {
       const q = this.q('treat'); q.state = 'active'; q.n = 0; q.have = {};
     }, { expr: 'sheepish', yes: "I'll knock!" });
-    if (who === 'lou') add('hoops', 'Bet you can\'t ride through all three harvest hoops over the road! Five bucks says no!', async () => {
-      const q = this.q('hoops'); q.state = 'active'; q.have = {};
+    if (who === 'lou') add('stunt', 'Bet you can\'t chain *four tricks* in one combo on that old bike! Five bucks says no!', async () => {
+      const q = this.q('stunt'); q.state = 'active'; q.best = 0;
     }, { expr: 'smug', yes: "You're on!" });
     return out;
   }
@@ -266,7 +266,7 @@ export class Quests {
       if (reward) {
         g.state.money += reward;
         g.sound.play('cash_coins');
-        ui.toast(`${QUESTS[id]?.title || 'Favour'} done! <b>+$${reward}</b>`, 'coin', 2600);
+        ui.pop(`Favour done! *+$${reward}*. Being helpful pays!`, { expr: 'sparkle' });
       }
       g.sound.play('quest_done');
       return true;
@@ -301,8 +301,8 @@ export class Quests {
     if (who === 'pip' && bowling.state === 'active' && bowling.strike) return done('bowling', 'STRIIIIKE!!! You are the BEST SKELETON EVER!!!', 'sparkle');
     const treat = this.q('treat');
     if (who === 'pop' && treat.state === 'active' && treat.n >= 6) return done('treat', "Six doors?! Everybody's coming! Mom says you get the first slice of pie.", 'sparkle');
-    const hoops = this.q('hoops');
-    if (who === 'lou' && hoops.state === 'active' && Object.keys(hoops.have).length >= 3) return done('hoops', 'NO WAY! All three! ...Here. Five bucks. And thirty-five more for the show.', 'shock');
+    const stunt = this.q('stunt');
+    if (who === 'lou' && stunt.state === 'active' && stunt.best >= 4) return done('stunt', 'NO WAY! Four in a row! ...Here. Five bucks. And thirty-five more for the show.', 'shock');
     // groceries handed to Nana
     if (who === 'grandma' && Object.keys(g.state.bag || {}).length) {
       const bag = g.state.bag;
@@ -338,15 +338,16 @@ export class Quests {
           cafe.n++;
           data.respawnT = 0;
           g.wait(0.6).then(() => { g.world.physprops.smash(data); g.world.physprops.list.find((x) => x === data).respawnT = 30; });
-          g.ui.toast(`Pumpkin delivered to the café! <b>${cafe.n}/3</b>`, 'pumpkin', 1800);
+          g.ui.pop(cafe.n >= 3 ? 'Three pumpkins at the café! Marie-Claude will be thrilled.' : `Pumpkin delivered! *${cafe.n}/3*. Gently does it.`, { expr: 'happy', key: 'cafe' });
         }
       }
     }
-    if (name === 'hoop') {
-      const q = this.q('hoops');
-      if (q.state === 'active') {
-        q.have[`${Math.round(data.x)},${Math.round(data.z)}`] = true;
-        g.ui.toast(`Harvest hoops: <b>${Object.keys(q.have).length}/3</b>`, 'star', 1600);
+    if (name === 'trick') {
+      // Lou's bet: four tricks in one combo
+      const q = this.q('stunt');
+      if (q.state === 'active' && (q.best || 0) < 4 && data?.combo >= 4) {
+        q.best = data.combo;
+        g.ui.pop('Four in a row! Lou owes me *five bucks*!', { expr: 'sparkle', key: 'stunt', ms: 2600 });
       }
     }
   }
@@ -377,7 +378,7 @@ export class Quests {
       if (down >= 6) {
         bowl.strike = true;
         g.sound.play('crowd_cheer');
-        g.ui.tag('strike', 'STRIKE!!!', pins[0].pivot.position.clone().setY(pins[0].pivot.position.y + 1.5), 2200, 'trick-shot');
+        g.ui.pop('STRIKE!!! Pip has to see this!', { shout: true, key: 'strike', expr: 'sparkle', ms: 2200 });
         g.effects.confetti(pins[0].pivot.position.x, pins[0].pivot.position.y + 1, pins[0].pivot.position.z, 50);
       }
     }
@@ -421,7 +422,7 @@ export class Quests {
     g.sound.play('cat_meow_happy');
     g.rider.ch.react('love');
     g.effects.hearts(o.x, o.y + 0.6, o.z, 5);
-    g.ui.toast(`<b>${c.name}</b> hopped into your basket! Take her home to Agnes.`, 'cat', 2600);
+    g.ui.pop(`*${c.name}* hopped in my basket! Back to Agnes we go.`, { expr: 'love' });
     g.save();
   }
 
@@ -432,7 +433,7 @@ export class Quests {
     this.objs = this.objs.filter((x) => x !== o);
     g.sound.play('item_get');
     g.rider.ch.react('yay');
-    g.ui.toast(`Found the <b>${L.name}</b>! Return it to ${CUSTOMERS[L.owner]?.name || L.owner}.`, 'star', 2600);
+    g.ui.pop(`Found the *${L.name}*! That goes back to ${CUSTOMERS[L.owner]?.name || L.owner}.`, { expr: 'sparkle' });
     g.save();
   }
 
@@ -460,7 +461,7 @@ export class Quests {
     g.effects.magic(s.x, s.y + 0.6, s.z, 16, [0.6, 1, 0.5]);
     ch.play('idle');
     ch.react('yay');
-    g.ui.toast(`Sapling planted! <b>${q.n}/6</b>`, 'leaf', 1600);
+    g.ui.pop(q.n >= 6 ? 'Six trees planted! Gus has to be impressed. Inside. Deep down.' : `Sapling planted! *${q.n}/6*. Grow, little buddy.`, { expr: 'happy', key: 'trees' });
     g.mode = 'ride';
     g.save();
   }
@@ -480,7 +481,7 @@ export class Quests {
     const owner = d.owner && CUSTOMERS[d.owner] ? (d.owner === 'kids' ? 'pip' : d.owner === 'lou_lh' ? 'ollie' : d.owner) : null;
     const lines = ["A harvest supper? We'll bring the beans!", "Pie at the Gagnons'? Count us in, dear.", "Supper! I'll dust off my good sweater.", "Tell your mother we're coming. With the casserole."];
     await g.ui.say(owner, lines[q.n % lines.length], { expr: 'happy', name: owner ? undefined : 'A voice behind the door' });
-    g.ui.toast(`Invitation delivered! <b>${q.n}/6</b> doors`, 'star', 1500);
+    g.ui.pop(q.n >= 6 ? 'Six doors! Back to Pop with the good news.' : `Invitation delivered! *${q.n}/6* doors.`, { expr: 'happy', key: 'treat' });
     g.mode = 'ride';
   }
 
@@ -535,9 +536,9 @@ export class Quests {
     if (kind) {
       const first = !g.state.photos[kind];
       g.state.photos[kind] = (g.state.photos[kind] || 0) + 1;
-      g.ui.toast(`Snap! A ${BIRD_NAMES[kind] || kind}${first ? ' — new for the bird book!' : '.'}`, 'camera', 2200);
+      g.ui.pop(`Snap! A ${BIRD_NAMES[kind] || kind}${first ? '! New for the bird book!' : '. Smile!'}`, { expr: first ? 'sparkle' : 'happy', key: 'photo' });
       if (first) g.sound.play('item_get');
-    } else g.ui.toast('Snap! A lovely photo of... nothing in particular.', 'camera', 1800);
+    } else g.ui.pop('Snap! A lovely photo of... nothing in particular.', { expr: 'sheepish', key: 'photo' });
   }
 
   // ------------------------------------------------------------ HUD & compass
@@ -557,7 +558,7 @@ export class Quests {
     if (S.cafe?.state === 'active') out.push(`Pumpkins to café ${S.cafe.n}/3`);
     if (S.bowling?.state === 'active') out.push(S.bowling.strike ? 'Tell Pip: STRIKE!' : 'Bowl a strike');
     if (S.treat?.state === 'active') out.push(S.treat.n >= 6 ? 'Tell Pop: everyone is coming' : `Supper invitations ${S.treat.n}/6`);
-    if (S.hoops?.state === 'active') out.push(`Harvest hoops ${Object.keys(S.hoops.have).length}/3`);
+    if (S.stunt?.state === 'active') out.push(S.stunt.best >= 4 ? 'Tell Lou: four-trick combo!' : 'Chain a 4-trick combo');
     if (Object.keys(g.state.bag || {}).length) out.push('Groceries: bring home');
     else if (S.groceries?.state === 'active') out.push('Buy groceries at Moose & Goose');
     return out.slice(0, 5);

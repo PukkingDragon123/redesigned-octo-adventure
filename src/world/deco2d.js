@@ -69,7 +69,7 @@ export function placeDeco2D(vw) {
     [L.POI.grave.x, L.POI.grave.z, 10], [L.POI.lumberCamp.x, L.POI.lumberCamp.z, 15], [L.HOME_SPAWN.x, L.HOME_SPAWN.z, 6],
     [L.POI.catLog.x, L.POI.catLog.z, 5], [L.MO_SPOT.x, L.MO_SPOT.z, 2], [L.POI.bridge.x, L.POI.bridge.z, 13],
     [L.BOWLING.x, L.BOWLING.z - 3, 6], [L.HOME_SPOTS.porch.x, L.HOME_SPOTS.porch.z, 7], [L.HOME_SPOTS.garage.x, L.HOME_SPOTS.garage.z, 6],
-    ...L.HOOPS.map(([x, z]) => [x, z, 4.5]), ...L.RAMPS.map((r) => [r.x, r.z, r.len + 2]), ...L.SIGNPOSTS.map((s) => [s.x, s.z, 2.5]),
+    ...L.RAMPS.map((r) => [r.x, r.z, r.len + 2]),
     ...L.PLANT_SPOTS.map(([x, z]) => [x, z, 2.5]), ...L.KEEPSAKES.map((k) => [k.x, k.z, 2]),
     ...Object.values(L.CUSTOMERS).map((c) => [c.x, c.z, 2.2]),
   ];
