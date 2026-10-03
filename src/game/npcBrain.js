@@ -139,7 +139,7 @@ export class NpcBrain {
     const dx = t.x - a.pos.x, dz = t.z - a.pos.z, d = hyp(dx, dz);
     const last = P.length === 1;
     // wait at the kerb while a bike comes down the road
-    if (t.cross && !this.crossing && X.live && !X.onFoot && X.speed > 3 && X.dRoad < 16 && Math.abs(X.p.x - a.pos.x) < 18) {
+    if (t.cross && !this.crossing && X.live && !X.onFoot && X.speed > 3 && X.dRoad < 5.5 && Math.abs(X.p.x - a.pos.x) < 18) {
       a.faceTowards(X.p.x, X.p.z);
       a.lookAt(this.g.playerChar);
       return;
