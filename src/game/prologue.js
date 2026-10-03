@@ -387,7 +387,8 @@ function yearsPass(story) {
     };
     const cp = graveAt(1.6, 3.4);
     await S.cam(V(cp.x, y0 + 1.5, cp.z), V(gr.x, y0 + 0.45, gr.z), 0, 42);
-    const zz = () => S.emote('zzz', V(gr.x, y0 + 0.7, gr.z), 2.2);
+    const zp = graveAt(1.0, 0.6);
+    const zz = () => S.emote('zzz', V(zp.x, y0 + 0.75, zp.z), 2.2);
     // night falls on the fresh grave
     A.hour = 21.5;
     A.setWeather('clear', true);
