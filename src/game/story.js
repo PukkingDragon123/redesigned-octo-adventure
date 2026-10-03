@@ -124,13 +124,23 @@ export class Story {
   // the sofa by the fire; Nana covers him with Harold's quilt and the talk goes on from there.
   async cabinNight() {
     const g = this.g;
+    this.nanaCalled = true;
+    await this.cabinArrive();
+    await this.cabinLookAround();
+    await this.cabinSofa();
+    g.interior.reset();
+    g.villagers.setVisible('grandma', true);
+    this.flag('cabin', true);
+    g.world.atmosphere.cold = 0;
+  }
+  // (test entry points: ?scene=cabinArrive | cabinSofa)
+  // 1. up the yard and in through the front door
+  cabinArrive() {
+    const g = this.g;
     const I = g.interior, R = I.room;
     const A = g.world.atmosphere;
     const L = (x, y, z) => R.wp(x, y, z); // room-local -> world
-    const Q = Math.PI / 2;
-    this.nanaCalled = true;
-    // 1. up the yard and in through the front door
-    await this.scene(async (S) => {
+    return this.scene(async (S) => {
       A.hour = 22.6;
       A.setWeather('clear', true);
       A.cold = 0.25;
@@ -146,8 +156,8 @@ export class Story {
       S.temp.push({ remove: () => g.lightPool.removeDynamic(lamp) });
       S.every(() => void lamp.pos.set(N.pos.x, N.pos.y + 1.0, N.pos.z));
       // the cabin glowing in the dark woods, smoke curling from the chimney
-      await S.cam(L(7.5, 3.4, 16.5), L(0, 2.0, 4.5), 0, 46);
-      S.cam(L(3.6, 1.9, 10.2), L(-0.2, 1.3, 5.0), 6.5, 44);
+      await S.cam(L(8.5, 3.8, 17.5), L(0, 2.0, 4.5), 0, 46);
+      S.cam(L(5.6, 2.7, 13.2), L(-0.1, 1.4, 6.0), 6.5, 44);
       await S.fade(0, 1.6);
       S.sfx('owl', { volume: 0.5 });
       const nw = N.walkTo([L(-0.45, 0, 7.8), L(-0.2, 0, 5.3)], 1.0, 'walk+lantern');
@@ -171,7 +181,7 @@ export class Story {
       H.yaw = H.targetYaw = R.wyaw(Math.PI);
       await S.cam(L(-2.0, 2.05, 0.5), L(0, 1.05, 3.7), 0, 50);
       await S.fade(0, 0.6);
-      const n2 = N.walkTo([L(-0.6, 0, 2.5)], 1.0, 'walk+lantern');
+      const n2 = N.walkTo([L(-0.95, 0, 2.6)], 1.0, 'walk+lantern');
       await S.wait(0.6);
       const h2 = H.walkTo([L(0.25, 0, 3.1)], 0.7, 'walk+shiver');
       await S.say('grandma', 'Come in, come in, out of that cold.', { actor: N, expr: 'happy' });
@@ -179,30 +189,46 @@ export class Story {
       await n2;
       R.setDoor(0);
       S.sfx('door', { volume: 0.5 });
-      N.faceTowards(H.pos.x, H.pos.z);
+      // side by side, taking in the room
+      N.face(R.wyaw(Math.PI - 0.45));
+      H.face(R.wyaw(Math.PI + 0.2));
       N.play('idle');
       H.play('shiver', 'surprised');
       g.effects.frost(H.pos.x, H.pos.y + 0.3, H.pos.z, 6);
-      await S.faceShot(H, { dist: 2.0, side: 0.7, dur: 0.8 });
+      await S.cam(L(-0.35, 1.65, 0.4), L(-0.35, 1.15, 2.8), 0.8, 46);
+      await S.faceShot(H, { dist: 2.3, side: -0.6, dur: 0.8 });
       await S.say('hankBuried', "Oh... it's *warm* in here. And it smells like... cinnamon? I think? I can't actually smell.", { actor: H, expr: 'happy' });
-      await S.faceShot(N, { dist: 2.1, side: -0.7, dur: 0.8 });
+      await S.faceShot(N, { dist: 2.3, side: 0.6, dur: 0.8 });
       await S.say('grandma', "Make yourself at home, dear. Have a look around. Then sit yourself down on the sofa by the fire, and I'll fix you something warm.", { actor: N, expr: 'happy' });
       // she heads for the stove; a look across the room at the fire
       const nk = N.walkTo([L(-1.9, 0, 0.2), L(-3.75, 0, -2.35)], 1.1, 'walk');
-      await S.cam(L(-0.4, 2.3, 3.4), L(3.0, 0.9, -1.4), 3.2, 52);
+      await S.cam(L(-1.05, 2.35, 3.35), L(3.0, 0.9, -1.4), 3.2, 52);
       await Promise.race([nk, S.wait(2.5)]);
       if (N.path) { N.path = null; N.pos.copy(L(-3.75, 0, -2.35)); }
     });
-    // 2. free to look around; sitting on the sofa moves the story on
+  }
+  // 2. free to look around; sitting on the sofa moves the story on
+  cabinLookAround() {
+    const g = this.g, I = g.interior;
     g.villagers.setVisible('grandma', true);
     I.moveNana(true);
-    await I.freeRoam({
+    return I.freeRoam({
       at: { x: 0.25, z: 3.1, yaw: Math.PI },
       hint: 'Sit on the sofa by the fire',
       toast: "Have a look around Nana's cabin. When you're ready, sit on the sofa by the fire.",
     });
-    // 3. on the sofa, under Harold's quilt
-    await this.scene(async (S) => {
+  }
+  // 3. on the sofa, under Harold's quilt
+  cabinSofa() {
+    const g = this.g;
+    const I = g.interior, R = I.room;
+    const A = g.world.atmosphere;
+    const L = (x, y, z) => R.wp(x, y, z); // room-local -> world
+    const Q = Math.PI / 2;
+    return this.scene(async (S) => {
+      I.stage(true);
+      A.hour = Math.max(A.hour, 22.7);
+      g.setBikeVisible(false);
       g.villagers.setVisible('grandma', false);
       g.rider.visible = false;
       const seat = L(1.98, 0, -1.31);
@@ -315,10 +341,6 @@ export class Story {
       await S.wait(3.2);
       await S.fade(1, 1.6);
     });
-    I.reset();
-    g.villagers.setVisible('grandma', true);
-    this.flag('cabin', true);
-    A.cold = 0;
   }
 
   // ---------------------------------------------------------------- 3. mornings, at Nana's table
