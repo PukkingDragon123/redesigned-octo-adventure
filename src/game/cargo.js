@@ -13,6 +13,7 @@ import * as L from '../world/layout.js';
 // crate-floor slots (bike-local metres before the bike's scale), front pair first
 const SLOTS = [[-0.085, 0.08], [0.085, 0.08], [-0.085, -0.08], [0.085, -0.08], [0, 0]];
 // sleeve colours, so each cocoa reads as its own cup
+const CUP_SCALE = 1.15; // a touch chunky, so they read from the chase camera
 const SLEEVE = { classic: 0xc8361f, maple: 0xe08a2a, cinnamon: 0x8a2418, mint: 0x3a9a6a, pumpkin: 0xe8702a, mocha: 0x5a3a2a };
 const _v = new THREE.Vector3();
 const _w = new THREE.Vector3();
@@ -66,6 +67,7 @@ export class Cargo {
   makeCup(o) {
     const g = new THREE.Group();
     g.rotation.order = 'YXZ';
+    g.scale.setScalar(CUP_SCALE);
     const mesh = propMesh(cupGeometry(o.cocoa), this.game.world.propMat, { cast: false });
     g.add(mesh);
     const steam = new THREE.Object3D(); // effects puff steam 0.1 m above this
@@ -162,6 +164,7 @@ export class Cargo {
     anchor.add(c.g);
     c.g.position.set(c.slot[0], 0, c.slot[1]);
     c.g.rotation.set(0, (c.o.id * 1.7) % (Math.PI * 2), 0);
+    c.g.scale.setScalar(CUP_SCALE);
     c.fly = null;
     c.ax = c.az = 0;
     c.vx = c.vz = 0;

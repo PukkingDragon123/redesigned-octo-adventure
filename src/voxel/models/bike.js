@@ -116,12 +116,11 @@ export function bikeCrate() {
   const { v } = G;
   const WOOD = 0xa0703a, WOOD_D = 0x7a5228, POST = 0x5e3c1c, ROPE = 0xc8361f;
   const [x0, y0, z0] = G.P(-0.18, 0.81, -0.73).map(Math.round);
-  const [x1, y1, z1] = G.P(0.18, 0.94, -0.39).map(Math.round);
+  const [x1, y1, z1] = G.P(0.18, 0.905, -0.39).map(Math.round); // low sides, so the cups show
   // floor, then plank walls with a gap between boards
   v.fill(x0, y0, z0, x1, y0, z1, WOOD_D);
   for (let y = y0 + 1; y <= y1; y++) {
-    const band = (y - y0 - 1) % 3;
-    if (band === 2 && y < y1) continue; // gap between planks
+    if (y === y0 + 2 && y < y1) continue; // gap between the two planks
     const c = (x, z) => ((x * 7 + z * 3 + y) % 5 === 0 ? tone(WOOD, -0.08) : (y % 2 ? WOOD : tone(WOOD, 0.06)));
     for (let x = x0; x <= x1; x++) { v.set(x, y, z0, c(x, z0)); v.set(x, y, z1, c(x, z1)); }
     for (let z = z0; z <= z1; z++) { v.set(x0, y, z, c(x0, z)); v.set(x1, y, z, c(x1, z)); }
@@ -135,8 +134,8 @@ export function bikeCrate() {
   for (let y = y0 + 2; y <= y1; y++) { v.set(x0 - 1, y, zm, ROPE); v.set(x1 + 1, y, zm, ROPE); }
   for (let x = x0 - 1; x <= x1 + 1; x++) v.set(x, y0 + 2, z1 + 1, ROPE);
   // a stencilled maple leaf on the back board
-  const lx = Math.round((x0 + x1) / 2), ly = y0 + 1;
-  for (const [dx, dy] of [[0, 0], [0, 1], [0, 2], [-1, 1], [1, 1], [-2, 2], [2, 2], [-1, 3], [1, 3], [0, 3], [0, 4], [0, -1]]) v.set(lx + dx, ly + dy, z0 - 1, ROPE);
+  const lx = Math.round((x0 + x1) / 2), ly = y0;
+  for (const [dx, dy] of [[0, 0], [-1, 1], [0, 1], [1, 1], [-2, 2], [-1, 2], [0, 2], [1, 2], [2, 2], [0, 3]]) v.set(lx + dx, ly + dy, z0 - 1, ROPE);
   return { vox: v, size: G.S, origin: G.origin };
 }
 

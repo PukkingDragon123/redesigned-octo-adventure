@@ -124,7 +124,7 @@ export class ChaseCamera {
     const dist = (6.5 + sp * 0.075 - walk * 1.6) * ds;
     // a wheelie or stoppie lifts the boom a touch so the whole bike stays in frame
     this.lift = damp(this.lift, walk ? 0 : clamp((bike.wheelie || 0) + (bike.stoppie || 0), 0, 1) * 0.5, 4, dt);
-    const hgt = (2.5 + sp * 0.022 - walk * 0.4) * (0.55 + ds * 0.45) + this.orbitPitch * 3 + this.lift - Math.sin(slope) * dist * 0.45;
+    const hgt = (3.0 + sp * 0.022 - walk * 0.75) * (0.55 + ds * 0.45) + this.orbitPitch * 3 + this.lift - Math.sin(slope) * dist * 0.45;
     // look ahead along the way Hank is actually travelling
     const la = clamp(speed * 0.16, 0, 2.8) * (walk ? 0.4 : 1);
     let dx = Math.sin(this.yaw), dz = Math.cos(this.yaw);
@@ -137,7 +137,7 @@ export class ChaseCamera {
       this.ahead.x = damp(this.ahead.x, dx * la, 2.2, dt);
       this.ahead.z = damp(this.ahead.z, dz * la, 2.2, dt);
     }
-    const target = _t.set(bike.pos.x + this.ahead.x, by + 1.15 - walk * 0.2 + Math.sin(slope) * (la + 2) * 0.55, bike.pos.z + this.ahead.z);
+    const target = _t.set(bike.pos.x + this.ahead.x, by + 1.0 + Math.sin(slope) * (la + 2) * 0.55, bike.pos.z + this.ahead.z);
     const desired = _v.set(bike.pos.x - Math.sin(yaw) * dist, by + hgt, bike.pos.z - Math.cos(yaw) * dist);
     // keep above ground
     const gh = this.ph.groundAt(desired.x, desired.z, desired.y).h;
