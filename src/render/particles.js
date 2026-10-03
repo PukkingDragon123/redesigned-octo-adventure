@@ -255,6 +255,12 @@ function paintToon(p, rng) {
         }
       }
       p.outline(0x463e52, { region: [ox, oy, C2, C2] });
+      // mark the outline (alpha 252): the shader tucks it behind neighbouring puffs,
+      // so a cluster of puffs reads as one cloud with a single outer line
+      for (let y = 0; y < C2; y++) for (let x = 0; x < C2; x++) {
+        const k = ((oy + y) * p.w + ox + x) * 4;
+        if (p.data[k + 3] && p.data[k] === 0x46 && p.data[k + 1] === 0x3e && p.data[k + 2] === 0x52) p.data[k + 3] = 252;
+      }
     }
   }
 }
@@ -467,6 +473,7 @@ varying float vSpan;
 varying float vAlpha;
 varying float vPhase;
 varying float vFlat;
+varying float vBackDepth;
 void main() {
   float size = iData.x;
   vec2 corner = position.xy; // -0.5..0.5
@@ -484,6 +491,9 @@ void main() {
     mv.xy += vec2(corner.x, corner.y * iExtra.z) * size;
   }
   gl_Position = projectionMatrix * mv;
+  // window depth 0.5 m behind this (camera-facing, so constant) quad, for tucked-in outlines
+  vec4 back = projectionMatrix * vec4(mv.xy, mv.z - 0.5, 1.0);
+  vBackDepth = iExtra.y > 0.5 ? -1.0 : (back.z / back.w) * 0.5 + 0.5;
   vColor = iColor;
   vUv = vec2(corner.x, -corner.y);
   vCell = vec2(mod(iData.y, ${N2}.0), floor(iData.y / ${N2}.0));
@@ -507,6 +517,7 @@ varying float vSpan;
 varying float vAlpha;
 varying float vPhase;
 varying float vFlat;
+varying float vBackDepth;
 void main() {
   vec2 pc = vUv;
   // tumble: squash horizontally with the flip phase, rotate in 90 degree steps
@@ -523,6 +534,8 @@ void main() {
   vec4 tx = texture2D(tAtlas, uv);
   float a = tx.a * vAlpha;
   if (a < bayer4(gl_FragCoord.xy) * 0.98 + 0.01) discard;
+  bool tuck = tx.a > 0.975 && tx.a < 0.995 && vBackDepth > 0.0;
+  gl_FragDepth = tuck ? vBackDepth : gl_FragCoord.z;
   vec3 col = tx.rgb * vColor.rgb;
   // lit particles take the scene light, emissive ones glow
   vec3 lit = col * (uSkyAmb * 1.2 + uSunColor * 0.55);
