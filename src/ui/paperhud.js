@@ -1,7 +1,7 @@
 // The HUD as physical things, drawn as pixel art at the kit's integer scale:
-// Harold's brass pocket watch, the day plate, a coin pouch, a brass compass whose
-// needle points at the next stop, Nana's order note pinned to the corner and the
-// handlebar speedometer.
+// Harold's brass pocket watch, the day plate, a coin pouch, a brass compass in a
+// turned-wood case whose needle points at the next stop, Nana's list (a little
+// spiral notepad on a clipboard) and the handlebar speedometer.
 import { iconURL, glyphURL, iconSmallURL } from '../art/icons.js';
 import { CHARACTERS } from '../art/characters.js';
 import { Pix } from '../art/pixel.js';
@@ -24,6 +24,24 @@ function ring(p, cx, cy, r0, r1, R) {
     const t = ((d - r0) / (r1 - r0)) * 2 - 1;
     const n = [(dx / d) * t, (dy / d) * t, Math.sqrt(Math.max(0, 1 - t * t))];
     p.set(x, y, toneOf(R, n[0] * LV[0] + n[1] * LV[1] + n[2] * LV[2]));
+  }
+}
+// a turned-wood ring (the compass case, the speedometer rim) with grain running round it
+const WOODR = [0x42210e, 0x643418, 0x8e4e24, 0xb87036, 0xd8914e, 0xf4c07a];
+const gh = (a, b) => { let h = Math.imul(a * 374761393 + b * 668265263, 1274126177); h ^= h >>> 15; return ((h >>> 0) % 1000) / 1000; };
+function woodRing(p, cx, cy, r0, r1) {
+  for (let y = Math.floor(cy - r1 - 1); y <= cy + r1 + 1; y++) for (let x = Math.floor(cx - r1 - 1); x <= cx + r1 + 1; x++) {
+    const dx = x + 0.5 - cx, dy = y + 0.5 - cy, d = Math.hypot(dx, dy);
+    if (d < r0 || d > r1) continue;
+    const t = ((d - r0) / (r1 - r0)) * 2 - 1;
+    const n = [(dx / d) * t, (dy / d) * t, Math.sqrt(Math.max(0, 1 - t * t))];
+    const c = toneOf(WOODR, n[0] * LV[0] + n[1] * LV[1] + n[2] * LV[2]);
+    let k = WOODR.indexOf(c);
+    const a = Math.floor(((Math.atan2(dy, dx) + Math.PI) * r1) / 3);
+    const g = gh(a, Math.floor(d * 1.3));
+    if (k < 5 && g < 0.22) k = Math.max(1, k - 1);
+    else if (g > 0.93 && k < 5) k++;
+    p.set(x, y, WOODR[k]);
   }
 }
 function disc(p, cx, cy, r, cols, dome = 0.25) {
@@ -115,9 +133,12 @@ export class Compass extends PixCanvas {
     const p = this.p;
     p.data.fill(0);
     const cx = 22, cy = 22;
-    ring(p, cx, cy, 16, 21, BRASS);
-    for (let k = 0; k < 4; k++) { const a = (k / 4) * Math.PI * 2 - Math.PI / 2; p.rect(Math.round(cx + Math.cos(a) * 18.5) - 1, Math.round(cy + Math.sin(a) * 18.5) - 1, 2, 2, k === 0 ? 0xc8361f : BRASS[1]); }
-    ring(p, cx, cy, 15, 16, [BRASS[0], BRASS[0], BRASS[1], BRASS[1], BRASS[1], BRASS[2]]);
+    woodRing(p, cx, cy, 18, 21.5);
+    ring(p, cx, cy, 15.5, 18, BRASS);
+    for (let k = 0; k < 4; k++) { const a = (k / 4) * Math.PI * 2 - Math.PI / 2; p.rect(Math.round(cx + Math.cos(a) * 16.8) - 1, Math.round(cy + Math.sin(a) * 16.8) - 1, 2, 2, k === 0 ? 0xc8361f : BRASS[1]); }
+    // brass screws in the wooden case
+    for (let k = 0; k < 4; k++) { const a = (k / 4) * Math.PI * 2 + Math.PI / 4; const x = Math.round(cx + Math.cos(a) * 19.6) - 1, y = Math.round(cy + Math.sin(a) * 19.6) - 1; p.set(x, y, BRASS[5]); p.set(x + 1, y, BRASS[3]); p.set(x, y + 1, BRASS[3]); p.set(x + 1, y + 1, BRASS[1]); }
+    ring(p, cx, cy, 15, 15.5, [BRASS[0], BRASS[0], BRASS[1], BRASS[1], BRASS[1], BRASS[2]]);
     disc(p, cx, cy, 15, [0xd8c49a, 0xf4e6c4, 0xfcf4dc]);
     // the rotating card: 16 ticks, a red N spike
     const t0 = (-cardDeg * Math.PI) / 180 - Math.PI / 2;
@@ -164,7 +185,8 @@ export class Gauge extends PixCanvas {
     const s = bike.stats || {};
     const top = s.topSpeed || 10;
     const k = clamp((bike.speed || 0) / (top * 1.2), 0, 1);
-    ring(p, cx, cy, 30.5, 35, GOLD);
+    woodRing(p, cx, cy, 31.5, 35);
+    ring(p, cx, cy, 30, 31.5, BRASS);
     disc(p, cx, cy, 30.5, [0x1e120e, 0x2e1c16, 0x3a2418], 0.1);
     // speed arc: 24 chunky segments with gaps
     for (let i = 0; i < 24; i++) {
@@ -240,8 +262,8 @@ export function buildPaperHUD(ui) {
   onScale(resnap);
   resnap();
   // Nana's list (top right)
-  const note = el('div', 'k-paper hud-note');
-  note.innerHTML = '<i class="pin"></i><div class="ttl k-bold">Nana\'s list</div><div class="rows"></div><div class="obj"></div>';
+  const note = el('div', 'hud-note hud-clip');
+  note.innerHTML = '<i class="clip"></i><div class="pad nb-ruled"><div class="ttl k-bold">Nana\'s list</div><div class="rows"></div><div class="obj"></div><div class="foot"></div></div>';
   h.appendChild(note);
   ui.noteEl = note;
   ui.noteRows = note.querySelector('.rows');
@@ -296,9 +318,16 @@ function mugOf(o) {
   return 'classic';
 }
 
+// Nana's list: the cups being carried (a tick box, the mug, who, a little
+// thermometer), ticked off and crossed out for a few seconds once delivered,
+// then quest lines written underneath.
+const DONE_MS = 8000;
 function updateNote(ui) {
   const g = ui.game;
-  const orders = g.orders?.carried() || [];
+  const list = g.orders?.list || [];
+  const now = performance.now();
+  ui._doneAt = ui._doneAt || new Map();
+  const orders = list.filter((o) => o.state === 'carried' || (o.state === 'delivered' && ui.orderCards.has(o.id) && now - (ui._doneAt.get(o.id) ?? now) < DONE_MS));
   const extra = g.quests?.noteLines?.() || [];
   const seen = new Set();
   for (const o of orders) {
@@ -307,11 +336,17 @@ function updateNote(ui) {
     if (!r) {
       r = el('div', 'nrow');
       const who = SHORT[o.customer] || CHARACTERS[o.customer]?.name?.split(' ')[0] || o.customer;
-      r.innerHTML = `<img class="k-g" src="${glyphURL(`mug_${mugOf(o)}`)}"><span class="who">${esc(who)}</span>${o.rush ? `<img class="k-g rush" src="${glyphURL('rush')}">` : ''}<span class="heat"><i></i></span>`;
-      ui.noteRows.appendChild(r);
+      r.innerHTML = `<i class="bx"></i><img class="k-g" src="${glyphURL(`mug_${mugOf(o)}`)}"><span class="who">${esc(who)}</span>${o.rush ? `<img class="k-g rush" src="${glyphURL('rush')}">` : ''}<span class="heat"><i></i></span>`;
+      const firstQuest = ui.noteRows.querySelector('.qrow');
+      ui.noteRows.insertBefore(r, firstQuest);
       ui.orderCards.set(o.id, r);
     }
-    // a little thermometer in whole art pixels, plus steam (or frost) by the cup
+    if (o.state === 'delivered') {
+      if (!ui._doneAt.has(o.id)) ui._doneAt.set(o.id, now);
+      r.classList.add('done');
+      continue;
+    }
+    // a little thermometer in whole art pixels
     const q = clamp(o.quality, 0, 100);
     const px = Math.round((q / 100) * 22);
     const hEl = r.querySelector('.heat');
@@ -320,15 +355,14 @@ function updateNote(ui) {
       hEl.firstChild.style.width = `calc(var(--u) * ${px})`;
       hEl.className = `heat ${q > 60 ? '' : q > 30 ? 'warm' : 'cool'}`;
     }
-    r.classList.toggle('done', o.state === 'delivered');
   }
-  for (const [id, r] of ui.orderCards) if (!seen.has(id)) { r.remove(); ui.orderCards.delete(id); }
+  for (const [id, r] of ui.orderCards) if (!seen.has(id)) { r.remove(); ui.orderCards.delete(id); ui._doneAt.delete(id); }
   // quest lines (lost cats, saplings...) written under the orders
   const key = extra.join('|');
   if (ui._extraKey !== key) {
     ui._extraKey = key;
     ui.noteRows.querySelectorAll('.qrow').forEach((e) => e.remove());
-    for (const t of extra) ui.noteRows.appendChild(el('div', 'nrow qrow', `<img class="k-g" src="${glyphURL('box')}"><span>${esc(t)}</span>`));
+    for (const t of extra) ui.noteRows.appendChild(el('div', 'nrow qrow', `<i class="bx"></i><span>${esc(t)}</span>`));
   }
   ui.noteEl.classList.toggle('empty', !orders.length && !extra.length && !ui.objective.textContent);
 }

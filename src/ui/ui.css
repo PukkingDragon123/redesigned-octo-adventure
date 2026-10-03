@@ -44,27 +44,7 @@
 .hud-dist { box-sizing: border-box; width: calc(var(--u) * 64); height: calc(var(--u) * 24); margin-top: calc(var(--u) * -5); display: flex; align-items: center; gap: calc(var(--u) * 2); padding: 0 0 0 calc(var(--u) * 3); white-space: nowrap; }
 .hud-dist.off { visibility: hidden; }
 
-.hud-note {
-  position: absolute; right: calc(var(--u) * 3 + var(--safe-r)); top: calc(var(--u) * 3 + var(--safe-t));
-  width: calc(var(--u) * 112); padding: calc(var(--u) * 3) calc(var(--u) * 3) calc(var(--u) * 2) calc(var(--u) * 4);
-  transition: transform 0.3s steps(3);
-}
-.hud-note.empty { transform: translateY(calc(-100% + var(--u) * 12)); }
-.hud-note .pin { position: absolute; left: calc(var(--u) * 45); top: calc(var(--u) * -9); width: calc(var(--u) * 16); height: calc(var(--u) * 16); background: var(--g-pin) 0 0 / 100% 100%; }
-.hud-note .ttl { color: #a8321e; margin-bottom: calc(var(--u) * 1); }
-.hud-note .nrow { display: flex; align-items: center; gap: calc(var(--u) * 2); height: calc(var(--u) * 16); white-space: nowrap; position: relative; }
-.hud-note .nrow .who { flex: 1; min-width: 0; overflow: hidden; }
-.hud-note .heat { flex: none; position: relative; width: calc(var(--u) * 22); height: calc(var(--u) * 6); background: #3a2418; box-shadow: 0 0 0 var(--u) var(--k-ink2); margin-right: calc(var(--u) * 1); }
-.hud-note .heat i { position: absolute; left: 0; top: 0; bottom: 0; background: linear-gradient(180deg, #ffe08a 0 var(--u), #f06a1e var(--u) calc(100% - var(--u)), #a82a12 calc(100% - var(--u))); }
-.hud-note .heat.warm i { background: linear-gradient(180deg, #fff2a0 0 var(--u), #f0ae26 var(--u) calc(100% - var(--u)), #b86e12 calc(100% - var(--u))); }
-.hud-note .heat.cool i { background: linear-gradient(180deg, #e6f2fc 0 var(--u), #8ab4e0 var(--u) calc(100% - var(--u)), #4a6aa0 calc(100% - var(--u))); }
-.hud-note .nrow .wisp { animation: k-hop 0.7s steps(1) infinite; }
-.hud-note .nrow.done { opacity: 0.55; }
-.hud-note .nrow.done::after { content: ''; position: absolute; left: calc(var(--u) * 16); right: 0; top: calc(var(--u) * 8); height: var(--u); background: var(--k-ink2); }
-.hud-note .qrow { height: auto; min-height: calc(var(--u) * 16); align-items: flex-start; white-space: normal; }
-.hud-note .qrow span:last-child { padding-top: calc(var(--u) * 2); }
-.hud-note .obj { display: none; margin-top: calc(var(--u) * 2); padding-left: calc(var(--u) * 12); color: #5a3a8a; white-space: normal; background: var(--g-arrowR) 0 calc(var(--u) * -2) / calc(var(--u) * 12) calc(var(--u) * 12) no-repeat; }
-.hud-note .obj.on { display: block; }
+/* Nana's list on its clipboard: see notebook.css */
 
 .hud-gauge { position: absolute; left: calc(var(--u) * 3 + var(--safe-l)); bottom: calc(var(--u) * 3 + var(--safe-b)); transition: transform 0.3s steps(3); }
 .hud-gauge.away { transform: translateY(calc(var(--u) * 90)); }
@@ -182,7 +162,6 @@
 .touchmode .hud-note .obj { display: none; }
 /* phones held upright: compass under the top row */
 .k-portrait .hud-compass { top: calc(var(--u) * 58 + var(--safe-t)); }
-.k-portrait .hud-note { width: calc(var(--u) * 92); }
 .k-portrait .touchmode .toasts { top: calc(var(--u) * 126 + var(--safe-t)); }
 .k-portrait .tbtn.tsq { top: calc(var(--u) * 74 + var(--safe-t)); }
 .k-portrait .t-map { left: calc(var(--u) * 6 + var(--safe-l)); }

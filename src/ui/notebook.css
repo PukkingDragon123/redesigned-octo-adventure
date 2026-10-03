@@ -1,0 +1,148 @@
+/* Nana's spiral notebook (order board, customer book) and the HUD clipboard.
+   Ruled paper is drawn with whole-art-pixel gradients over a paper tile, so the
+   blue rules land exactly on the 16 px rows the text sits on. */
+:root {
+  --nb-rule: #b8cce2;
+  --nb-margin: #e89a94;
+  --nb-blue: #2e4c9e;
+  --nb-red: #b8281e;
+  --nb-pencil: #5e5a66;
+  --nb-cover: #6e2a1e;
+}
+.nb-ruled {
+  background:
+    linear-gradient(90deg, transparent var(--nb-mx, calc(var(--u) * 15)), var(--nb-margin) var(--nb-mx, calc(var(--u) * 15)) calc(var(--nb-mx, calc(var(--u) * 15)) + var(--u)), transparent calc(var(--nb-mx, calc(var(--u) * 15)) + var(--u))) 0 0 / 100% 100% no-repeat,
+    repeating-linear-gradient(180deg, transparent 0 calc(var(--u) * 15), var(--nb-rule) calc(var(--u) * 15) calc(var(--u) * 16)) 0 var(--nb-y0, 0) / 100% calc(100% - var(--nb-y0, 0px)) no-repeat,
+    var(--k-nb-paper) 0 0 / calc(var(--u) * 32) calc(var(--u) * 32) repeat;
+  background-color: #fbf5e4;
+  color: var(--nb-blue);
+  text-shadow: none;
+  line-height: calc(var(--u) * 16);
+}
+
+/* ---------------------------------------------------------------- the open notebook on Nana's table */
+.menu.nbsheet { width: min(calc(var(--u) * 344), calc(100% - var(--u) * 8)); }
+.nb {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) calc(var(--u) * 10) minmax(0, 1fr);
+  padding: calc(var(--u) * 2) calc(var(--u) * 2) calc(var(--u) * 3);
+  margin: calc(var(--u) * 2) calc(var(--u) * 2) calc(var(--u) * 6);
+  background: var(--nb-cover);
+  box-shadow: 0 0 0 var(--u) var(--k-ink), var(--u) calc(var(--u) * 3) 0 var(--u) rgba(18, 10, 12, 0.45);
+}
+/* the cover's lower edge and a page stack peeking out */
+.nb::after { content: ''; position: absolute; left: calc(var(--u) * 2); right: calc(var(--u) * 2); bottom: var(--u); height: var(--u); background: repeating-linear-gradient(90deg, #e8dcc0 0 calc(var(--u) * 3), #c8b898 calc(var(--u) * 3) calc(var(--u) * 4)); }
+.nb-page { position: relative; min-width: 0; min-height: calc(var(--u) * 128); padding: 0 calc(var(--u) * 4) calc(var(--u) * 4) calc(var(--u) * 19); --nb-mx: calc(var(--u) * 16); }
+.nb-page.nb-r { padding-left: calc(var(--u) * 16); --nb-mx: calc(var(--u) * 12); }
+/* the gutter: pages darken towards the binding, the coils sit on top */
+.nb-gutter { position: relative; background: linear-gradient(90deg, #d8ccb0 0 var(--u), #5a2016 var(--u) calc(100% - var(--u)), #d8ccb0 calc(100% - var(--u))); }
+.nb-gutter::before { content: ''; position: absolute; left: calc(var(--u) * -7); top: calc(var(--u) * 2); bottom: calc(var(--u) * 2); width: calc(var(--u) * 24); background: var(--k-nb-spiral) 0 0 / calc(var(--u) * 24) calc(var(--u) * 10) repeat-y; z-index: 2; }
+.nb-page.nb-l::after, .nb-page.nb-r::after { content: ''; position: absolute; top: 0; bottom: 0; width: calc(var(--u) * 3); pointer-events: none; }
+.nb-page.nb-l::after { right: 0; background: linear-gradient(90deg, rgba(120, 90, 60, 0.12) 0 var(--u), rgba(120, 90, 60, 0.22) var(--u) calc(var(--u) * 2), rgba(120, 90, 60, 0.34) calc(var(--u) * 2)); }
+.nb-page.nb-r::after { left: 0; background: linear-gradient(90deg, rgba(120, 90, 60, 0.34) 0 var(--u), rgba(120, 90, 60, 0.22) var(--u) calc(var(--u) * 2), rgba(120, 90, 60, 0.12) calc(var(--u) * 2)); }
+
+/* written on the page */
+.nb-head { display: flex; align-items: center; gap: calc(var(--u) * 2); height: calc(var(--u) * 32); line-height: calc(var(--u) * 16); }
+.nb-head .t { color: var(--nb-red); flex: 1; white-space: nowrap; }
+.nb-head .t small { display: block; font-family: 'Monogram', monospace; color: var(--nb-pencil); }
+.nb-head .cups { display: flex; align-items: center; gap: 0; color: var(--nb-pencil); }
+.nb-head .cups img.empty { filter: grayscale(1) brightness(1.4); opacity: 0.45; }
+.nb-pencil-note { color: var(--nb-pencil); white-space: normal; }
+.nb-ink { color: var(--nb-blue); }
+.nb-redink { color: var(--nb-red); }
+
+/* a row on the list: tick box in the margin, then the line */
+.nb-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 2);
+  box-sizing: border-box;
+  width: 100%;
+  height: calc(var(--u) * 16);
+  margin: 0;
+  padding: 0 calc(var(--u) * 1) 0 0;
+  border: 0;
+  background: none;
+  color: var(--nb-blue);
+  font: inherit;
+  line-height: calc(var(--u) * 16);
+  text-align: left;
+  cursor: pointer;
+  outline: none;
+  white-space: nowrap;
+}
+.nb-row .bx { position: absolute; left: calc(var(--u) * -16); top: calc(var(--u) * 1); width: calc(var(--u) * 12); height: calc(var(--u) * 12); background: var(--k-nb-box) 0 0 / 100% 100% no-repeat; }
+.nb-row.packed .bx { background-image: var(--k-nb-check); }
+.nb-row.done .bx { background-image: var(--k-nb-tick); }
+.nb-row .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: clip; }
+.nb-row .rt { flex: none; display: flex; align-items: center; gap: var(--u); color: var(--nb-pencil); }
+.nb-row .rt .k-g.rush { margin-right: calc(var(--u) * -3); }
+.nb-row.done .nm { color: var(--nb-pencil); text-decoration: line-through; text-decoration-color: var(--nb-red); text-decoration-thickness: var(--u); }
+.nb-row.packed .nm::after { content: ' (packed)'; color: var(--nb-pencil); }
+/* the focused row gets a stroke of yellow highlighter, and Hank's finger in the margin */
+.nb-row:hover, .nb-row.sel { background: linear-gradient(180deg, transparent calc(var(--u) * 3), rgba(255, 226, 64, 0.62) calc(var(--u) * 3) calc(var(--u) * 14), transparent calc(var(--u) * 14)); }
+.nb-row.sel::before { content: ''; position: absolute; left: calc(var(--u) * -34); top: 0; width: calc(var(--u) * 16); height: calc(var(--u) * 16); background: var(--g-hand) 0 0 / 100% 100% no-repeat; animation: k-poke 0.6s steps(1) infinite; z-index: 3; }
+.nb-row.off { cursor: default; }
+
+/* the detail page: a taped-in photo, who and where, what they ordered */
+.nb-card { position: relative; }
+.nb-top { display: flex; gap: calc(var(--u) * 4); align-items: flex-start; min-height: calc(var(--u) * 48); }
+.nb-photo { position: relative; flex: none; width: calc(var(--u) * 36); height: calc(var(--u) * 42); margin-top: calc(var(--u) * 4); background: #fffdf6; box-shadow: 0 0 0 var(--u) #a89878, var(--u) var(--u) 0 var(--u) rgba(60, 40, 30, 0.35); }
+.nb-photo img { position: absolute; left: calc(var(--u) * 2); top: calc(var(--u) * 2); width: calc(var(--u) * 32); height: calc(var(--u) * 32); background: #cfe0f0; }
+.nb-photo::after { content: ''; position: absolute; left: calc(var(--u) * 7); top: calc(var(--u) * -5); width: calc(var(--u) * 22); height: calc(var(--u) * 9); background: var(--k-nb-tape) 0 0 / 100% 100% no-repeat; }
+.nb-who { min-width: 0; padding-top: 0; }
+.nb-who .nm { color: var(--nb-red); white-space: normal; line-height: calc(var(--u) * 16); }
+.nb-who .addr { color: var(--nb-pencil); white-space: normal; }
+.nb-line { display: flex; align-items: center; gap: calc(var(--u) * 2); min-height: calc(var(--u) * 16); white-space: nowrap; }
+.nb-line .lbl { color: var(--nb-pencil); flex: none; }
+.nb-line .v { overflow: hidden; }
+.nb-line.wrap { white-space: normal; align-items: flex-start; }
+.nb-quote { color: var(--nb-blue); white-space: normal; margin-top: 0; }
+.nb-stamp { display: inline-block; margin-left: auto; padding: 0 calc(var(--u) * 2); line-height: calc(var(--u) * 12); color: var(--nb-red); box-shadow: inset 0 0 0 var(--u) var(--nb-red); font-family: 'BoldPixels', monospace; }
+.nb-stamp.ok { color: #2f6e2c; box-shadow: inset 0 0 0 var(--u) #2f6e2c; }
+
+/* the clutter of a well-used notebook */
+.nb-stain { position: absolute; width: calc(var(--u) * 30); height: calc(var(--u) * 30); background: var(--k-nb-stain) 0 0 / 100% 100% no-repeat; pointer-events: none; }
+.nb-doodle { position: absolute; width: calc(var(--u) * 24); height: calc(var(--u) * 16); background: 0 0 / 100% 100% no-repeat; pointer-events: none; }
+.nb-pencil { position: absolute; right: calc(var(--u) * 18); bottom: calc(var(--u) * -7); width: calc(var(--u) * 62); height: calc(var(--u) * 10); background: var(--k-nb-pencil) 0 0 / 100% 100% no-repeat; pointer-events: none; z-index: 3; }
+
+/* phones held upright: one page above the other */
+.k-portrait .nb { grid-template-columns: minmax(0, 1fr); }
+.k-portrait .nb-gutter { height: calc(var(--u) * 4); }
+.k-portrait .nb-gutter::before { display: none; }
+.k-portrait .nb-page { min-height: 0; }
+.k-portrait .nb-page.nb-r { padding-left: calc(var(--u) * 19); --nb-mx: calc(var(--u) * 16); }
+
+/* ---------------------------------------------------------------- the HUD: Nana's list on a clipboard */
+.hud-note.hud-clip {
+  position: absolute; right: calc(var(--u) * 3 + var(--safe-r)); top: calc(var(--u) * 6 + var(--safe-t));
+  box-sizing: border-box; width: calc(var(--u) * 116);
+  border-style: solid; border-color: transparent; border-width: calc(var(--u) * 6) calc(var(--u) * 5) calc(var(--u) * 9);
+  border-image: var(--k-clipboard) 10 fill / calc(var(--u) * 10) / 0 repeat;
+  padding: 0;
+  image-rendering: pixelated;
+  transition: transform 0.3s steps(3);
+}
+.hud-clip .clip { position: absolute; left: calc(50% - var(--u) * 17); top: calc(var(--u) * -9); width: calc(var(--u) * 34); height: calc(var(--u) * 14); background: var(--k-clip) 0 0 / 100% 100% no-repeat; z-index: 3; }
+.hud-clip .pad { position: relative; padding: calc(var(--u) * 7) calc(var(--u) * 2) 0 calc(var(--u) * 16); --nb-y0: calc(var(--u) * 7); --nb-mx: calc(var(--u) * 14); box-shadow: 0 var(--u) 0 #c8b898, 0 calc(var(--u) * 2) 0 rgba(40, 24, 16, 0.4); }
+.hud-clip .pad::before { content: ''; position: absolute; left: calc(var(--u) * 3); right: calc(var(--u) * 3); top: calc(var(--u) * -7); height: calc(var(--u) * 14); background: var(--k-nb-coil) 0 0 / calc(var(--u) * 10) calc(var(--u) * 14) repeat-x; z-index: 2; }
+.hud-note.hud-clip.empty { transform: translateY(calc(-100% + var(--u) * 10)); }
+.hud-clip .ttl { color: var(--nb-red); height: calc(var(--u) * 16); margin: 0; line-height: calc(var(--u) * 16); white-space: nowrap; }
+.hud-clip .nrow { display: flex; align-items: center; gap: calc(var(--u) * 2); height: calc(var(--u) * 16); white-space: nowrap; position: relative; color: var(--nb-blue); }
+.hud-clip .nrow .bx { position: absolute; left: calc(var(--u) * -15); top: calc(var(--u) * 1); width: calc(var(--u) * 12); height: calc(var(--u) * 12); background: var(--k-nb-box) 0 0 / 100% 100% no-repeat; }
+.hud-clip .nrow.done .bx { background-image: var(--k-nb-tick); }
+.hud-clip .nrow.done .who { color: var(--nb-pencil); text-decoration: line-through; text-decoration-color: var(--nb-red); text-decoration-thickness: var(--u); }
+.hud-clip .nrow.done .heat { visibility: hidden; }
+.hud-clip .nrow .who { flex: 1; min-width: 0; overflow: hidden; }
+.hud-clip .heat { flex: none; position: relative; width: calc(var(--u) * 22); height: calc(var(--u) * 6); background: #e8dcc4; box-shadow: 0 0 0 var(--u) var(--nb-pencil); margin-right: calc(var(--u) * 1); }
+.hud-clip .heat i { position: absolute; left: 0; top: 0; bottom: 0; background: linear-gradient(180deg, #ffe08a 0 var(--u), #f06a1e var(--u) calc(100% - var(--u)), #a82a12 calc(100% - var(--u))); }
+.hud-clip .heat.warm i { background: linear-gradient(180deg, #fff2a0 0 var(--u), #f0ae26 var(--u) calc(100% - var(--u)), #b86e12 calc(100% - var(--u))); }
+.hud-clip .heat.cool i { background: linear-gradient(180deg, #e6f2fc 0 var(--u), #8ab4e0 var(--u) calc(100% - var(--u)), #4a6aa0 calc(100% - var(--u))); }
+.hud-clip .qrow { height: auto; min-height: calc(var(--u) * 16); align-items: flex-start; white-space: normal; line-height: calc(var(--u) * 16); color: var(--nb-pencil); }
+.hud-clip .obj { display: none; padding-left: 0; color: var(--nb-red); white-space: normal; line-height: calc(var(--u) * 16); background: none; }
+.hud-clip .obj::before { content: ''; position: absolute; left: calc(var(--u) * 2); width: calc(var(--u) * 12); height: calc(var(--u) * 12); margin-top: calc(var(--u) * 2); background: var(--g-arrowR) 0 0 / 100% 100% no-repeat; }
+.hud-clip .obj.on { display: block; }
+.hud-clip .foot { height: calc(var(--u) * 4); }
+.k-portrait .hud-note.hud-clip { width: calc(var(--u) * 96); }

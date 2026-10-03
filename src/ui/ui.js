@@ -4,6 +4,7 @@ import './kit.css';
 import './ui.css';
 import './paper.css';
 import './menus.css';
+import './notebook.css';
 import { Bubbles } from './bubbles.js';
 import { buildPaperHUD, updatePaperHUD, Gauge } from './paperhud.js';
 import { installKit, kitReady, kButton, kPanel, el, snap, snapBox, scale } from './kit.js';
