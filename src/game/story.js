@@ -491,6 +491,8 @@ export class Story {
       const kid = V2.get('kids'), pop = V2.get('pop'), marie = V2.get('marie'), doug = V2.get('doug'), ingrid = V2.get('ingrid'), gus = V2.get('gus');
       const cast = [kid, pop, marie, doug, ingrid, gus].filter(Boolean);
       for (const a of cast) a.scripted = true;
+      // whatever happens (even a skip), the cast goes back to their own lives afterwards
+      S.temp.push({ remove: () => { for (const a of cast) a.scripted = false; } });
       // gather a little crowd near the street
       const meet = bp.clone().addScaledVector(fwd, 9);
       const spots = [[-3, 2], [-1, 3.5], [1.5, 3], [3, 1.5], [4.5, -1], [0, 5]];
@@ -570,8 +572,10 @@ export class Story {
       for (const a of crowd) a?.play('cheer', 'happy');
       S.sfx('delivered');
       await S.wait(1.0);
-      // everyone goes back home
-      V2.scaredOfHank = false;
+      // everyone goes back home. They've met him now, but only Gus (who got his
+      // cocoa) and the kids (who think he's the coolest) are anything like at ease;
+      // the rest of the village still has to get used to a skeleton on a bicycle.
+      for (const [c, t] of [['gus', 46], ['marie', 24], ['doug', 22], ['ingrid', 26], ['pip', 62], ['pop', 55]]) V2.force(c, t);
       for (const a of cast) {
         a.scripted = false;
         a.play('idle', 'neutral');

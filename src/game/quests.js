@@ -8,6 +8,9 @@ import { voxMesh, sharedVoxelMaterial } from '../render/voxelMaterial.js';
 import * as PR from '../voxel/models/props.js';
 import { input } from '../core/input.js';
 import { CUSTOMERS, BUILDINGS, POI, MO_SPOT } from '../world/layout.js';
+import { PEOPLE } from './npcRoutines.js';
+
+const PEOPLE_LINES = (who) => Object.values(PEOPLE).find((p) => (p.char || '') === who || PEOPLE[who] === p)?.wary;
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 
@@ -86,6 +89,7 @@ const GREET = {
   pop: ["I'm not scared. Pip is scared.", 'Do skeletons get cold?', 'Is your skull detachable? Asking for Pip.'],
   ollie: ['Ahh, the bony lad.', 'Lighthouse is lonely work. Nice to see a face. Skull. Face.', 'Mind the gulls.'],
   mo: ['Welcome to Moose & Goose!', 'Fresh pumpkins, fresh milk, fresh gossip!', 'Hank! Cash or... bones?'],
+  josee: ['Pip and Pop talk about you non-stop, you know.', 'Thanks for slowing down near the rink.', 'Supper\'s at six. You can come. You don\'t have to eat.'],
   grandma: ['Hello, dear.'],
 };
 
@@ -155,8 +159,9 @@ export class Quests {
   }
 
   // ------------------------------------------------------------ talking to villagers
+  // villagers who are still terrified of Hank won't stop for a chat
   canTalk(a) {
-    return !!GREET[a.char];
+    return !!GREET[a.char] && (this.game.villagers?.canChat?.(a) ?? true);
   }
   async talk(a) {
     const g = this.game;
@@ -171,22 +176,28 @@ export class Quests {
       // turn-ins first
       if (await this.turnIns(a)) return;
       const offers = this.offersFor(who);
-      const lines = GREET[who] || ['Hello!'];
+      // still nervous around a skeleton? then it's nervous small talk
+      const V = g.villagers;
+      const wary = V?.moodOf?.(who) === 'wary';
+      const lines = (wary && PEOPLE_LINES(who)) || GREET[who] || ['Hello!'];
       const greet = lines[Math.floor(Math.random() * lines.length)];
+      V?.addTrust?.(who, 2.5, 60);
+      if (wary) a.tempExpr('worried', 3);
       if (who === 'mo') {
         const c = await ui.say(who, greet, { expr: 'happy', choices: ['Let me see the shelves', 'Just browsing!'] });
         if (c === 0) await this.shop();
         return;
       }
       if (!offers.length) {
-        a.react(Math.random() < 0.5 ? 'nod' : 'bounce');
-        await ui.say(who, greet, { expr: 'happy' });
+        a.react(wary ? 'eep' : Math.random() < 0.5 ? 'nod' : 'bounce');
+        await ui.say(who, greet, { expr: wary ? 'worried' : 'happy' });
         return;
       }
       const o = offers[0];
       const c = await ui.say(who, greet + ' ' + o.ask, { expr: o.expr || 'worried', choices: [o.yes || "I'll help!", 'Maybe later'] });
       if (c === 0) {
         a.react('yay');
+        V?.addTrust?.(who, 5);
         await o.start();
         g.sound.play('quest_new');
         ui.toast(`New note in the journal: <b>${QUESTS[o.id]?.title || o.title}</b>`, 'star', 2600);
@@ -247,6 +258,7 @@ export class Quests {
     const done = async (id, line, expr = 'happy') => {
       const q = this.q(id);
       q.state = 'done';
+      g.villagers?.addTrust?.(who, 25);
       const reward = QUESTS[id]?.reward ?? 10;
       a.react('yay');
       g.effects.hearts(a.pos.x, a.pos.y + 1.6, a.pos.z, 6);
@@ -565,7 +577,7 @@ export class Quests {
     this.hintT = 90;
     for (const a of Object.values(villagers.actors)) {
       const has = this.offersFor(a.char).length > 0;
-      if (has && a.visible) this.game.emotes?.show(a, 'alert', 1.4);
+      if (has && a.visible && this.canTalk(a)) this.game.emotes?.show(a, 'alert', 1.4);
     }
   }
 }
