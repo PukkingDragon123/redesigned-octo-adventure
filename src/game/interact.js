@@ -1,6 +1,8 @@
 // Things Hank can poke at around town: kick pumpkins and the bowling ball, sit on
-// benches, watch Nana's TV and ride through the harvest hoops.
+// benches, watch Nana's TV, ride through the harvest hoops, and knock over the 2D
+// street clutter (bins, fences, crates, signs, the fish stall...: see deco2d.js).
 import { input } from '../core/input.js';
+import { Deco2D } from './deco2d.js';
 
 export class Interactables {
   constructor(game) {
@@ -11,6 +13,7 @@ export class Interactables {
     this.spots = game.world.voxel?.spots || [];
     this.hoops = game.world.voxel?.hoops || [];
     this.sitting = null;
+    this.deco = new Deco2D(game);
     game.world.interactables = this;
     if (this.props) {
       this.props.onSmash = (p) => {
@@ -33,6 +36,8 @@ export class Interactables {
     if (best) return { text: best.text, fn: () => this.use(best) };
     const pr = this.props?.nearest(p, 1.3);
     if (pr) return { text: KICK_TEXT[pr.kind] || 'Kick it', key: 'F', fn: () => this.kickNow(), passive: true };
+    const dk = this.deco.nearest(p, 1.0);
+    if (dk) return { text: dk.text, key: 'F', fn: () => this.kickNow(), passive: true };
     return null;
   }
 
@@ -50,6 +55,7 @@ export class Interactables {
     // the boot lands a beat after the wind-up
     g.wait(0.2).then(() => {
       const hit = this.props?.kick(pos, yaw, 1);
+      if (this.deco.kick(pos, yaw, 1) && !hit) g.chase.shake(0.2);
       if (hit) {
         g.chase.shake(0.25);
         g.quests?.event('kick', hit);
@@ -103,6 +109,8 @@ export class Interactables {
       else if (g.bike.crash <= 0) actors.push({ pos: g.bike.pos, vel: g.bike.vel, r: 0.45, bike: true });
       this.props.update(dt, actors);
     }
+    // the 2D street clutter: knocked over by the bike and by Hank, tidied away while nobody looks
+    this.deco.update(dt);
     // harvest hoops: riding through one at speed is a trick shot
     if (!g.onFoot && this.hoops.length) {
       const b = g.bike;
