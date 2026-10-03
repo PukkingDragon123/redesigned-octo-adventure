@@ -147,12 +147,13 @@ function leafFn(A, B, s, { mix = 0.3, holes = 0, ragged = 0.42 } = {}) {
     const B9 = p.B, r = p.r;
     const nzv = (B9[6] * h[0]) / r[0] + (B9[7] * h[1]) / r[1] + (B9[8] * h[2]) / r[2];
     const nl = Math.hypot((B9[0] * h[0]) / r[0] + (B9[1] * h[1]) / r[1] + (B9[2] * h[2]) / r[2], (B9[3] * h[0]) / r[0] + (B9[4] * h[1]) / r[1] + (B9[5] * h[2]) / r[2], nzv);
-    const nz = nzv / nl;
+    const nz = nzv / nl, ny = ((B9[3] * h[0]) / r[0] + (B9[4] * h[1]) / r[1] + (B9[5] * h[2]) / r[2]) / nl;
     if (nz < ragged && below && edge < 0.28 + (ragged - nz) * 0.9) return null;
     if (holes && below && edge < 0.22 && hash2(bx, by, g + 977) < holes) return null;
     const pal = smoothNoise(bx * 0.45, by * 0.45, g % 7) + hash2(bx, by, g + 5) * 0.35 < 0.35 + mix * 0.75 ? B : A;
-    if (below && py > 0.14 && edge < 0.36) return `${pal}Sh`;
-    if (!below && py < -0.22 && edge < 0.13) return `${pal}Lt`;
+    // crescents under the lumps, deeper on the underside of the clump; lips only on top
+    if (below && py > 0.12 && edge < (ny < -0.15 ? 0.42 : 0.24)) return `${pal}Sh`;
+    if (!below && py < (ny > 0.1 ? -0.16 : -0.26) && edge < (ny > 0.1 ? 0.16 : 0.1)) return `${pal}Lt`;
     return pal;
   };
 }
@@ -218,12 +219,12 @@ function broad(R, o) {
   S.tube([[0, -0.2, 0], [lean * 0.25, forkY * 0.45, 0], top], [tr * 1.3, tr * 1.02, tr * 0.86], barkFn(bark, forkY, R.int(0, 99)), { group: trunkG });
   for (let k = 0; k < 3; k++) {
     const a = (k / 3) * TAU + R.range(-0.4, 0.4);
-    S.ell([Math.cos(a) * tr * 0.9, 0.06, Math.sin(a) * tr * 0.9], [tr * 0.75, tr * 0.42, tr * 0.5], bark, { rot: [-a, 0, 0], group: trunkG });
+    S.ell([Math.cos(a) * tr * 0.8, -0.08, Math.sin(a) * tr * 0.8], [tr * 1.0, tr * 0.55, tr * 0.6], bark, { rot: [-a, 0.25, 0], group: trunkG });
   }
   // the crown: clumps spread over a dome
   const clumps = [];
   for (let i = 0; i < o.clumps; i++) {
-    const th = R.range(0, TAU), cph = R.range(-0.5, 1);
+    const th = R.range(0, TAU), cph = R.range(-0.75, 1);
     const sph = Math.sqrt(1 - cph * cph), sh = R.range(0.5, 0.86);
     clumps.push({ c: [Math.cos(th) * sph * rx * sh + lean, cy + cph * ry * sh, Math.sin(th) * sph * rx * sh * 0.8], r: R.range(o.clumpR[0], o.clumpR[1]) });
   }
@@ -235,7 +236,7 @@ function broad(R, o) {
     S.tube([top, mid, end], [tr * 0.72, tr * 0.45, tr * 0.22], barkFn(bark, 3, R.int(0, 99)), { group: trunkG });
   }
   // dark heart of the canopy, set back so limbs in front still show between clumps
-  S.ell([lean, cy + ry * 0.15, -rx * 0.35], [rx * 0.55, ry * 0.5, rx * 0.4], `${A}Sh`, { line: false });
+  S.ell([lean, cy + ry * 0.05, -rx * 0.5], [rx * 0.45, ry * 0.42, rx * 0.3], `${A}Sh`, { line: false });
   const fn = leafFn(A, B, o.leafS, { mix: o.mix ?? 0.32 });
   for (const cl of clumps) {
     const g = S.group(), r = cl.r;
@@ -611,13 +612,13 @@ function mushroom(R, o) {
 // H: sculpted height (m); each forest tree is scaled to its own height
 const T = (o) => ({ ppm: 32, pitch: 0.06, views: 1, ...o });
 export const SPRITES = {
-  maple: T({ kind: 'tree', H: 9.5, build: broad, base: { bark: 'maple', trunkR: 0.36, fork: 0.3, crownY: 0.57, crown: [0.35, 0.38], limbs: 4, clumps: 18, clumpR: [1.0, 1.5], squash: 0.85, leafS: 0.36 }, variants: [
+  maple: T({ kind: 'tree', H: 9.5, build: broad, base: { bark: 'maple', trunkR: 0.36, fork: 0.3, crownY: 0.57, crown: [0.35, 0.38], limbs: 4, clumps: 18, clumpR: [1.0, 1.5], squash: 0.85, leafS: 0.42 }, variants: [
     { leaf: 'mapleRed', alt: 'mapleCrimson' }, { leaf: 'mapleOrange', alt: 'mapleRed' }, { leaf: 'mapleMix', alt: 'mapleOrange' }, { leaf: 'scarlet', alt: 'mapleOrange' },
   ] }),
-  maple2: T({ kind: 'tree', H: 8.5, build: broad, base: { bark: 'maple', trunkR: 0.34, fork: 0.3, crownY: 0.56, crown: [0.4, 0.36], limbs: 4, clumps: 18, clumpR: [1.0, 1.45], squash: 0.8, leafS: 0.36 }, variants: [
+  maple2: T({ kind: 'tree', H: 8.5, build: broad, base: { bark: 'maple', trunkR: 0.34, fork: 0.3, crownY: 0.56, crown: [0.4, 0.36], limbs: 4, clumps: 18, clumpR: [1.0, 1.45], squash: 0.8, leafS: 0.42 }, variants: [
     { leaf: 'sugarOrange', alt: 'sugarGold' }, { leaf: 'sugarGold', alt: 'mapleGreen' }, { leaf: 'scarlet', alt: 'sugarOrange' },
   ] }),
-  oak: T({ kind: 'tree', H: 8.5, build: broad, base: { bark: 'oak', trunkR: 0.46, fork: 0.26, crownY: 0.57, crown: [0.46, 0.33], limbs: 5, clumps: 19, clumpR: [1.0, 1.4], squash: 0.72, leafS: 0.32 }, variants: [
+  oak: T({ kind: 'tree', H: 8.5, build: broad, base: { bark: 'oak', trunkR: 0.46, fork: 0.26, crownY: 0.57, crown: [0.46, 0.33], limbs: 5, clumps: 19, clumpR: [1.0, 1.4], squash: 0.72, leafS: 0.38 }, variants: [
     { leaf: 'oakRusset', alt: 'oakBronze' }, { leaf: 'oakBronze', alt: 'oakOlive' }, { leaf: 'oakRed', alt: 'oakRusset' },
   ] }),
   birch: T({ kind: 'tree', H: 10.5, build: slim, base: { bark: 'birch', trunkR: 0.16, crownFrom: 0.42, crownW: 0.17, droop: 0.5, clumps: 15, clumpR: [0.55, 0.85], leafS: 0.3 }, variants: [
@@ -681,6 +682,7 @@ export function bakeSprite({ species, seed = 0 }) {
   const R = makeRng(seed * 7919 + species.length * 131 + species.charCodeAt(0));
   const o = { H: spec.H, ...spec.base, ...v };
   const { S, meta } = spec.build(R, o);
-  const views = (spec.views > 1 ? LOG_VIEWS : [0]).map((yaw) => packView(renderSculpt(S, { yaw, pitch: spec.pitch }, spec.ppm, { normals: true, light: BAKE_LIGHT, contour: 2.2 })));
+  const clipY = spec.kind === 'tree' ? -0.3 : spec.kind === 'log' || spec.kind === 'stump' ? undefined : -0.06;
+  const views = (spec.views > 1 ? LOG_VIEWS : [0]).map((yaw) => packView(renderSculpt(S, { yaw, pitch: spec.pitch }, spec.ppm, { normals: true, light: BAKE_LIGHT, contour: 2.2, clipY })));
   return { views, meta, ppm: spec.ppm };
 }
