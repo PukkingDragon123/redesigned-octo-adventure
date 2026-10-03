@@ -63,9 +63,17 @@ export class Nav {
   gy(p) {
     return this.ph.groundAt(p.x, p.z, (p.y ?? 50) + 1).h;
   }
-  // true when nothing tall (a building wall) blocks the straight line
+  // true when nothing tall (a building wall) blocks the straight line, and it
+  // doesn't step off a ledge (the boardwalk, a dock, a bank) on the way
   clear(a, b) {
-    return this.ph.segmentHit(a.x, this.gy(a) + 1, a.z, b.x, this.gy(b) + 1, b.z, 0.2) >= 0.999;
+    const ya = this.gy(a), yb = this.gy(b);
+    if (this.ph.segmentHit(a.x, ya + 1, a.z, b.x, yb + 1, b.z, 0.2) < 0.999) return false;
+    const n = Math.min(6, Math.ceil(hyp(b.x - a.x, b.z - a.z) / 4));
+    for (let i = 1; i < n; i++) {
+      const t = i / n, yi = ya + (yb - ya) * t;
+      if (Math.abs(this.ph.groundAt(a.x + (b.x - a.x) * t, a.z + (b.z - a.z) * t, yi + 0.6).h - yi) > 0.7) return false;
+    }
+    return true;
   }
   nearestNode(p) {
     let list = NODES.map((n) => ({ n, d: hyp(n.x - p.x, n.z - p.z) })).sort((a, b) => a.d - b.d);

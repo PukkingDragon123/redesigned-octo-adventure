@@ -67,7 +67,7 @@ export class NpcBrain {
     const up = ['terrified', 'wary', 'friendly', 'fan'].indexOf(after) > ['terrified', 'wary', 'friendly', 'fan'].indexOf(before);
     if (!up) return;
     this.V.moodToast(this, after);
-    if (after === 'wary' && ['hide', 'indoors', 'keepAway', 'cowerOpen'].includes(this.mode)) this.comeOut();
+    if (after !== 'terrified' && ['hide', 'indoors', 'standoff', 'cowerOpen'].includes(this.mode)) this.comeOut();
   }
 
   // ------------------------------------------------------------ tiny coroutines
@@ -253,9 +253,9 @@ export class NpcBrain {
       if (this.mode === 'routine' && seen && d < 13 + Math.min(11, sp * 0.9)) return this.startle(X);
       // a mum won't let her kids go near the skeleton
       if (this.cfg.fear === 'kids' && this.mode === 'routine' && d < 45 && this.V.kidBrains().some((k) => k.d < 9 && k.shown && !k.leash)) return this.startle(X);
-      if (['hide', 'indoors', 'keepAway', 'cowerOpen'].includes(this.mode)) {
+      if (['hide', 'indoors', 'standoff', 'cowerOpen'].includes(this.mode)) {
         // calm, slow Hank wins them over little by little
-        if (calm && (this.peeking || this.mode === 'keepAway')) this.addTrust(dt * (X.onFoot ? 1.7 : 1.2), TRUST.WARY + 6);
+        if (calm && (this.peeking || this.mode === 'standoff')) this.addTrust(dt * (X.onFoot ? 1.7 : 1.2), TRUST.WARY + 6);
         else if (calm && this.mode !== 'indoors') this.addTrust(dt * 0.45, TRUST.WARY + 6);
         if (this.mood !== 'terrified') return;
         const pushy = d < 3.2 || (d < 7 && sp > 5 && this.closing > 2);
@@ -265,6 +265,8 @@ export class NpcBrain {
       }
       return;
     }
+    // (won over while hiding? come out)
+    if (['hide', 'indoors', 'standoff', 'cowerOpen'].includes(this.mode)) return this.comeOut();
     if (this.mode !== 'routine') return;
     if (mood === 'wary') {
       if (d < 3.4 && (sp > 1.2 || this.closing > 0.8 || d < 2) && !(this.cool.back > 0)) { this.cool.back = 2.5; return this.backOff(X); }
@@ -460,6 +462,16 @@ export class NpcBrain {
     const first = !this.rec.met;
     this.rec.met = true;
     this.mode = 'startle';
+    // each fright is a little less of a shock than the last
+    if (!first) {
+      this.addTrust(2.5, TRUST.WARY + 2);
+      if (this.mood !== 'terrified') {
+        this.a.react('eep');
+        this.a.tempExpr('worried', 2.5);
+        this.mode = 'routine';
+        return;
+      }
+    }
     const style = this.cfg.fear;
     if (style === 'cool') return this.kidsMeet(X, first);
     this.seq(async (w) => {
@@ -669,8 +681,9 @@ export class NpcBrain {
       await this.runForCover(w, X, this.cover);
     });
   }
-  // Hank's gone: back to what they were doing, a bit jumpy
+  // Hank's gone (and nobody got eaten): back to what they were doing, a bit jumpy
   allClear() {
+    this.addTrust(1.5, TRUST.WARY + 2);
     this.seq(async (w) => {
       const a = this.a;
       if (this.inside) await this.comeOutside(w);
@@ -701,10 +714,10 @@ export class NpcBrain {
   }
   // Constable Doug keeps an eye on the suspect from a safe distance
   keepAway() {
-    this.mode = 'keepAway';
+    this.mode = 'standoff';
     this.seq(async (w) => {
       const a = this.a, g = this.g;
-      this.mode = 'keepAway';
+      this.mode = 'standoff';
       a.lookAt(g.playerChar);
       let t = 0;
       for (;;) {

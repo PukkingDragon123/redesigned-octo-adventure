@@ -430,7 +430,7 @@ export class Villagers {
     const b = a.brain;
     if (!b) return true;
     if (b.mood === 'terrified') return false;
-    return !['flee', 'hide', 'indoors', 'startle', 'script', 'cowerOpen'].includes(b.mode) && a.visible;
+    return !['flee', 'hide', 'indoors', 'startle', 'script', 'cowerOpen', 'standoff'].includes(b.mode) && a.visible;
   }
   // a gentle nudge the first couple of times a frightened villager peeks at Hank
   hint() {
