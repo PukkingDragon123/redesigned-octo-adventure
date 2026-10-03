@@ -11,6 +11,8 @@ import { meshVox } from '../voxel/mesh.js';
 import { voxMesh, sharedVoxelMaterial, createFlatMaterial } from '../render/voxelMaterial.js';
 import { PhysProps } from './physprops.js';
 import { Vox } from '../voxel/vox.js';
+import { nearestRoad } from './terrain.js';
+import { dressPlaces } from './places.js';
 
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _s = new THREE.Vector3(1, 1, 1), _p = new THREE.Vector3();
 const UP = new THREE.Vector3(0, 1, 0);
@@ -50,7 +52,10 @@ export class VoxelWorld {
     if (!c) this.chunks.set(key, (c = []));
     _q.setFromAxisAngle(UP, yaw);
     _s.setScalar(scale);
-    c.push({ geo: r.geometry, m: new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), _q.clone(), _s.clone()) });
+    const M = new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), _q.clone(), _s.clone());
+    c.push({ geo: r.geometry, m: M });
+    // lettering painted on the prop (signposts, STOP signs, stands)
+    for (const sg of r.meta?.signs || []) this.sign(sg, M, {});
     // lights from the model meta
     for (const l of r.meta?.lights || []) {
       _p.set(l.x, l.y, l.z).multiplyScalar(scale).applyAxisAngle(UP, yaw).add(new THREE.Vector3(x, y, z));
@@ -59,6 +64,7 @@ export class VoxelWorld {
   }
 
   buildStatic() {
+    this.buildSigns();
     const mat = sharedVoxelMaterial();
     for (const [key, list] of this.chunks) {
       const geos = list.map(({ geo, m }) => {
@@ -81,32 +87,39 @@ export class VoxelWorld {
   }
 
   // ------------------------------------------------------------ buildings
-  buildings(placed) {
+  // builds every building's voxel model; yields to the browser now and then so the page stays alive
+  async buildings(placed, yieldFn = null) {
     const mat = sharedVoxelMaterial();
+    const pre = this.world.buildingJobs; // models already being built in workers (see startBuildingJobs)
+    let last = performance.now();
     for (const b of L.BUILDINGS) {
+      if (yieldFn && performance.now() - last > 120) { await yieldFn(); last = performance.now(); }
       const at = placed[b.id];
       if (!at) continue;
       const yaw = b.facing || 0;
       let y = at.y0;
-      const opts = { seed: hashStr(b.id) };
-      if (b.stilts) {
-        // posts reach down to the seabed
-        let low = 1e9;
-        for (const [lx, lz] of [[-b.w / 2, -b.d / 2], [b.w / 2, -b.d / 2], [-b.w / 2, b.d / 2], [b.w / 2, b.d / 2], [0, 0]]) {
-          const c = Math.cos(yaw), s = Math.sin(yaw);
-          low = Math.min(low, this.ground(b.x + lx * c + lz * s, b.z - lx * s + lz * c));
-        }
-        opts.stilt = Math.max(1.5, y - Math.min(low, -0.4) + 0.6);
-      }
       if (b.kind === 'lighthouse') y += 0.3;
-      let r;
-      try {
-        r = buildVoxelBuilding({ ...b, ...opts });
-      } catch (e) {
-        console.warn('voxel building failed', b.id, e);
-        continue;
+      let geo, r;
+      const job = pre ? await pre.get(b.id) : null;
+      if (job && !job.error) {
+        geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.BufferAttribute(job.pos, 3));
+        geo.setAttribute('normal', new THREE.BufferAttribute(job.nor, 3));
+        geo.setAttribute('color4', new THREE.BufferAttribute(job.col, 4));
+        geo.setIndex(new THREE.BufferAttribute(job.idx, 1));
+        geo.computeBoundingSphere();
+        geo.computeBoundingBox();
+        r = { meta: job.meta };
+      } else {
+        if (job?.error) console.warn('worker building failed', b.id, job.error);
+        try {
+          r = buildVoxelBuilding(buildingSpec(b, this.terrain));
+        } catch (e) {
+          console.warn('voxel building failed', b.id, e);
+          continue;
+        }
+        geo = meshVox(r.vox, { size: r.size, origin: r.origin, jitter: 0 });
       }
-      const geo = meshVox(r.vox, { size: r.size, origin: r.origin, jitter: 0 });
       const mesh = voxMesh(geo, mat);
       mesh.position.set(b.x, y, b.z);
       mesh.rotation.y = yaw;
@@ -123,59 +136,109 @@ export class VoxelWorld {
       const ls = (meta.lights || []).slice().sort((a, b2) => (a.kind === 'porch' ? -1 : 0) - (b2.kind === 'porch' ? -1 : 0)).slice(0, 3);
       for (const l of ls) this.lights.push({ pos: new THREE.Vector3(l.x, l.y, l.z).applyMatrix4(M), color: l.color, radius: Math.min(9, l.radius || 6), kind: l.kind === 'beacon' ? 'beacon' : 'lamp' });
       at.voxel = { mesh, meta, M };
+      // voxel-only kinds bring their own walkable decks, posts and extra solids
+      if (at.generic) {
+        const PH = this.world.physics;
+        const wp = (x, yy, z) => new THREE.Vector3(x, yy, z).applyMatrix4(M);
+        for (const d of meta.porch || []) {
+          const c = wp((d.x0 + d.x1) / 2, d.y, (d.z0 + d.z1) / 2);
+          PH.addPlatform({ x: c.x, z: c.z, yaw, w: d.x1 - d.x0, l: d.z1 - d.z0, y0: c.y, surface: 'wood', kind: 'deck' });
+        }
+        for (const q of meta.posts || []) {
+          const c = wp(q.x, 0, q.z);
+          PH.addCircle({ x: c.x, z: c.z, r: q.r ?? 0.15, y0: y - 1, y1: y + 6, kind: 'post' });
+        }
+        for (const q of meta.solids || []) {
+          if (!q.collide) continue;
+          const c = wp((q.x0 + q.x1) / 2, 0, (q.z0 + q.z1) / 2);
+          PH.addBox({ x: c.x, z: c.z, yaw, w: q.x1 - q.x0, l: q.z1 - q.z0, y0: y + q.y0 - 0.5, y1: y + q.y1, kind: 'wall' });
+        }
+      }
     }
   }
 
-  // hand-lettered sign text planes
+  // hand-lettered signs: queued here, painted into a shared atlas and merged into a few meshes by
+  // buildSigns() (64 px per metre so the lettering stays crisp at HD)
   sign(s, M, b) {
     const text = s.text || b.sign || '';
     if (!text) return;
-    const PPM = 24; // texture pixels per metre (≈ voxel scale)
-    const W = Math.max(8, Math.round(s.w * PPM)), H = Math.max(6, Math.round(s.h * PPM));
-    const c = document.createElement('canvas');
-    c.width = W;
-    c.height = H;
-    const g = c.getContext('2d');
-    g.imageSmoothingEnabled = false;
+    const PPM = 64;
     const chalk = s.kind === 'chalk';
-    const bg = chalk ? '#2a3a32' : toCss(s.bg ?? 0xf2e6c8);
-    const fg = chalk ? '#f2efe2' : toCss(s.fg ?? 0x3a2418);
-    g.fillStyle = bg;
-    g.fillRect(0, 0, W, H);
-    const lines = chalk ? text.split(/\s*\n\s*|(?<=JOUR)\s/) : [text];
-    let size = 16;
-    g.font = `${size}px BoldPixels`;
-    const widest = () => Math.max(...lines.map((l) => g.measureText(l).width));
-    while ((widest() > W - 4 || size * lines.length > H - 2) && size > 8) {
-      size -= size > 12 ? 4 : 2;
-      g.font = `${size}px BoldPixels`;
-    }
-    g.fillStyle = fg;
-    g.textBaseline = 'middle';
-    g.textAlign = 'center';
-    lines.forEach((l, i) => g.fillText(l, Math.round(W / 2), Math.round(H / 2 + (i - (lines.length - 1) / 2) * size)));
-    const tex = new THREE.CanvasTexture(c);
-    tex.magFilter = tex.minFilter = THREE.NearestFilter;
-    tex.generateMipmaps = false;
-    tex.colorSpace = THREE.SRGBColorSpace;
-    const mat = createFlatMaterial(tex);
-    const plane = new THREE.Mesh(new THREE.PlaneGeometry(s.w, s.h), mat);
     const n = new THREE.Vector3(...(s.normal ? [s.normal[0] ?? s.normal.x, s.normal[1] ?? s.normal.y, s.normal[2] ?? s.normal.z] : [0, 0, 1]));
     const pos = new THREE.Vector3(s.x, s.y, s.z).applyMatrix4(M);
     const nw = n.clone().transformDirection(M);
-    plane.position.copy(pos);
-    plane.lookAt(pos.clone().add(nw));
-    plane.receiveShadow = true;
-    this.scene.add(plane);
-    // fonts may arrive after the first draw
-    document.fonts?.load?.('16px BoldPixels').then(() => {
-      g.fillStyle = bg;
-      g.fillRect(0, 0, W, H);
-      g.font = `${size}px BoldPixels`;
-      g.fillStyle = fg;
-      lines.forEach((l, i) => g.fillText(l, Math.round(W / 2), Math.round(H / 2 + (i - (lines.length - 1) / 2) * size)));
-      tex.needsUpdate = true;
+    const o = new THREE.Object3D();
+    o.position.copy(pos);
+    o.lookAt(pos.clone().add(nw));
+    o.updateMatrix();
+    (this.signQueue ||= []).push({
+      text, chalk, w: s.w, h: s.h, matrix: o.matrix.clone(), normal: nw,
+      W: Math.max(16, Math.round(s.w * PPM)), H: Math.max(12, Math.round(s.h * PPM)),
+      bg: chalk ? '#2a3a32' : toCss(s.bg ?? 0xf2e6c8), fg: chalk ? '#f2efe2' : toCss(s.fg ?? 0x3a2418),
     });
+  }
+
+  buildSigns() {
+    const list = this.signQueue || [];
+    if (!list.length) return;
+    // shelf-pack into atlases 2048 px wide
+    const AW = 2048, PAD = 3;
+    const atlases = [];
+    let cur = null;
+    const sorted = list.slice().sort((a, b) => b.H - a.H);
+    for (const sg of sorted) {
+      const w = Math.min(AW - PAD * 2, sg.W), h = sg.H;
+      if (!cur || cur.x + w + PAD * 2 > AW) {
+        if (cur) { cur.y += cur.shelf; cur.x = 0; cur.shelf = 0; }
+        if (!cur || cur.y + h + PAD * 2 > AW) { cur = { x: 0, y: 0, shelf: 0, items: [] }; atlases.push(cur); }
+      }
+      sg.ax = cur.x + PAD; sg.ay = cur.y + PAD; sg.aw = w;
+      cur.x += w + PAD * 2;
+      cur.shelf = Math.max(cur.shelf, h + PAD * 2);
+      cur.items.push(sg);
+    }
+    for (const at of atlases) {
+      const c = document.createElement('canvas');
+      c.width = AW;
+      c.height = Math.max(16, at.y + at.shelf);
+      const g = c.getContext('2d');
+      g.imageSmoothingEnabled = false;
+      const draw = () => { for (const sg of at.items) drawSign(g, sg, PAD); };
+      draw();
+      const tex = new THREE.CanvasTexture(c);
+      tex.magFilter = THREE.NearestFilter;
+      tex.minFilter = THREE.LinearMipmapLinearFilter;
+      tex.colorSpace = THREE.SRGBColorSpace;
+      // one merged mesh of quads per atlas
+      const n = at.items.length;
+      const pos = new Float32Array(n * 12), nor = new Float32Array(n * 12), uv = new Float32Array(n * 8), idx = [];
+      const v = new THREE.Vector3();
+      at.items.forEach((sg, i) => {
+        const hw = sg.w / 2, hh = sg.h / 2;
+        const u0 = sg.ax / AW, u1 = (sg.ax + sg.aw) / AW, v1 = 1 - sg.ay / c.height, v0 = 1 - (sg.ay + sg.H) / c.height;
+        [[-hw, -hh, u0, v0], [hw, -hh, u1, v0], [hw, hh, u1, v1], [-hw, hh, u0, v1]].forEach(([x, y, uu, vv], k) => {
+          v.set(x, y, 0).applyMatrix4(sg.matrix);
+          pos.set([v.x, v.y, v.z], (i * 4 + k) * 3);
+          nor.set([sg.normal.x, sg.normal.y, sg.normal.z], (i * 4 + k) * 3);
+          uv.set([uu, vv], (i * 4 + k) * 2);
+        });
+        idx.push(i * 4, i * 4 + 1, i * 4 + 2, i * 4, i * 4 + 2, i * 4 + 3);
+      });
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+      geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+      geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+      geo.setIndex(idx);
+      geo.computeBoundingSphere();
+      const mesh = new THREE.Mesh(geo, createFlatMaterial(tex));
+      mesh.receiveShadow = true;
+      mesh.name = 'signs';
+      mesh.matrixAutoUpdate = false;
+      this.scene.add(mesh);
+      // fonts may arrive after the first paint
+      document.fonts?.load?.('16px BoldPixels').then(() => { draw(); tex.needsUpdate = true; });
+    }
+    this.signQueue = [];
   }
 
   // ------------------------------------------------------------ old prop placements -> voxel props
@@ -226,6 +289,12 @@ export class VoxelWorld {
         case 'wheelbarrow':
           this.addStatic(this.model('wheelbarrow', () => PR.wheelbarrow({ contents: 'pumpkins' })), d.x, d.y, d.z, d.yaw ?? 0);
           break;
+        case 'bridge':
+          this.addStatic(this.model('coveredBridge', () => buildVoxelBuilding({ id: 'bridge', kind: 'coveredBridge', w: d.w, d: d.len })), d.x, d.y, d.z, d.yaw);
+          break;
+        case 'ramp':
+          this.addStatic(this.model(`ramp:${d.len}:${d.h}`, () => PR.jumpRamp({ len: d.len, h: d.h, w: d.w })), d.x, d.y, d.z, d.yaw);
+          break;
         case 'picnic':
           this.addStatic(this.model(`picnic:${seed % 2}`, () => PR.picnicTable({ cloth: seed % 2 === 0 })), d.x, d.y, d.z, d.yaw ?? 0);
           break;
@@ -252,22 +321,23 @@ export class VoxelWorld {
     this.spot(p.x + 5.5, p.z - 3, 2, 'Stir the cauldron', 'cauldron');
     S('witchhat', () => PR.witchHat({}), p.x + 6.3, p.z - 1.6, 0.3, 0, 1.2);
     S('broom', () => PR.broom({}), p.x + 4.4, p.z - 4.4, 0.9);
-    for (let i = 0; i < 4; i++) S(`candles:${i}`, () => PR.candleCluster({ seed: i, count: 3 + (i % 3) }), p.x + Math.cos(i * 1.6) * 3.6, p.z + Math.sin(i * 1.6) * 3.6, i);
+    for (let i = 0; i < 4; i++) S(`candles:${i}`, () => PR.candleCluster({ seed: i, count: 3 + (i % 3) }), p.x + Math.cos(i * 1.6 + 0.4) * 5.2, p.z + Math.sin(i * 1.6 + 0.4) * 5.2, i);
     S('scarecrow', () => PR.scarecrow({ crow: true }), p.x - 8, p.z + 2.5, 1.2);
     S('candybowl', () => PR.candyBowl({}), p.x + 1.2, p.z + 3.4, 0);
     S('catstatue', () => PR.blackCatStatue({}), p.x - 2.5, p.z + 3.8, 0.4);
     S('spider', () => PR.spider({}), p.x + 2.6, p.z - 3.8, 2.1);
-    // bowling pins for pumpkin bowling on the street
-    const lane = { x: 168, z: 64 };
+    // bowling pins for pumpkin bowling down the green's gravel path
+    const lane = L.BOWLING;
     for (const [i, j] of [[0, 0], [-1, 1], [1, 1], [-2, 2], [0, 2], [2, 2]]) {
       const x = lane.x + i * 0.32, z = lane.z - 6 - j * 0.38;
       physprops.add(this.model('pin', () => PR.bowlingPin({})), x, gy(x, z), z, { kind: 'pin', hp: 99, mass: 0.35, round: false, respawn: 25 });
     }
     S('lane-sign', () => PR.signpost({ arrows: [{ dir: 'front', color: 0xe8701e, len: 8 }] }), lane.x + 2.2, lane.z - 1, Math.PI);
-    // trick hoops for the bike (one by the ramps, one on the main road)
-    const hoops = [[-6, 30, 1.45], [60, 41, -1.2], [-120, 63, 2.0]];
+    // trick hoops for the bike, standing over the roads (turned to face along the road)
     this.hoops = [];
-    for (const [x, z, yaw] of hoops) {
+    for (const [x, z] of L.HOOPS) {
+      const rd = nearestRoad(x, z);
+      const yaw = Math.atan2(rd.dx, rd.dz); // the ring faces along the road
       const r = this.model('hoop', () => PR.trickHoop({ flames: true }));
       this.addStatic(r, x, gy(x, z) - 0.1, z, yaw);
       this.hoops.push({ x, z, yaw, y: gy(x, z), ring: r.meta.ring });
@@ -281,8 +351,9 @@ export class VoxelWorld {
     const g = P.graveyard;
     S('gargoyle', () => PR.gargoyle({}), g.x + 9, g.z + 9, -2.4);
     S('gargoyle', () => PR.gargoyle({}), g.x - 10, g.z + 7, 2.6);
-    S('coffin', () => PR.coffin({ open: true }), g.x + 4, g.z - 8, 0.5);
-    S('ghostpost', () => PR.ghostPost({}), g.x - 4, g.z - 9, 0.3);
+    // (nothing within ~8 m of Hank's grave: the funeral is staged there)
+    S('coffin', () => PR.coffin({ open: true }), g.x + 7, g.z - 9.5, 0.5);
+    S('ghostpost', () => PR.ghostPost({}), g.x - 6, g.z - 11, 0.3);
     for (let i = 0; i < 5; i++) S(`cross:${i % 2}`, () => PR.woodenCross({ seed: i % 2 }), g.x - 8 + i * 3.3, g.z + 11 - (i % 2) * 1.5, (i % 3) * 0.2 - 0.2);
     // homestead: Nana's porch decorated, a gnome with a tiny jack, flamingo in a witch hat
     const c = P.cabin;
@@ -316,19 +387,69 @@ export class VoxelWorld {
     }
     // planting spots (side quest): dirt mounds waiting for saplings
     this.plantSpots = [];
-    for (const [x, z] of [[-150, 40], [-138, 50], [-128, 62], [80, 66], [64, 74], [-60, 46]]) {
+    for (const [x, z] of L.PLANT_SPOTS) {
       this.plantSpots.push({ x, z, y: gy(x, z), planted: false });
       S(`mound:${x % 2}`, () => PR.dirtMound({ stage: 'hole', seed: Math.abs(x) % 3 }), x + 0.7, z + 0.4, x * 0.3);
     }
     // more kickable pumpkins scattered along roads and porches
-    const extra = [[167.6, 63.2], [169.2, 63.6], [150, 58], [153, 57.5], [190, 58], [206, 58.5], [232, 58], [126, 62], [-160, 76], [-158, 77.5], [-176, 76], [-210, -26], [-206, -27]];
+    const extra = L.LOOSE_PUMPKINS;
     extra.forEach(([x, z], i) => {
       const jack = i % 2 === 0;
       const r = jack ? this.model(`jack:medium:${i % 6}`, () => PR.jackOLantern({ face: PR.JACK_FACES[i % PR.JACK_FACES.length], kind: 'medium', seed: i, hollow: false }))
         : this.model(`pumpkin:medium:${i % 6}`, () => PR.pumpkin({ kind: 'medium', seed: i + 30 }));
       physprops.add(r, x, gy(x, z), z, { yaw: i * 1.3, kind: jack ? 'jack' : 'pumpkin', hp: 3, mass: 1.2, lights: jack });
     });
+    // the rest of the remade map: streets, green, harbour, farm, beach, campground, signposts...
+    dressPlaces(this, physprops);
   }
+}
+
+// The spec a building's voxel model is built from (stilt houses reach down to the seabed)
+export function buildingSpec(b, terrain) {
+  const opts = { seed: hashStr(b.id) };
+  if (b.stilts) {
+    const yaw = b.facing || 0, y = L.BOARDWALK[0].h + 0.02;
+    let low = 1e9;
+    for (const [lx, lz] of [[-b.w / 2, -b.d / 2], [b.w / 2, -b.d / 2], [-b.w / 2, b.d / 2], [b.w / 2, b.d / 2], [0, 0]]) {
+      const c = Math.cos(yaw), s = Math.sin(yaw);
+      low = Math.min(low, terrain.heightAt(b.x + lx * c + lz * s, b.z - lx * s + lz * c));
+    }
+    opts.stilt = Math.max(1.5, y - Math.min(low, -0.4) + 0.6);
+  }
+  return { ...b, ...opts };
+}
+
+// Start building every voxel building in Web Workers (in parallel with the forest on the main
+// thread). Returns a Map id -> Promise<{ pos, nor, col, idx, meta } | { error }>, or null.
+export function startBuildingJobs(terrain) {
+  if (typeof Worker === 'undefined') return null;
+  const cores = Math.max(1, Math.min(3, (navigator.hardwareConcurrency || 2) - 1));
+  let workers;
+  try {
+    workers = Array.from({ length: cores }, () => new Worker(new URL('./buildWorker.js', import.meta.url), { type: 'module' }));
+  } catch {
+    return null;
+  }
+  const waiting = new Map(), jobs = new Map();
+  const lists = workers.map(() => []);
+  // biggest first, dealt round-robin so the workers finish together
+  const order = L.BUILDINGS.slice().sort((a, b) => b.w * b.d * (b.floors || 1) - a.w * a.d * (a.floors || 1));
+  order.forEach((b, i) => lists[i % workers.length].push({ id: b.id, spec: buildingSpec(b, terrain) }));
+  for (const b of L.BUILDINGS) jobs.set(b.id, new Promise((res) => waiting.set(b.id, res)));
+  let left = L.BUILDINGS.length;
+  workers.forEach((w, k) => {
+    w.onmessage = (e) => {
+      waiting.get(e.data.id)?.(e.data);
+      if (--left === 0) for (const ww of workers) ww.terminate();
+    };
+    w.onerror = (e) => {
+      // a worker that can't even start: everything it owned falls back to the main thread
+      for (const j of lists[k]) waiting.get(j.id)?.({ id: j.id, error: e.message || 'worker failed' });
+      e.preventDefault?.();
+    };
+    w.postMessage({ jobs: lists[k] });
+  });
+  return jobs;
 }
 
 // Nana's old TV on the porch: Maple Cove TV with the weather and town news
@@ -384,7 +505,52 @@ export function drawTV(tv, info) {
   tv.tex.needsUpdate = true;
 }
 
+// paint one sign board into an atlas canvas at (sg.ax, sg.ay)
+function drawSign(g, sg, pad) {
+  const { ax, ay, aw: W, H, bg, fg, chalk, text } = sg;
+  g.fillStyle = bg;
+  g.fillRect(ax - pad, ay - pad, W + pad * 2, H + pad * 2);
+  if (!chalk && H >= 24) {
+    g.fillStyle = fg;
+    g.globalAlpha = 0.5;
+    g.fillRect(ax + 3, ay + 3, W - 6, 2); g.fillRect(ax + 3, ay + H - 5, W - 6, 2); g.fillRect(ax + 3, ay + 3, 2, H - 6); g.fillRect(ax + W - 5, ay + 3, 2, H - 6);
+    g.globalAlpha = 1;
+  }
+  let lines = chalk ? text.split(/\s*\n\s*|(?<=JOUR)\s/) : [text];
+  const fits = (ls, size) => {
+    g.font = `${size}px BoldPixels`;
+    return Math.max(...ls.map((l) => g.measureText(l).width)) <= W - 12 && size * ls.length * 1.05 <= H - 8;
+  };
+  const sizes = [56, 48, 40, 32, 28, 24, 20, 16, 12, 10, 8];
+  let size = sizes.find((z) => fits(lines, z)) ?? 8;
+  if (!chalk && lines.length === 1 && text.includes(' ')) {
+    const words = text.split(' ');
+    const mid = Math.ceil(words.length / 2);
+    const two = [words.slice(0, mid).join(' '), words.slice(mid).join(' ')];
+    const size2 = sizes.find((z) => fits(two, z)) ?? 8;
+    if (size2 > size * 1.3) { lines = two; size = size2; }
+  }
+  g.font = `${size}px BoldPixels`;
+  g.textBaseline = 'middle';
+  g.textAlign = 'center';
+  const lh = size * 1.05;
+  g.save();
+  g.beginPath();
+  g.rect(ax, ay, W, H);
+  g.clip();
+  lines.forEach((l, i) => {
+    const x = Math.round(ax + W / 2), y = Math.round(ay + H / 2 + (i - (lines.length - 1) / 2) * lh);
+    const sh = Math.max(1, Math.round(size / 16));
+    g.fillStyle = 'rgba(0, 0, 0, 0.28)';
+    g.fillText(l, x + sh, y + sh);
+    g.fillStyle = fg;
+    g.fillText(l, x, y);
+  });
+  g.restore();
+}
+
 function toCss(c) {
+  if (typeof c === 'string') return c; // models hand over '#rrggbb' already
   return `#${(c & 0xffffff).toString(16).padStart(6, '0')}`;
 }
 function hashStr(s) {

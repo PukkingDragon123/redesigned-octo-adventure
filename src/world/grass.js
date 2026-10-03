@@ -7,6 +7,7 @@ import { worldUniforms, LIGHT_PARS_VERT, SHADOW_VERT, LIGHT_PARS_FRAG, NOISE_GLS
 import { smoothstep } from '../core/math.js';
 import { Simplex } from '../core/noise.js';
 import * as L from './layout.js';
+import { beachMask, beachWidth, seaSDF } from './terrain.js';
 
 const CELL = 32;
 
@@ -184,6 +185,14 @@ export function buildGrassMask(terrain, blockers = []) {
       // natural clumping
       d *= 0.55 + 0.45 * smoothstep(-0.4, 0.4, sx.noise(x / 9, z / 9));
       let hf = 0.55 + 0.45 * smoothstep(-0.3, 0.6, sx.noise(x / 30 + 5, z / 30));
+      // beaches: bare sand down to the water, tall marram grass tufts on the dunes behind
+      const bm = beachMask(x, z);
+      if (bm > 0.05) {
+        const sd = seaSDF(x, z), bw = beachWidth(x, z);
+        const dune = smoothstep(bw - 4, bw + 2, sd);
+        d *= 1 - bm * (1 - dune * 0.75);
+        if (dune > 0.2) hf = Math.max(hf, 0.85 * dune);
+      }
       // meadows are lush
       for (const m of [L.POI.meadow1, L.POI.meadow2]) {
         const md = Math.hypot(x - m.x, z - m.z);

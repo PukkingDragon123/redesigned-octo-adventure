@@ -18,10 +18,12 @@ import { createWater } from './water.js';
 import { Atmosphere } from './atmosphere.js';
 import { G } from '../render/shaderlib.js';
 import { DECOR } from './decor.js';
-import { VoxelWorld } from './voxelWorld.js';
+import { VoxelWorld, startBuildingJobs } from './voxelWorld.js';
 import { VoxelForest } from './voxelForest.js';
 import { PhysProps } from './physprops.js';
 import * as VOXPROPS from '../voxel/models/props.js';
+import { meshVox } from '../voxel/mesh.js';
+import { voxMesh, sharedVoxelMaterial } from '../render/voxelMaterial.js';
 
 export class World {
   constructor(pipeline, progress = () => {}) {
@@ -38,6 +40,8 @@ export class World {
     };
     await step(0.05, 'shaping the hills');
     this.terrain = new Terrain();
+    // the voxel houses are built in workers while the forest grows on this thread
+    if (!this.noVoxelTown) this.buildingJobs = startBuildingJobs(this.terrain);
     await step(0.25, 'painting the ground');
     this.textures = createWorldTextures(this.terrain);
     this.terrainMat = createTerrainMaterial();
@@ -63,7 +67,19 @@ export class World {
     await step(0.45, 'growing the grass');
     const blockers = L.BUILDINGS.map((b) => ({ x: b.x, z: b.z, w: b.w + (b.porch ? 3 : 0.5), d: b.d + (b.porch ? 3 : 0.5), yaw: b.facing || 0 }));
     blockers.push({ x: L.POI.cabin.x + 8, z: L.POI.cabin.z + 8, w: 26, d: 26, yaw: 0, keep: 0.8, short: true });
-    blockers.push({ x: L.POI.plaza.x, z: L.POI.plaza.z, w: 24, d: 20, yaw: 0, keep: 0.6, short: true });
+    // the town: lawn on the green, nothing under the sidewalks, the rink or the bike park
+    const MS = L.MAIN_ST;
+    blockers.push({ x: (MS.x0 + MS.x1) / 2, z: MS.z, w: MS.x1 - MS.x0 + 4, d: MS.road + MS.walk * 2 + 1.2, yaw: 0, keep: 0 });
+    blockers.push({ x: L.POI.plaza.x, z: L.POI.plaza.z, w: 40, d: 36, yaw: 0, keep: 0.9, short: true });
+    blockers.push({ x: L.POI.rink.x, z: L.POI.rink.z, w: 32, d: 20, yaw: 0, keep: 0 });
+    blockers.push({ x: L.POI.bikePark.x, z: L.POI.bikePark.z, w: 44, d: 34, yaw: 0, keep: 0.25, short: true });
+    blockers.push({ x: L.POI.pumpkinPatch.x, z: L.POI.pumpkinPatch.z, w: 26, d: 26, yaw: 0, keep: 0.35, short: true });
+    blockers.push({ x: L.POI.campground.x, z: L.POI.campground.z, w: 22, d: 22, yaw: 0, keep: 0.6, short: true });
+    blockers.push({ x: L.POI.picnic.x, z: L.POI.picnic.z, w: 16, d: 16, yaw: 0, keep: 0.7, short: true });
+    // cutscene stages: short, sparse grass so low cameras see the actors (lumber camp, Hank's grave)
+    const lc = L.POI.lumberCamp;
+    if (lc) blockers.push({ x: lc.x, z: lc.z, w: lc.r * 2 + 4, d: lc.r * 2 + 4, yaw: Math.PI / 4, keep: 0.4, short: true });
+    blockers.push({ x: L.POI.grave.x, z: L.POI.grave.z, w: 20, d: 20, yaw: Math.PI / 4, keep: 0.4, short: true });
     blockers.push({ x: L.POI.graveyard.x, z: L.POI.graveyard.z, w: 30, d: 30, yaw: 0, keep: 0.9, short: true });
     blockers.push({ x: L.POI.catLog.x, z: L.POI.catLog.z - 0.8, w: 8, d: 8, yaw: 0, keep: 0.5, short: true });
     blockers.push({ x: L.POI.garage.x + 6, z: L.POI.garage.z, w: 12, d: 10, yaw: 0, keep: 0.7, short: true });
@@ -72,7 +88,7 @@ export class World {
     this.scene.add(this.grass.mesh);
 
     await step(0.5, 'filling the cove');
-    this.water = createWater(this.pipeline);
+    this.water = createWater(this.pipeline, this.terrain);
     this.scene.add(this.water);
     this.sky = createSky();
     this.scene.add(this.sky);
@@ -124,13 +140,16 @@ export class World {
       this.voxelProps = VOXPROPS;
       this.physprops = new PhysProps(null, this.scene, ctx.lights);
       await step(0.41, 'building voxel houses');
-      this.voxel.buildings(this.buildings);
+      await this.voxel.buildings(this.buildings, () => step(0.42, 'building voxel houses'));
+      const t1 = performance.now();
       await step(0.43, 'carving pumpkins');
       this.voxel.decor(DECOR.list, this.physprops);
       this.voxel.halloween(this.physprops);
+      const t2 = performance.now();
       this.voxel.buildStatic();
       for (const l of this.voxel.lights) ctx.lights.push(l);
-      console.log(`voxel town in ${(performance.now() - t0).toFixed(0)}ms, ${this.physprops.list.length} physics props`);
+      const ms = (a, b) => (b - a).toFixed(0);
+      console.log(`voxel town in ${ms(t0, performance.now())}ms (buildings ${ms(t0, t1)}, props ${ms(t1, t2)}, merge ${ms(t2, performance.now())}), ${this.voxel.cache.size} prop models, ${this.physprops.list.length} physics props`);
     }
     this.townMeshes = [];
     for (const [name, B] of Object.entries(areas)) {
@@ -141,14 +160,32 @@ export class World {
       this.scene.add(m);
       this.townMeshes.push(m);
     }
-    // boats bob on the water as separate meshes
+    // boats bob on the water as separate meshes (voxel lobster boats, dinghies & canoes)
+    const HULLS = { hull: 0xb8352c, hullBlue: 0x2e5a8a, hullGreen: 0x3a7a5a };
+    const boatGeo = new Map();
+    const voxBoat = (kind, hull) => {
+      const key = kind + ':' + hull;
+      if (!boatGeo.has(key)) {
+        const col = HULLS[hull] ?? 0x2e5a8a;
+        const r = kind === 'fishing' ? VOXPROPS.fishingBoat({ hull: col }) : kind === 'rowboat' ? VOXPROPS.rowboat({ color: col }) : VOXPROPS.canoe({ color: 0xb83a2a });
+        boatGeo.set(key, { geo: meshVox(r.vox, { size: r.size, origin: r.origin, jitter: 0 }), y: kind === 'fishing' ? 0 : kind === 'rowboat' ? -0.22 : -0.12 });
+      }
+      return boatGeo.get(key);
+    };
     this.boats = ctx.boats.map((bt, i) => {
-      const B = new Builder();
-      boatGeometry(B, bt.kind, bt.hull);
-      const m = propMesh(B.build(), this.propMat);
-      m.position.set(bt.x, 0, bt.z);
+      let m, baseY = 0;
+      if (voxel) {
+        const vb = voxBoat(bt.kind, bt.hull);
+        m = voxMesh(vb.geo, sharedVoxelMaterial());
+        baseY = vb.y;
+      } else {
+        const B = new Builder();
+        boatGeometry(B, bt.kind, bt.hull);
+        m = propMesh(B.build(), this.propMat);
+      }
+      m.position.set(bt.x, baseY, bt.z);
       m.rotation.y = bt.yaw;
-      m.userData = { ...bt, phase: i * 1.7 };
+      m.userData = { ...bt, phase: i * 1.7, baseY };
       this.scene.add(m);
       if (bt.kind !== 'canoe') this.physics.addBox({ x: bt.x, z: bt.z, yaw: bt.yaw, w: bt.kind === 'fishing' ? 2.3 : 1.4, l: bt.kind === 'fishing' ? 6.5 : 3.2, y0: -2, y1: 2.5, kind: 'boat' });
       return m;
@@ -174,7 +211,7 @@ export class World {
     const t = G.uTime.value;
     for (const b of this.boats || []) {
       const ph = b.userData.phase;
-      b.position.y = Math.sin(t * 1.1 + ph) * 0.06 - 0.02;
+      b.position.y = (b.userData.baseY || 0) + Math.sin(t * 1.1 + ph) * 0.06 - 0.02;
       b.rotation.z = Math.sin(t * 0.9 + ph) * 0.035;
       b.rotation.x = Math.sin(t * 0.7 + ph * 1.3) * 0.02;
     }

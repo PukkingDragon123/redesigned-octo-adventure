@@ -7,7 +7,7 @@ import { meshVox } from '../voxel/mesh.js';
 import { voxMesh, sharedVoxelMaterial } from '../render/voxelMaterial.js';
 import * as PR from '../voxel/models/props.js';
 import { input } from '../core/input.js';
-import { CUSTOMERS, BUILDINGS, POI } from '../world/layout.js';
+import { CUSTOMERS, BUILDINGS, POI, MO_SPOT } from '../world/layout.js';
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 
@@ -52,11 +52,11 @@ const CATS = [
   { id: 'shadow', owner: 'doug', name: 'Sergeant Shadow', color: 0x2a2228, belly: 0x3a3238, x: -219, z: -34, hint: 'Probably hunting ghosts at the old cemetery.' },
 ];
 const LOST = [
-  { id: 'glasses', owner: 'agnes', item: 'glasses', name: 'reading glasses', x: 160, z: 22, build: () => PR.compass(), say: 'My reading glasses! I put them down somewhere near the chapel...' },
+  { id: 'glasses', owner: 'agnes', item: 'glasses', name: 'reading glasses', x: 178, z: 6, build: () => PR.compass(), say: 'My reading glasses! I put them down somewhere by the chapel steps, up past the green...' },
   { id: 'puck', owner: 'pip', item: 'puck', name: 'hockey puck', x: 98, z: 116, build: () => PR.hockeyPuck(), say: 'Pop slapped our LUCKY PUCK all the way to the sawmill!!' },
   { id: 'compass', owner: 'ollie', item: 'compass', name: 'brass compass', x: -31, z: 36, build: () => PR.compass(), say: "Lost me brass compass by the covered bridge. Can't find north without it, ha!" },
   { id: 'stetho', owner: 'ingrid', item: 'stetho', name: 'stethoscope', x: -110, z: -146, build: () => PR.stethoscope(), say: 'I left my stethoscope at the old tree stand while birdwatching. Clinically embarrassing.' },
-  { id: 'hat', owner: 'doug', item: 'hat', name: 'Mountie hat', x: 238, z: 92, build: () => PR.mountieHat(), say: 'The wind took my hat. Off the boardwalk. Toward the boathouse. Very undignified.' },
+  { id: 'hat', owner: 'doug', item: 'hat', name: 'Mountie hat', x: 214, z: 87, build: () => PR.mountieHat(), say: 'The wind took my hat. Down the harbour boardwalk. Toward the boathouse. Very undignified.' },
 ];
 const BIRDS = ['robin', 'chickadee', 'crow', 'goose'];
 const BIRD_NAMES = { robin: 'American robin', chickadee: 'Black-capped chickadee', crow: 'Common crow', goose: 'Canada goose', deer: 'White-tailed deer', moose: 'Moose (!!)', beaver: 'Beaver', buck: 'Big buck' };
@@ -560,7 +560,7 @@ export class Quests {
     const m = [];
     const S = this.S;
     for (const o of this.objs) m.push({ id: `q:${o.id}`, x: o.x, z: o.z, icon: o.kind === 'cat' ? 'cat' : 'star' });
-    if (S.groceries?.state === 'active' && !Object.keys(this.game.state.bag || {}).length) m.push({ id: 'shop', x: 186, z: 94, icon: 'basket' });
+    if (S.groceries?.state === 'active' && !Object.keys(this.game.state.bag || {}).length) m.push({ id: 'shop', x: MO_SPOT.x, z: MO_SPOT.z, icon: 'basket' });
     return m;
   }
 

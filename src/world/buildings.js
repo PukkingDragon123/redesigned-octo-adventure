@@ -452,6 +452,31 @@ function TILESIZE(name) {
 }
 export { TILESIZE };
 
+// Kinds that only exist as voxel models: just a floor height and a collision box here;
+// the voxel model adds its own porches/decks and extra solids from its meta (voxelWorld.js).
+const GENERIC = {
+  shop: { lift: 0.3, H: (b) => b.floors * 2.75 + 2.6 },
+  firehall: { lift: 0.2, H: (b) => 8.5 },
+  barn: { lift: 0.15, H: (b) => 9.5 },
+  sugarshack: { lift: 0.3, H: (b) => 5.5 },
+  gazebo: { lift: 0.05, H: () => 5.6, open: true },
+  lifeguard: { lift: 0.0, H: () => 4.2, open: true },
+  rink: { lift: 0.06, H: () => 1.2, open: true, top: true },
+};
+function generic(ctx, B, b) {
+  const { terrain, physics } = ctx;
+  const g = GENERIC[b.kind];
+  const fh = footprintHeights(terrain, b);
+  const y0 = (g.open && !g.top ? fh.mn : fh.mx) + g.lift;
+  const M = buildingMatrix(b.x, y0, b.z, b.facing || 0);
+  const H = g.H(b);
+  // a recessed shopfront (the general store's porch) leaves its front strip walkable
+  const rec = b.recess || 0, f = b.facing || 0;
+  const cx = b.x - Math.sin(f) * rec / 2, cz = b.z - Math.cos(f) * rec / 2;
+  if (!g.open) physics.addBox({ x: cx, z: cz, yaw: f, w: b.w + 0.2, l: b.d - rec + 0.2, y0: y0 - 1, y1: y0 + H });
+  return { M, y0, H, generic: true };
+}
+
 export function buildBuildings(ctx, B, list = L.BUILDINGS) {
   const out = {};
   for (const b of list) {
@@ -462,6 +487,7 @@ export function buildBuildings(ctx, B, list = L.BUILDINGS) {
     else if (b.kind === 'chapel') r = chapel(ctx, B, b);
     else if (b.kind === 'lighthouse') r = lighthouse(ctx, B, b);
     else if (b.kind === 'sawmill') r = sawmill(ctx, B, b);
+    else if (GENERIC[b.kind]) r = generic(ctx, B, b);
     out[b.id] = r;
   }
   return out;

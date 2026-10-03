@@ -1,7 +1,7 @@
 // Villagers of Maple Cove (and Nana at home): idle personalities, reactions.
 import * as THREE from 'three';
 import { VoxelCharacter as Actor } from './vchar.js';
-import { CUSTOMERS, BUILDINGS, POI } from '../world/layout.js';
+import { CUSTOMERS, BUILDINGS, POI, MO_SPOT, DOUG_BEAT } from '../world/layout.js';
 
 const IDLE = { agnes: 'knit', pip: 'hockey', pop: 'hockey', birdie: 'idle', gus: 'idle', marie: 'idle', doug: 'idle', ingrid: 'idle', lou: 'idle', ollie: 'idle', grandma: 'idle' };
 
@@ -24,20 +24,21 @@ export class Villagers {
       a.play(IDLE[char] || 'idle');
       this.actors[spot] = a;
     }
-    // Pop plays hockey with Pip
+    // Pop plays hockey with Pip out on the rink
     const kids = CUSTOMERS.kids;
-    const pop = new Actor(game, 'pop', { x: kids.x + 2.5, z: kids.z + 3, yaw: -2.5 });
+    this.actors.kids.homeYaw = Math.PI / 2;
+    const pop = new Actor(game, 'pop', { x: kids.x + 4, z: kids.z - 1.5, yaw: -Math.PI / 2 - 0.3 });
     pop.play('hockey');
     pop.homePos = pop.pos.clone();
-    pop.homeYaw = -2.5;
+    pop.homeYaw = -Math.PI / 2 - 0.3;
     this.actors.pop = pop;
-    // Doug walks a little beat along the street
-    this.actors.doug.patrol = [new THREE.Vector3(150, 0, 60), new THREE.Vector3(186, 0, 60)];
+    // Doug walks a little beat along the Main Street sidewalks
+    this.actors.doug.patrol = DOUG_BEAT.map((p) => new THREE.Vector3(p.x, 0, p.z));
     this.actors.doug.patrolIdx = 0;
-    // Mo minds the grocery on the boardwalk
-    const mo = new Actor(game, 'mo', { x: 189.5, z: 94.6, yaw: 0 });
+    // Mo minds the counter on the general store's front porch
+    const mo = new Actor(game, 'mo', { x: MO_SPOT.x, z: MO_SPOT.z, yaw: MO_SPOT.yaw });
     mo.homePos = mo.pos.clone();
-    mo.homeYaw = 0;
+    mo.homeYaw = MO_SPOT.yaw;
     this.actors.mo = mo;
     // Nana lives on the porch
     const nana = new Actor(game, 'grandma', { x: -169.5, z: 66.5, yaw: Math.PI / 2 });

@@ -50,9 +50,9 @@ const P = {
   apple: 0xc8302a, appleG: 0x8cb43c, squash: 0xe8c040, squashG: 0x4c7a3a,
   cauldron: 0x2e2c34, brew: 0x7aff4a | EMIT,
 };
-const SIDING = { red: 0xa63a30, teal: 0x3a9690, blue: 0x5080b6, white: 0xe8dfca, yellow: 0xe4ba50, green: 0x5f9a58, log: 0x8a5a34, weathered: 0x8c8478 };
-const DOORC = { red: 0x2e5a40, teal: 0xb03e2a, blue: 0xe8b84a, yellow: 0x34528a, white: 0x2e5a7a, green: 0xc89a48, log: 0x3a6a4a, weathered: 0x6a4a2a };
-const SHUTC = { red: 0x2e4a3a, teal: 0xf0e6d0, blue: 0x283a5c, yellow: 0x3a6a4a, white: 0x2e5a7a, green: 0xf0e6d0, log: 0x3a6a4a, weathered: 0x5c4a3a };
+const SIDING = { red: 0xa63a30, teal: 0x3a9690, blue: 0x5080b6, white: 0xe8dfca, yellow: 0xe4ba50, green: 0x5f9a58, log: 0x8a5a34, weathered: 0x8c8478, pink: 0xe6a0ae, brick: 0xa4483a };
+const DOORC = { red: 0x2e5a40, teal: 0xb03e2a, blue: 0xe8b84a, yellow: 0x34528a, white: 0x2e5a7a, green: 0xc89a48, log: 0x3a6a4a, weathered: 0x6a4a2a, pink: 0x6a3a2a, brick: 0x2e5a40 };
+const SHUTC = { red: 0x2e4a3a, teal: 0xf0e6d0, blue: 0x283a5c, yellow: 0x3a6a4a, white: 0x2e5a7a, green: 0xf0e6d0, log: 0x3a6a4a, weathered: 0x5c4a3a, pink: 0xf2e8d4, brick: 0x2e4a3a };
 const ROOFC = { dark: 0x4c4856, red: 0x9c3c32, green: 0x4a6e4a, moss: 0x5a6640, rust: 0x9a5832 };
 const CURTAINS = [0xe8d8b0, 0xc8504a, 0xe8c070, 0x8a6aa8, 0xf0e8dc, 0x6a9a7a];
 
@@ -101,8 +101,15 @@ class VB {
     return x + this.W * (y + this.H * z);
   }
   set(x, y, z, c) {
-    const i = this.idx(Math.round(x), Math.round(y), Math.round(z));
-    if (i >= 0) this.a[i] = c >>> 0;
+    const lx = Math.round(x) - this.x0, ly = Math.round(y) - this.y0, lz = Math.round(z) - this.z0;
+    if (lx < 0 || ly < 0 || lz < 0 || lx >= this.W || ly >= this.H || lz >= this.D) return;
+    this.a[lx + this.W * (ly + this.H * lz)] = c >>> 0;
+    if (c) {
+      // grow the painted bounds (finish() only scans inside them)
+      const bb = this.bb || (this.bb = [lx, ly, lz, lx, ly, lz]);
+      if (lx < bb[0]) bb[0] = lx; if (ly < bb[1]) bb[1] = ly; if (lz < bb[2]) bb[2] = lz;
+      if (lx > bb[3]) bb[3] = lx; if (ly > bb[4]) bb[4] = ly; if (lz > bb[5]) bb[5] = lz;
+    }
   }
   get(x, y, z) {
     const i = this.idx(Math.round(x), Math.round(y), Math.round(z));
@@ -146,10 +153,11 @@ class VB {
   }
   finish() {
     let x0 = 1e9, y0 = 1e9, z0 = 1e9, x1 = -1, y1 = -1, z1 = -1;
-    const { W, H, D, a } = this;
-    for (let z = 0; z < D; z++) for (let y = 0; y < H; y++) {
+    const { W, H, a } = this;
+    const bb = this.bb || [0, 0, 0, -1, -1, -1];
+    for (let z = bb[2]; z <= bb[5]; z++) for (let y = bb[1]; y <= bb[4]; y++) {
       const row = W * (y + H * z);
-      for (let x = 0; x < W; x++) if (a[row + x]) {
+      for (let x = bb[0]; x <= bb[3]; x++) if (a[row + x]) {
         if (x < x0) x0 = x; if (x > x1) x1 = x;
         if (y < y0) y0 = y; if (y > y1) y1 = y;
         if (z < z0) z0 = z; if (z > z1) z1 = z;
@@ -2101,8 +2109,824 @@ function buildSawmill(spec, ctx) {
   return ctx;
 }
 
+// ------------------------------------------------------------------ MAIN STREET SHOPS
+// Storefronts: kick panels, big display windows with goods behind the glass, transoms, a fascia
+// board with the shop's name, a bracketed cornice, striped awnings, a hanging blade sign, upper
+// floor sash windows, and a false-front parapet (or a gable) on top. Per-shop dressing below.
+const SHOP_CFG = {
+  post: { brick: true, parapet: 'flat', fascia: 0x24346a, fg: '#f2e8d4', door: 0, accent: 0x24346a, flag: true, clock: true, blade: 'mail', goods: 'parcels' },
+  donuts: { parapet: 'round', fascia: 0x5a2e22, fg: '#ffe6c4', door: 1, accent: 0x8a3a4a, awning: [0xe8708e, 0xf6e8d6], donut: true, blade: 'cup', goods: 'donuts' },
+  cafe: { roof: 'gable', pitch: 0.8, fascia: 0x2e5a40, fg: '#f2e8d4', door: -1, accent: 0x2e5a40, awning: [0x2e6a4a, 0xf2e8d4], blade: 'leaf', boxes: true, goods: 'cakes' },
+  store: { parapet: 'stepped', fascia: 0x7a2a22, fg: '#f6e6c8', door: 0, accent: 0x2e5a40, recess: 24, moose: true, goods: 'jars' },
+  poutine: { small: true, fascia: 0xc8382e, fg: '#fff4dc', accent: 0xc8382e, awning: [0xc8382e, 0xf2e8d4], hatch: true, topper: 'fries' },
+  fishchips: { small: true, fascia: 0x1e4a6a, fg: '#fff4dc', accent: 0x1e4a6a, awning: [0x2a6a8a, 0xf2e8d4], hatch: true, topper: 'fish' },
+  hardware: { parapet: 'flat', fascia: 0x2e2e34, fg: '#f2c23a', door: 1, accent: 0x3a5a8a, awning: [0x3a5a8a, 0xf2e8d4], blade: 'hammer', goods: 'tools' },
+  bakery: { roof: 'gable', pitch: 0.9, fascia: 0x7a3e22, fg: '#fff0d8', door: -1, accent: 0x7a3e22, awning: [0xe8a03a, 0xf6e8d6], blade: 'bread', boxes: true, goods: 'bread' },
+};
+const SF = { kick: 3, win0: 4, win1: 15, tr0: 17, tr1: 18, fas0: 20, fas1: 24, cor: 25, top: 26 }; // storefront rows
+
+// what's displayed behind the shop glass (u, y on the glass plane)
+function goodsFn(kind, u0, ww, y0, y1) {
+  const base = glassFn(u0, y1);
+  const shelf = (y) => y === y0 + 1 || y === y0 + 6;
+  return (u, y) => {
+    const k = u - u0;
+    if (kind === 'donuts') {
+      if (shelf(y)) return P.woodLight;
+      if ((y === y0 + 2 || y === y0 + 7) && k % 3 !== 2) return [0xf0a0b8, 0xc8803a, 0x7a4a2a, 0xf2e2c4][Math.floor(vhash(u, y, 3) * 4)];
+    } else if (kind === 'cakes') {
+      if (shelf(y)) return P.woodLight;
+      if (y === y0 + 2 && k % 4 !== 3) return k % 8 < 4 ? 0xf2e8d4 : 0x8a4a2a;
+      if (y === y0 + 3 && k % 4 === 1) return 0xd8302a;
+      if (y === y0 + 7 && k % 3 === 0) return 0xe8dcc8;
+    } else if (kind === 'parcels') {
+      if (y === y0 + 1) return P.woodLight;
+      if (y >= y0 + 2 && y <= y0 + 4 && k % 6 < 4) return (y === y0 + 3 || k % 6 === 1) ? 0xc8302a : 0xc49a64;
+    } else if (kind === 'tools') {
+      if (shelf(y)) return P.woodLight;
+      if (y >= y0 + 2 && y <= y0 + 4 && k % 5 === 1) return y === y0 + 4 ? P.steelD : P.woodLight; // hammers
+      if (y === y0 + 7 && k % 4 < 3) return [P.red, 0xf2c23a, P.steel][Math.floor(k / 4) % 3]; // paint cans
+    } else if (kind === 'bread') {
+      if (shelf(y)) return P.woodLight;
+      if ((y === y0 + 2 || y === y0 + 7) && k % 4 !== 3) return k % 8 < 4 ? 0xc8883e : 0xe0a858;
+      if (y === y0 + 3 && k % 4 === 1) return 0xa86a2e;
+    } else if (kind === 'jars') {
+      if (shelf(y)) return P.woodLight;
+      if ((y === y0 + 2 || y === y0 + 3 || y === y0 + 7) && k % 2 === 0) return y === y0 + 3 ? 0xf2e8d4 : [0xc87a1e, 0xa83228, 0xd8a838][Math.floor(vhash(u, y, 5) * 3)];
+    }
+    return base(u, y);
+  };
+}
+// a hanging blade sign: iron arm out from the wall, a board with a little painted icon on it
+const BLADE = {
+  cup: ['.......', '..w.w..', '...w...', 'ccccc..', 'cCCCcc.', 'cCCCc.c', 'cCCCcc.', '.ccc...'],
+  leaf: ['...r...', '.r.r.r.', '.rrrrr.', 'rrrrrrr', '.rrrrr.', '..rrr..', '...b...', '...b...'],
+  mail: ['.......', 'eeeeeee', 'eEeeeEe', 'eeEeEee', 'eeeEeee', 'eeeeeee', '...s...', '.......'],
+  hammer: ['.......', '.EEEE..', '.EEEEE.', '...b...', '...b...', '...b...', '...b...', '.......'],
+  bread: ['.......', '..ccc..', '.cCcCc.', 'cCcCcCc', 'ccccccc', '.......', '.......', '.......'],
+};
+function bladeSign(ctx, F, u, y, icon, o = {}) {
+  const pat = BLADE[icon];
+  if (!pat) return;
+  const bg = o.bg ?? P.cream, edge = o.edge ?? P.woodDark;
+  // arm
+  for (let n = 1; n <= 9; n++) F.set(u, y + 9, n, P.iron);
+  F.set(u, y + 8, 1, P.iron); F.set(u, y + 7, 1, P.iron);
+  F.set(u, y + 8, 2, P.iron);
+  // board (in the plane across the wall), with chains
+  const n0 = 2;
+  F.set(u, y + 8, n0 + 1, P.iron); F.set(u, y + 8, n0 + 7, P.iron);
+  for (let j = 0; j < 8; j++) for (let i = 0; i < 9; i++) {
+    const edgeV = j === 0 || j === 7 || i === 0 || i === 8;
+    let c = edgeV ? edge : bg;
+    if (!edgeV) {
+      const ch = pat[7 - j]?.[i - 1] ?? '.';
+      if (ch === 'w') c = 0xe8e4dc; else if (ch === 'c') c = icon === 'bread' ? 0xd89a4a : 0xf2ece0; else if (ch === 'C') c = icon === 'bread' ? 0xf2d8a8 : 0x6a3a22;
+      else if (ch === 'r') c = P.red; else if (ch === 'b') c = P.woodDark; else if (ch === 'e') c = 0xf2ece0;
+      else if (ch === 'E') c = 0x9a8a78; else if (ch === 's') c = P.red;
+    }
+    F.set(u, y + j, n0 + i, c);
+  }
+  F.occ.push([u - 1, y, u + 1, y + 9]);
+}
+// a round clock (hands at 4:12, when Harold proposed)
+function clockFace(F, uc, yc, n = 2) {
+  for (let a = -5; a <= 5; a++) for (let b2 = -5; b2 <= 5; b2++) {
+    const d = Math.hypot(a, b2);
+    if (d > 5.2) continue;
+    F.set(uc + a, yc + b2, n, d > 4.2 ? P.brass : P.cream);
+  }
+  F.set(uc, yc, n + 1, P.iron);
+  for (let k = 1; k <= 3; k++) F.set(uc + Math.round(Math.cos(-0.5) * k), yc + Math.round(Math.sin(-0.5) * k), n + 1, P.iron); // hour hand ~4
+  for (let k = 1; k <= 4; k++) F.set(uc + Math.round(Math.cos(1.2) * k * 0.3), yc + Math.round(Math.sin(1.25) * k), n + 1, P.iron); // minute ~12
+  for (const [a, b2] of [[0, 4], [4, 0], [0, -4], [-4, 0]]) F.set(uc + a, yc + b2, n + 1, P.navy);
+  F.occ.push([uc - 6, yc - 6, uc + 6, yc + 6]);
+}
+// the giant donut that sits on the donut shop
+function giantDonut(ctx, cx, cy, cz) {
+  const vb = ctx.vb, R = 8, r = 3.6;
+  const sprinkles = [0xf2d23a, 0x5ab4e8, 0xf2f0e8, 0x7ac84a, 0xb05cd8];
+  for (let z = -5; z <= 5; z++) for (let y = -13; y <= 13; y++) for (let x = -13; x <= 13; x++) {
+    const q = Math.hypot(x, y) - R;
+    if (q * q + z * z > r * r + 0.3) continue;
+    const icing = z >= 1 || (z === 0 && vhash(x, y, 1) < 0.5);
+    const wav = q < -r * 0.55 + Math.sin(Math.atan2(y, x) * 7) * 0.6;
+    let c = icing && !wav ? (vhash(x, y, z + 9) < 0.08 ? pick(sprinkles, vhash(x, y, 4)) : 0xf08aa6) : (vhash(x, y, z) < 0.5 ? 0xd8934a : 0xc8823e);
+    if (!icing && z <= -3) c = 0xa86a30;
+    vb.set(cx + x, cy + y, cz + z, c);
+  }
+}
+// a moose head & a goose in relief on the store's parapet
+function mooseAndGoose(F, ucM, ucG, y) {
+  const br = 0x6a4428, brD = 0x4a2e1c, ant = 0xe0cfa8, wh = 0xf2ece0, gy = 0x8a8478, blk = 0x2a2420;
+  // moose: long face, droopy nose, big palmate antlers
+  const M = [
+    'AA.......AA', 'AAA.....AAA', '.AAAA.AAAA.', '..AAbbbAA..', '....bbb....', '...bbbbb...', '...bebeb...', '...bbbbb...', '....bbb....', '....bdb....', '....ddd....',
+  ];
+  const put2 = (u, yy, c) => { for (const [a, b2] of [[0, 0], [1, 0], [0, 1], [1, 1]]) F.set(u + a, yy + b2, 2, c); };
+  M.forEach((row, i) => { for (let k = 0; k < row.length; k++) { const ch = row[k]; if (ch === '.') continue; put2(ucM - 11 + k * 2, y + (M.length - 1 - i) * 2, ch === 'A' ? ant : ch === 'e' ? blk : ch === 'd' ? brD : br); } });
+  // goose: black neck & head, white chin strap, grey-brown body
+  const Gs = ['..kk.......', '.kkwk......', '..kk.......', '..kk.......', '..kk.......', '..kkgggg...', '.ggggggggg.', '..ggggggg..', '...y...y...'];
+  Gs.forEach((row, i) => { for (let k = 0; k < row.length; k++) { const ch = row[k]; if (ch === '.') continue; put2(ucG - 11 + k * 2, y + (Gs.length - 1 - i) * 2, ch === 'k' ? blk : ch === 'w' ? wh : ch === 'y' ? 0xe8a43a : gy); } });
+  F.occ.push([ucM - 12, y - 1, ucM + 12, y + 23], [ucG - 12, y - 1, ucG + 12, y + 19]);
+}
+
+function buildShop(spec, ctx) {
+  const cfg = { ...(SHOP_CFG[spec.shop] || SHOP_CFG.cafe) };
+  const R = ctx.R, hw = ctx.hw;
+  const W = evenV(spec.w ?? 10), D = evenV(spec.d ?? 8);
+  const floors = cfg.small ? 1 : Math.max(1, spec.floors || 1);
+  const H = cfg.small ? 24 : SF.top + (floors - 1) * FH + 2;
+  const b = { x0: -W / 2, x1: W / 2 - 1, z0: -D / 2, z1: D / 2 - 1 };
+  const G = (ctx.G = 3);
+  const vb = (ctx.vb = new VB(b.x0 - 26, -14, b.z0 - 22, b.x1 + 26, H + 76, b.z1 + 44));
+  const sid = cfg.brick ? SIDING.brick : (SIDING[spec.color] ?? SIDING.white);
+  const trim = cfg.brick ? P.stoneC : P.trim;
+  const acc = cfg.accent;
+  const parapet = !cfg.roof && !cfg.small;
+  foundation(ctx, b, G, 4);
+
+  // ---- body & roof
+  let Rf = null, st = roofStyle(spec.roof ?? 'dark', ctx.seed);
+  if (cfg.roof === 'gable') Rf = roofGeom({ axis: 'z', b, H, pitch: cfg.pitch ?? 0.8, oh: 4, ohR0: 3, ohR1: 3 });
+  else if (cfg.small) Rf = roofGeom({ axis: 'x', b, H, pitch: 0.55, oh: 5, ohR0: 3, ohR1: 3 });
+  fillBody(vb, b, H, Rf, sid);
+  const brick = brickFn(ctx.seed);
+  if (cfg.brick) vb.fill(b.x0, 0, b.z0, b.x1, H + 30, b.z1, (x, y, z) => (vb.get(x, y, z) ? brick(x, y, z) : 0));
+  let pTop = H;
+  if (parapet) {
+    // a low shed roof hidden behind the false front
+    for (let z = b.z0 - 2; z <= b.z1 - 3; z++) {
+      const y = H + Math.round(((z - b.z0 + 2) / (D - 1)) * 4);
+      for (let x = b.x0 - 1; x <= b.x1 + 1; x++) {
+        vb.set(x, y, z, shingle({ ...st, kind: 'tin' }, z, x, y));
+        if (x >= b.x0 && x <= b.x1 && z >= b.z0) for (let yy = H; yy < y; yy++) vb.set(x, yy, z, cfg.brick ? brick(x, yy, z) : sid);
+      }
+    }
+    const base = H + 8;
+    for (let x = b.x0; x <= b.x1; x++) {
+      const t = Math.abs(x + 0.5) / (W / 2);
+      let top = base;
+      if (cfg.parapet === 'stepped') top = base + (t < 0.28 ? 8 : t < 0.56 ? 4 : 0);
+      if (cfg.parapet === 'round') top = base + Math.round(8 * Math.sqrt(Math.max(0, 1 - (t / 0.6) ** 2)));
+      vb.fill(x, H, b.z1 - 2, x, top, b.z1, cfg.brick ? brick : sid);
+      vb.fill(x, top + 1, b.z1 - 3, x, top + 1, b.z1 + 1, trim);
+      vb.set(x, top, b.z1 + 1, trim);
+      pTop = Math.max(pTop, top + 1);
+    }
+    for (const x of [b.x0, b.x1]) vb.fill(x - 1, H, b.z1 - 3, x + 1, base + 1, b.z1 + 1, trim);
+  }
+  const F = frames(vb, b);
+  if (!cfg.brick) {
+    if (cfg.small) for (const f of Object.values(F)) battens(f, sid, 0, H + 40, 4, ctx.seed);
+    else for (const f of Object.values(F)) clapboard(f, sid, 0, pTop + 2, ctx.seed);
+  }
+  cornerTrims(vb, b, 0, H - 1, trim);
+  for (const f of Object.values(F)) {
+    band(f, 0, 1, cfg.brick ? P.stoneB : tone(sid, -0.25));
+    if (!cfg.small && floors > 1) band(f, SF.top, SF.top + 1, trim);
+  }
+  if (cfg.brick) for (const f of Object.values(F)) band(f, H - 2, H - 1, P.stoneC);
+  if (Rf) drawRoof(vb, Rf, { ...st, spouts: !cfg.small });
+
+  // ---- storefront
+  const Ff = F.front;
+  const recess = cfg.recess ?? 0;
+  const porchH = 19;
+  let Fs = Ff;
+  if (recess) {
+    // the ground floor steps back behind a deep porch; the upper floor rides over it on posts
+    vb.clear(b.x0 + 2, 0, b.z1 - recess + 1, b.x1 - 2, porchH, b.z1 + 2);
+    Fs = mkFrame(vb, { ...b, z1: b.z1 - recess }, 'front');
+    deckOn(ctx, Fs, b.x0 + 2, b.x1 - 2, recess + 1, { col: P.plank });
+    for (const u of [b.x0 + 2, Math.round(-W * 0.18), Math.round(W * 0.18) - 1, b.x1 - 3]) {
+      postAt(Ff, u, -2, 0, porchH, P.trim);
+      const p = Ff.pt(u + 0.5, 0, -1.5);
+      (ctx.posts ||= []).push({ x: r3(p[0] / VPM), z: r3(p[2] / VPM), r: 0.14 });
+    }
+    Ff.fill(b.x0 + 2, porchH - 1, -2, b.x1 - 2, porchH, 0, P.trim);
+    // ceiling boards
+    vb.fill(b.x0 + 2, porchH, b.z1 - recess + 1, b.x1 - 2, porchH, b.z1, (x) => (x % 3 ? P.woodLight : P.wood));
+  }
+  const doorW = 8;
+  const doorU = cfg.door === 0 ? 0 : cfg.door > 0 ? Math.round(W * 0.27) : -Math.round(W * 0.27);
+  if (cfg.hatch) {
+    // a serving hatch with a counter shelf and a menu board; the door is round the side
+    const ha = b.x0 + 8, hb = b.x1 - 8;
+    Ff.clear(ha, 8, -3, hb, 15, 1);
+    Ff.fill(ha, 8, -3, hb, 15, -3, (u, y) => (y === 12 && u % 4 === 0 ? 0xc8c8c0 : y < 10 ? 0x8a8a90 : 0x3a2e2a));
+    Ff.fill(ha - 1, 7, -2, hb + 1, 7, 3, P.woodLight);
+    Ff.fill(ha - 1, 16, 1, hb + 1, 16, 1, trim);
+    for (const u of [ha - 1, hb + 1]) Ff.fill(u, 8, 1, u, 15, 1, trim);
+    // fry baskets & a ketchup bottle on the counter
+    Ff.fill(ha + 2, 8, 1, ha + 4, 8, 2, P.red); Ff.set(ha + 3, 9, 1, 0xf2d23a);
+    Ff.fill(hb - 3, 8, 1, hb - 3, 10, 1, 0xc8302a);
+    awningOn(Ff, ha - 2, hb + 2, 20, 8, cfg.awning, { drop: 2, stripe: 3 });
+    Ff.occ.push([ha - 2, 6, hb + 2, 21]);
+    signOn(ctx, Ff, 0, 1, W - 16, 4, 'MENU', { bg: P.chalk, fg: '#f0f0e4', edge: P.woodDark, kind: 'chalk' });
+    doorOn(ctx, F.left, 0, { color: acc, h: 17, lanternOpts: { radius: 5 } });
+    windowOn(ctx, F.right, -3, 8, { w: 6, h: 6, lit: true, box: false });
+  } else {
+    const segL = [b.x0 + 4, doorU - doorW / 2 - 4], segR = [doorU + doorW / 2 + 3, b.x1 - 4];
+    for (const [ua, ub] of [segL, segR]) {
+      const ww = ub - ua + 1;
+      if (ww < 6) continue;
+      Fs.fill(ua - 1, 0, 1, ub + 1, SF.kick, 1, (u, y) => (y === 0 || y === SF.kick || u === ua - 1 || u === ub + 1 ? tone(acc, 0.18) : tone(acc, -0.12)));
+      const mull = ww > 14 ? [ua + Math.round(ww / 3), ua + Math.round((2 * ww) / 3)] : [ua + (ww >> 1)];
+      windowOn(ctx, Fs, ua, SF.win0, { w: ww, h: SF.win1 - SF.win0 + 1, mullU: mull, mullY: [], lit: true, frame: tone(acc, 0.12), box: false, glassFn: goodsFn(cfg.goods, ua, ww, SF.win0, SF.win1) });
+      const tm = []; for (let u = ua + 3; u < ub - 1; u += 4) tm.push(u);
+      windowOn(ctx, Fs, ua, SF.tr0, { w: ww, h: SF.tr1 - SF.tr0 + 1, mullU: tm, mullY: [], frame: tone(acc, 0.12), box: false });
+    }
+    doorOn(ctx, Fs, doorU, { w: doorW, h: 18, glass: true, color: acc, lantern: false, frame: tone(acc, 0.12) });
+    if (!recess) {
+      lanternOn(ctx, Ff, doorU - doorW / 2 - 4, 11, { radius: 6 });
+      lanternOn(ctx, Ff, doorU + doorW / 2 + 2, 11, { radius: 6 });
+    }
+    // fascia board with the name, and a bracketed cornice
+    signOn(ctx, Ff, 0, SF.fas0, W - 10, SF.fas1 - SF.fas0 + 1, spec.sign || '', { bg: cfg.fascia, fg: cfg.fg, edge: trim, n: recess ? 1 : 1 });
+    Ff.fill(b.x0 - 1, SF.cor, 1, b.x1 + 1, SF.cor + 1, 2, trim);
+    for (let u = b.x0 + 1; u <= b.x1 - 1; u += 6) Ff.fill(u, SF.cor - 2, 1, u, SF.cor - 1, 1, trim);
+    if (cfg.awning) awningOn(Ff, b.x0 + 3, b.x1 - 3, SF.fas0 - 1, 9, cfg.awning, { drop: 4 });
+  }
+
+  // ---- upper floors
+  const shut = cfg.brick ? null : SHUTC[spec.color] ?? P.navy;
+  const cur = pick(CURTAINS, R());
+  for (let f = 1; f < floors; f++) {
+    const y0 = SF.top + (f - 1) * FH + 6;
+    const cnt = Math.max(2, Math.min(4, Math.floor((W - 8) / 18)));
+    windowRow(ctx, Ff, b.x0 + 5, b.x1 - 5, y0, cnt, { w: 6, h: 10, shutter: shut, box: !!cfg.boxes, curtain: cur, frame: cfg.brick ? P.stoneC : P.trim }, (i) => ({ lit: i === 1 }));
+    if (cfg.brick) for (let i = 0; i < cnt; i++) { /* stone lintels come from the window frame colour */ }
+  }
+  // sides & back
+  for (const fn of ['left', 'right']) {
+    if (cfg.hatch && fn === 'left') continue;
+    const Fx = F[fn];
+    if (!cfg.small) windowRow(ctx, Fx, Fx.umin + 5, Fx.umax - 5, 7, Math.max(1, Math.floor((D - 10) / 24)), { w: 6, h: 8, box: false, frame: trim });
+    for (let f = 1; f < floors; f++) windowRow(ctx, Fx, Fx.umin + 5, Fx.umax - 5, SF.top + (f - 1) * FH + 6, Math.max(1, Math.floor((D - 10) / 22)), { w: 6, h: 10, shutter: shut, curtain: pick(CURTAINS, R()), frame: trim }, (i) => ({ lit: fn === 'right' && i === 0 }));
+  }
+  doorOn(ctx, F.back, Math.round(W * 0.25), { color: tone(acc, -0.1), main: false, lantern: false });
+
+  // ---- per-shop dressing
+  if (cfg.blade) bladeSign(ctx, Ff, cfg.door > 0 ? b.x0 + 3 : b.x1 - 3, SF.top + 6, cfg.blade, { bg: P.cream });
+  if (cfg.flag) flagOn(ctx, Ff, b.x1 - 4, SF.top + 4);
+  if (cfg.clock && parapet) clockFace(Ff, 0, H + 4, 2);
+  if (cfg.donut) giantDonut(ctx, 0, pTop + 10, b.z1 - 2);
+  if (cfg.moose && parapet) mooseAndGoose(Ff, Math.round(-W * 0.31), Math.round(W * 0.31), SF.top + 4);
+  if (recess) {
+    // the counter Mo minds, with the till, a scale and a jar of maple candy
+    const cz = b.z1 - recess + 12;
+    vb.fill(-Math.round(W * 0.16), 0, cz, Math.round(W * 0.16), 7, cz + 2, (x, y, z) => (y === 7 ? P.woodLight : (x % 4 === 0 ? P.woodDark : P.wood)));
+    vb.fill(-3, 8, cz, 0, 10, cz + 1, 0x8a8a90); vb.fill(-2, 10, cz, -1, 11, cz, 0x5a8a6a);
+    vb.fill(4, 8, cz + 1, 5, 9, cz + 1, P.brass);
+    vb.fill(-8, 8, cz + 1, -7, 10, cz + 1, 0xd8e8e0 | GLASS); vb.set(-8, 8, cz + 1, 0xc87a1e);
+    ctx.solids.push({ collide: true, x0: -Math.round(W * 0.16) / VPM, y0: 0, z0: cz / VPM, x1: (Math.round(W * 0.16) + 1) / VPM, y1: 1, z1: (cz + 3) / VPM });
+    // produce on the porch
+    crate(ctx, b.x0 + 4, 0, b.z1 - 8, 7, 3, 5, 'apple');
+    crate(ctx, b.x0 + 12, 0, b.z1 - 8, 7, 3, 5, 'pumpkin');
+    crate(ctx, b.x1 - 10, 0, b.z1 - 8, 7, 3, 5, 'squash');
+    crate(ctx, b.x1 - 18, 0, b.z1 - 8, 7, 3, 5, 'potato');
+    for (const u of [Math.round(-W * 0.18), Math.round(W * 0.18) - 1]) { const p = Ff.pt(u, porchH - 4, -2).map(Math.floor); vb.fill(p[0], p[1], p[2] - 1, p[0] + 1, p[1] + 2, p[2], P.lamp); addLight(ctx, [p[0] + 1, p[1], p[2]], [1.0, 0.72, 0.4], 6, 'porch'); }
+    signOn(ctx, Ff, 0, porchH + 2, W - 12, 5, spec.sign || '', { bg: cfg.fascia, fg: cfg.fg, edge: trim, n: 1 });
+    chalkboard(ctx, b.x1 - 12, 0, b.z1 + 4, 'PUMPKINS 3$');
+    ctx.mo = M3(0, 0, cz - 6);
+  }
+  if (cfg.topper === 'fries') {
+    // a giant carton of fries on the roof
+    const cy = Rf ? Rf.ridge - 2 : H, cz = 0;
+    vb.fill(-6, cy, cz - 4, 5, cy + 8, cz + 3, (x, y) => (((x + 6) >> 1) % 2 ? P.red : P.white));
+    for (let x = -5; x <= 4; x++) for (let z = cz - 3; z <= cz + 2; z++) { const h = 2 + Math.floor(vhash(x, z, 8) * 5); for (let k = 0; k < h; k++) vb.set(x, cy + 9 + k, z, k === h - 1 ? 0xf6d26a : 0xe8b440); }
+  }
+  if (cfg.topper === 'fish') {
+    const cy = Rf ? Rf.ridge + 1 : H, cz = 0;
+    for (let x = -10; x <= 10; x++) for (let y = -4; y <= 4; y++) {
+      const body = (x / 9) ** 2 + (y / 3.6) ** 2 <= 1 && x < 7;
+      const tail = x >= 6 && Math.abs(y) <= (x - 5) * 0.9;
+      if (!body && !tail) continue;
+      const c = x === -6 && y === 1 ? 0x1e1418 : y < -1 ? 0xe8e4dc : tail ? 0x2a6a8a : (x + y) % 3 === 0 ? 0x5ab4d0 : 0x3a8ab0;
+      for (let z = -1; z <= 0; z++) vb.set(x, cy + 6 + y, cz + z, c);
+    }
+    vb.fill(-1, cy, -1, 0, cy + 2, 0, P.iron);
+  }
+  if (cfg.small) {
+    // fryer chimney
+    const top = (Rf ? Rf.ridge : H) + 5;
+    vb.fill(b.x1 - 8, H - 2, b.z0 + 4, b.x1 - 7, top, b.z0 + 5, P.metal);
+    vb.fill(b.x1 - 9, top + 1, b.z0 + 3, b.x1 - 6, top + 1, b.z0 + 6, P.iron);
+    ctx.smoke.push(M3(b.x1 - 7, top + 2, b.z0 + 5));
+  } else if (!cfg.brick) chimneyBrick(ctx, Math.round(W * 0.25), b.z0 + 4, H - 2, (Rf ? Rf.ridge : pTop) + 4);
+
+  // ---- Halloween
+  if (hw) {
+    const dz = b.z1 + 2;
+    if (!cfg.hatch && !recess) {
+      cornStalks(ctx, doorU - doorW / 2 - 3, 0, b.z1 + 1);
+      cornStalks(ctx, doorU + doorW / 2 + 1, 0, b.z1 + 1);
+      jack(ctx, doorU - doorW / 2 - 2, 0, dz + 3, { size: 2 });
+      pumpkinPlain(ctx, doorU + doorW / 2 + 3, 0, dz + 3, 2);
+    } else if (cfg.hatch) {
+      jack(ctx, b.x0 + 3, 0, dz + 1, { size: 2 });
+      pumpkinPlain(ctx, b.x1 - 3, 0, dz + 1, 1);
+    } else {
+      jack(ctx, b.x0 + 6, 3, b.z1 - 7, { size: 1 });
+      jack(ctx, b.x1 - 6, 3, b.z1 - 7, { size: 2 });
+    }
+    if (!cfg.hatch) stringLights(ctx, Array.from({ length: W + 2 }, (_, i) => [b.x0 - 1 + i, SF.cor + 3, b.z1 + 2]), { span: 12, sag: 1 });
+    placeBats(ctx, Ff, 2, SF.top + 2, (parapet ? pTop : H) - 4);
+    placeBats(ctx, F[R() < 0.5 ? 'left' : 'right'], 1, 8, H - 2);
+    cobweb(ctx, [b.x0 + 2, SF.cor - 3, b.z1 + 2], [1, 0, 0], [0, -1, 0], 5);
+  }
+  ctx.solids.push({ x0: b.x0 / VPM, y0: -G / VPM, z0: b.z0 / VPM, x1: (b.x1 + 1) / VPM, y1: H / VPM, z1: (b.z1 + 1 - recess) / VPM });
+  return ctx;
+}
+
+// ------------------------------------------------------------------ FIRE HALL
+function buildFirehall(spec, ctx) {
+  const R = ctx.R, hw = ctx.hw;
+  const W = evenV(spec.w ?? 12), D = evenV(spec.d ?? 12);
+  const H = SF.top + FH + 4;
+  const b = { x0: -W / 2, x1: W / 2 - 1, z0: -D / 2, z1: D / 2 - 1 };
+  const G = (ctx.G = 2);
+  const TW = 24; // hose tower
+  const tb = { x0: b.x1 - TW + 1, x1: b.x1, z0: b.z0, z1: b.z0 + TW - 1 };
+  const TH = H + 34;
+  const vb = (ctx.vb = new VB(b.x0 - 24, -14, b.z0 - 20, b.x1 + 24, TH + 34, b.z1 + 44));
+  const brick = brickFn(ctx.seed);
+  foundation(ctx, b, G, 4);
+  vb.fill(b.x0, 0, b.z0, b.x1, H - 1, b.z1, brick);
+  // flat roof behind a parapet with a stepped centre & a stone plaque
+  vb.fill(b.x0, H, b.z0, b.x1, H, b.z1, 0x5a5654);
+  for (let x = b.x0; x <= b.x1; x++) {
+    const t = Math.abs(x + 0.5) / (W / 2);
+    const top = H + 5 + (t < 0.3 ? 7 : t < 0.5 ? 3 : 0);
+    vb.fill(x, H, b.z1 - 2, x, top, b.z1, brick);
+    vb.fill(x, top + 1, b.z1 - 3, x, top + 1, b.z1 + 1, P.stoneC);
+    for (const z of [b.z0]) vb.fill(x, H, z, x, H + 3, z, brick);
+  }
+  for (const x of [b.x0, b.x1]) vb.fill(x, H, b.z0, x, H + 3, b.z1, brick);
+  // hose-drying tower at the back corner with an open belfry and a pyramid cap
+  vb.fill(tb.x0, H, tb.z0, tb.x1, TH, tb.z1, brick);
+  vb.clear(tb.x0 + 2, TH - 12, tb.z0 + 2, tb.x1 - 2, TH - 2, tb.z1 - 2);
+  const T = frames(vb, tb);
+  for (const f of Object.values(T)) {
+    f.clear(f.umin + 4, TH - 11, -1, f.umax - 4, TH - 3, 0);
+    f.fill(f.umin + 3, TH - 12, 1, f.umax - 3, TH - 12, 2, P.stoneC);
+    f.fill(f.umin, TH - 1, 1, f.umax, TH, 2, P.stoneC);
+  }
+  for (let k = 0; k < 6; k++) vb.disc(tb.x0 + TW / 2 - 0.5, TH - 4 - k, tb.z0 + TW / 2 - 0.5, [1, 1.6, 2.1, 2.5, 2.8, 3.1][k], k === 5 ? 0xa87822 : 0xd8a838);
+  for (let k = 0; k < 13; k++) {
+    const y = TH + 1 + k, inset = Math.round(k * 0.95);
+    vb.fill(tb.x0 - 1 + inset, y, tb.z0 - 1 + inset, tb.x1 + 1 - inset, y, tb.z1 + 1 - inset, (x, yy, z) => (x === tb.x0 - 1 + inset || x === tb.x1 + 1 - inset || z === tb.z0 - 1 + inset || z === tb.z1 + 1 - inset ? shingle({ kind: 'shingle', col: ROOFC.red, seed: ctx.seed }, x, z, yy) : 0x3a2e2a));
+  }
+  vb.fill(tb.x0 + TW / 2 - 1, TH + 14, tb.z0 + TW / 2 - 1, tb.x0 + TW / 2, TH + 18, tb.z0 + TW / 2, P.iron);
+  const F = frames(vb, b);
+  cornerTrims(vb, b, 0, H - 1, P.stoneC);
+  for (const f of Object.values(F)) { band(f, 0, 1, P.stoneB); band(f, SF.top, SF.top + 1, P.stoneC); band(f, H - 2, H - 1, P.stoneC); }
+  const Ff = F.front;
+  // two big engine bay doors: red panels, a row of small windows, stone arches
+  const bays = [Math.round(-W * 0.22), Math.round(W * 0.22)];
+  for (const uc of bays) {
+    const w = 28, h = 22, u0 = uc - w / 2, u1 = u0 + w - 1;
+    Ff.clear(u0 - 1, 0, 1, u1 + 1, h + 1, 1);
+    Ff.fill(u0, 0, 0, u1, h - 1, 0, (u, y) => {
+      if (y >= 14 && y <= 17 && (u - u0) % 5 !== 0) return glassFn(u0, 17)(u, y);
+      return (u - u0) % 7 === 0 || y % 7 === 0 ? 0x8e2420 : 0xb83228;
+    });
+    Ff.fill(u0 - 1, 0, 1, u0 - 1, h, 1, P.stoneC);
+    Ff.fill(u1 + 1, 0, 1, u1 + 1, h, 1, P.stoneC);
+    for (let u = u0 - 2; u <= u1 + 2; u++) {
+      const arch = Math.round(3 * Math.sqrt(Math.max(0, 1 - ((u - uc + 0.5) / (w / 2 + 2)) ** 2)));
+      Ff.fill(u, h, 1, u, h + arch, 2, P.stoneC);
+    }
+    Ff.fill(uc - 1, h + 4, 1, uc, h + 4, 3, P.iron);
+    Ff.fill(uc - 1, h + 3, 3, uc, h + 3, 3, 0xff6a3a | EMIT);
+    addLight(ctx, Ff.pt(uc - 0.5, h + 2, 4), [1.0, 0.45, 0.3], 7, 'porch');
+    Ff.occ.push([u0 - 2, 0, u1 + 2, h + 5]);
+  }
+  ctx.door = { ...M3(-0.5, 0, b.z1 + 3), face: 'front' };
+  signOn(ctx, Ff, 0, 26, W - 20, 5, spec.sign || 'FIRE HALL', { bg: P.stoneC, fg: '#8e2420', edge: P.stoneD, n: 1 });
+  // a gold Maltese cross on the parapet
+  const my = H + 6;
+  for (let a = -4; a <= 4; a++) for (let c = -4; c <= 4; c++) {
+    const arm = (Math.abs(a) <= 1 + Math.abs(c) * 0.6 && Math.abs(c) <= 4) || (Math.abs(c) <= 1 + Math.abs(a) * 0.6 && Math.abs(a) <= 4);
+    if (arm && Math.abs(a) + Math.abs(c) <= 6) Ff.set(a, my + c, 2, Math.abs(a) <= 1 && Math.abs(c) <= 1 ? P.red : 0xe0b040);
+  }
+  windowRow(ctx, Ff, b.x0 + 6, b.x1 - 6, SF.top + 6, 4, { w: 6, h: 10, frame: P.stoneC, curtain: 0xe8d8b0 }, (i) => ({ lit: i === 1 }));
+  for (const fn of ['left', 'right']) {
+    windowRow(ctx, F[fn], F[fn].umin + 6, F[fn].umax - 6, 8, 2, { w: 6, h: 9, frame: P.stoneC, box: false });
+    windowRow(ctx, F[fn], F[fn].umin + 6, F[fn].umax - 6, SF.top + 6, 2, { w: 6, h: 10, frame: P.stoneC }, (i) => ({ lit: i === 0 && fn === 'left' }));
+  }
+  doorOn(ctx, F.left, F.left.umax - 10, { color: 0x8e2420, main: false });
+  flagOn(ctx, Ff, b.x0 + 4, SF.top + 3);
+  // apron in front of the bays
+  Ff.fill(b.x0 + 1, -G, 1, b.x1 - 1, -1, 5, (u, y) => (y === -1 ? (u % 8 === 0 ? 0x8a8478 : 0x9e988c) : P.stoneB));
+  if (hw) {
+    jack(ctx, bays[0] - 17, -G, b.z1 + 3, { size: 2 });
+    jack(ctx, bays[1] + 16, -G, b.z1 + 3, { size: 2 });
+    hayBale(ctx, -3, -G, b.z1 + 8, 'x');
+    jack(ctx, 0, -G + 4, b.z1 + 10, { size: 2 });
+    stringLights(ctx, Array.from({ length: W + 2 }, (_, i) => [b.x0 - 1 + i, 33, b.z1 + 2]), { span: 12, sag: 1 });
+    placeBats(ctx, Ff, 2, SF.top + 2, H - 2);
+    cobweb(ctx, [b.x0 + 2, SF.top - 2, b.z1 + 2], [1, 0, 0], [0, -1, 0], 5);
+  }
+  ctx.solids.push({ x0: b.x0 / VPM, y0: -G / VPM, z0: b.z0 / VPM, x1: (b.x1 + 1) / VPM, y1: H / VPM, z1: (b.z1 + 1) / VPM });
+  return ctx;
+}
+
+// ------------------------------------------------------------------ RED BARN & SILO
+function buildBarn(spec, ctx) {
+  const hw = ctx.hw;
+  const W = evenV(spec.w ?? 14), D = evenV(spec.d ?? 12);
+  const H = 30; // wall height
+  const b = { x0: -W / 2, x1: W / 2 - 1, z0: -D / 2, z1: D / 2 - 1 };
+  const G = (ctx.G = 2);
+  const SR = 18, sx = b.x1 + SR + 6, sz = b.z0 + SR + 4, SH = 104; // silo
+  const vb = (ctx.vb = new VB(b.x0 - 22, -12, b.z0 - 18, sx + SR + 4, SH + 30, b.z1 + 44));
+  const red = 0xa8382c;
+  foundation(ctx, b, G, 6);
+  // gambrel profile across x: steep lower slope to the knuckle, shallow upper slope to the ridge
+  const half = W / 2 + 3;
+  const prof = (x) => {
+    const t = Math.abs(x + 0.5) / half; // 0 centre .. 1 eave
+    return t > 0.55 ? H + Math.round(((1 - t) / 0.45) * 22) : H + 22 + Math.round(((0.55 - t) / 0.55) * 11);
+  };
+  for (let z = b.z0; z <= b.z1; z++) for (let x = b.x0; x <= b.x1; x++) vb.fill(x, 0, z, x, prof(x) - 2, z, red);
+  const F = frames(vb, b);
+  for (const f of Object.values(F)) battens(f, red, 0, H + 40, 4, ctx.seed);
+  cornerTrims(vb, b, 0, H - 1, P.trim);
+  // roof slabs (2 thick), overhanging the gables
+  const st = roofStyle(spec.roof ?? 'dark', ctx.seed, { gutter: false });
+  for (let x = -half; x <= half - 1; x++) {
+    const y = prof(x);
+    for (let z = b.z0 - 3; z <= b.z1 + 3; z++) {
+      const edge = z === b.z0 - 3 || z === b.z1 + 3;
+      vb.set(x, y, z, edge ? P.trim : shingle(st, x, z, y));
+      vb.set(x, y - 1, z, edge ? P.trim : P.trimShade);
+      if (Math.abs(x + 0.5) < 1) vb.set(x, y + 1, z, st.ridge);
+    }
+  }
+  // white trim along the gable edges
+  for (const z of [b.z1 + 1, b.z0 - 1]) for (let x = -half; x <= half - 1; x++) { vb.set(x, prof(x) - 1, z, P.trim); vb.set(x, prof(x) - 2, z, P.trim); }
+  const Ff = F.front;
+  // big sliding doors with white X braces, hung on a track
+  const dw = 34, dh = 26, u0 = -dw / 2, u1 = dw / 2 - 1;
+  Ff.clear(u0 - 1, 0, 1, u1 + 1, dh + 2, 1);
+  Ff.fill(u0, 0, 0, u1, dh - 1, 0, (u) => ((u - u0) % 3 === 0 ? tone(red, -0.14) : tone(red, -0.04)));
+  for (const [a, bq] of [[u0, -1], [0, u1]]) {
+    Ff.fill(a, 0, 1, bq, 1, 1, P.trim); Ff.fill(a, dh - 2, 1, bq, dh - 1, 1, P.trim);
+    Ff.fill(a, 0, 1, a, dh - 1, 1, P.trim); Ff.fill(bq, 0, 1, bq, dh - 1, 1, P.trim);
+    const lw = bq - a;
+    for (let k = 1; k < dh - 2; k++) { const t = k / (dh - 2); Ff.set(Math.round(a + t * lw), k, 1, P.trim); Ff.set(Math.round(bq - t * lw), k, 1, P.trim); }
+  }
+  Ff.fill(u0 - 4, dh, 1, u1 + 4, dh + 1, 2, P.iron);
+  Ff.occ.push([u0 - 4, 0, u1 + 4, dh + 1]);
+  ctx.door = { ...M3(0, 0, b.z1 + 3), face: 'front', w: dw / VPM };
+  // hay loft door, hay spilling out, and the hoist beam
+  const ly = H + 4, lw = 14, lh = 13;
+  Ff.clear(-lw / 2, ly, 0, lw / 2 - 1, ly + lh - 1, 1);
+  Ff.fill(-lw / 2, ly, -1, lw / 2 - 1, ly + lh - 1, -1, (u, y) => (y < ly + 4 ? P.hay : y < ly + 6 && u < 2 ? P.hayC : 0x3a2a24));
+  Ff.fill(-lw / 2 - 1, ly - 1, 1, lw / 2, ly - 1, 1, P.trim); Ff.fill(-lw / 2 - 1, ly + lh, 1, lw / 2, ly + lh, 1, P.trim);
+  Ff.fill(-lw / 2 - 1, ly, 1, -lw / 2 - 1, ly + lh - 1, 1, P.trim); Ff.fill(lw / 2, ly, 1, lw / 2, ly + lh - 1, 1, P.trim);
+  Ff.fill(-lw / 2, ly, 1, -lw / 2 + 2, ly + 2, 2, P.hayC);
+  const hy = prof(0) - 3;
+  Ff.fill(-1, hy, -2, 0, hy + 1, 8, P.woodDark);
+  Ff.fill(0, ly + 3, 7, 0, hy - 1, 7, P.twine);
+  Ff.fill(-1, ly + 2, 6, 1, ly + 3, 8, P.iron);
+  // cupola with a rooster weathervane
+  const cy = prof(0) + 1;
+  vb.fill(-5, cy, -5, 4, cy + 7, 4, (x, y, z) => (y < cy + 2 || x === -5 || x === 4 || z === -5 || z === 4 ? (y > cy + 1 && y < cy + 6 && (x + z) % 2 === 0 ? 0x3a2a24 : P.trim) : 0));
+  for (let k = 0; k < 5; k++) vb.fill(-6 + k, cy + 8 + k, -6 + k, 5 - k, cy + 8 + k, 5 - k, shingle(st, k, 0, cy + 8 + k));
+  vb.fill(-1, cy + 13, -1, 0, cy + 17, 0, P.iron);
+  for (const [x, y, c] of [[-3, 18, P.iron], [-2, 18, P.iron], [-1, 18, P.iron], [0, 18, P.iron], [1, 19, P.iron], [2, 19, P.iron], [2, 20, P.red], [-3, 19, P.iron], [-4, 20, P.iron]]) vb.set(x, cy + y, 0, c);
+  // windows on the sides & the back
+  for (const fn of ['left', 'right']) windowRow(ctx, F[fn], F[fn].umin + 8, F[fn].umax - 8, 10, 3, { w: 6, h: 6, box: false }, (i) => ({ lit: fn === 'right' && i === 1 }));
+  windowOn(ctx, F.back, -3, H + 6, { w: 6, h: 6 });
+  lanternOn(ctx, Ff, u1 + 6, 14, { radius: 8 });
+  // the silo: stone base, banded staves, a domed cap and a little ladder
+  for (let y = -G - 4; y < SH; y++) {
+    const r = SR - (y > SH - 6 ? 1 : 0);
+    const c = y < 8 ? stoneFn(ctx.seed + 4)(sx, y, sz) : (y % 16 === 0 ? P.metal : (y >> 3) % 2 ? 0xc8c0b0 : 0xd6cebe);
+    vb.disc(sx - 0.5, y, sz - 0.5, r, (x, yy, z) => (y < 8 ? stoneFn(ctx.seed + 4)(x, yy, z) : c), 3);
+  }
+  for (let k = 0; k <= 12; k++) vb.disc(sx - 0.5, SH + k, sz - 0.5, Math.sqrt(Math.max(0, SR * SR - (k * 1.55) ** 2)), k < 2 ? P.metal : 0xa0a6ae, 2);
+  for (let y = 4; y < SH - 2; y++) { if (y % 3 === 0) vb.fill(sx - 2, y, sz + SR, sx + 1, y, sz + SR, P.iron); }
+  vb.fill(sx - 2, 4, sz + SR, sx - 2, SH - 2, sz + SR, P.iron); vb.fill(sx + 1, 4, sz + SR, sx + 1, SH - 2, sz + SR, P.iron);
+  ctx.solids.push({ collide: true, x0: (sx - SR) / VPM, y0: 0, z0: (sz - SR) / VPM, x1: (sx + SR) / VPM, y1: SH / VPM, z1: (sz + SR) / VPM });
+  if (hw) {
+    hayBale(ctx, u0 - 12, -G, b.z1 + 4, 'x');
+    hayBale(ctx, u0 - 11, -G + 4, b.z1 + 4, 'x');
+    hayBale(ctx, u1 + 5, -G, b.z1 + 5, 'x');
+    jack(ctx, u0 - 7, -G + 8, b.z1 + 6, { size: 3 });
+    jack(ctx, u1 + 9, -G + 4, b.z1 + 7, { size: 2 });
+    pumpkinPlain(ctx, u1 + 15, -G, b.z1 + 9, 3);
+    pumpkinPlain(ctx, u0 - 17, -G, b.z1 + 10, 2);
+    cornStalks(ctx, u0 - 3, -G, b.z1 + 2, { h: 15 });
+    cornStalks(ctx, u1 + 2, -G, b.z1 + 2, { h: 15 });
+    witchHat(ctx, u1 + 9, -G + 10, b.z1 + 7);
+    placeBats(ctx, F.left, 2, 8, H + 8);
+    cobweb(ctx, [u0 + 1, dh - 3, b.z1 + 2], [1, 0, 0], [0, -1, 0], 6);
+  }
+  ctx.solids.push({ x0: b.x0 / VPM, y0: -G / VPM, z0: b.z0 / VPM, x1: (b.x1 + 1) / VPM, y1: H / VPM, z1: (b.z1 + 1) / VPM });
+  return ctx;
+}
+
+// ------------------------------------------------------------------ SUGAR SHACK (cabane à sucre)
+function buildSugarShack(spec, ctx) {
+  const hw = ctx.hw;
+  const W = evenV(spec.w ?? 9), D = evenV(spec.d ?? 7);
+  const H = 32;
+  const b = { x0: -W / 2, x1: W / 2 - 1, z0: -D / 2, z1: D / 2 - 1 };
+  const G = (ctx.G = 3);
+  const vb = (ctx.vb = new VB(b.x0 - 24, -12, b.z0 - 20, b.x1 + 24, H + 64, b.z1 + 44));
+  const wood = SIDING.weathered;
+  const Rf = roofGeom({ axis: 'x', b, H, pitch: 1.05, oh: 5, ohR0: 4, ohR1: 4, t: 2 });
+  const st = roofStyle('rust', ctx.seed, { gutter: false, barge: P.woodDark, fascia: P.woodDark, soffit: P.woodDark });
+  foundation(ctx, b, G, 4);
+  fillBody(vb, b, H, Rf, wood);
+  const F = frames(vb, b);
+  for (const f of Object.values(F)) battens(f, wood, 0, H + 60, 3, ctx.seed, 0);
+  drawRoof(vb, Rf, st);
+  // the steam vent (lanterneau) along the ridge, steam pouring out of its louvres
+  const vy = Rf.ridge + 1, vl = Math.round(W * 0.3);
+  vb.fill(-vl, vy, -4, vl - 1, vy + 6, 3, (x, y, z) => (y === vy + 6 ? 0 : x === -vl || x === vl - 1 || z === -4 || z === 3 ? (y % 2 ? 0x3a2e28 : wood) : 0x2a201c));
+  for (let k = 0; k < 4; k++) vb.fill(-vl - 1 + k, vy + 6 + k, -5 + k, vl - k, vy + 6 + k, 4 - k, shingle(st, k, 0, vy + 6 + k));
+  for (const x of [-vl + 3, 0, vl - 4]) ctx.smoke.push(M3(x, vy + 6, -0.5));
+  // evaporator stack
+  const cx = Math.round(W * 0.3), cz = Math.round(-D * 0.2);
+  vb.fill(cx, H - 2, cz, cx + 2, Rf.ridge + 14, cz + 2, P.metal);
+  vb.fill(cx - 1, Rf.ridge + 15, cz - 1, cx + 3, Rf.ridge + 15, cz + 3, P.iron);
+  ctx.smoke.push(M3(cx + 1.5, Rf.ridge + 17, cz + 1.5));
+  const Ff = F.front;
+  const dr = doorOn(ctx, Ff, -Math.round(W * 0.15), { color: 0x6a3a22, plank: true, frame: P.woodDark, lanternOpts: { radius: 7 } });
+  windowOn(ctx, Ff, dr.u1 + 8, 8, { w: 7, h: 7, lit: true, frame: P.woodDark, curtain: 0xc84a3a, box: false });
+  windowOn(ctx, F.left, -3, 8, { w: 6, h: 6, lit: true, frame: P.woodDark });
+  signOn(ctx, Ff, Math.round(W * 0.12), 20, Math.min(W - 26, 40), 5, spec.sign || 'CABANE A SUCRE', { bg: 0xf0e0c0, fg: '#7a3a1a', edge: P.woodDark });
+  // firewood stacked along the side, and a taffy trough (snow & syrup) out front
+  woodpile(ctx, F.right, F.right.umin + 3, F.right.umax - 3, 1, 9);
+  const tz = b.z1 + 10;
+  vb.fill(dr.u1 + 2, 0, tz, dr.u1 + 16, 4, tz + 4, (x, y, z) => (y === 4 ? (x % 3 === 0 && z === tz + 2 ? 0xc87a1e : 0xf2f4f8) : (y === 0 || x === dr.u1 + 2 || x === dr.u1 + 16 ? P.woodDark : P.wood)));
+  for (const x of [dr.u1 + 3, dr.u1 + 15]) vb.fill(x, -G, tz + 1, x, -1, tz + 3, P.woodDark);
+  // sap buckets hung on the walls (more hang on the maples outside)
+  for (const u of [b.x0 + 4, b.x1 - 8]) { Ff.fill(u, 9, 1, u + 2, 12, 2, P.metalL); Ff.fill(u, 13, 1, u + 2, 13, 2, P.metal); Ff.set(u + 1, 14, 1, P.metal); }
+  if (hw) {
+    jack(ctx, dr.u0 - 4, 0, b.z1 + 4, { size: 2 });
+    pumpkinPlain(ctx, dr.u0 - 9, 0, b.z1 + 3, 1);
+    cobweb(ctx, [b.x0 + 2, H - 3, b.z1 + 2], [1, 0, 0], [0, -1, 0], 5);
+    placeBats(ctx, F.left, 1, 6, H);
+  }
+  ctx.solids.push({ x0: b.x0 / VPM, y0: -G / VPM, z0: b.z0 / VPM, x1: (b.x1 + 1) / VPM, y1: H / VPM, z1: (b.z1 + 1) / VPM });
+  return ctx;
+}
+
+// ------------------------------------------------------------------ GAZEBO (bandstand on the green)
+function buildGazebo(spec, ctx) {
+  const hw = ctx.hw;
+  const Rr = Math.round((spec.w ?? 7) * VPM / 2); // radius in voxels
+  const G = (ctx.G = 4);
+  const deck = 4; // deck top (voxels above the yard)
+  const vb = (ctx.vb = new VB(-Rr - 8, -12, -Rr - 8, Rr + 8, 64, Rr + 20));
+  const oct = (x, z, r) => Math.abs(x + 0.5) <= r && Math.abs(z + 0.5) <= r && Math.abs(x + 0.5) + Math.abs(z + 0.5) <= r * 1.38;
+  const wht = P.trim;
+  // base: stone plinth, lattice skirt, plank deck
+  for (let y = -G - 3; y < deck; y++) for (let z = -Rr; z <= Rr; z++) for (let x = -Rr; x <= Rr; x++) {
+    if (!oct(x, z, Rr)) continue;
+    const rim = !oct(x, z, Rr - 1);
+    let c;
+    if (y === deck - 1) c = rim ? wht : plankTone(z, 3);
+    else if (y < -G + 1) c = stoneFn(ctx.seed)(x, y, z);
+    else c = rim ? (((x + y + z) & 1) ? wht : 0x3a2e2a) : P.woodDark;
+    vb.set(x, y, z, c);
+  }
+  // front steps
+  for (let k = 0; k < 3; k++) vb.fill(-6, -G + k, Rr + 1 + (2 - k) * 2, 5, -G + k + 1, Rr + 2 + (2 - k) * 2, (x, y) => (y === -G + k + 1 ? plankTone(x, 5) : P.stoneB));
+  // posts at the octagon corners, railings between them (open at the front)
+  const PH = 26;
+  const corners = [];
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2 + Math.PI / 8;
+    corners.push([Math.round(Math.cos(a) * (Rr - 1.5)), Math.round(Math.sin(a) * (Rr - 1.5))]);
+  }
+  for (const [x, z] of corners) {
+    vb.fill(x - 1, deck, z - 1, x, deck + PH, z, wht);
+    // gingerbread brackets
+    vb.set(x - 1, deck + PH - 2, z + Math.sign(-z || 1), wht); vb.set(x + Math.sign(-x || 1), deck + PH - 2, z, wht);
+  }
+  for (let i = 0; i < 8; i++) {
+    const [ax, az] = corners[i], [bx, bz] = corners[(i + 1) % 8];
+    const front = (az + bz) / 2 > Rr * 0.6 && Math.abs(ax + bx) < Rr;
+    vb.line(ax, deck + PH - 3, az, bx, deck + PH - 3, bz, wht);
+    if (front) continue;
+    vb.line(ax, deck + 8, az, bx, deck + 8, bz, wht);
+    vb.line(ax, deck + 1, az, bx, deck + 1, bz, wht);
+    const n = Math.max(Math.abs(bx - ax), Math.abs(bz - az));
+    for (let k = 1; k < n; k += 2) vb.fill(Math.round(ax + ((bx - ax) * k) / n), deck + 2, Math.round(az + ((bz - az) * k) / n), Math.round(ax + ((bx - ax) * k) / n), deck + 7, Math.round(az + ((bz - az) * k) / n), wht);
+  }
+  // octagonal roof: green shingles in courses, white fascia, gold finial
+  const rb = deck + PH + 1, RH = 16;
+  const st = roofStyle(spec.roof ?? 'green', ctx.seed);
+  for (let k = 0; k <= RH; k++) {
+    const r = (Rr + 3) * (1 - k / (RH + 2));
+    for (let z = -Rr - 3; z <= Rr + 3; z++) for (let x = -Rr - 3; x <= Rr + 3; x++) {
+      if (!oct(x, z, r) || oct(x, z, r - 1.6)) continue;
+      vb.set(x, rb + k, z, k === 0 ? wht : shingle(st, x + z, x - z, rb + k));
+    }
+  }
+  vb.fill(-1, rb + RH, -1, 0, rb + RH + 3, 0, 0xe0b040);
+  vb.fill(-2, rb + RH + 1, -2, 1, rb + RH + 1, 1, 0xe0b040);
+  vb.set(0, rb + RH + 4, 0, 0xf8dc78);
+  // inside: a ceiling lamp and a music stand
+  vb.fill(-1, rb - 2, -1, 0, rb - 1, 0, P.iron);
+  vb.fill(-1, rb - 4, -1, 0, rb - 3, 0, P.lamp);
+  addLight(ctx, [0, rb - 4, 0], [1.0, 0.75, 0.45], 10, 'lamp');
+  vb.fill(-4, deck, -6, -4, deck + 8, -6, P.iron);
+  vb.fill(-6, deck + 8, -6, -2, deck + 10, -6, P.iron);
+  if (hw) {
+    // orange & black bunting under the eaves, string lights, pumpkins on the deck
+    for (let i = 0; i < 8; i++) {
+      const [ax, az] = corners[i], [bx, bz] = corners[(i + 1) % 8];
+      for (let k = 0; k <= 6; k++) {
+        const t = k / 6, x = Math.round(ax + (bx - ax) * t), z = Math.round(az + (bz - az) * t);
+        const sag = Math.round(Math.sin(t * Math.PI) * 2);
+        vb.set(x, rb - 2 - sag, z, k % 2 ? 0x2a2230 : P.pumpkin);
+        vb.set(x, rb - 3 - sag, z, k % 2 ? 0x2a2230 : P.pumpkin);
+      }
+    }
+    stringLights(ctx, corners.flatMap(([x, z], i) => { const [bx, bz] = corners[(i + 1) % 8]; return Array.from({ length: 8 }, (_, k) => [Math.round(x + ((bx - x) * k) / 8), rb - 1, Math.round(z + ((bz - z) * k) / 8)]); }), { span: 8, sag: 1 });
+    for (const [x, z] of [corners[1], corners[2]]) jack(ctx, Math.round(x * 0.8), deck, Math.round(z * 0.8), { size: 2 });
+    pumpkinPlain(ctx, Math.round(corners[5][0] * 0.75), deck, Math.round(corners[5][1] * 0.75), 2);
+  }
+  ctx.door = { ...M3(0, deck, Rr + 6), face: 'front' };
+  // walkable deck (an inscribed square) + the steps; posts collide
+  const s = (Rr - 1) * 0.84 / VPM;
+  ctx.porch.push({ x0: r3(-s), z0: r3(-s), x1: r3(s), z1: r3(s), y: r3(deck / VPM) });
+  ctx.posts = corners.map(([x, z]) => ({ x: r3((x - 0.5) / VPM), z: r3((z - 0.5) / VPM), r: 0.14 }));
+  ctx.solids.push({ x0: -Rr / VPM, y0: -G / VPM, z0: -Rr / VPM, x1: Rr / VPM, y1: deck / VPM, z1: Rr / VPM, floor: true });
+  return ctx;
+}
+
+// ------------------------------------------------------------------ LIFEGUARD TOWER
+function buildLifeguard(spec, ctx) {
+  const hw = ctx.hw;
+  const G = (ctx.G = 0);
+  const vb = (ctx.vb = new VB(-16, -6, -16, 16, 52, 18));
+  const wht = 0xf2ece0, red = 0xc8302a, wd = 0xc8a070;
+  // four splayed legs sunk into the sand, cross-braced
+  const legs = [[-8, -8], [7, -8], [-8, 7], [7, 7]];
+  for (const [x, z] of legs) vb.line(x * 1.25, -4, z * 1.25, x, 22, z, wht, 1);
+  vb.line(-10, 6, 9, 9, 16, 9, wht); vb.line(9, 6, 9, -10, 16, 9, wht);
+  vb.line(-10, 6, -10, 9, 16, -10, wht);
+  vb.line(-10, 8, -10, -10, 8, 9, wht); vb.line(9, 8, -10, 9, 8, 9, wht);
+  // platform with a little railing and the chair
+  vb.fill(-10, 22, -10, 9, 23, 9, (x, y, z) => (y === 23 ? plankTone(x, 7, wd) : 0x8a6440));
+  for (const z of [-10]) vb.fill(-10, 24, z, 9, 30, z, (x, y) => (y === 30 || y === 24 || x % 4 === 0 ? wht : 0));
+  for (const x of [-10, 9]) vb.fill(x, 24, -10, x, 30, 9, (xx, y, z) => (y === 30 || y === 24 || z % 4 === 0 ? wht : 0));
+  vb.fill(-4, 24, -4, 3, 27, 2, (x, y) => (y === 27 ? red : wht));
+  vb.fill(-4, 28, -5, 3, 36, -4, (x, y) => (y % 3 === 0 ? red : wht));
+  // a striped peaked sun roof on four poles
+  for (const [x, z] of [[-9, -9], [8, -9], [-9, 8], [8, 8]]) vb.fill(x, 24, z, x, 40, z, wht);
+  for (let k = 0; k < 7; k++) vb.fill(-11 + k, 41 + k, -11 + k, 10 - k, 41 + k, 10 - k, (x, y, z) => (((x + z + 40) >> 2) % 2 ? red : wht));
+  vb.set(0, 48, 0, red); vb.set(-1, 48, 0, red);
+  // ladder at the back (the sea is in front)
+  for (const x of [-3, 2]) vb.line(x, 0, -16, x, 22, -11, wd);
+  for (let k = 1; k < 11; k++) vb.fill(-3, k * 2, -16 + Math.round(k * 0.45), 2, k * 2, -16 + Math.round(k * 0.45), wd);
+  // red cross board & a rescue ring on the rail
+  vb.fill(-4, 31, 10, 3, 38, 10, wht);
+  vb.fill(-1, 32, 11, 0, 37, 11, red); vb.fill(-3, 34, 11, 2, 35, 11, red);
+  for (let a = -3; a <= 3; a++) for (let c = -3; c <= 3; c++) { const d2 = a * a + c * c; if (d2 > 11 || d2 < 3) continue; vb.set(9 + 1, 27 + c, a, ((Math.atan2(c, a) + 4) * 2 | 0) % 2 ? wht : red); }
+  if (hw) jack(ctx, 0, 24, 5, { size: 1 });
+  ctx.door = { ...M3(0, 0, -16), face: 'back' };
+  ctx.posts = legs.map(([x, z]) => ({ x: r3((x * 1.25) / VPM), z: r3((z * 1.25) / VPM), r: 0.12 }));
+  ctx.solids.push({ x0: -10 / VPM, y0: 22 / VPM, z0: -10 / VPM, x1: 10 / VPM, y1: 30 / VPM, z1: 10 / VPM });
+  return ctx;
+}
+
+// ------------------------------------------------------------------ OUTDOOR HOCKEY RINK
+function buildRink(spec, ctx) {
+  const hw = ctx.hw;
+  const W = evenV(spec.w ?? 26), D = evenV(spec.d ?? 13);
+  const G = (ctx.G = 2);
+  const x0 = -W / 2, x1 = W / 2 - 1, z0 = -D / 2, z1 = D / 2 - 1;
+  const vb = (ctx.vb = new VB(x0 - 34, -10, z0 - 40, x1 + 34, 70, z1 + 12));
+  const CR = 22; // corner radius
+  const inside = (x, z, inset = 0) => {
+    const cx = Math.max(x0 + CR, Math.min(x1 - CR, x)), cz = Math.max(z0 + CR, Math.min(z1 - CR, z));
+    return Math.hypot(x - cx, z - cz) <= CR - inset;
+  };
+  const ICE = 0xe6eef2, ICE_D = 0xd2dce4, LRED = 0xc8383a, LBLUE = 0x3a5aa8;
+  // ice + its markings
+  for (let z = z0; z <= z1; z++) for (let x = x0; x <= x1; x++) {
+    if (!inside(x, z)) continue;
+    let c = (vhash(x >> 2, z >> 2, 7) < 0.25 ? ICE_D : ICE);
+    const ax = Math.abs(x + 0.5);
+    if (ax < 1.5) c = LRED;
+    if (Math.abs(ax - W / 6) < 1.5) c = LBLUE;
+    if (Math.abs(ax - (W / 2 - 14)) < 0.8) c = LRED;
+    for (const fx of [0, -(W / 2 - 34), W / 2 - 34]) { const d = Math.hypot(x + 0.5 - fx, z + 0.5); if (Math.abs(d - (fx ? 12 : 14)) < 0.8) c = LRED; if (d < 1.2) c = fx ? LRED : LBLUE; }
+    // goal creases
+    for (const sx of [-1, 1]) { const gx = sx * (W / 2 - 14); const d = Math.hypot(x + 0.5 - gx, z + 0.5); if (d < 7 && Math.sign(x + 0.5 - gx) === -sx) c = 0x9ab8e8; }
+    vb.set(x, -1, z, c);
+    vb.fill(x, -G - 2, z, x, -2, z, P.stoneB);
+  }
+  // boards: white, yellow kick plate, red cap; a gate on the front side
+  const gate = [Math.round(-W * 0.3) - 6, Math.round(-W * 0.3) + 6];
+  for (let z = z0 - 2; z <= z1 + 2; z++) for (let x = x0 - 2; x <= x1 + 2; x++) {
+    if (inside(x, z) || !inside(x, z, -2)) continue;
+    if (z > 0 && x >= gate[0] && x <= gate[1]) continue;
+    for (let y = -G - 2; y <= 8; y++) vb.set(x, y, z, y < 0 ? P.stoneB : y <= 1 ? 0xe8c040 : y === 8 ? LRED : y === 7 ? LBLUE : 0xf2f0ea);
+  }
+  // plexiglass panels at the ends
+  for (const sx of [-1, 1]) for (let z = z0 + 6; z <= z1 - 6; z++) for (let y = 9; y <= 16; y++) { const x = sx < 0 ? x0 - 1 : x1 + 1; vb.set(x, y, z, z % 12 === 0 || y === 16 ? 0xd8dce0 : 0xb8d8e8 | GLASS); }
+  // bleachers along the back
+  for (let r = 0; r < 4; r++) vb.fill(-44, r * 3, z0 - 6 - r * 4, 43, r * 3 + 2, z0 - 3 - r * 4, (x, y) => (y === r * 3 + 2 ? plankTone(x >> 2, 9, 0x4a7ab0) : P.woodDark));
+  vb.fill(-44, -G, z0 - 22, 43, 11, z0 - 22, (x, y) => (x % 8 === 0 || y === 11 ? P.iron : 0));
+  signFree(ctx, -24, 14, z0 - 21, 48, 8, 'PATINOIRE MAPLE COVE RINK', { bg: 0x2c3c64, fg: '#f2e8d4', edge: P.trim });
+  vb.fill(-26, 0, z0 - 22, -25, 22, z0 - 22, P.iron); vb.fill(24, 0, z0 - 22, 25, 22, z0 - 22, P.iron);
+  // light poles at the corners
+  for (const [x, z] of [[x0 - 6, z0 - 6], [x1 + 6, z0 - 6], [x0 - 6, z1 + 6], [x1 + 6, z1 + 6]]) {
+    vb.fill(x, -G, z, x + 1, 52, z + 1, P.iron);
+    vb.fill(x - 3, 52, z - 1, x + 4, 54, z + 2, P.iron);
+    vb.fill(x - 2, 51, z, x + 3, 51, z + 1, P.lampHot);
+    addLight(ctx, [x + 0.5, 48, z + 0.5], [1.0, 0.92, 0.78], 18, 'lamp');
+  }
+  if (hw) {
+    for (const [x, z] of [[x0 + 30, z1 + 3], [x1 - 30, z1 + 3], [x0 - 3, 0]]) jack(ctx, x, 9, z, { size: 1 });
+    jack(ctx, -30, 12, z0 - 16, { size: 2 });
+    jack(ctx, 22, 12, z0 - 16, { size: 2 });
+  }
+  ctx.door = { ...M3(gate[0] + 6, 0, z1 + 6), face: 'front' };
+  // walkable ice, and the boards collide (four straight runs; the gate stays open)
+  ctx.porch.push({ x0: r3(x0 / VPM), z0: r3(z0 / VPM), x1: r3((x1 + 1) / VPM), z1: r3((z1 + 1) / VPM), y: 0 });
+  const bt = 2 / VPM, by1 = 1.1;
+  ctx.solids.push({ collide: true, x0: r3((x0 + CR) / VPM), y0: 0, z0: r3((z0 - 2) / VPM), x1: r3((x1 - CR) / VPM), y1: by1, z1: r3(z0 / VPM) });
+  ctx.solids.push({ collide: true, x0: r3((x0 + CR) / VPM), y0: 0, z0: r3((z1 + 1) / VPM), x1: r3(gate[0] / VPM), y1: by1, z1: r3((z1 + 3) / VPM) });
+  ctx.solids.push({ collide: true, x0: r3((gate[1] + 1) / VPM), y0: 0, z0: r3((z1 + 1) / VPM), x1: r3((x1 - CR) / VPM), y1: by1, z1: r3((z1 + 3) / VPM) });
+  ctx.solids.push({ collide: true, x0: r3((x0 - 2) / VPM), y0: 0, z0: r3((z0 + CR) / VPM), x1: r3(x0 / VPM), y1: by1, z1: r3((z1 - CR) / VPM) });
+  ctx.solids.push({ collide: true, x0: r3((x1 + 1) / VPM), y0: 0, z0: r3((z0 + CR) / VPM), x1: r3((x1 + 3) / VPM), y1: by1, z1: r3((z1 - CR) / VPM) });
+  void bt;
+  return ctx;
+}
+
+// ------------------------------------------------------------------ COVERED BRIDGE (Beaver Creek)
+// Local frame: the bridge runs along z (the road), the deck top is y = 0, walls at x = +-w/2.
+function buildCoveredBridge(spec, ctx) {
+  const hw = ctx.hw;
+  const Wd = evenV(spec.w ?? 5.2), Ln = evenV(spec.d ?? 24);
+  const x0 = -Wd / 2, x1 = Wd / 2 - 1, z0 = -Ln / 2, z1 = Ln / 2 - 1;
+  const H = 30; // wall height above the deck
+  const G = (ctx.G = 0);
+  const vb = (ctx.vb = new VB(x0 - 10, -46, z0 - 6, x1 + 10, H + 34, z1 + 6));
+  const red = 0xa83a2c, redD = 0x8a2e24;
+  // deck planks (across the bridge) on heavy stringers
+  vb.fill(x0, -2, z0, x1, -1, z1, (x, y, z) => (y === -1 ? plankTone(z >> 1, ctx.seed, P.plank) : P.woodDark));
+  for (const x of [x0 + 2, -1, x1 - 2]) vb.fill(x - 1, -6, z0, x + 1, -3, z1, P.woodDD);
+  // stone piers into the creek: at the banks and two in the water
+  for (const z of [z0 + 4, Math.round(z0 / 3), Math.round(z1 / 3), z1 - 4]) vb.fill(x0 + 1, -46, z - 3, x1 - 1, -7, z + 3, stoneFn(ctx.seed + 2));
+  // board & batten walls with a long window band, white trim
+  for (const x of [x0, x1]) {
+    for (let z = z0; z <= z1; z++) for (let y = 0; y <= H; y++) {
+      const win = y >= 10 && y <= 19 && ((z - z0) % 16) > 2 && ((z - z0) % 16) < 14;
+      if (win) continue;
+      const bat = (z - z0) % 4 === 0;
+      vb.set(x, y, z, bat ? redD : red);
+      if (bat && y < H) vb.set(x + (x < 0 ? -1 : 1), y, z, redD);
+    }
+    vb.fill(x + (x < 0 ? -1 : 1), 9, z0, x + (x < 0 ? -1 : 1), 9, z1, P.trim);
+    vb.fill(x + (x < 0 ? -1 : 1), 20, z0, x + (x < 0 ? -1 : 1), 20, z1, P.trim);
+    vb.fill(x, 0, z0, x, 1, z1, P.woodDark);
+  }
+  // trusses showing inside the window band
+  for (const x of [x0 + 1, x1 - 1]) for (let z = z0; z <= z1 - 16; z += 16) { vb.line(x, 10, z + 2, x, 19, z + 14, P.woodDark); vb.line(x, 19, z + 2, x, 10, z + 14, P.woodDark); }
+  // roof: a steep gable along the bridge, overhanging the portals
+  const Rf = roofGeom({ axis: 'z', b: { x0, x1, z0, z1 }, H: H + 1, pitch: 0.75, oh: 4, ohR0: 4, ohR1: 4 });
+  const st = roofStyle(spec.roof ?? 'dark', ctx.seed, { gutter: false });
+  for (let z = z0; z <= z1; z++) for (let x = x0 + 1; x <= x1 - 1; x++) for (let y = H + 1; y < Rf.topAt(x, z) - Rf.t; y++) if (z === z0 || z === z1) vb.set(x, y, z, red);
+  drawRoof(vb, Rf, st);
+  // portals: gable boards with the name, white posts, a lantern inside each end
+  for (const [z, face] of [[z1, 1], [z0, -1]]) {
+    for (let x = x0 - 1; x <= x1 + 1; x++) for (let y = H - 3; y <= H; y++) vb.set(x, y, z + face, P.trim);
+    for (const x of [x0 - 1, x1 + 1]) vb.fill(x, 0, z + face, x, H, z + face, P.trim);
+    const sw = Math.min(Wd - 8, 34), sh = 6;
+    vb.fill(-sw / 2 - 1, H + 2, z + face, sw / 2, H + 3 + sh, z + face, P.woodDark);
+    const p = M3(-0.5, H + 3 + sh / 2, z + face + (face > 0 ? 1 : 0));
+    ctx.signs.push({ x: p.x, y: p.y, z: r3(p.z + face * 0.012), w: sw / VPM, h: sh / VPM, text: 'BEAVER CREEK', normal: [0, 0, face], bg: '#5a3a22', fg: '#f6e7c8' });
+    vb.fill(-1, H - 5, z - face * 10, 0, H - 3, z - face * 10, P.lamp);
+    addLight(ctx, [-0.5, H - 6, z - face * 10], [1.0, 0.7, 0.35], 8, 'lamp');
+  }
+  if (hw) {
+    jack(ctx, x0 + 3, 0, z1 - 3, { size: 1 });
+    jack(ctx, x1 - 3, 0, z0 + 3, { size: 1 });
+    cobweb(ctx, [x0 + 1, H - 1, z1 - 1], [1, 0, 0], [0, -1, 0], 6);
+    cobweb(ctx, [x1 - 1, H - 1, z0 + 1], [-1, 0, 0], [0, -1, 0], 6);
+    placeBats(ctx, frames(vb, { x0, x1, z0, z1 }).left, 2, 22, H - 2);
+  }
+  return ctx;
+}
+
 // ------------------------------------------------------------------ API
-const KINDS = { house: buildHouse, cabin: buildCabin, shed: buildGarage, garage: buildGarage, outhouse: buildOuthouse, chapel: buildChapel, lighthouse: buildLighthouse, sawmill: buildSawmill };
+const KINDS = {
+  house: buildHouse, cabin: buildCabin, shed: buildGarage, garage: buildGarage, outhouse: buildOuthouse, chapel: buildChapel, lighthouse: buildLighthouse, sawmill: buildSawmill,
+  shop: buildShop, firehall: buildFirehall, barn: buildBarn, sugarshack: buildSugarShack, gazebo: buildGazebo, lifeguard: buildLifeguard, rink: buildRink, coveredBridge: buildCoveredBridge,
+};
 
 export function buildVoxelBuilding(spec = {}) {
   const hw = spec.halloween !== false;
@@ -2122,6 +2946,7 @@ export function buildVoxelBuilding(spec = {}) {
     height: r3(hi[1] / VPM), depth: r3(lo[1] / VPM), ground: r3(-ctx.G / VPM),
     bounds: { x0: r3(lo[0] / VPM), y0: r3(lo[1] / VPM), z0: r3(lo[2] / VPM), x1: r3(hi[0] / VPM), y1: r3(hi[1] / VPM), z1: r3(hi[2] / VPM) },
     lights: ctx.lights, smoke: ctx.smoke, signs: ctx.signs, porch: ctx.porch, solids: ctx.solids.map((s) => ({ ...s, x0: r3(s.x0), y0: r3(s.y0), z0: r3(s.z0), x1: r3(s.x1), y1: r3(s.y1), z1: r3(s.z1) })),
+    posts: ctx.posts || [], mo: ctx.mo || null,
     halloween: hw,
   };
   return { vox, size: VOXEL_SIZE, origin, jitter: 0, meta };
@@ -2140,4 +2965,5 @@ export const PREVIEW = {};
 const lifted = (r) => ({ ...r, origin: [r.origin[0], 0, r.origin[2]] });
 for (const b of BUILDINGS) PREVIEW[b.id] = () => lifted(buildVoxelBuilding({ ...b, stilt: b.stilts ? 3.6 : 0 }));
 PREVIEW.house5_plain = () => lifted(buildVoxelBuilding({ ...BUILDINGS.find((b) => b.id === 'house5'), halloween: false }));
+PREVIEW.covered_bridge = () => lifted(buildVoxelBuilding({ id: 'bridge', kind: 'coveredBridge', w: 5.2, d: 24 }));
 PREVIEW.cafe_plain = () => lifted(buildVoxelBuilding({ ...BUILDINGS.find((b) => b.id === 'cafe'), stilt: 3.6, halloween: false }));
