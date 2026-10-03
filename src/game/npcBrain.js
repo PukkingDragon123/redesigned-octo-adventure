@@ -283,7 +283,7 @@ export class NpcBrain {
       this.cool.wave = rand(35, 55);
       a.react('hi');
       if (Math.random() < 0.7) this.say(pick(this.cfg.hello || ['Hi, Hank!']));
-      a.tempExpr('happy', 2);
+      a.tempExpr(pick(['excited', 'happy', 'giggle']), 2);
     }
     if (mood === 'fan' && sp < 0.6 && d < 11 && d > 3 && !(this.cool.fan > 0)) { this.cool.fan = rand(50, 80); return this.fanChat(X); }
   }
@@ -420,8 +420,8 @@ export class NpcBrain {
             a.faceTowards(M.x, M.z);
             const mate = pick(mates);
             a.lookAt(mate.a);
-            if (Math.random() < 0.5) { a.say(rand(1.8, 3.2)); a.tempExpr(pick(['happy', 'neutral', 'surprised']), 2); }
-            else if (Math.random() < 0.3) a.react(pick(['laugh', 'nod', 'nod', 'shake']));
+            if (Math.random() < 0.5) { a.say(rand(1.8, 3.2)); a.tempExpr(pick(['happy', 'giggle', 'surprised', 'excited', 'confused', 'smug', 'awe', 'proud']), 2); }
+            else if (Math.random() < 0.45) a.react(pick(['laugh', 'nod', 'gasp', 'shake', 'love', 'clap']));
           }
           await w(rand(2.2, 3.6));
         }
@@ -764,8 +764,8 @@ export class NpcBrain {
       const to = { x: a.pos.x + f.z * side * 1.5, z: a.pos.z - f.x * side * 1.5 };
       a.react('eep');
       if (this.V.nav.clear(a.pos, to)) await w.walk([to], 3.2, 'idle', { faceHank: true });
-      if (this.mood !== 'fan' && Math.random() < 0.6) { a.react('angry'); this.say(pick(['Slow down, Hank!', 'Watch it!', 'Sidewalk\'s for walking!', 'Whoa there!']), 1800); this.addTrust(-1); }
-      else if (Math.random() < 0.5) { a.react('yay'); this.say(pick(['Woo! Go Hank!', 'Look at him go!']), 1600); }
+      if (this.mood !== 'fan' && Math.random() < 0.6) { a.react('angry'); a.tempExpr('furious', 1.6); this.say(pick(['Slow down, Hank!', 'Watch it!', 'Sidewalk\'s for walking!', 'Whoa there!']), 1800); this.addTrust(-1); }
+      else if (Math.random() < 0.5) { a.react('yay'); a.tempExpr('excited', 1.6); this.say(pick(['Woo! Go Hank!', 'Look at him go!']), 1600); }
       await w(1.4);
       this.mode = 'routine';
       this.busy = false;
@@ -943,7 +943,7 @@ export class NpcBrain {
     if (mood === 'wary') { a.react('gasp'); a.tempExpr('surprised', 1.5); this.addTrust(0.8, TRUST.FRIENDLY - 1); return; }
     if (mood === 'friendly') { a.react(Math.random() < 0.5 ? 'gasp' : 'clap'); this.addTrust(0.4); return; }
     a.react(Math.random() < 0.5 ? 'yay' : 'clap');
-    a.tempExpr('sparkle', 1.5);
+    a.tempExpr(pick(['sparkle', 'awe', 'excited']), 1.8);
     if (Math.random() < 0.5) this.say(pick(['WOOO!', 'Bravo!', 'Do it again!', 'HANK! HANK! HANK!', 'Magnifique!']), 1500);
     this.addTrust(0.4);
   }
