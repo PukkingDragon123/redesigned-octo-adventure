@@ -3,6 +3,7 @@
 // pumpkins & jack-o'-lanterns as kickable physics props, and a pile of extra
 // Halloween dressing (bobbleheads, cauldrons, candles, bats, trick hoops...).
 import * as THREE from 'three';
+import BuildWorker from './buildWorker.js?worker&inline';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import * as L from './layout.js';
 import { buildVoxelBuilding } from '../voxel/models/buildings.js';
@@ -426,7 +427,7 @@ export function startBuildingJobs(terrain) {
   const cores = Math.max(1, Math.min(3, (navigator.hardwareConcurrency || 2) - 1));
   let workers;
   try {
-    workers = Array.from({ length: cores }, () => new Worker(new URL('./buildWorker.js', import.meta.url), { type: 'module' }));
+    workers = Array.from({ length: cores }, () => new BuildWorker());
   } catch {
     return null;
   }
