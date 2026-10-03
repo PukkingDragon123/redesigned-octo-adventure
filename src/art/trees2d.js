@@ -306,6 +306,7 @@ function conifer(R, o) {
   S.tube([[0, -0.2, 0], [R.range(-0.08, 0.08), H * 0.98, 0]], [tr * 1.25, tr * 0.25], barkFn(bark, H, R.int(0, 99), { k: 3 }));
   const fn = leafFn(A, B, o.leafS, { mix: o.mix ?? 0.22, holes: o.holes ?? 0 });
   const base = o.base, n = o.tiers;
+  const gap = (H - 0.9 - base) / (n - 1);
   for (let k = 0; k < n; k++) {
     const f = k / (n - 1);
     const y = base + (H - 0.9 - base) * Math.pow(f, 0.92);
@@ -317,14 +318,14 @@ function conifer(R, o) {
       const a = a0 + (i / fans) * TAU + R.range(-0.25, 0.25);
       const len = Rt * R.range(0.85, 1.08);
       const c = [Math.cos(a) * len * 0.5, y - len * 0.16, Math.sin(a) * len * 0.5];
-      S.ell(c, [len * 0.55, Math.max(0.22, len * (o.thick ?? 0.17)), len * 0.3], fn, { rot: [-a, -(o.droop ?? 0.32), 0], group: g });
+      S.ell(c, [len * 0.55, Math.max(gap * 0.4, len * (o.thick ?? 0.17)), len * 0.3], fn, { rot: [-a, -(o.droop ?? 0.32) * (1 - f * 0.6), 0], group: g });
     }
     // a little mound in the middle of each tier so it reads as solid
-    S.ell([0, y - 0.05, 0], [Rt * 0.42, Math.max(0.3, Rt * 0.24), Rt * 0.42], fn, { group: g });
+    S.ell([0, y + gap * 0.1, 0], [Rt * 0.4, Math.min(gap * 0.62, Rt * 0.5) + 0.08, Rt * 0.4], fn, { group: g });
   }
   // the leader
   const g = S.group();
-  S.ell([0, H - 0.55, 0], [0.32, 0.7, 0.32], fn, { group: g });
+  S.ell([0, H - 0.7, 0], [0.26, 0.8, 0.26], fn, { group: g });
   S.tube([[0, H - 0.6, 0], [0, H + 0.15, 0]], [0.08, 0.03], `${A}`, { group: g });
   if (o.cones) {
     addBark(mats, 'cone', [0x3a2014, 0x5a3420, 0x7a4a2a, 0x96603a, 0xa8744a]);
