@@ -193,8 +193,8 @@ function leafCluster(c, R, { shape, n, len, spread, alt = 0.3, droop = 0, cx = 1
 function needleSpray(c, R, { sprays = 3, needle = 3.2, dense = 1, alt = 0.2, bright = 0 }) {
   let id = 0;
   for (let s = 0; s < sprays; s++) {
-    const x0 = R.range(4, 9), y0 = R.range(8, 24);
-    const a = R.range(-0.5, 0.35), L = R.range(18, 25), bend = R.range(0.004, 0.02);
+    const x0 = R.range(3, 7), y0 = 8 + (s + R.range(0.2, 0.8)) * 16 / sprays;
+    const a = R.range(-0.25, 0.25), L = R.range(20, 26), bend = R.range(-0.012, 0.012);
     const al = R.chance(alt) ? 1 : 0;
     const steps = Math.ceil(L);
     let x = x0, y = y0, dir = a;
@@ -211,7 +211,7 @@ function needleSpray(c, R, { sprays = 3, needle = 3.2, dense = 1, alt = 0.2, bri
         c.line(x, y, ex, ey, lit - 0.08 + bright, lit + 0.16 + bright, al, id);
       }
       c.set(x, y, 0.18, al, id);
-      x += ux; y += uy; dir += bend * 6;
+      x += ux; y += uy; dir += bend;
     }
     id++;
   }
@@ -287,14 +287,15 @@ function barkTile(c, R, kind) {
     const n = R.next() * 0.06;
     if (kind === 'birch' || kind === 'aspen') {
       v = 0.66 + n + (Math.sin(y * TAU / 32 * 3 + x) * 0.03);
-    } else if (kind === 'spruce' || kind === 'tamarack' || kind === 'stem') {
-      // small scales in staggered rows
-      const row = Math.floor(y / 4), sx = (x + (row % 2) * 3) % 6, sy = y % 4;
-      v = sx === 0 || sy === 3 ? 0.14 : 0.4 + (3 - sy) * 0.06 + n;
-    } else if (kind === 'pine') {
-      // big plates with dark cracks
-      const row = Math.floor(y / 8), sx = (x + (row % 2) * 5) % 10, sy = y % 8;
-      v = sx === 0 || sy === 7 ? 0.1 : 0.44 + (7 - sy) * 0.03 + n;
+    } else if (kind === 'spruce' || kind === 'tamarack' || kind === 'stem' || kind === 'pine') {
+      // flaky plates: columns of uneven length, each column slid up or down
+      const pine = kind === 'pine', cw = pine ? 8 : 4, ch = pine ? 11 : 6;
+      const col = Math.floor(x / cw), sx = x % cw;
+      const off = Math.floor(hashTile(col, 7) * ch);
+      const yy = (y + off) % TILE, row = Math.floor(yy / ch), sy = yy % ch;
+      const plate = hashTile(col * 13 + row, 3);
+      const crack = sx === 0 || (sy === ch - 1 && hashTile(col, row) < 0.8);
+      v = crack ? 0.1 : 0.34 + plate * 0.16 + (ch - 1 - sy) / ch * 0.12 + (sx === 1 ? 0.06 : 0) + n;
     } else {
       // maple / oak: wavy vertical furrows
       const w = x + Math.sin(y * TAU / 32 * 2 + Math.floor(x / 8)) * 1.5;
@@ -318,6 +319,12 @@ function barkTile(c, R, kind) {
   }
 }
 
+function hashTile(a, b) {
+  let h = Math.imul(a ^ 0x9e3779b9, 0x85ebca6b) ^ Math.imul(b + 0x51ed27, 0xc2b2ae35);
+  h ^= h >>> 15; h = Math.imul(h, 0x27d4eb2f); h ^= h >>> 13;
+  return (h >>> 0) / 4294967296;
+}
+
 let atlasCache = null;
 // RGBA8: R shade, G second-palette flag, A coverage. Row 0 is the bottom (v = 0).
 export function buildAtlas() {
@@ -329,14 +336,14 @@ export function buildAtlas() {
   TILES.oak.forEach((t) => paint(t, (c) => leafCluster(c, R, { shape: 'oak', n: 14, len: [10, 13], spread: 9, alt: 0.3 })));
   TILES.birch.forEach((t) => paint(t, (c) => leafCluster(c, R, { shape: 'birch', n: 26, len: [6, 8], spread: 10, alt: 0.3, droop: 0.9 })));
   TILES.aspen.forEach((t) => paint(t, (c) => leafCluster(c, R, { shape: 'aspen', n: 24, len: [6, 7.5], spread: 10, alt: 0.3, droop: 0.4 })));
-  TILES.spruce.forEach((t, k) => paint(t, (c) => needleSpray(c, R, { sprays: 3 + k, needle: 3.4 })));
+  TILES.spruce.forEach((t, k) => paint(t, (c) => needleSpray(c, R, { sprays: 3 + k, needle: 4.6 })));
   TILES.pine.forEach((t) => paint(t, (c) => pineTufts(c, R, { tufts: 5 })));
   TILES.tamarack.forEach((t) => paint(t, (c) => rosettes(c, R, { n: 16 })));
   TILES.bush.forEach((t) => paint(t, (c) => leafCluster(c, R, { shape: 'bush', n: 18, len: [8, 11], spread: 9, alt: 0.35, droop: 0.2 })));
   TILES.fern.forEach((t) => paint(t, (c) => frond(c, R, {})));
   paint(TILES.sapMaple[0], (c) => leafCluster(c, R, { shape: 'maple', n: 6, len: [7, 9], spread: 8, alt: 0.2 }));
   paint(TILES.sapBirch[0], (c) => leafCluster(c, R, { shape: 'birch', n: 12, len: [5, 6], spread: 9, alt: 0.2, droop: 0.6 }));
-  paint(TILES.sapSpruce[0], (c) => needleSpray(c, R, { sprays: 3, needle: 3 }));
+  paint(TILES.sapSpruce[0], (c) => needleSpray(c, R, { sprays: 3, needle: 4 }));
   for (const [kind, t] of Object.entries(BARK_TILE)) if (kind !== 'dead') paint(t, (c) => barkTile(c, R, kind));
   atlasCache = { data, w: ATLAS, h: ATLAS };
   return atlasCache;
@@ -608,10 +615,11 @@ function conifer(R, o, B, lod) {
   for (const b of woodB) B.branch([b.p0, b.e], [0.045 + 0.03 * (1 - b.f), 0.012], { ...bark, flex0: 0.15, flex1: 0.75 + 0.2 * (1 - b.f), phase: b.phase, ao: 0.45 });
   // needle sprays along each branch, rolled around it so the tree is full from every side
   const total = B.C.cards;
-  const per = total / branches.length;
+  const shellN = Math.round(total * (lod === 'near' ? 0.5 : 0.65));
+  const per = (total - shellN) / branches.length;
   let acc = 0, used = 0;
   const tiles = tam ? TILES.tamarack : TILES.spruce;
-  const s0 = (lod === 'near' ? 0.42 : 0.82) * (H / 13) * (tam ? 1.05 : 1);
+  const s0 = (lod === 'near' ? 0.52 : 0.95) * (H / 13) * (tam ? 0.95 : 1);
   for (const b of branches) {
     acc += per;
     let n = Math.floor(acc) - used;
@@ -633,6 +641,19 @@ function conifer(R, o, B, lod) {
       const ao = Math.min(1, (0.2 + 0.6 * rr) * (0.55 + 0.45 * b.f + 0.25) );
       B.card(add(p, mul(randUnit(R), 0.08)), U, V, { n: nn, ao, tile: R.pick(tiles), pal: R.chance(tam ? 0.35 : 0.2) ? leafAlt : leaf, phase: b.phase, flex: Math.min(1, 0.25 + 0.75 * rr * (1 - b.f * 0.3)) });
     }
+  }
+  // the outer skirt: sprays on the cone's surface facing out, so the silhouette is full
+  for (let k = 0; k < shellN; k++) {
+    const f = Math.pow(R.next(), 0.8);
+    const y = y0 + (y1 + 0.3 - y0) * f;
+    const rc = Math.max(0.25, R0 * Math.pow(Math.max(0, 1 - f), 0.95) + 0.2) * R.range(0.72, 1.0);
+    const az = R.range(0, TAU);
+    const radial = [Math.cos(az), 0, Math.sin(az)];
+    const p = add(lerp3(tp[0], tp[4], (y + 0.3) / (H + 0.3)), add(mul(radial, rc), [0, -(tam ? 0.15 : 0.3) * rc, 0]));
+    const nn = norm(add(mul(radial, 0.8), [0, 0.5, 0]));
+    const face = add(add(mul(radial, 0.8), [0, 0.35, 0]), mul(randUnit(R), 0.4));
+    const s = s0 * (0.85 + 0.45 * (1 - f)) * R.range(0.85, 1.2);
+    cardAt(B, R, p, face, s, { n: nn, ao: Math.min(1, 0.55 + 0.35 * f + R.range(0, 0.15)), tile: R.pick(tiles), pal: R.chance(tam ? 0.35 : 0.2) ? leafAlt : leaf, phase: R.range(0, TAU), flex: 0.7 + 0.3 * R.next() });
   }
   return { height: H, trunkR: tr, crown };
 }
