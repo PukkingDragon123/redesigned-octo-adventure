@@ -57,7 +57,7 @@ export class Popups {
     this.queue = [];
     this.cur = null;
     this.t = 0;
-    this.warm = ['hank|happy', 'hank|sparkle', 'hank|shock', 'hank|sheepish', 'hank|laugh', 'hank|worried', 'grandma|happy'];
+    this.warm = ['hank|happy', 'hank|sparkle', 'hank|shock', 'hank|sheepish', 'grandma|happy'];
     this.warmT = 1.5;
     addEventListener('resize', () => this.cur && (this.cur.placed = false));
   }
@@ -111,10 +111,13 @@ export class Popups {
     if (blocked) return;
     if (this.queue.length) { this.show(this.queue.shift()); return; }
     // nothing to say: pre-render the common faces so the first pop-up doesn't hitch
+    // (one face at a time, in idle time between frames where the browser offers it)
     if (this.warm.length && (this.warmT -= dt) <= 0) {
       const [who, expr] = this.warm.shift().split('|');
-      this.portrait(who, expr);
-      this.warmT = 0.4;
+      this.warmT = 1e9;
+      const go = () => { this.portrait(who, expr); this.warmT = 0.5; };
+      if (window.requestIdleCallback) requestIdleCallback(go, { timeout: 2000 });
+      else go();
     }
   }
 

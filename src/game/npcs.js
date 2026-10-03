@@ -406,8 +406,8 @@ export class Villagers {
     setTimeout(() => g.sound.play('cash'), 300);
     const name = g.villagerName(a.char);
     const money = `*$${r.pay}*${r.tip ? ` (plus *$${r.tip}* tip)` : ''}`;
-    if (how === 'step') g.ui.pop(`${name}'s note says "LEAVE IT ON THE STEP!!" Fine. ${money} under the mat.`, { expr: 'sheepish', key: 'pay', ms: 4200 });
-    else g.ui.pop(`${name} snatched the cocoa and ran! Well, I got ${money}.`, { expr: 'sheepish', key: 'pay' });
+    if (how === 'step') g.ui.pop(`${name}'s note says "LEAVE IT ON THE STEP!!" Fine. ${money} under the mat.`, { expr: 'sheepish', ms: 4200 });
+    else g.ui.pop(`${name} snatched the cocoa and ran! Well, I got ${money}.`, { expr: 'sheepish' });
     this.afterDelivery(null, r.quality, a);
     g.save();
     return r;

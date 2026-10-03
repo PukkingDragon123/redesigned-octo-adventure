@@ -266,7 +266,7 @@ export class Quests {
       if (reward) {
         g.state.money += reward;
         g.sound.play('cash_coins');
-        ui.pop(`Favour done! *+$${reward}*. Being helpful pays!`, { expr: 'sparkle', key: 'pay' });
+        ui.pop(`Favour done! *+$${reward}*. Being helpful pays!`, { expr: 'sparkle' });
       }
       g.sound.play('quest_done');
       return true;

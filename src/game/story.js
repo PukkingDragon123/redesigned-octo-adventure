@@ -561,7 +561,7 @@ export class Story {
         const r = g.orders.deliver(o);
         g.effects.coins(H.pos.x, H.pos.y + 1.2, H.pos.z, 10);
         S.sfx('cash');
-        g.ui.pop(`*$${r.pay}*${r.tip ? ` and a *$${r.tip}* tip` : ''} from Gus! I think he almost smiled.`, { expr: 'happy', key: 'pay' });
+        g.ui.pop(`*$${r.pay}*${r.tip ? ` and a *$${r.tip}* tip` : ''} from Gus! I think he almost smiled.`, { expr: 'happy' });
       }
       gus.play('sip', 'happy');
       for (const a of crowd) a?.play('idle', 'surprised');
@@ -665,7 +665,7 @@ export class Story {
     setTimeout(() => g.sound.play('cash'), 300);
     const q = Math.round(r.quality);
     const heat = q > 80 ? 'Still piping hot!' : q > 55 ? `Cocoa ${q}% hot.` : q > 30 ? `Only ${q}% hot... oops.` : `${q}% hot. More like iced cocoa.`;
-    g.ui.pop(`*$${r.pay}*${r.tip ? ` plus a *$${r.tip}* tip` : ''}! ${heat}`, { expr: q > 55 ? 'happy' : 'sheepish', key: 'pay' });
+    g.ui.pop(`*$${r.pay}*${r.tip ? ` plus a *$${r.tip}* tip` : ''}! ${heat}`, { expr: q > 55 ? 'happy' : 'sheepish' });
     g.ui.tag(`d${o.id}`, r.quality > 55 ? 'Toasty!' : 'Brr...', actor.pos.clone().setY(actor.pos.y + 2.4), 1600);
     g.mode = 'menu';
     await g.ui.say(o.customer, line, { expr: r.quality > 55 ? 'happy' : 'sad' });
