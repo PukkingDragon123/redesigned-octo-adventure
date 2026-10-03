@@ -17,7 +17,7 @@ const leg = (T, s, f, o, k) => { T['lF' + s] = f; T['lO' + s] = o; T['kB' + s] =
 const BAIL_WORDS = {
   loopout: ['LOOPED OUT!', 'WHOOPS-A-DAISY!'], looped: ['LOOPED OUT!'], endo: ['OVER THE BARS!', 'ENDO!'], nose: ['FACEPLANT!', 'NOSE DIVE!'],
   flat: ['SPLAT!', 'KER-SPLAT!'], sideways: ['SIDEWAYS!', 'CLATTER!'], fakie: ['WRONG WAY!'], slideout: ['WIPEOUT!', 'SKRRT-BONK!'],
-  kerb: ['KERBED!', 'CLONK!'], trick: ['BAIL!', 'TOO LATE!'], wall: ['BONK!', 'CRACK!', 'OOF!', 'RATTLE RATTLE!', 'KER-SPLAT!', 'CLATTER!'],
+  kerb: ['KERBED!', 'CLONK!'], tree: ['THUNK!', 'TIMBER!', 'KNOCK KNOCK!', 'BONK!'], trick: ['BAIL!', 'TOO LATE!'], wall: ['BONK!', 'CRACK!', 'OOF!', 'RATTLE RATTLE!', 'KER-SPLAT!', 'CLATTER!'],
 };
 
 export class VoxelRider {
@@ -141,8 +141,10 @@ export class VoxelRider {
     const from = ch.root.position.clone();
     this.dismount();
     const fx = Math.sin(bike.yaw), fz = Math.cos(bike.yaw);
-    const k = e.kind === 'loopout' ? -1.1 : e.kind === 'endo' ? 1.6 : 0.4;
-    const side = e.kind === 'tumble' ? (Math.random() < 0.5 ? 1 : -1) * 0.9 : 0;
+    // off a tree trunk he bounces back and sits down hard beside the bike
+    const tree = e.why === 'tree';
+    const k = tree ? -0.55 : e.kind === 'loopout' ? -1.1 : e.kind === 'endo' ? 1.6 : 0.4;
+    const side = tree ? (Math.random() < 0.5 ? 1 : -1) * 0.7 : e.kind === 'tumble' ? (Math.random() < 0.5 ? 1 : -1) * 0.9 : 0;
     const x = bike.pos.x + fx * k + fz * side, z = bike.pos.z + fz * k - fx * side;
     const y = this.game.physics.groundAt(x, z, bike.pos.y + 1).h;
     ch.yaw = ch.targetYaw = e.kind === 'endo' ? bike.yaw + Math.PI : bike.yaw;
@@ -153,7 +155,8 @@ export class VoxelRider {
       t: 0, dur: e.kind === 'endo' ? 0.45 : 0.32, from, to: new THREE.Vector3(x, y, z), off: true, arc: e.kind === 'endo' ? 0.9 : 0.35,
       done: () => {
         ch.play('lie');
-        ch.tempExpr('dizzy', 1.4);
+        ch.tempExpr('dizzy', tree ? 1.8 : 1.4);
+        if (tree) this.game.emotes?.show?.(ch, 'star', 1.6);
         ch.kick('sq', 0.6);
         this.game.sound?.play('bone_rattle');
         this.game.effects?.poof?.(x, y + 0.2, z, { scale: 0.8, count: 6 });

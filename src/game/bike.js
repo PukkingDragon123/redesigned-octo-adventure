@@ -435,9 +435,18 @@ export class Bike {
             this.squash.value = 0.78;
             this.emit('bump', { size: 0.3, kind: hit.obj.kind });
           }
+        } else if (hit.obj.tree && impact > 3) {
+          // tree trunks don't give: Bessie stops dead, bounces back a little and Hank comes off
+          this.vel.x -= hit.nx * vn * 1.15;
+          this.vel.z -= hit.nz * vn * 1.15;
+          this.vel.x *= 0.35;
+          this.vel.z *= 0.35;
+          this.startCrash(impact, 'tree', { tree: hit.obj.tree });
+          return;
         } else {
           this.vel.x -= hit.nx * vn * 1.35;
           this.vel.z -= hit.nz * vn * 1.35;
+          if (hit.obj.tree && impact > 0.5 && impact <= 1.8) this.emit('treeBump', { impact, tree: hit.obj.tree });
           if (impact > 6.6 && hit.obj.kind !== 'boundary') {
             this.startCrash(impact, 'wall');
             return;
@@ -834,13 +843,14 @@ export class Bike {
     return this.speed > 0.5 ? 'coast' : 'idle';
   }
 
-  startCrash(impact, why) {
-    const soft = impact < 6.5 && ['loopout', 'endo', 'slideout', 'nose', 'looped', 'sideways', 'fakie', 'trick', 'kerb'].includes(why);
+  startCrash(impact, why, extra = {}) {
+    // trees only burst Hank into bones when he hits one really fast; otherwise he just falls off
+    const soft = why === 'tree' ? impact < 9 : impact < 6.5 && ['loopout', 'endo', 'slideout', 'nose', 'looped', 'sideways', 'fakie', 'trick', 'kerb'].includes(why);
     this.crashKind = why === 'loopout' || why === 'looped' ? 'loopout' : why === 'endo' || why === 'nose' || why === 'kerb' ? 'endo' : 'tumble';
     this.crash = soft ? 1.5 : 1.9;
     this.crashT = 0;
     this.crashImpact = impact;
-    this.crashSpin = (Math.random() < 0.5 ? -1 : 1) * (4 + impact * 0.4);
+    this.crashSpin = (Math.random() < 0.5 ? -1 : 1) * (4 + impact * 0.4) * (why === 'tree' ? 0.35 : 1);
     this.crashPitch = this.pitch;
     this.drifting = false;
     this.skidding = false;
@@ -856,8 +866,8 @@ export class Bike {
     this.vel.y = 0;
     this.vel.x *= 0.45;
     this.vel.z *= 0.45;
-    this.emit('bail', { why, impact, soft, kind: this.crashKind });
-    this.emit('crash', { impact, why, soft, kind: this.crashKind });
+    this.emit('bail', { why, impact, soft, kind: this.crashKind, ...extra });
+    this.emit('crash', { impact, why, soft, kind: this.crashKind, ...extra });
   }
 
   updateCrash(dt) {

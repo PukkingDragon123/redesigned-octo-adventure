@@ -326,11 +326,11 @@ export class Cargo {
       // the camera looks across the crate from the far side, so Hank faces it as he packs
       const crate = g.bikeModel.crateAnchor.getWorldPosition(new THREE.Vector3());
       await S.cam(
-        new THREE.Vector3(crate.x - rx * side * 2.6 + fx * 0.5, crate.y + 1.2, crate.z - rz * side * 2.6 + fz * 0.5),
+        new THREE.Vector3(crate.x - rx * side * 2.6 - fx * 0.15, crate.y + 1.2, crate.z - rz * side * 2.6 - fz * 0.15),
         new THREE.Vector3(crate.x + rx * side * 0.35, crate.y + 0.35, crate.z + rz * side * 0.35), 0, 44);
       const skipped = new Promise((res) => S.every(() => (S.skip ? (res(), true) : false)));
       // walk up beside the crate and turn to face it
-      const stand = [crate.x + rx * side * 0.62 - fx * 0.1, crate.z + rz * side * 0.62 - fz * 0.1];
+      const stand = [crate.x + rx * side * 0.62 - fx * 0.3, crate.z + rz * side * 0.62 - fz * 0.3];
       await Promise.race([H.walkTo([stand], 2.1, 'walk+carry'), skipped]);
       H.face(Math.atan2(-rx * side, -rz * side));
       await S.wait(0.25);

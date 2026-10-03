@@ -549,7 +549,7 @@ export class Game {
       case 'land':
         if (e.impact > 6) { sound.play('land_hard'); this.orders.slosh(3); }
         else if (e.impact > 2) sound.play('land', { volume: clamp(e.impact / 6, 0.3, 1) });
-        if (e.impact > 7) { ch.shake(Math.min(0.9, e.impact * 0.06)); this.freeze(0.05); }
+        if (e.impact > 7) { ch.shake(Math.min(0.9, e.impact * 0.06)); this.freeze(0.05); this.touch?.buzz?.(25); }
         if (e.airTime > 0.6) {
           st.stats.bestAir = Math.max(st.stats.bestAir, e.airTime);
           st.stats.dayAir = Math.max(st.stats.dayAir || 0, e.airTime);
@@ -580,6 +580,9 @@ export class Game {
       case 'dab': sound.play('footstep_stone', { volume: 0.45 }); break;
       case 'crash':
         sound.play('crash');
+        // trees shake (and drop leaves) when Hank rides into them; phones buzz
+        if (e.tree) this.world.forest?.shake?.(e.tree, clamp(e.impact / 6, 0.6, 1.5));
+        this.touch?.buzz?.(e.soft ? [30, 40, 50] : [60, 40, 120]);
         this.orders.slosh(e.soft ? 8 : 15);
         st.stats.crashes++;
         st.stats.dayCrashes = (st.stats.dayCrashes || 0) + 1;
@@ -595,7 +598,14 @@ export class Game {
         }
         break;
       case 'reassemble': break;
-      case 'bonk': sound.play('wobble', { volume: 0.6 }); this.orders.slosh(1); if (e.impact > 4) this.freeze(0.04); break;
+      case 'bonk':
+        sound.play('wobble', { volume: 0.6 });
+        this.orders.slosh(1);
+        if (e.impact > 4) this.freeze(0.04);
+        if (e.tree) this.world.forest?.shake?.(e.tree, clamp(e.impact / 7, 0.2, 0.5));
+        this.touch?.buzz?.(15);
+        break;
+      case 'treeBump': this.world.forest?.shake?.(e.tree, clamp(e.impact / 8, 0.1, 0.3)); break;
       case 'gear': sound.play(e.dir > 0 ? 'gear_up' : 'gear_down', { volume: 0.5 }); break;
       case 'driftBoost': sound.play('drift_boost'); break;
       case 'splash': sound.play('splash', { volume: 0.5 }); break;
