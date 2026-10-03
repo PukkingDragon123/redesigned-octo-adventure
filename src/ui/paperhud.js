@@ -6,6 +6,7 @@ import { iconURL, glyphURL, iconSmallURL } from '../art/icons.js';
 import { CHARACTERS } from '../art/characters.js';
 import { Pix } from '../art/pixel.js';
 import { el, esc, snapBox, onScale } from './kit.js';
+import { cupTemp } from '../game/orders.js';
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const INK = 0x1e1418;
@@ -322,6 +323,8 @@ function mugOf(o) {
 // thermometer), ticked off and crossed out for a few seconds once delivered,
 // then quest lines written underneath.
 const DONE_MS = 8000;
+const HEAT_CSS = 'width:calc(var(--u)*30);height:calc(var(--u)*6);margin-left:calc(var(--u)*5);background:linear-gradient(90deg,#d8e8f6,#f6e6c8)';
+const BULB_CSS = 'position:absolute;left:calc(var(--u)*-6);top:calc(var(--u)*-2);width:calc(var(--u)*8);height:calc(var(--u)*10);border-radius:50%;box-shadow:0 0 0 var(--u) var(--nb-pencil)';
 function updateNote(ui) {
   const g = ui.game;
   const list = g.orders?.list || [];
@@ -336,7 +339,7 @@ function updateNote(ui) {
     if (!r) {
       r = el('div', 'nrow');
       const who = SHORT[o.customer] || CHARACTERS[o.customer]?.name?.split(' ')[0] || o.customer;
-      r.innerHTML = `<i class="bx"></i><img class="k-g" src="${glyphURL(`mug_${mugOf(o)}`)}"><span class="who">${esc(who)}</span>${o.rush ? `<img class="k-g rush" src="${glyphURL('rush')}">` : ''}<span class="heat"><i></i></span>`;
+      r.innerHTML = `<i class="bx"></i><img class="k-g" src="${glyphURL(`mug_${mugOf(o)}`)}"><span class="who">${esc(who)}</span>${o.rush ? `<img class="k-g rush" src="${glyphURL('rush')}">` : ''}<span class="heat" style="${HEAT_CSS}"><i style="border-radius:0"></i><b style="${BULB_CSS}"></b></span>`;
       const firstQuest = ui.noteRows.querySelector('.qrow');
       ui.noteRows.insertBefore(r, firstQuest);
       ui.orderCards.set(o.id, r);
@@ -346,14 +349,20 @@ function updateNote(ui) {
       r.classList.add('done');
       continue;
     }
-    // a little thermometer in whole art pixels
+    // a thermometer: bulb + temperature bar from hot red-orange down to cold blue
     const q = clamp(o.quality, 0, 100);
-    const px = Math.round((q / 100) * 22);
+    const px = Math.round((q / 100) * 30);
     const hEl = r.querySelector('.heat');
     if (hEl.dataset.p !== String(px)) {
       hEl.dataset.p = px;
-      hEl.firstChild.style.width = `calc(var(--u) * ${px})`;
+      const T = cupTemp(q);
+      const f = hEl.firstChild;
+      f.style.width = `calc(var(--u) * ${px})`;
+      f.style.background = `linear-gradient(180deg, rgba(255,255,255,0.45) 0 var(--u), ${T.color} var(--u) calc(100% - var(--u)), rgba(0,0,0,0.25) calc(100% - var(--u)))`;
+      hEl.lastChild.style.background = T.color;
+      hEl.title = `${T.word} (${T.deg}\u00b0C)`;
       hEl.className = `heat ${q > 60 ? '' : q > 30 ? 'warm' : 'cool'}`;
+      r.classList.toggle('cold', q <= 12);
     }
   }
   for (const [id, r] of ui.orderCards) if (!seen.has(id)) { r.remove(); ui.orderCards.delete(id); ui._doneAt.delete(id); }

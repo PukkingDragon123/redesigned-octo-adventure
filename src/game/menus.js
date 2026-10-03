@@ -11,6 +11,7 @@ import { CHARACTERS } from '../art/characters.js';
 import { KEEPSAKES, POI, CUSTOMERS, WORLD_HALF, BUILDINGS } from '../world/layout.js';
 import { KEEPSAKE_ICON } from './keepsakes.js';
 import { hasSave } from './state.js';
+import { tempBarHTML, cupTemp } from './orders.js';
 import { foodIconURL, FOOD_INFO } from '../art/foodsprites.js';
 import { QUESTS, SHOP, RECIPES, LOST, BIRD_NAMES } from './quests.js';
 
@@ -678,7 +679,9 @@ function nbCard(page, { id, spot, where = '', stamp = null, lines = [], quote = 
 function heatLine(o) {
   const q = o.state === 'carried' ? o.quality : 100;
   const [g, w] = q > 85 ? ['steam3', 'piping hot'] : q > 60 ? ['steam2', 'still hot'] : q > 30 ? ['steam1', 'only warm'] : ['cold', 'gone cold!'];
-  return `<div class="nb-line"><img class="k-g" src="${glyphURL(g)}"><span class="v${q > 30 ? '' : ' nb-redink'}">${w}</span></div>`;
+  const T = cupTemp(q);
+  return `<div class="nb-line"><img class="k-g" src="${glyphURL(g)}"><span class="v${q > 30 ? '' : ' nb-redink'}">${w}</span><span style="margin-left:auto;color:${T.color};font-weight:bold">${T.deg}\u00b0C</span></div>` +
+    `<div class="nb-line" style="gap:6px">${tempBarHTML(q, 'big')}</div>`;
 }
 // pen doodles, a coffee ring and a pencil: a notebook that gets used
 const DOODLE_KINDS = ['bike', 'mug', 'leaf', 'heart', 'star', 'swirl'];
