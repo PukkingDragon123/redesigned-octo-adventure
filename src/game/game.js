@@ -399,6 +399,7 @@ export class Game {
         sun.shadow.map = null;
       }
       this.pipeline.reflections = q !== 'low';
+      this.world.voxel?.setBuildingDetail?.(q); // full-detail houses up close (none on low)
       this.world.water.material.uniforms.uReflOn.value = q !== 'low' ? 1 : 0;
       this.world.forest.lodScale = q === 'low' ? 0.55 : q === 'medium' ? 0.8 : 1;
       if (this.world.voxelForest) {
