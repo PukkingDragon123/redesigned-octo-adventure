@@ -142,9 +142,9 @@ export class World {
       await step(0.41, 'building voxel houses');
       await this.voxel.buildings(this.buildings, () => step(0.42, 'building voxel houses'));
       const t1 = performance.now();
-      await step(0.43, 'carving pumpkins');
+      await step(0.43, 'raking the leaves');
       this.voxel.decor(DECOR.list, this.physprops);
-      this.voxel.halloween(this.physprops);
+      this.voxel.dress(this.physprops);
       const t2 = performance.now();
       this.voxel.buildStatic();
       for (const l of this.voxel.lights) ctx.lights.push(l);

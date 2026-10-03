@@ -1570,34 +1570,59 @@ export function stringBulb({ color = 'orange' } = {}) {
   return res;
 }
 
-// bowlingPin({ seed }) — stubby cute skeleton pin (~0.5 m) for pumpkin bowling; knockable
-export function bowlingPin({ seed = 1, stripe = RED } = {}) {
+// bowlingPin({ seed, skull }) — stubby ~0.5 m pin for lawn bowling on the green (skull: the old skeleton pin); knockable
+export function bowlingPin({ seed = 1, stripe = RED, skull = false } = {}) {
   const v = new Vox(14, 24, 14);
   const c = 6.5;
   const rf = profile([[0, 3.2], [2, 3.9], [5, 4.5], [8, 3.9], [10, 2.7], [12, 2.4], [14, 3.1], [17, 3.6], [19, 3.3], [21, 2.2], [22, 1.1]]);
-  lathe(v, c, c, 0, 22, rf, (x, y, z, a, d, r) => {
-    if (y === 10 || y === 11) return stripe;
-    if (y === 0) return BONE_D;
-    const front = Math.cos(a - Math.PI / 2) > 0.45;
-    if (front && (y === 3 || y === 5 || y === 7)) return 0x9a8c74; // ribs
-    if (front && Math.abs(x - c) < 0.6 && y >= 3 && y <= 8) return BONE_L; // sternum
-    return y > 18 ? BONE_L : BONE;
+  const PIN = 0xf4eee2, PIN_D = 0xd8cfbe, PIN_L = 0xfffaf0;
+  lathe(v, c, c, 0, 22, rf, (x, y, z, a) => {
+    if (skull) {
+      if (y === 10 || y === 11) return stripe;
+      if (y === 0) return BONE_D;
+      const front = Math.cos(a - Math.PI / 2) > 0.45;
+      if (front && (y === 3 || y === 5 || y === 7)) return 0x9a8c74; // ribs
+      if (front && Math.abs(x - c) < 0.6 && y >= 3 && y <= 8) return BONE_L; // sternum
+      return y > 18 ? BONE_L : BONE;
+    }
+    // plain white maple with two red neck stripes
+    if (y === 11 || y === 13) return stripe;
+    if (y === 0) return PIN_D;
+    return y > 17 || Math.cos(a + 0.8) > 0.3 ? PIN_L : y < 3 ? PIN_D : PIN;
   });
-  // skull face
-  for (const s of [-1, 1]) {
-    const ex = Math.round(c + s * 1.4 + (s > 0 ? 0 : 0));
-    for (const [dx, dy] of [[0, 0], [0, 1], [s, 0], [s, 1]]) { const x = ex + dx, y = 16 + dy, z = frontZ(v, x, y); v.set(x, y, z, 0); v.set(x, y, z - 1, 0x2e2430); }
+  if (skull) {
+    for (const s of [-1, 1]) {
+      const ex = Math.round(c + s * 1.4);
+      for (const [dx, dy] of [[0, 0], [0, 1], [s, 0], [s, 1]]) { const x = ex + dx, y = 16 + dy, z = frontZ(v, x, y); v.set(x, y, z, 0); v.set(x, y, z - 1, 0x2e2430); }
+    }
+    { const z = frontZ(v, 6, 15); v.set(6, 15, z, 0x5a4a40); v.set(7, 15, frontZ(v, 7, 15), 0x5a4a40); }
+    for (let x = 4; x <= 9; x++) { const z = frontZ(v, x, 13); v.set(x, 13, z, x % 2 ? 0x8a7c66 : BONE_L); }
+    for (const s of [-1, 1]) { polyline(v, [[c + s * 4.2, 7, c], [c + s * 5.6, 5, c + 0.5]], BONE); v.set(Math.round(c + s * 5.8), 4, Math.round(c + 0.5), BONE_L); }
   }
-  { const z = frontZ(v, 6, 15); v.set(6, 15, z, 0x5a4a40); v.set(7, 15, frontZ(v, 7, 15), 0x5a4a40); }
-  for (let x = 4; x <= 9; x++) { const z = frontZ(v, x, 13); v.set(x, 13, z, x % 2 ? 0x8a7c66 : BONE_L); }
-  // little bone arms
-  for (const s of [-1, 1]) { polyline(v, [[c + s * 4.2, 7, c], [c + s * 5.6, 5, c + 0.5]], BONE); v.set(Math.round(c + s * 5.8), 4, Math.round(c + 0.5), BONE_L); }
   bevel(v, { top: 0.06, bottom: -0.06 });
   return finish(v, FINE, { origin: [c + 0.5, 0, c + 0.5], radius: 0.11, breakable: true, meta: { knockable: true, mass: 1.5 } });
 }
 
-// trickHoop({ flames, seed }) — ~3 m ring of little jack-o'-lanterns on a wooden hoop between two posts; ride through it
-export function trickHoop({ flames = true, seed = 1, count = 16 } = {}) {
+// bowlingBall({ color }) — a big glossy bowling ball with three finger holes (kick it at the pins)
+export function bowlingBall({ color = 0x2e5a8a } = {}) {
+  const v = new Vox(14, 14, 14);
+  const c = 6.5, R = 6.4;
+  const D = tone(color, -0.2), Lc = tone(color, 0.16), H = tone(color, 0.32);
+  v.ellipsoid(c, c, c, R, R, R, (x, y, z) => {
+    const l = (-0.5 * (x - c) + 0.7 * (y - c) + 0.5 * (z - c)) / R;
+    if (l > 0.8) return H;
+    if (l > 0.35) return Lc;
+    if (l < -0.45) return D;
+    return Math.floor((x + y * 2 + z) / 3) % 5 === 0 ? tone(color, 0.05) : color;
+  });
+  for (const [x, y] of [[5, 9], [8, 9], [6, 6]]) { const z = frontZ(v, x, y); if (z > 0) { v.set(x, y, z, INK); v.set(x, y, z - 1, INK); } }
+  return finish(v, FINE, { origin: [c + 0.5, 0, c + 0.5], radius: 0.16, meta: { knockable: true, mass: 1 } });
+}
+
+// trickHoop({ flames, harvest, seed }) — ~3 m wooden hoop between two posts; ride through it. harvest: dressed with
+// little gourds, maple leaves, corn sheaves and ribbon (the fall-fair kind); otherwise a ring of jack-o'-lanterns
+export function trickHoop({ flames = true, harvest = false, seed = 1, count = 16 } = {}) {
+  if (harvest) return harvestHoop({ seed, count });
   const W = 70, H = 70, D = 13;
   const v = new Vox(W, H, D);
   const cx = 34.5, cy = 36, cz = 6, Rr = 26;
@@ -1636,6 +1661,46 @@ export function trickHoop({ flames = true, seed = 1, count = 16 } = {}) {
   }
   bevel(v, { top: 0.08, bottom: 0 });
   const res = finish(v, STD, { origin: [cx + 0.5, 0, cz + 0.5], radius: 0.15, lights, meta: { flames } });
+  res.meta.ring = { center: [0, r3((cy + 0.5) * STD), 0], inner: r3((Rr - 4.5) * STD), outer: r3((Rr + 4) * STD), axis: 'z' };
+  res.meta.colliders = [-1, 1].map((s) => ({ x: r3(s * (Rr + 4.5) * STD), z: 0, r: 0.08 }));
+  return res;
+}
+
+function harvestHoop({ seed = 1, count = 16 } = {}) {
+  const v = new Vox(70, 70, 13);
+  const cx = 34.5, cy = 36, cz = 6, Rr = 26;
+  // the hoop wrapped in a red & cream ribbon spiral
+  torus(v, cx, cy, cz, Rr, 1.4, (x, y, z, a) => {
+    const k = Math.floor(((a + Math.PI) / TAU) * 48) % 6;
+    return k < 2 ? RED : k === 2 ? RED_D : k < 5 ? CREAM : 0xd8ccb0;
+  }, 'z');
+  for (const s of [-1, 1]) {
+    const px = Math.round(cx + s * (Rr + 4));
+    v.fill(px, 0, cz - 1, px + 1, cy + 2, cz, WOOD);
+    v.fill(px, cy + 3, cz - 1, px + 1, cy + 3, cz, WOOD_L);
+    polyline(v, [[px + 0.5, 12, cz], [px + 0.5, 0, cz - 5]], WOOD_D, 0.6);
+    polyline(v, [[px + 0.5, 12, cz], [px + 0.5, 0, cz + 5]], WOOD_D, 0.6);
+    v.fill(px - 1, 0, cz - 6, px + 2, 0, cz + 6, WOOD_DD);
+    v.fill(Math.round(cx + s * (Rr + 1)), cy - 1, cz - 1, px, cy, cz, WOOD_D);
+    // a sheaf of corn stalks tied to each post with a red ribbon
+    for (let k = -1; k <= 1; k++) polyline(v, [[px + 0.5 + k, 0, cz + 2], [px + 0.5 + k * 2, 16, cz + 2]], k ? STRAW_D : STRAW, 0.6);
+    v.fill(px - 1, 6, cz + 1, px + 2, 6, cz + 3, RED);
+  }
+  // little pumpkins and squash in harvest colours, with maple leaves between them
+  const R = rng(seed * 5 + 3);
+  const pals = ['orange', 'amber', 'red'];
+  const leafC = [RED_L, GOLD, ORANGE, RED];
+  for (let i = 0; i < count; i++) {
+    const a = (i / count) * TAU + Math.PI / count;
+    const x = Math.round(cx + Math.cos(a) * Rr), y = Math.round(cy + Math.sin(a) * Rr);
+    if (i % 2 === 0) paintPumpkin(v, x, y - 3, cz, { rx: 3.0, ry: 2.6, rz: 3.0, ribs: 6, pal: pals[(i / 2) % 3], seed: seed * 50 + i, stemH: 1, stemR: 0.6, lump: 0.02, ribDepth: 0.06 });
+    else {
+      const c = leafC[Math.floor(R() * leafC.length)];
+      for (const [dx, dy] of [[0, 0], [-1, 0], [1, 0], [0, 1], [0, 2], [-2, 1], [2, 1], [-1, -1], [1, -1], [0, -2]]) for (const dz of [-1, 0, 1]) v.set(x + dx, y + dy + 1, cz + dz, dz ? tone(c, -0.08) : c);
+    }
+  }
+  bevel(v, { top: 0.08, bottom: 0 });
+  const res = finish(v, STD, { origin: [cx + 0.5, 0, cz + 0.5], radius: 0.15, meta: { flames: false, harvest: true } });
   res.meta.ring = { center: [0, r3((cy + 0.5) * STD), 0], inner: r3((Rr - 4.5) * STD), outer: r3((Rr + 4) * STD), axis: 'z' };
   res.meta.colliders = [-1, 1].map((s) => ({ x: r3(s * (Rr + 4.5) * STD), z: 0, r: 0.08 }));
   return res;

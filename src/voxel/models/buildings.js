@@ -37,7 +37,7 @@ const P = {
   brick: 0xa4483a, brickB: 0x8e3c30, brickC: 0xb65a44, mortar: 0xc4b6a0,
   pumpkin: 0xe8741e, pumpkinB: 0xc85c16, pumpkinL: 0xf4903a, stem: 0x6a6a2c,
   glow: 0xffb43c | EMIT, glowHot: 0xffd870 | EMIT,
-  bulbO: 0xff8a24 | EMIT, bulbP: 0xb05cff | EMIT, bulbG: 0x9cff5a | EMIT, wire: 0x2a2630,
+  bulbO: 0xff8a24 | EMIT, bulbP: 0xb05cff | EMIT, bulbW: 0xfff0c4 | EMIT, bulbG: 0x9cff5a | EMIT, wire: 0x2a2630,
   bat: 0x2c2034, web: 0xdedad4, ghost: 0xf4efe6, ghostB: 0xdcd6cc, eye: 0x2a1e26,
   hay: 0xd9b558, hayB: 0xc09c40, hayC: 0xeacf7e, twine: 0x8a6a3c,
   corn: 0xcab474, cornB: 0xa88e54, cornC: 0xe2d29a, cornEar: 0xe8b23a,
@@ -50,6 +50,9 @@ const P = {
   apple: 0xc8302a, appleG: 0x8cb43c, squash: 0xe8c040, squashG: 0x4c7a3a,
   cauldron: 0x2e2c34, brew: 0x7aff4a | EMIT,
 };
+// The town is dressed for the harvest, not for Halloween: carved jack-o'-lanterns, bats, cobwebs,
+// ghosts, witches' hats, spiders, cauldrons and lawn tombstones stay off unless this is flipped.
+const SPOOKY = false;
 const SIDING = { red: 0xa63a30, teal: 0x3a9690, blue: 0x5080b6, white: 0xe8dfca, yellow: 0xe4ba50, green: 0x5f9a58, log: 0x8a5a34, weathered: 0x8c8478, pink: 0xe6a0ae, brick: 0xa4483a };
 const DOORC = { red: 0x2e5a40, teal: 0xb03e2a, blue: 0xe8b84a, yellow: 0x34528a, white: 0x2e5a7a, green: 0xc89a48, log: 0x3a6a4a, weathered: 0x6a4a2a, pink: 0x6a3a2a, brick: 0x2e5a40 };
 const SHUTC = { red: 0x2e4a3a, teal: 0xf0e6d0, blue: 0x283a5c, yellow: 0x3a6a4a, white: 0x2e5a7a, green: 0xf0e6d0, log: 0x3a6a4a, weathered: 0x5c4a3a, pink: 0xf2e8d4, brick: 0x2e4a3a };
@@ -470,7 +473,7 @@ function windowOn(ctx, F, u0, y0, o = {}) {
   F.fill(u1 + 1, y0, 1, u1 + 1, y1, 1, fr);
   F.fill(u0 - 2, y0 - 1, 1, u1 + 2, y0 - 1, 2, fr);
   F.fill(u0 - 2, y1 + 2, 1, u1 + 2, y1 + 2, 2, fr);
-  if (o.jack && ww >= 5) {
+  if (SPOOKY && o.jack && ww >= 5) {
     const cu = u0 + (ww >> 1);
     const rows = [['.SS.', 0], ['OOOOO', -2], ['OEOEO', -2], ['OOMOO', -2], ['.OOO.', -2]];
     rows.forEach(([row, du], i) => {
@@ -482,7 +485,7 @@ function windowOn(ctx, F, u0, y0, o = {}) {
       }
     });
   }
-  if (o.cat) {
+  if (SPOOKY && o.cat) {
     const cu = u1 - 4;
     const rows = ['X.X..', 'XEXE.', '.XX..', 'XXXX.', 'XXXXX'];
     rows.forEach((row, i) => {
@@ -714,9 +717,9 @@ function porchOn(ctx, F, o) {
   return { yPost, spots };
 }
 
-// ------------------------------------------------------------------ Halloween & autumn props
+// ------------------------------------------------------------------ harvest props (and the old Halloween ones, see SPOOKY)
 function jack(ctx, x, y, z, o = {}) {
-  const vb = ctx.vb, size = o.size ?? 2, face = o.face ?? 'front', carved = o.carved ?? true;
+  const vb = ctx.vb, size = o.size ?? 2, face = o.face ?? 'front', carved = SPOOKY && (o.carved ?? true);
   const map = {
     front: (a, c) => [x + a, z + c], back: (a, c) => [x - a, z - c],
     right: (a, c) => [x + c, z - a], left: (a, c) => [x - c, z + a],
@@ -821,6 +824,7 @@ function batOn(F, u, y, shape, n = 2) {
   });
 }
 function placeBats(ctx, F, count, yMin, yMax, n = 2) {
+  if (!SPOOKY) return;
   const R = ctx.R;
   let placed = 0;
   for (let tries = 0; tries < 60 && placed < count; tries++) {
@@ -839,6 +843,7 @@ function placeBats(ctx, F, count, yMin, yMax, n = 2) {
 }
 // quarter cobweb in a plane: corner p, arms along du and dv (unit vectors)
 function cobweb(ctx, p, du, dv, size = 6) {
+  if (!SPOOKY) return;
   const vb = ctx.vb;
   const at = (i, j) => vb.set(p[0] + du[0] * i + dv[0] * j, p[1] + du[1] * i + dv[1] * j, p[2] + du[2] * i + dv[2] * j, P.web);
   for (let i = 0; i < size; i++) { at(i, 0); at(0, i); }
@@ -846,6 +851,7 @@ function cobweb(ctx, p, du, dv, size = 6) {
   for (const r of [2, 4, 6]) if (r < size + 1) for (let k = 0; k <= r; k++) at(k, r - k);
 }
 function ghostSheet(ctx, x, yTop, z) {
+  if (!SPOOKY) return;
   const vb = ctx.vb;
   vb.set(x, yTop, z, P.web); vb.set(x, yTop - 1, z, P.web);
   vb.ellipsoid(x, yTop - 4, z, 2.4, 2.4, 2.4, P.ghost);
@@ -863,6 +869,7 @@ function ghostSheet(ctx, x, yTop, z) {
   vb.set(x, yTop - 6, z + 3, P.eye);
 }
 function witchHat(ctx, x, y, z, o = {}) {
+  if (!SPOOKY) return;
   const vb = ctx.vb;
   vb.disc(x, y, z, 3.2, P.hat);
   vb.disc(x, y + 1, z, 2.1, o.band ?? P.hatBand);
@@ -875,6 +882,7 @@ function witchHat(ctx, x, y, z, o = {}) {
   vb.set(x, y + 1, z + 2, P.brass);
 }
 function spider(ctx, x, y, z, s = 1) {
+  if (!SPOOKY) return;
   const vb = ctx.vb;
   vb.ellipsoid(x, y, z, 1.6 * s, 1.2 * s, 1.8 * s, P.bat);
   vb.ellipsoid(x, y, z + 2 * s, 1.1 * s, 0.9 * s, 1 * s, P.bat);
@@ -886,6 +894,7 @@ function spider(ctx, x, y, z, s = 1) {
   }
 }
 function cauldron(ctx, x, y, z) {
+  if (!SPOOKY) return;
   const vb = ctx.vb;
   for (let k = 0; k < 5; k++) vb.disc(x, y + 1 + k, z, [2.2, 3, 3.3, 3.2, 3.0][k], P.cauldron);
   vb.disc(x, y + 6, z, 3.2, P.cauldron, 1);
@@ -895,6 +904,7 @@ function cauldron(ctx, x, y, z) {
   addLight(ctx, [x + 0.5, y + 8, z + 0.5], [0.45, 1.0, 0.3], 3.5, 'lantern');
 }
 function broom(ctx, x, y, z, dx = 1) {
+  if (!SPOOKY) return;
   const vb = ctx.vb;
   vb.line(x, y + 3, z, x + dx * 3, y + 16, z, P.woodLight);
   vb.fill(x - 1, y, z - 1, x + 1, y + 3, z + 1, (xx, yy, zz) => (yy === 3 ? P.twine : (xx + zz) % 2 ? P.hayB : P.hay));
@@ -1348,7 +1358,7 @@ function buildHouse(spec, ctx) {
       for (let i = 0; i < n; i++) {
         const x = cands[i % cands.length];
         if (Math.abs(x - dr.uc) < 10) continue;
-        tombstone(ctx, x, ys, zs + Math.floor(R() * 5), i % 3 === 1 ? 1 : (i % 3 === 2 ? 2 : 0));
+        if (SPOOKY) tombstone(ctx, x, ys, zs + Math.floor(R() * 5), i % 3 === 1 ? 1 : (i % 3 === 2 ? 2 : 0));
       }
       if (cfg.spooky) { spider(ctx, Math.round(W * 0.2), Rf.topAt(Math.round(W * 0.2), b.z1 - 6) + 3, b.z1 - 6, 1.4); }
     }
@@ -1424,7 +1434,7 @@ function boatDoors(ctx, F, uc, w, h) {
 }
 function stringLights(ctx, pts, o = {}) {
   const vb = ctx.vb, span = o.span ?? 12, sag = o.sag ?? 2;
-  const cols = o.cols ?? [P.bulbO, P.bulbP];
+  const cols = o.cols ?? (SPOOKY ? [P.bulbO, P.bulbP] : [P.bulbW, P.bulbO]);
   let prev = null, nb = 0;
   const skip = o.skip ?? (() => false);
   for (let i = 0; i < pts.length; i++) {
@@ -1439,7 +1449,7 @@ function stringLights(ctx, pts, o = {}) {
     if (i % 3 === 1) {
       const c = cols[nb++ % cols.length];
       vb.set(x, wy - 1, z, c);
-      if (nb % 6 === 3) addLight(ctx, [x + 0.5, wy - 2.2, z + 0.5], c === P.bulbP ? [0.7, 0.4, 1.0] : [1.0, 0.55, 0.2], 3.2, 'string');
+      if (nb % 6 === 3) addLight(ctx, [x + 0.5, wy - 2.2, z + 0.5], c === P.bulbP ? [0.7, 0.4, 1.0] : c === P.bulbW ? [1.0, 0.82, 0.55] : [1.0, 0.55, 0.2], 3.2, 'string');
     }
   }
 }
@@ -1600,9 +1610,11 @@ function buildCabin(spec, ctx) {
     placeBats(ctx, F.left, 2, 6, H + 8, 2);
     placeBats(ctx, Ff, 1, 6, H - 4, 2);
     const zs = b.z1 + (cfg.porch ? 30 : 16);
-    tombstone(ctx, b.x0 + 4, -G, zs, 0);
-    tombstone(ctx, b.x0 + 12, -G, zs + 3, 1);
-    if (W > 60) tombstone(ctx, b.x1 - 8, -G, zs + 1, 2);
+    if (SPOOKY) {
+      tombstone(ctx, b.x0 + 4, -G, zs, 0);
+      tombstone(ctx, b.x0 + 12, -G, zs + 3, 1);
+      if (W > 60) tombstone(ctx, b.x1 - 8, -G, zs + 1, 2);
+    }
   }
   ctx.solids.push({ x0: (b.x0 - 3) / VPM, y0: -G / VPM, z0: (b.z0 - 3) / VPM, x1: (b.x1 + 4) / VPM, y1: H / VPM, z1: (b.z1 + 4) / VPM });
   return ctx;
@@ -1724,7 +1736,7 @@ function buildOuthouse(spec, ctx) {
   for (let k = 0; k < 12; k++) Ff.set(-3 + Math.round((k / 11) * 6), 2 + k, 1, tone(dc, -0.2));
   Ff.fill(-4, 2, 1, 3, 2, 1, tone(dc, -0.2)); Ff.fill(-4, 13, 1, 3, 13, 1, tone(dc, -0.2));
   for (const [u, y] of [[-1, 11], [-2, 10], [-2, 9], [-2, 8], [-1, 7], [0, 7], [0, 11]]) Ff.set(u, y, 0, 0x1e1418);
-  if (ctx.hw) { Ff.set(-1, 9, 0, 0xc8ff5a | EMIT); Ff.set(0, 9, 0, 0xc8ff5a | EMIT); }
+  if (SPOOKY && ctx.hw) { Ff.set(-1, 9, 0, 0xc8ff5a | EMIT); Ff.set(0, 9, 0, 0xc8ff5a | EMIT); }
   Ff.set(2, 8, 1, P.iron);
   ctx.door = { ...M3(0, 0, b.z1 + 3), face: 'front' };
   Ff.fill(-5, -G, 1, 4, -1, 4, (u, y) => (y === -1 ? plankTone(u, 4) : P.stoneB));
@@ -1978,7 +1990,7 @@ function buildLighthouse(spec, ctx) {
     // ghost on the gallery + bats on the tower
     ghostSheet(ctx, 8, gy + 6, 13);
     stringLights(ctx, Array.from({ length: 60 }, (_, i) => { const a = (i / 60) * Math.PI * 2; return [Math.round(Math.cos(a) * 17.6 - 0.5), gy + 6, Math.round(Math.sin(a) * 17.6 - 0.5)]; }), { span: 10, sag: 1 });
-    for (const [x, y, z, sh] of [[-6, 62, 0, 0], [4, 88, 0, 1], [-4, 28, 0, 2]]) {
+    if (SPOOKY) for (const [x, y, z, sh] of [[-6, 62, 0, 0], [4, 88, 0, 1], [-4, 28, 0, 2]]) {
       const shape = BATS[sh];
       let zz = 30; while (zz > 0 && !vb.get(x, y, zz)) zz--;
       shape.forEach((row, i) => { for (let k = 0; k < row.length; k++) if (row[k] === 'X') vb.set(x + k, y + shape.length - 1 - i, zz + 1, P.bat); });
@@ -2741,14 +2753,14 @@ function buildGazebo(spec, ctx) {
   vb.fill(-4, deck, -6, -4, deck + 8, -6, P.iron);
   vb.fill(-6, deck + 8, -6, -2, deck + 10, -6, P.iron);
   if (hw) {
-    // orange & black bunting under the eaves, string lights, pumpkins on the deck
+    // maple-red & cream bunting under the eaves, string lights, pumpkins on the deck
     for (let i = 0; i < 8; i++) {
       const [ax, az] = corners[i], [bx, bz] = corners[(i + 1) % 8];
       for (let k = 0; k <= 6; k++) {
         const t = k / 6, x = Math.round(ax + (bx - ax) * t), z = Math.round(az + (bz - az) * t);
         const sag = Math.round(Math.sin(t * Math.PI) * 2);
-        vb.set(x, rb - 2 - sag, z, k % 2 ? 0x2a2230 : P.pumpkin);
-        vb.set(x, rb - 3 - sag, z, k % 2 ? 0x2a2230 : P.pumpkin);
+        vb.set(x, rb - 2 - sag, z, k % 2 ? P.cream : P.red);
+        vb.set(x, rb - 3 - sag, z, k % 2 ? P.cream : P.red);
       }
     }
     stringLights(ctx, corners.flatMap(([x, z], i) => { const [bx, bz] = corners[(i + 1) % 8]; return Array.from({ length: 8 }, (_, k) => [Math.round(x + ((bx - x) * k) / 8), rb - 1, Math.round(z + ((bz - z) * k) / 8)]); }), { span: 8, sag: 1 });

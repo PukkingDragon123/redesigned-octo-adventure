@@ -385,8 +385,7 @@ function graveyard(ctx, B) {
       B.box([0, 0.15, 0], [0.7, 0.3, 0.7], { color: 0x8a8a8c }, null, M);
     }
     ctx.physics.addCircle({ x, z, r: 0.4, y0: y - 1, y1: y + 1.4, kind: 'grave' });
-    // little offerings: pumpkins & candles
-    if (rng.chance(0.25)) pumpkin(B, M, 0.5, 0, 0.4, 0.18);
+    rng.chance(0.25); // (kept so the rest of the cemetery lays out as before)
   }
   // Hank's grave: open hole, dirt mound, shovel, his own headstone
   const hg = L.POI.grave;

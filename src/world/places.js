@@ -22,10 +22,9 @@ export function dressPlaces(vw, physprops) {
     box(x, z, yaw, 1.6, 0.55, 0.9, 'bench');
     vw.spot(x, z, 1.4, 'Sit on the bench', 'sit', { yaw, y: gy(x, z) });
   };
-  const kickable = (x, z, i, jack = i % 2 === 0) => {
-    const r = jack ? vw.model(`jack:medium:${i % 6}`, () => PR.jackOLantern({ face: PR.JACK_FACES[i % PR.JACK_FACES.length], kind: 'medium', seed: i, hollow: false }))
-      : vw.model(`pumpkin:medium:${i % 6}`, () => PR.pumpkin({ kind: 'medium', seed: i + 30 }));
-    physprops.add(r, x, gy(x, z), z, { yaw: i * 1.3, kind: jack ? 'jack' : 'pumpkin', hp: 3, mass: 1.2, lights: jack });
+  const kickable = (x, z, i) => {
+    const r = vw.model(`pumpkin:medium:${i % 6}`, () => PR.pumpkin({ kind: 'medium', seed: i + 30 }));
+    physprops.add(r, x, gy(x, z), z, { yaw: i * 1.3, kind: 'pumpkin', hp: 3, mass: 1.2, lights: false });
   };
 
   mainStreet(vw, { S, post, box, bench, gy, PH });
@@ -170,7 +169,7 @@ function green(vw, { S, post, box, bench, gy, ctx }) {
     S('greenlamp', () => PR.streetLamp({ variant: 'post', lit: true }), p.x + dx, p.z + dz);
     post(p.x + dx, p.z + dz, 0.16, 3);
   }
-  S('pstack:1', () => PR.pumpkinStack({ seed: 3, jack: true }), p.x + 3, p.z + 13);
+  S('pstack:1', () => PR.pumpkinStack({ seed: 3 }), p.x + 3, p.z + 13);
   S('pstack:2', () => PR.pumpkinStack({ seed: 5 }), p.x - 15.5, p.z - 2);
   S('scarecrow:g2', () => PR.scarecrow({ seed: 1, crow: false }), p.x + 15, p.z - 4, -1.2);
   for (const [dx, dz, i] of [[-12, 8, 0], [12.5, 7, 1], [-4, -13, 2]]) S(`hay:g${i}`, () => PR.hayBale({ seed: i }), p.x + dx, p.z + dz, i * 0.7);
@@ -226,7 +225,7 @@ function farm(vw, { S, post, box, gy, kickable }) {
     S(`pp:${kind}:${i % 4}`, () => PR.pumpkin({ kind, seed: i % 4 + 50, color: i % 9 === 4 ? 'white' : 'orange' }), x, z, a);
     n++;
   }
-  [[pp.x + 6.4, pp.z - 5], [pp.x - 6.2, pp.z + 4.4], [pp.x + 5.5, pp.z + 6]].forEach(([x, z], i) => kickable(x, z, 40 + i, i === 1));
+  [[pp.x + 6.4, pp.z - 5], [pp.x - 6.2, pp.z + 4.4], [pp.x + 5.5, pp.z + 6]].forEach(([x, z], i) => kickable(x, z, 40 + i));
   S('scarecrow:pp', () => PR.scarecrow({ seed: 0, crow: true }), pp.x, pp.z, 0.4);
   post(pp.x, pp.z, 0.3, 2);
   // split-rail fence round the patch
