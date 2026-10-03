@@ -756,7 +756,7 @@ export class Game {
     for (const e of ev) {
       if (e.type === 'jump') { sound.play('jump_foot'); ch.kick('sq', 1.25); }
       if (e.type === 'land') { sound.play('land_foot', { volume: Math.min(1, e.impact / 8) }); ch.kick('sq', 0.75); }
-      if (e.type === 'kick') { ch.play('kick'); ch.animT = 0; this.world.interactables?.kick(W.pos, W.yaw, this); }
+      if (e.type === 'kick') { ch.play('kick'); ch.animT = 0; this.world.interactables?.kick(W.pos, W.yaw, this); this.wait(0.2).then(() => this.world.forest?.kick?.(W.pos, W.yaw)); }
     }
   }
 
