@@ -87,6 +87,14 @@ export const SFX4 = {
     setWet(c, 0.15);
     upto(c, 1.0);
   },
+  bark(c) {
+    for (const t of [0, 0.2]) {
+      T(c, { t, dur: 0.13, type: 'sawtooth', f: rand(400, 440), f2: 240, g: 0.05, v: 0.2, lp: 1500, a: 0.004 });
+      N(c, { t, dur: 0.1, bp: 850, q: 1.6, v: 0.32, a: 0.003 });
+    }
+    setWet(c, 0.12);
+    upto(c, 0.5);
+  },
   door_slam(c) {
     T(c, { dur: 0.32, f: 120, f2: 48, g: 0.09, v: 0.8 });
     N(c, { dur: 0.25, buf: 'brown', lp: 600, v: 0.8, a: 0.001 });

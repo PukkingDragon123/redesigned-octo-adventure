@@ -9,6 +9,7 @@ import { CUSTOMERS, BUILDINGS, MO_SPOT, MAIN_ST, frontOf } from '../world/layout
 import { NpcBrain, TRUST, moodOf } from './npcBrain.js';
 import { PEOPLE } from './npcRoutines.js';
 import { Nav } from './npcNav.js';
+import { Pets } from './npcPets.js';
 import { bootVox, LORE } from './npcPoses.js';
 import { meshVox } from '../voxel/mesh.js';
 import { tone } from '../voxel/vox.js';
@@ -59,6 +60,7 @@ export class Villagers {
     }
     this.waveCooldown = {};
     this.ctx = makeCtx(game);
+    this.pets = new Pets(this);
     game.listeners?.push((e) => this.onBikeEvent(e));
   }
 
@@ -269,6 +271,7 @@ export class Villagers {
     X.refresh(dt);
     const cam = g.camera.position;
     this.litter.update(dt);
+    this.pets.update(dt, X);
     if (g.state?.npc && g.state.day > (g.state.npc._day ?? g.state.day)) this.newDay();
     for (const [id, a] of Object.entries(this.actors)) {
       const b = a.brain;

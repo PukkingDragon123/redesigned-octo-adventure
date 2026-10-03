@@ -241,6 +241,8 @@ export class NpcBrain {
     const seen = this.shown && this.hankVisible();
     if (mood === 'terrified') {
       if (this.mode === 'routine' && seen && d < 13 + Math.min(11, sp * 0.9)) return this.startle(X);
+      // a mum won't let her kids go near the skeleton
+      if (this.cfg.fear === 'kids' && this.mode === 'routine' && d < 45 && this.V.kidBrains().some((k) => k.d < 9 && k.shown && !k.leash)) return this.startle(X);
       if (['hide', 'indoors', 'keepAway', 'cowerOpen'].includes(this.mode)) {
         // calm, slow Hank wins them over little by little
         if (calm && (this.peeking || this.mode === 'keepAway')) this.addTrust(dt * (X.onFoot ? 1.7 : 1.2), TRUST.WARY + 6);
@@ -544,10 +546,12 @@ export class NpcBrain {
       a.face(c.yaw);
       a.play(c.pose, 'scared');
       a.lookAt(null);
+      // Dr. Ingrid can't help taking notes on the specimen
+      const peekPose = this.cfg.fear === 'notes' && c.kind !== 'low' ? 'clipboard' : c.peekPose;
       await w(rand(1.2, 2.2));
       for (;;) {
         a.peekSide = c.side || (Math.random() < 0.5 ? 1 : -1);
-        a.play(c.peekPose, 'worried');
+        a.play(peekPose, 'worried');
         a.lookAt(g.playerChar);
         this.peeking = true;
         if (Math.random() < 0.35 && !(this.cool.peekTalk > 0)) { this.cool.peekTalk = 9; this.say(pick(this.cfg.peek || ['Is it gone?']), 2000); }
