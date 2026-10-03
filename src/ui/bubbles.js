@@ -22,8 +22,8 @@ function toURL(p) {
   c.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(p.data), p.w, p.h), 0, 0);
   return c.toDataURL();
 }
-const frame = (style) => URLS.get(`f${style}`) || (URLS.set(`f${style}`, toURL(bubbleArt(style))), URLS.get(`f${style}`));
-const tail = (style) => URLS.get(`t${style}`) || (URLS.set(`t${style}`, toURL(bubbleTailArt(style))), URLS.get(`t${style}`));
+export const frame = (style) => URLS.get(`f${style}`) || (URLS.set(`f${style}`, toURL(bubbleArt(style))), URLS.get(`f${style}`));
+export const tail = (style) => URLS.get(`t${style}`) || (URLS.set(`t${style}`, toURL(bubbleTailArt(style))), URLS.get(`t${style}`));
 
 // emotion -> bubble look
 function moodOf(expr) {
@@ -43,7 +43,7 @@ function moodOf(expr) {
 }
 
 // text markup: *bold*, ~wave~, ^shake^, _small_
-function tokenize(text) {
+export function tokenize(text) {
   const parts = [];
   const on = { '*': false, '~': false, '^': false, _: false };
   for (const ch of text) {
@@ -55,7 +55,7 @@ function tokenize(text) {
 // The whole line is laid out up front with every letter hidden, then typing just
 // reveals letters: the bubble has its final size from the first frame, so it
 // never grows, slides or re-wraps words while the text types in.
-function layoutText(txt, parts) {
+export function layoutText(txt, parts) {
   const out = [];
   let word = null;
   parts.forEach((p, i) => {

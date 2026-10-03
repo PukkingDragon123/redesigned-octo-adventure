@@ -1,4 +1,4 @@
-/* Deli-very-dead HUD, toasts, banners, stamps, overlays and touch controls.
+/* Deli-very-dead HUD, pop-ups, overlays and touch controls.
    Every size is a whole number of art pixels (var(--u)); motion moves in whole
    art pixels with steps() so text and art never resample. */
 :root {
@@ -58,34 +58,19 @@
 .hud-prompt.on { display: flex; animation: k-rise 0.2s steps(2); }
 @keyframes k-rise { 0% { transform: translateY(calc(var(--u) * 4)); } 50% { transform: translateY(calc(var(--u) * 2)); } }
 
-/* ---------------------------------------------------------------- toasts */
-.toasts { position: absolute; right: calc(var(--u) * 3 + var(--safe-r)); bottom: calc(var(--u) * 3 + var(--safe-b)); display: flex; flex-direction: column; gap: calc(var(--u) * 1); align-items: flex-end; pointer-events: none; }
-.toast { display: flex; align-items: center; gap: calc(var(--u) * 3); max-width: min(calc(var(--u) * 150), calc(50vw - var(--u) * 10)); padding: calc(var(--u) * 1) calc(var(--u) * 4) calc(var(--u) * 1) calc(var(--u) * 1); animation: k-toastin 0.24s steps(3); }
-.toast .ti { flex: none; }
-.toast .ti.s32 { width: calc(var(--u) * 32); height: calc(var(--u) * 32); }
-.toast .ti.s48 { width: calc(var(--u) * 48); height: calc(var(--u) * 48); margin: calc(var(--u) * -6) calc(var(--u) * -4) calc(var(--u) * -6) calc(var(--u) * -6); }
-.toast .tt { padding: calc(var(--u) * 2) 0; }
-.toast.out { animation: k-toastout 0.3s steps(3) forwards; }
-@keyframes k-toastin { from { transform: translateX(calc(var(--u) * 30)); opacity: 0; } }
-@keyframes k-toastout { to { transform: translateX(calc(var(--u) * 30)); opacity: 0; } }
-
-/* ---------------------------------------------------------------- the Gazette */
-.banner.gazette {
-  position: absolute; left: 0; right: 0; margin: 0 auto; top: calc(var(--u) * 46 + var(--safe-t));
-  width: calc(var(--u) * 196); padding: calc(var(--u) * 3) calc(var(--u) * 6) calc(var(--u) * 4); text-align: center; pointer-events: none;
-  animation: k-gazin 0.5s steps(5) both; z-index: 3;
-}
-.banner.gazette .mast { color: var(--k-ink); padding-bottom: calc(var(--u) * 1); }
-.banner.gazette .rule { height: calc(var(--u) * 3); margin: 0 0 calc(var(--u) * 2); background: linear-gradient(180deg, var(--k-ink) 0 var(--u), transparent var(--u) calc(var(--u) * 2), var(--k-ink) calc(var(--u) * 2)); }
-.banner.gazette .b1 { font-size: calc(var(--u) * 32); line-height: calc(var(--u) * 28); color: var(--k-ink); margin: calc(var(--u) * 1) 0; }
-.banner.gazette .b2 { color: #4a3a34; }
-.banner.gazette .cols { display: grid; grid-template-columns: repeat(3, 1fr); gap: calc(var(--u) * 4); margin-top: calc(var(--u) * 3); }
-.banner.gazette .cols i { height: calc(var(--u) * 11); background: repeating-linear-gradient(180deg, rgba(42, 26, 34, 0.45) 0 var(--u), transparent var(--u) calc(var(--u) * 3)); }
-.banner.gazette.out { animation: k-gazout 0.5s steps(5) forwards; }
-@keyframes k-gazin { 0% { transform: translateY(calc(var(--u) * -150)); } 80% { transform: translateY(calc(var(--u) * 4)); } 100% { transform: none; } }
-@keyframes k-gazout { to { transform: translateY(calc(var(--u) * -150)); } }
-/* (old plain banners) */
-.banner:not(.gazette) { position: absolute; left: 0; right: 0; top: 30%; text-align: center; pointer-events: none; }
+/* ---------------------------------------------------------------- pop-ups (popup.js): Hank peeks up and says it */
+.pop-layer { position: absolute; inset: 0; pointer-events: none; z-index: 3; overflow: hidden; }
+.pop-layer * { pointer-events: none !important; }
+.pop { position: absolute; inset: 0; }
+.pop-clip { position: absolute; left: 0; top: 0; width: 100%; overflow: hidden; }
+.pop-char { position: absolute; left: 0; top: 0; display: block; image-rendering: pixelated; transform-origin: 50% 100%; }
+.pop-bub { position: absolute; }
+.pop-anim { position: relative; width: max-content; }
+.pop-anim.anim-pop { animation: k-bin 0.18s steps(1); }
+.pop-key { height: calc(var(--u) * 14); vertical-align: top; margin: calc(var(--u) * -1) var(--u) 0; color: var(--k-ink); }
+.pop-key.hid { visibility: hidden; }
+.pop-shout .b-text { font-family: 'BoldPixels', monospace; color: #a8321e; }
+.pop-sill { position: absolute; left: 0; top: 0; min-height: 0; height: calc(var(--u) * 10); padding: 0; }
 
 /* ---------------------------------------------------------------- cutscene letterbox */
 .letterbox::before, .letterbox::after { content: ''; position: absolute; left: 0; right: 0; height: 9%; background: #0c0608; z-index: 1; }
@@ -95,20 +80,7 @@
 .letterbox .skiphint { display: flex; }
 .touchmode .skiphint { pointer-events: auto; padding: calc(var(--u) * 2); }
 
-/* ---------------------------------------------------------------- comic stamps and world tags */
-.stamp {
-  position: absolute; left: 0; top: 0; pointer-events: none; white-space: nowrap; z-index: 2;
-  font-size: calc(var(--u) * 32); line-height: calc(var(--u) * 28); color: #ffd84a;
-  padding: calc(var(--u) * 2) calc(var(--u) * 3);
-  text-shadow:
-    var(--u) 0 0 var(--k-ink), calc(var(--u) * -1) 0 0 var(--k-ink), 0 var(--u) 0 var(--k-ink), 0 calc(var(--u) * -1) 0 var(--k-ink),
-    var(--u) var(--u) 0 var(--k-ink), calc(var(--u) * -1) var(--u) 0 var(--k-ink), var(--u) calc(var(--u) * -1) 0 var(--k-ink), calc(var(--u) * -1) calc(var(--u) * -1) 0 var(--k-ink),
-    0 calc(var(--u) * 2) 0 var(--k-ink), var(--u) calc(var(--u) * 3) 0 #b04a10, 0 calc(var(--u) * 3) 0 #b04a10, calc(var(--u) * -1) calc(var(--u) * 3) 0 #b04a10;
-}
-.stamp.trick-bail { color: #ff9a7a; }
-.stamp.trick-shot { color: #fff4dc; }
-.stamp.pop .k-dummy, .stamp.pop { animation: k-stamp 0.5s steps(1); }
-@keyframes k-stamp { 0% { font-size: calc(var(--u) * 48); line-height: calc(var(--u) * 42); } 25% { font-size: calc(var(--u) * 32); line-height: calc(var(--u) * 28); margin-top: calc(var(--u) * -4); } 50%, 100% { margin-top: 0; } }
+/* ---------------------------------------------------------------- little tags over things in the world */
 .wtag { position: absolute; left: 0; top: 0; pointer-events: none; z-index: 2; }
 
 /* ---------------------------------------------------------------- classic dialogue box (unused by default) */
@@ -157,12 +129,9 @@
 .touchmode .hud-gauge.away { transform: translateY(calc(var(--u) * 200)); }
 .touchmode .hud-speedo { width: calc(var(--u) * 72); height: calc(var(--u) * 72); }
 .touchmode .hud-prompt { display: none !important; }
-.touchmode .toasts { left: 0; right: 0; top: calc(var(--u) * 72 + var(--safe-t)); bottom: auto; align-items: center; }
-.touchmode .toast { max-width: calc(var(--u) * 150); }
 .touchmode .hud-note .obj { display: none; }
 /* phones held upright: compass under the top row */
 .k-portrait .hud-compass { top: calc(var(--u) * 58 + var(--safe-t)); }
-.k-portrait .touchmode .toasts { top: calc(var(--u) * 126 + var(--safe-t)); }
 .k-portrait .tbtn.tsq { top: calc(var(--u) * 74 + var(--safe-t)); }
 .k-portrait .t-map { left: calc(var(--u) * 6 + var(--safe-l)); }
 .k-portrait .t-pause { left: calc(var(--u) * 40 + var(--safe-l)); }
