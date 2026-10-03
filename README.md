@@ -108,10 +108,25 @@ now; tap it.
   outlined, shaded sprites (with baked normals so the sun lights them from the
   side), baked in Web Workers into one atlas and drawn as one instanced batch
   of upright camera-facing cards that sway, cast shadows and shake when hit.
-- **Street clutter** (`src/art/deco2d.js`, `src/world/deco2d.js`,
+- **Villagers** (`src/game/npcs.js`, `npcBrain.js`, `npcRoutines.js`,
+  `npcNav.js`, `npcPets.js`): everyone is terrified of the walking skeleton at
+  first. They scream, drop things, run for cover, hide and peek, faint, throw
+  a boot or blow a whistle. Trust (saved per villager) grows with hot
+  deliveries, a polite bell, calm riding and favours, from terrified to wary,
+  friendly and fan. They keep daily routines by the hour (opening shop,
+  sweeping, fishing, jogging, gossiping at the café, going home at night) and
+  walk the sidewalks and crosswalks.
+- **Houses** (`src/voxel/models/buildings.js`, `src/world/foundations.js`):
+  buildings are painted at 1/16 m voxels with lap siding, sashed windows,
+  shutters, panelled doors, shingle roofs, gutters and stone foundations. Near
+  and far LOD meshes are built in workers. Lots are levelled and foundations,
+  steps and stilts reach the ground; `node tools/floatcheck.mjs` reports gaps.
+- **Street clutter and furniture** (`src/art/deco2d.js`,
+  `src/art/furniture2d.js`, `src/world/deco2d.js`, `src/world/furniture2d.js`,
   `src/game/deco2d.js`): 2D fences, bins, crates, barrels, hay, mailboxes,
-  market stalls with fish, lamp posts and more, with simple physics so they
-  tip over, roll and spill when knocked, then tidy themselves up off-screen.
+  market stalls with fish, porch rockers and swings, café terraces, shop window
+  displays, beach and harbour gear, with simple physics so small things tip
+  over, roll and spill when knocked, then tidy themselves up off-screen.
 - **Nana's cabin** (`src/world/cabinInterior.js`, `src/game/interior.js`,
   `src/voxel/models/interior.js`): a walkable voxel room inside the real
   cabin, with its own colliders, camera box, firelight and things to use.
@@ -166,7 +181,7 @@ now; tap it.
 
 These are useful while developing:
 
-- `?start=ride` starts riding straight away (`&spawn=x,z,yaw`, `&day=3`,
+- `?start=ride` starts riding straight away (`&spawn=x,z,yaw`, `&day=3`, `&trust=60`,
   `&money=200`, `&skills=max` or `&skills=1` to pre-fill Harold's notes,
   `&assist=1` / `&assist=0` to force riding assists, `&nofreeze` to turn off
   hit-stop, `&cat=1`)
