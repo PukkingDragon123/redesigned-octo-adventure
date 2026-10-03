@@ -78,3 +78,9 @@ body {
 }
 
 /* the boot screen styles live inline in index.html (they must work before modules load) */
+
+/* every picture in the interface is pixel art: scale it with hard edges, never smoothed */
+#ui *, #ui *::before, #ui *::after,
+#title3d *, #loader3d * {
+  image-rendering: pixelated;
+}

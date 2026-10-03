@@ -273,9 +273,8 @@ export class Menus {
       show();
       return c;
     };
-    // resolution: CSS pixels per rendered pixel (Ultra renders above 1:1 on sharp screens)
+    // resolution: HD renders every real screen pixel, Balanced a little under; Retro and Chunky are the pixel looks
     const res = [1, 1.5, 2, 3], resL = ['HD', 'Balanced', 'Retro', 'Chunky'];
-    if ((window.devicePixelRatio || 1) >= 1.5) { res.unshift(0.5); resL.unshift('Ultra'); }
     row('Resolution', cycle('pixel', res, resL), glyphURL('eye'));
     row('Graphics', cycle('quality', ['low', 'medium', 'high'], ['Low', 'Medium', 'High']), glyphURL('gear'));
     row('Interface size', cycle('uiSize', [-1, 0, 1, 2], ['Small', 'Normal', 'Big', 'Huge'], (v) => { setUIScaleOffset(v); requestAnimationFrame(() => snapBox(p)); }), glyphURL('size'));

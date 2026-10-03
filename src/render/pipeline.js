@@ -225,7 +225,9 @@ export class Pipeline {
     this.renderer.toneMapping = THREE.NoToneMapping;
     this.pixelScale = 1;
     this.fxaa = true;
-    this.maxPixels = 2.4e6; // keep 4K screens affordable
+    // pixel budget: phones are dense but small GPUs; desktops can afford more
+    const touch = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches;
+    this.maxPixels = touch ? 2.3e6 : 3.7e6;
     this.reflections = true;
     this.fsCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
     this.fsGeo = new THREE.PlaneGeometry(2, 2);
@@ -317,8 +319,10 @@ export class Pipeline {
     this.reflUniforms.tRefl.value = this.reflRT.texture;
   }
 
-  // pixelScale = CSS pixels per rendered pixel: 0.5 (high-DPI 'Ultra'), 1 (HD),
-  // 1.5, or 2+ for the retro pixel look (nearest upscale, dither, posterise)
+  // pixelScale: 1 'HD' and 1.5 'Balanced' are DEVICE pixels per rendered pixel,
+  // so phones and high-DPI screens render at their real sharpness (a CSS-pixel
+  // canvas stretched over 2-3x as many device pixels looked smeared); 2 and 3
+  // are the retro looks in CSS pixels (nearest upscale, dither, posterise).
   resize() {
     const W = window.innerWidth, H = window.innerHeight;
     let s = this.pixelScale;
@@ -329,8 +333,9 @@ export class Pipeline {
       this.canvas.style.width = `${this.w * s}px`;
       this.canvas.style.height = `${this.h * s}px`;
     } else {
-      // never above the screen's real pixels, and capped for huge displays
-      s = Math.max(s, 1 / Math.max(1, window.devicePixelRatio || 1), Math.sqrt((W * H) / this.maxPixels));
+      // native device pixels, capped by a pixel budget for very large or very dense screens
+      const dpr = Math.max(0.5, window.devicePixelRatio || 1);
+      s = Math.max(Math.max(1, s) / dpr, Math.sqrt((W * H) / this.maxPixels));
       this.w = Math.max(2, Math.round(W / s));
       this.h = Math.max(2, Math.round(H / s));
       this.canvas.style.width = `${W}px`;
