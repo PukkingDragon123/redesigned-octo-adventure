@@ -507,7 +507,6 @@ export class Game {
         if (d < bd && Math.abs(a.pos.y - p.y) < 2.5) { bd = d; best = a; }
       }
       if (best && best.char !== 'grandma') action = { text: `Chat with ${this.villagerName(best.char)}`, fn: () => this.quests.talk(best) };
-      if (!action) action = this.villagers.hint(p, slow);
     }
     if (!action && this.world.interactables) action = this.world.interactables.nearestAction(this) || null;
     if (!action && this.onFoot && this.nearBike()) action = { text: 'Hop on the bike', fn: () => this.hopOn() };

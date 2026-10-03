@@ -273,6 +273,7 @@ export class Villagers {
     const camF = g.camera.getWorldDirection(_f);
     this.litter.update(dt);
     this.pets.update(dt, X);
+    this.hint();
     if (g.state?.npc && g.state.day > (g.state.npc._day ?? g.state.day)) this.newDay();
     for (const [id, a] of Object.entries(this.actors)) {
       const b = a.brain;
@@ -431,13 +432,16 @@ export class Villagers {
     if (b.mood === 'terrified') return false;
     return !['flee', 'hide', 'indoors', 'startle', 'script', 'cowerOpen'].includes(b.mode) && a.visible;
   }
-  // a gentle nudge when a frightened villager is peeking at Hank
-  hint(p, slow) {
-    if (!slow) return null;
-    for (const b of this.brains) {
-      if (b.mood === 'terrified' && b.peeking && b.d < 14 && b.d > 3) return { text: `${this.game.villagerName(b.char)} is scared. Stay calm, or ring the bell to say hi`, key: 'R', passive: true };
-    }
-    return null;
+  // a gentle nudge the first couple of times a frightened villager peeks at Hank
+  hint() {
+    const g = this.game, N = g.state?.npc;
+    if (!N || (N._hints || 0) >= 2 || !this.ctx.live || (this._hintT = (this._hintT || 0) - 1) > 0) return;
+    this._hintT = 30;
+    const b = this.brains.find((q) => q.mood === 'terrified' && q.peeking && q.d < 15 && q.d > 3);
+    if (!b) return;
+    N._hints = (N._hints || 0) + 1;
+    this._hintT = 1800;
+    g.ui?.toast(`${g.villagerName(b.char)} is peeking at you. Stay calm and slow, or ring your bell <span class="key">R</span> to say hello.`, 'bell', 6000);
   }
 }
 
