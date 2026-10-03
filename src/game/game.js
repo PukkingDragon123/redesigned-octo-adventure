@@ -20,6 +20,7 @@ import { Wildlife } from './wildlife.js';
 import { Villagers } from './npcs.js';
 import { Keepsakes } from './keepsakes.js';
 import { Orders } from './orders.js';
+import { Cargo } from './cargo.js';
 import { Story } from './story.js';
 import { Menus } from './menus.js';
 import { UI } from '../ui/ui.js';
@@ -88,6 +89,8 @@ export class Game {
     this.touch = new TouchControls(this);
     this.menus = new Menus(this);
     this.orders = new Orders(this);
+    this.cargo = new Cargo(this);
+    this.listeners.push((e) => this.cargo.onBikeEvent(e));
     this.story = new Story(this);
     this.settings = loadSettings();
     this.state = newState();
@@ -125,6 +128,13 @@ export class Game {
       this.villagers.scaredOfHank = true;
     }
     if (name === 'catRescue') this.state.cat = false;
+    if (name === 'loadCargo') {
+      for (const o of this.orders.carried()) o.loaded = false;
+      this.orders.syncCups();
+      await this.loadCargo();
+      if (this.mode === 'cutscene') this.beginRide();
+      return;
+    }
     const fn = this.story[name];
     if (!fn) return;
     if (name === 'morning') await this.story.morning(this.state.day);
@@ -150,6 +160,8 @@ export class Game {
     this.orders.makeBoard(this.state.day, this.params.has('panic') ? ['gus', 'marie'] : null);
     this.applyBike();
     for (const o of this.orders.board().slice(0, this.bike.stats.capacity)) this.orders.pack(o);
+    for (const o of this.orders.carried()) o.loaded = true;
+    this.orders.syncCups();
     this.setOutfit(this.state.outfit);
     this.rider.enableCat(!!this.state.cat);
     const sp = this.params.get('spawn')?.split(',').map(Number);
@@ -233,6 +245,7 @@ export class Game {
     await new Promise((res) => this.menus.orderBoard(res));
     if (!this.orders.carried().length) for (const o of this.orders.board()) this.orders.pack(o);
     await this.story.garageReveal();
+    await this.loadCargo();
     this.beginRide();
   }
 
@@ -285,9 +298,15 @@ export class Game {
       this.mode = 'menu';
       await new Promise((res) => this.menus.orderBoard(res));
       if (!this.orders.carried().length) for (const o of this.orders.board().slice(0, this.bike.stats.capacity)) this.orders.pack(o);
-      this.orders.syncCups();
+      await this.loadCargo();
       this.beginRide();
     });
+  }
+
+  // after Nana's order board: Hank carries the picked cups out and packs them into Bessie's crate
+  // (a short skippable scene; resolves at once when nothing is waiting to be loaded)
+  loadCargo() {
+    return this.cargo.load();
   }
 
   pickWeather(day) {
@@ -530,7 +549,7 @@ export class Game {
       case 'land':
         if (e.impact > 6) { sound.play('land_hard'); this.orders.slosh(3); }
         else if (e.impact > 2) sound.play('land', { volume: clamp(e.impact / 6, 0.3, 1) });
-        if (e.impact > 7) { ch.shake(Math.min(0.9, e.impact * 0.06)); this.freeze(0.05); }
+        if (e.impact > 7) { ch.shake(Math.min(0.9, e.impact * 0.06)); this.freeze(0.05); this.touch?.buzz?.(25); }
         if (e.airTime > 0.6) {
           st.stats.bestAir = Math.max(st.stats.bestAir, e.airTime);
           st.stats.dayAir = Math.max(st.stats.dayAir || 0, e.airTime);
@@ -561,6 +580,9 @@ export class Game {
       case 'dab': sound.play('footstep_stone', { volume: 0.45 }); break;
       case 'crash':
         sound.play('crash');
+        // trees shake (and drop leaves) when Hank rides into them; phones buzz
+        if (e.tree) this.world.forest?.shake?.(e.tree, clamp(e.impact / 6, 0.6, 1.5));
+        this.touch?.buzz?.(e.soft ? [30, 40, 50] : [60, 40, 120]);
         this.orders.slosh(e.soft ? 8 : 15);
         st.stats.crashes++;
         st.stats.dayCrashes = (st.stats.dayCrashes || 0) + 1;
@@ -576,7 +598,14 @@ export class Game {
         }
         break;
       case 'reassemble': break;
-      case 'bonk': sound.play('wobble', { volume: 0.6 }); this.orders.slosh(1); if (e.impact > 4) this.freeze(0.04); break;
+      case 'bonk':
+        sound.play('wobble', { volume: 0.6 });
+        this.orders.slosh(1);
+        if (e.impact > 4) this.freeze(0.04);
+        if (e.tree) this.world.forest?.shake?.(e.tree, clamp(e.impact / 7, 0.2, 0.5));
+        this.touch?.buzz?.(15);
+        break;
+      case 'treeBump': this.world.forest?.shake?.(e.tree, clamp(e.impact / 8, 0.1, 0.3)); break;
       case 'gear': sound.play(e.dir > 0 ? 'gear_up' : 'gear_down', { volume: 0.5 }); break;
       case 'driftBoost': sound.play('drift_boost'); break;
       case 'splash': sound.play('splash', { volume: 0.5 }); break;
@@ -697,6 +726,7 @@ export class Game {
     this.tricks.update(sdt);
     this.skills.update(dt);
     this.bikeModel.update(sdt, this.bike, c.steer);
+    this.cargo.update(sdt);
     G.uPlayer.value.copy(this.playerPos);
     if (this.mode === 'title') this.title ? this.title.update(dt) : this.titleCamera(dt);
     else {

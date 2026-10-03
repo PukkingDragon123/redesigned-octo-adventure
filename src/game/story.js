@@ -587,6 +587,7 @@ export class Story {
       const what = opts[ch][1];
       if (what === 'board') {
         await new Promise((res) => g.menus.orderBoard(res));
+        await g.loadCargo?.();
         if (g.orders.carried().length) g.ui.toast(`Packed ${g.orders.carried().length} hot cocoa${g.orders.carried().length > 1 ? 's' : ''}. Go go go!`, 'cocoa');
         g.refillBoosts();
       } else if (what === 'sleep') {

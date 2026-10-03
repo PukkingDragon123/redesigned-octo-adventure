@@ -3,6 +3,7 @@
 // finer (0.0125 m) brass headlamp. Coordinates follow BikeModel's local spaces so
 // the parts drop straight into its groups.
 import { Vox, tone, EMIT } from '../vox.js';
+// (the wheels are smooth geometry now, built in BikeModel; bikeWheel stays for the voxel preview)
 
 const S = 0.025;
 const FRAME = 0x2f6e52, FRAME_HI = 0x4a9a72, CREAM = 0xeadfc4, CHROME = 0xc8ccd4, SADDLE = 0x6a3a1e, TIRE = 0x241e1c, RIM = 0xb4b8c0, BLACK = 0x1e1a1a, WICKER = 0xb98a48, WICKER_D = 0x8a5e2c, LEATHER = 0x4a2a1a;
@@ -48,11 +49,13 @@ export function bikeFrame() {
   }
   box(0, 0.8, -0.56, 0.16, 0.025, 0.36, BLACK);
   for (const sx of [-0.07, 0.07]) line([sx, 0.8, -0.72], [sx, rear[1], rear[2]], BLACK, 0.4);
-  // chainring + chain + chain guard
-  for (let a = 0; a < Math.PI * 2; a += 0.12) G.v.set(...G.P(0.075, BB[1] + Math.cos(a) * 0.1, BB[2] + Math.sin(a) * 0.1), CHROME);
-  line([0.075, BB[1] + 0.1, BB[2]], [0.075, rear[1] + 0.04, rear[2]], 0x4a4a50, 0.3);
-  line([0.075, BB[1] - 0.1, BB[2]], [0.075, rear[1] - 0.04, rear[2]], 0x4a4a50, 0.3);
-  box(0.085, 0.31, -0.28, 0.025, 0.07, 0.5, CREAM);
+  // (the chainring, chain and cog are moving parts in BikeModel) a slim cream guard over the top run
+  line([-0.1, BB[1] + 0.14, BB[2] - 0.02], [-0.1, rear[1] + 0.075, rear[2] + 0.1], CREAM, 0.55);
+  line([-0.1, BB[1] + 0.14, BB[2] - 0.02], [-0.1, BB[1] + 0.1, BB[2] + 0.07], CREAM, 0.5);
+  // bottom bracket shell, and the dropouts the axles bolt into
+  for (let x = -0.05; x <= 0.05; x += 0.025) G.v.set(...G.P(x, BB[1], BB[2]), FRAME_HI);
+  // a kickstand folded up along the chainstay
+  line([0.06, BB[1] - 0.01, BB[2] - 0.1], [0.07, rear[1] - 0.03, rear[2] + 0.12], 0x3a3a40, 0.45);
   return { vox: G.v, size: S, origin: G.origin };
 }
 
@@ -107,18 +110,17 @@ export function bikeWheel(radius = 0.34) {
   return { vox: v, size: S, origin: [2, n, n] };
 }
 
-// the wooden crate strapped to the rear rack (bike-local space; open top, the third cup rides inside)
+// the wooden crate strapped to the rear rack (bike-local space; open top, the cups of cocoa ride in it)
 export function bikeCrate() {
   const G = grid(-0.22, 0.22, 0.8, 1.05, -0.76, -0.36);
   const { v } = G;
   const WOOD = 0xa0703a, WOOD_D = 0x7a5228, POST = 0x5e3c1c, ROPE = 0xc8361f;
   const [x0, y0, z0] = G.P(-0.18, 0.81, -0.73).map(Math.round);
-  const [x1, y1, z1] = G.P(0.18, 0.99, -0.39).map(Math.round);
+  const [x1, y1, z1] = G.P(0.18, 0.905, -0.39).map(Math.round); // low sides, so the cups show
   // floor, then plank walls with a gap between boards
   v.fill(x0, y0, z0, x1, y0, z1, WOOD_D);
   for (let y = y0 + 1; y <= y1; y++) {
-    const band = (y - y0 - 1) % 3;
-    if (band === 2 && y < y1) continue; // gap between planks
+    if (y === y0 + 2 && y < y1) continue; // gap between the two planks
     const c = (x, z) => ((x * 7 + z * 3 + y) % 5 === 0 ? tone(WOOD, -0.08) : (y % 2 ? WOOD : tone(WOOD, 0.06)));
     for (let x = x0; x <= x1; x++) { v.set(x, y, z0, c(x, z0)); v.set(x, y, z1, c(x, z1)); }
     for (let z = z0; z <= z1; z++) { v.set(x0, y, z, c(x0, z)); v.set(x1, y, z, c(x1, z)); }
@@ -127,13 +129,13 @@ export function bikeCrate() {
   for (const [x, z] of [[x0, z0], [x1, z0], [x0, z1], [x1, z1]]) v.fill(x, y0, z, x, y1 + 1, z, POST);
   for (let x = x0; x <= x1; x++) { v.set(x, y1, z0, WOOD_D); v.set(x, y1, z1, WOOD_D); }
   for (let z = z0; z <= z1; z++) { v.set(x0, y1, z, WOOD_D); v.set(x1, y1, z, WOOD_D); }
-  // a red bungee cord over the top and down the sides, because of course
+  // a red bungee cord round the outside, because of course
   const zm = Math.round((z0 + z1) / 2);
-  for (let x = x0 - 1; x <= x1 + 1; x++) v.set(x, y1 + 1, zm, ROPE);
   for (let y = y0 + 2; y <= y1; y++) { v.set(x0 - 1, y, zm, ROPE); v.set(x1 + 1, y, zm, ROPE); }
+  for (let x = x0 - 1; x <= x1 + 1; x++) v.set(x, y0 + 2, z1 + 1, ROPE);
   // a stencilled maple leaf on the back board
-  const lx = Math.round((x0 + x1) / 2), ly = y0 + 4;
-  for (const [dx, dy] of [[0, 0], [0, 1], [0, 2], [-1, 1], [1, 1], [-2, 2], [2, 2], [-1, 3], [1, 3], [0, 3], [0, 4], [0, -1]]) v.set(lx + dx, ly + dy, z0 - 1, ROPE);
+  const lx = Math.round((x0 + x1) / 2), ly = y0;
+  for (const [dx, dy] of [[0, 0], [-1, 1], [0, 1], [1, 1], [-2, 2], [-1, 2], [0, 2], [1, 2], [2, 2], [0, 3]]) v.set(lx + dx, ly + dy, z0 - 1, ROPE);
   return { vox: v, size: G.S, origin: G.origin };
 }
 
