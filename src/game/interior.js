@@ -5,12 +5,33 @@
 import * as THREE from 'three';
 import { CabinInterior, SPOTS, CAM_BOX } from '../world/cabinInterior.js';
 import { ROOM } from '../voxel/models/interior.js';
-import { VoxelCharacter } from './vchar.js';
+import { VoxelCharacter, extendVChar, POSE_KIT } from './vchar.js';
 import { input } from '../core/input.js';
 import { clamp, damp, angleDamp, wrapAngle } from '../core/math.js';
 import { P } from '../render/particles.js';
+import * as FOOD from '../voxel/models/food.js';
 
 const _v = new THREE.Vector3();
+
+// seated variants of a few poses, so Hank can sip, eat, shiver and doze on the sofa or at the table
+{
+  const { POSES, arm } = POSE_KIT;
+  const seated = (k) => (c, t, T) => { POSES.sit(c, t, T); POSES[k](c, t, T); };
+  extendVChar({
+    poses: {
+      sitSip: seated('sip'),
+      sitEat: seated('eat'),
+      sitSleep: seated('sleep'),
+      sitShiver: (c, t, T) => {
+        POSES.sit(c, t, T);
+        arm(T, 'L', 0.9, 0.5, 1.9, 0.6); arm(T, 'R', 0.9, 0.5, 1.9, 0.6);
+        T.lean += 0.12 + Math.sin(t * 40) * 0.015; T.headX += 0.1;
+      },
+      sitWarm: (c, t, T) => { POSES.sit(c, t, T); arm(T, 'L', 1.1, 0.15, 0.4, -0.1); arm(T, 'R', 1.1, 0.15, 0.4, -0.1); T.lean += 0.08; },
+    },
+    held: { sitSip: { fn: FOOD.cocoaMaple, scale: 1, upright: true } },
+  });
+}
 
 const PHOTO_LINES = [
   [['hank', 'Nana and Harold on their wedding day. He\'s wearing the toque. The same toque.', 'happy'], ['hank', '...It has held up better than he did. Better than I did, too.', 'sheepish']],
@@ -168,6 +189,7 @@ export class Interior {
     this.hint = null;
     if (this.active) this.exitNow();
     this.stand(true);
+    this.moveNana(false);
     g.walker.frozen = false;
     g.walker.phys = null;
     if (g.onFoot) {
@@ -219,6 +241,12 @@ export class Interior {
     g.rider.visible = false;
     g.walker.frozen = true;
     this.sitT = 0;
+    // Harold's quilt over his knees
+    const q = this.room.lapQuilt;
+    q.position.set(s.x, 0, s.z);
+    q.rotation.set(0, s.yaw, 0);
+    q.scale.setScalar(1);
+    q.visible = true;
     g.sound.play('land_foot', { volume: 0.3 });
     g.effects?.poof?.(p.x, this.room.floorY + 0.5, p.z, { scale: 0.6, color: [0.9, 0.82, 0.7], count: 3 });
   }
@@ -228,6 +256,7 @@ export class Interior {
     this.sitting.remove();
     this.sitting.dispose?.();
     this.sitting = null;
+    this.room.lapQuilt.visible = false;
     g.rider.visible = true;
     g.walker.frozen = false;
     const s = SPOTS.sofa.stand;
@@ -237,7 +266,7 @@ export class Interior {
   }
 
   // ---------------------------------------------------------------- the story beat: look around, then sit by the fire
-  freeRoam({ hint = 'Sit by the fire', toast = null } = {}) {
+  freeRoam({ hint = 'Sit by the fire', toast = null, at = { x: SPOTS.entry.x, z: SPOTS.entry.z - 0.4, yaw: Math.PI } } = {}) {
     const g = this.g;
     return new Promise((res) => {
       this.beat = { res, t: 0, nudged: false };
@@ -245,12 +274,14 @@ export class Interior {
       if (!this.active) {
         this.footMode();
         this.room.show(true, g.lightPool);
-        const p = this.room.wp(SPOTS.entry.x, 0, SPOTS.entry.z - 0.4);
-        g.walker.place(p.x, this.room.floorY, p.z, this.room.wyaw(Math.PI));
+        const p = this.room.wp(at.x, 0, at.z);
+        g.walker.place(p.x, this.room.floorY, p.z, this.room.wyaw(at.yaw));
         g.walker.phys = this.phys;
         g.walker.frozen = false;
         this.active = true;
-        this.camYaw = Math.PI;
+        this.staged = false;
+        g.rider.visible = true;
+        this.camYaw = at.yaw;
         this.updateCamera(0, true);
       }
       g.mode = 'ride';
@@ -266,6 +297,9 @@ export class Interior {
     this.g.ui.prompt(null);
     this.g.ui.showHUD(false);
     this.g.mode = 'cutscene';
+    // the story takes it from here (the room stays lit for the scene)
+    this.active = false;
+    this.staged = true;
     b.res();
   }
 
@@ -355,7 +389,7 @@ export class Interior {
       // any movement gets him up again
       if (this.sitT > 0.6 && g.mode === 'ride' && !g.ui.dialogueTick && (Math.abs(input.steer()) > 0.3 || Math.abs(input.moveY()) > 0.3)) this.stand();
     }
-    if (!this.active) return;
+    if (!this.active || g.mode === 'cutscene') return;
     if (this.beat && g.mode === 'ride') {
       this.beat.t += dt;
       if (!this.beat.nudged && this.beat.t > 40) {

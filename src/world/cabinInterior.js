@@ -24,7 +24,7 @@ const LAYOUT = [
   { m: 'braidedRug', o: { w: 2.5, d: 1.75 }, x: 3.2, z: FIRE_Z, yaw: Q },
   { m: 'sofa', x: 2.0, z: FIRE_Z, yaw: Q, key: 'sofa', box: [1.55, FIRE_Z - 1.05, 2.45, FIRE_Z + 1.05] },
   { m: 'armchair', x: 3.55, z: 0.95, yaw: 2.55, key: 'armchair', r: 0.45 },
-  { m: 'rocker', x: 3.5, z: -3.4, yaw: 0.5, key: 'rocker', r: 0.42 },
+  { m: 'rocker', x: 3.5, z: -3.4, yaw: -0.2, key: 'rocker', r: 0.42 },
   { m: 'knittingBasket', x: 2.75, z: -3.75, yaw: 0.3, r: 0.22 },
   { m: 'floorLamp', x: 4.55, z: 1.8, yaw: 0, key: 'floorLamp', r: 0.2 },
   { m: 'sideTable', x: 2.0, z: 0.12, yaw: 0, key: 'sideTable', r: 0.28 },
