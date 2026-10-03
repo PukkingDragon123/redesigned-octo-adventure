@@ -106,7 +106,9 @@ export class Effects {
   }
 
   // anime speed lines: callers can force them on for a moment
+  // (once the game starts driving them, the built-in speed rule steps aside)
   speedLines(on, strength = 1) {
+    this.lineDriven = true;
     this.lineExt.strength = on ? clamp(strength, 0, 1) : 0;
     this.lineExt.until = on ? (this.game.time || 0) + 0.25 : -1;
   }
@@ -307,7 +309,7 @@ export class Effects {
     }
     // skid marks while drifting, skidding, braking hard or nose-wheeling
     this.skidT = Math.max(0, this.skidT - dt);
-    const braking = b.brakeIn > 0.6 && b.fwdSpeed > 4;
+    const braking = b.skidding ?? (b.brakeIn > 0.6 && b.fwdSpeed > 4);
     const skidding = visible && b.grounded && b.crash <= 0 && surf !== 'water' && (b.drifting || this.skidT > 0 || braking || this.stoppie);
     if (skidding) {
       const wx = this.stoppie ? frontX : rearX, wz = this.stoppie ? frontZ : rearZ;
@@ -362,9 +364,11 @@ export class Effects {
     this.lineKick = Math.max(0, this.lineKick - dt * 1.6);
     let s = 0;
     if (g.mode === 'ride' && !g.onFoot && b && b.crash <= 0 && !(g.ui?.menuStack?.length)) {
-      const top = b.stats?.topSpeed || 12;
-      s = clamp((b.speed - top * 0.62) / (top * 0.38), 0, 1);
-      if (!b.grounded && b.speed > top * 0.4) s = Math.max(s, 0.35);
+      if (!this.lineDriven) {
+        const top = b.stats?.topSpeed || 12;
+        s = clamp((b.speed - top * 0.62) / (top * 0.38), 0, 1);
+        if (!b.grounded && b.speed > top * 0.4) s = Math.max(s, 0.35);
+      }
       s = Math.max(s, this.lineKick);
     }
     if ((g.time || 0) < this.lineExt.until) s = Math.max(s, this.lineExt.strength);
@@ -419,14 +423,56 @@ export class Effects {
       case 'sink':
         this.splashCrown(b.pos.x, 0.02, b.pos.z, 1.3);
         break;
-      case 'crash':
-      case 'bail': {
+      case 'bail':
+        // (the bike sends 'bail' and 'crash' together; the crash carries the show)
+        break;
+      case 'crash': {
         const hx = b.pos.x, hz = b.pos.z;
-        this.impact(hx, y + 0.8, hz, e.type === 'crash' ? 1 : 0.7);
+        if (e.soft) {
+          // a flop: a dusty sit-down rather than a wreck
+          this.poof(hx, y + 0.3, hz, { scale: 0.8, color: water ? [0.85, 0.95, 1] : DUST, count: 5 });
+          this.dizzy(hx, y + 1.3, hz, 3);
+          break;
+        }
+        this.impact(hx, y + 0.8, hz, clamp((e.impact ?? 10) / 10, 0.7, 1.3));
         this.poof(hx, y + 0.4, hz, { scale: 1.3, color: [0.9, 0.86, 0.82], count: 8 });
         this.breakBits(hx, y + 0.5, hz, { colors: [0xc8361f, 0xf4eee0, 0x2a2428, 0xe8a830], count: 10, power: 1, size: 0.09 });
         for (let k = 0; k < 7; k++) ps.spawn({ x: hx, y: y + 1, z: hz, vx: rng.range(-3, 3), vy: rng.range(3, 6), vz: rng.range(-3, 3), life: 2.2, size: 0.28, sprite: P.bone, color: [1, 1, 1], gravity: 12, drag: 0.4, spin: rng.range(-12, 12), ground: true, rest: 1.2 });
         this.dizzy(hx, y + 1.5, hz, 4);
+        break;
+      }
+      case 'frontSlam':
+      case 'rearSlam': {
+        // a wheel slapping back down out of a wheelie / stoppie
+        const k = clamp((e.power ?? 3) / 6, 0.2, 1.2);
+        const w = e.type === 'frontSlam' ? frontPos(b, 0.55) : frontPos(b, -0.55);
+        if (!water) this.poof(w.x, y + 0.06, w.z, { scale: 0.35 + k * 0.3, color: DUST, count: 3 + Math.round(k * 2) });
+        else this.splashDrops(w.x, 0.05, w.z, 5, 0.6);
+        if (k > 0.8) this.ps.spawn({ x: w.x, y: y + 0.25, z: w.z, life: 0.22, size: 0.6 * k, size1: 1.0 * k, sprite: P.burst, color: [1, 0.96, 0.85], emissive: 0.4 });
+        break;
+      }
+      case 'bump': {
+        const sz = e.size ?? 0.2;
+        if (water || sz < 0.12) break;
+        const w = frontPos(b, 0.5);
+        this.dustKick(w.x, y + 0.08, w.z, { scale: 0.3 + Math.min(0.4, sz), color: DUST });
+        if (e.rough) for (let k = 0; k < 4; k++) ps.spawn({ x: w.x, y: y + 0.1, z: w.z, vx: rng.range(-1.5, 1.5), vy: rng.range(1.5, 3), vz: rng.range(-1.5, 1.5), life: 1, size: 0.08, sprite: P.dirt, color: [1, 1, 1], gravity: 10, drag: 0.4, ground: true, rest: 0.4 });
+        break;
+      }
+      case 'pedalSlip':
+        // rear wheel spinning out: a spray of dirt and a little puff
+        if (!water) {
+          const r = frontPos(b, -0.55);
+          for (let k = 0; k < 5; k++) ps.spawn({ x: r.x, y: y + 0.08, z: r.z, vx: -fx * rng.range(1.5, 3) + rng.range(-0.6, 0.6), vy: rng.range(1, 2.5), vz: -fz * rng.range(1.5, 3) + rng.range(-0.6, 0.6), life: 0.9, size: 0.08, sprite: P.dirt, color: [1, 1, 1], gravity: 10, drag: 0.4, ground: true, rest: 0.4 });
+          this.dustKick(r.x, y + 0.08, r.z, { scale: 0.5, vx: -fx, vz: -fz });
+        }
+        break;
+      case 'dab': {
+        // a foot dabbed down to catch a wobble
+        const sd = e.side ?? 1;
+        const dx = Math.cos(b.yaw) * 0.45 * sd, dz = -Math.sin(b.yaw) * 0.45 * sd;
+        if (!water) this.dustKick(b.pos.x + dx, y + 0.05, b.pos.z + dz, { scale: 0.4 });
+        else this.splashDrops(b.pos.x + dx, 0.05, b.pos.z + dz, 4, 0.5);
         break;
       }
       case 'reassemble':
@@ -467,7 +513,7 @@ export class Effects {
         break;
       case 'flip':
       case 'spin':
-        ps.spawn({ x: b.pos.x, y: y + 1.0, z: b.pos.z, life: 0.35, size: 1.8, size1: 2.4, sprite: P.whoosh, color: [1, 1, 1], emissive: 0.5, phase: e.dir < 0 ? Math.PI * 2 : 0 });
+        ps.spawn({ x: b.pos.x, y: y + 1.0, z: b.pos.z, life: 0.35, size: 1.8, size1: 2.4, sprite: P.whoosh, color: [1, 1, 1], emissive: 0.5, phase: e.dir === 'front' || e.dir < 0 ? Math.PI * 2 : 0 });
         for (let k = 0; k < 4; k++) this.glint(b.pos.x + rng.range(-0.8, 0.8), y + rng.range(0.5, 1.6), b.pos.z + rng.range(-0.8, 0.8), { size: 0.3 });
         this.lineKick = Math.max(this.lineKick, 0.5);
         break;
