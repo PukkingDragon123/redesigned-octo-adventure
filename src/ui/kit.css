@@ -67,9 +67,9 @@
   min-height: calc(var(--u) * 32);
   border-style: solid;
   border-color: transparent;
-  border-width: calc(var(--u) * 7);
+  border-width: calc(var(--u) * 10);
   border-image: var(--k-panel-leather) 16 fill / calc(var(--u) * 16) / 0 repeat;
-  padding: calc(var(--u) * 5) calc(var(--u) * 7);
+  padding: calc(var(--u) * 2) calc(var(--u) * 4);
   color: var(--k-cream);
   text-shadow: 0 var(--u) 0 var(--k-ink);
   image-rendering: pixelated;
@@ -355,6 +355,28 @@
 }
 .k-ribbon.k-green { border-image-source: var(--k-ribbon-green); text-shadow: 0 var(--u) 0 #1b4220; }
 .k-ribbon.k-blue { border-image-source: var(--k-ribbon-blue); text-shadow: 0 var(--u) 0 #152c56; }
+
+/* ---------------------------------------------------------------- wood-burned sign (64x24, slice 6 18 8 18) */
+.k-sign {
+  display: inline-block;
+  box-sizing: border-box;
+  height: calc(var(--u) * 24);
+  min-width: calc(var(--u) * 40);
+  border-style: solid;
+  border-color: transparent;
+  border-width: calc(var(--u) * 4) calc(var(--u) * 16) calc(var(--u) * 6);
+  border-image: var(--k-sign) 6 18 8 18 fill / calc(var(--u) * 6) calc(var(--u) * 18) calc(var(--u) * 8) / 0 repeat;
+  padding: 0 calc(var(--u) * 1);
+  color: #3e1a0a;
+  text-shadow: 0 var(--u) 0 #f8cf8e;
+  white-space: nowrap;
+  image-rendering: pixelated;
+}
+.k-sign.k-green { border-image-source: var(--k-sign-green); color: #0e2a12; text-shadow: 0 var(--u) 0 #c8f08a; }
+
+/* a leather strap with a brass buckle down the edge of a book */
+.k-strap { position: absolute; top: calc(var(--u) * 6); bottom: calc(var(--u) * 6); width: calc(var(--u) * 14); background: var(--k-strap) 0 0 / calc(var(--u) * 14) calc(var(--u) * 16) repeat-y; pointer-events: none; z-index: 2; }
+.k-strap::after { content: ''; position: absolute; left: calc(var(--u) * -4); top: calc(50% - var(--u) * 9); width: calc(var(--u) * 22); height: calc(var(--u) * 18); background: var(--k-buckle) 0 0 / 100% 100% no-repeat; }
 
 /* ---------------------------------------------------------------- key caps (16px, slice 5 5 7 5) */
 .k-key {

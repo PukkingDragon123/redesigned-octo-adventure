@@ -3,7 +3,7 @@
 // Goose shop, pumpkin carving and the day's receipt. All built from the pixel UI
 // kit (src/ui/kit.js, styles in src/ui/menus.css).
 import { el } from '../ui/ui.js';
-import { kPanel, kRibbon, kClose, kBook, kBar, kSlider, kToggle, kSlot, kKey, esc, scale, snap, snapBox, setUIScaleOffset } from '../ui/kit.js';
+import { kPanel, kSign, kClose, kBook, kBar, kSlider, kToggle, kSlot, kKey, esc, scale, snap, snapBox, setUIScaleOffset } from '../ui/kit.js';
 import { iconURL, iconSmallURL, glyphURL } from '../art/icons.js';
 import { drawPortrait } from '../art/portraits.js';
 import { Pix } from '../art/pixel.js';
@@ -31,10 +31,10 @@ export class Menus {
   }
 
   // ---------------------------------------------------------------- building blocks
-  // a framed sheet with a ribbon title and a close button; body is the scrolling part
-  sheet(title, { kind = 'leather', cls = '', ribbon = 'red', onClose = null } = {}) {
+  // a carved wooden frame with a wood-burned sign for a title and a close button; body is the scrolling part
+  sheet(title, { kind = 'leather', cls = '', ribbon = 'oak', onClose = null } = {}) {
     const p = kPanel(kind, `menu ${cls}`);
-    const rb = kRibbon(title, ribbon, 'm-title');
+    const rb = kSign(title, ribbon, 'm-title');
     p.appendChild(rb);
     if (onClose) {
       const x = kClose(() => { this.game.sound?.play('ui_click'); onClose(); });

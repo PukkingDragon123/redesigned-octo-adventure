@@ -1,4 +1,5 @@
-// The pixel UI kit: brown leather & wood panels with gold filigree, buttons,
+// The pixel UI kit: carved oak frames with brass corner plates around leather,
+// parchment and plank panels, wooden buttons and signs,
 // item slots, tabs, scroll lists, bars, toggles, sliders, close buttons,
 // tooltips, counters, ribbons, key caps and book pages.
 //
@@ -13,6 +14,7 @@
 //   <button class="k-btn">Ride</button>         chunky button (hover/.sel, :active/.down, :disabled)
 //   <div class="k-slot"><img src=icon></div>    inventory slot (.sel, .empty, .locked)
 //   <div class="k-ribbon">Title</div>           red ribbon banner
+//   <div class="k-sign">Title</div>             wood-burned plank sign (menu titles)
 //   <span class="k-key">E</span>                key cap
 //
 // Text uses the bundled pixel fonts at 16 * --u (their native size), with
@@ -125,6 +127,23 @@ export const KIT_IMAGES = {
   'knob-hot': () => A.knobArt(true),
   close: () => A.closeArt(false),
   'close-hot': () => A.closeArt(true),
+  sign: () => A.signArt(),
+  'sign-green': () => A.signArt([0xc8f08a, 0x8ed056, 0x58a63a, 0x2f6e2c, 0x1b4220, 0x0e2a12]),
+  strap: () => A.strapArt(),
+  buckle: () => A.buckleArt(),
+  // the spiral notebook and the HUD clipboard
+  'nb-paper': () => A.nbPaperArt(),
+  'nb-spiral': () => A.spiralArt('v'),
+  'nb-coil': () => A.spiralArt('top'),
+  'nb-pencil': () => A.pencilArt(),
+  'nb-stain': () => A.stainArt(),
+  'nb-tape': () => A.tapeArt(),
+  'nb-box': () => A.nbBoxArt('box'),
+  'nb-check': () => A.nbBoxArt('check'),
+  'nb-tick': () => A.nbBoxArt('tick'),
+  ...Object.fromEntries(A.DOODLES.map((d) => [`dd-${d}`, () => A.doodleArt(d)])),
+  clipboard: () => A.clipboardArt(),
+  clip: () => A.clipArt(),
 };
 const KIT_GLYPHS = ['box', 'boxOn', 'boxX', 'check', 'cross', 'hand', 'arrowR', 'arrowL', 'arrowU', 'arrowD', 'heart', 'lock', 'star', 'coin', 'pin', 'medalB', 'medalS', 'medalG', 'medalNone', 'dot'];
 const URLS = {};
@@ -132,7 +151,7 @@ export const kitURL = (name) => URLS[name] || (URLS[name] = url(KIT_IMAGES[name]
 
 // what the HUD needs on the first frame; everything else is painted in idle time
 // (or at once, the moment a menu opens: see kitReady)
-const FIRST = ['plate-leather', 'plate-dark', 'plate-parchment', 'paper-note', 'paper-news', 'key', 'tip', 'tip-tail', 'panel-dark', 'panel-leather', 'bar', 'btn', 'btn-hover', 'ribbon'];
+const FIRST = ['plate-leather', 'plate-dark', 'plate-parchment', 'paper-note', 'paper-news', 'key', 'tip', 'tip-tail', 'panel-dark', 'panel-leather', 'bar', 'btn', 'btn-hover', 'ribbon', 'clipboard', 'clip', 'nb-paper', 'nb-coil', 'nb-box', 'nb-check', 'nb-tick'];
 let installed = false, pending = [];
 const put = (name) => document.documentElement.style.setProperty(`--k-${name}`, `url(${kitURL(name)})`);
 export function kitReady() {
@@ -175,6 +194,10 @@ export function kPanel(kind = 'leather', cls = '') {
 // small plate: kind = leather | parchment | dark | paper | cream
 export function kPlate(html = '', kind = 'leather', cls = '') {
   return el('div', `k-plate${kind !== 'leather' ? ` k-${kind}` : ''}${cls ? ` ${cls}` : ''}`, html);
+}
+// a wood-burned plank sign (menu titles); kind = oak | green
+export function kSign(text, kind = '', cls = '') {
+  return el('div', `k-sign k-bold${kind && kind !== 'oak' ? ` k-${kind}` : ''}${cls ? ` ${cls}` : ''}`, `<span>${text}</span>`);
 }
 export function kRibbon(text, color = 'red', cls = '') {
   return el('div', `k-ribbon${color !== 'red' ? ` k-${color}` : ''}${cls ? ` ${cls}` : ''}`, `<span>${text}</span>`);

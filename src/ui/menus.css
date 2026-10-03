@@ -7,11 +7,11 @@
   max-width: calc(100% - var(--u) * 8);
   max-height: calc(100% - var(--u) * 30);
   margin-top: calc(var(--u) * 12);
-  padding: calc(var(--u) * 12) calc(var(--u) * 7) calc(var(--u) * 5);
+  padding: calc(var(--u) * 9) calc(var(--u) * 4) calc(var(--u) * 2);
   pointer-events: auto;
 }
-.m-title { position: absolute; top: calc(var(--u) * -17); left: 50%; transform: translateX(-50%); z-index: 2; }
-.m-close { position: absolute; top: calc(var(--u) * -6); right: calc(var(--u) * -6); z-index: 2; }
+.m-title { position: absolute; top: calc(var(--u) * -20); left: 50%; transform: translateX(-50%); z-index: 2; }
+.m-close { position: absolute; top: calc(var(--u) * -9); right: calc(var(--u) * -9); z-index: 2; }
 .m-body {
   min-height: 0;
   overflow-y: auto;
@@ -198,7 +198,7 @@
 .receipt .line.total { font-family: 'BoldPixels', monospace; line-height: calc(var(--u) * 14); color: #8a2214; min-height: calc(var(--u) * 22); background: none; margin-top: calc(var(--u) * 2); }
 
 /* phones held upright / small screens */
-.k-compact .menu { padding-left: calc(var(--u) * 5); padding-right: calc(var(--u) * 5); }
+.k-compact .menu { padding-left: calc(var(--u) * 2); padding-right: calc(var(--u) * 2); }
 .k-portrait .k-book { grid-template-columns: 1fr; }
 .k-portrait .k-book .k-spine { display: none; }
 .k-portrait .k-book .k-page.k-r { margin-top: calc(var(--u) * 2); }
