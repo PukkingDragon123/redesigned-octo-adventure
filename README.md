@@ -93,8 +93,8 @@ now; tap it.
   voxel props (`src/voxel/models/lore.js`), front-on face shots and timed
   effects.
 - **Loading and title** (`src/boot/loader3d.js`, `src/ui/title.js`): the
-  loading screen is a 3D scene drawn through the game's own renderer while
-  the world builds. Hank sprints down a spooky road and keeps losing his head.
+  loading screen is plain black: a little pixel-art Hank runs on the spot with
+  his mug of cocoa above a thin progress bar (one cheap 2D canvas).
   The title is a live dusk shot of him on Bessie outside Nana's cabin, with a
   pixel logo painted in code.
 - **Voxels** (`src/voxel`): models are painted in code into voxel grids and

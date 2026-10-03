@@ -42,6 +42,13 @@ async function boot() {
   // let the loading scene draw a few frames before the heavy world build starts
   await new Promise((r) => setTimeout(r, testRun ? 0 : 120));
   await world.build();
+  // the street clutter, fences and furniture finish baking (in a worker) before
+  // the loading screen goes, so the village is complete on the first frame
+  const paint = world.deco2d?.paint;
+  if (paint && !testRun) {
+    loader.progress(0.97, 'putting up the fences');
+    await Promise.race([paint, new Promise((r) => setTimeout(r, 20000))]);
+  }
   onResize();
   if (params.has('hour')) world.atmosphere.hour = parseFloat(params.get('hour'));
   if (params.has('weather')) world.atmosphere.setWeather(params.get('weather'), true);

@@ -64,7 +64,7 @@ export function clearSave() {
   }
 }
 
-export const DEFAULT_SETTINGS = { pixel: 1, gfx: 3, master: 0.8, music: 0.55, sfx: 0.85, quality: 'high', camDist: 1, fps: false, autoQuality: true };
+export const DEFAULT_SETTINGS = { pixel: 1, gfx: 4, master: 0.8, music: 0.55, sfx: 0.85, quality: 'high', camDist: 1, fps: false, autoQuality: true };
 
 // phones and small tablets start one notch lower; the governor in game.js steps further if needed
 function deviceDefaults() {
@@ -80,7 +80,9 @@ export function loadSettings() {
     // before device-pixel rendering: 'Ultra' is now plain HD, and a resolution the
     // frame-rate governor lowered (not the player) starts fresh at HD again
     if ((saved.gfx || 1) < 3 && (saved.pixel < 1 || (saved.autoQuality !== false && saved.pixel > 1))) saved.pixel = 1;
-    return { ...DEFAULT_SETTINGS, ...deviceDefaults(), ...saved, gfx: 3 };
+    // the lighter renderer: quality the player didn't pick by hand starts from the device default again
+    if ((saved.gfx || 1) < 4 && saved.autoQuality !== false) { delete saved.quality; if (saved.pixel === 1.5) saved.pixel = 1; }
+    return { ...DEFAULT_SETTINGS, ...deviceDefaults(), ...saved, gfx: 4 };
   } catch {
     return { ...DEFAULT_SETTINGS, ...deviceDefaults() };
   }

@@ -156,29 +156,7 @@ export class Forest {
     }
     // trees planted on purpose (the big maple on the town green...)
     for (const t of L.PLANTED || []) this.addTree(t.species, t.x, T.heightAt(t.x, t.z) - 0.15, t.z, t.H, rng);
-    // undergrowth: bushes & ferns
-    const ucell = 3.0 / Math.sqrt(this.density);
-    for (let z = -half; z < half; z += ucell) {
-      for (let x = -half; x < half; x += ucell) {
-        const px = x + rng.range(0, ucell), pz = z + rng.range(0, ucell);
-        const h = T.heightAt(px, pz);
-        if (h < 1.5 || h > 60) continue;
-        const fd = forestNoise(px, pz);
-        let p = 0.08 + smoothstep(0.3, 0.8, fd) * 0.3;
-        if (villageMask(px, pz) > 0.3) p *= 0.15;
-        p *= (0.4 + 0.6 * clearingFactor(px, pz)) * (0.3 + 0.7 * vistaFactor(px, pz));
-        if (rng.next() > p) continue;
-        if (bareClearing(px, pz)) continue;
-        if (this.roadNear(px, pz, 1.2)) continue;
-        if (T.splatAt(px, pz).sand > 0.5) continue;
-        if (buildingBlocked(px, pz, 1.5)) continue;
-        const river = riverInfo(px, pz);
-        if (river.d < river.w * 0.5 + 1) continue;
-        const kind = rng.next();
-        const species = kind < 0.42 ? 'bushRed' : kind < 0.7 ? 'bushOrange' : 'fern';
-        this.addBush(species, px, h, pz, rng);
-      }
-    }
+    // (no bushes or ferns: the forest floor stays open and cheap to draw)
   }
 
   addTree(species, x, y, z, H, rng) {
@@ -229,7 +207,7 @@ export class Forest {
         if (villageMask(px, pz) > 0.3) p *= 0.04;
         p *= clearingFactor(px, pz) * (0.35 + 0.65 * vistaFactor(px, pz));
         if (roll > p) continue;
-        const species = kind < 0.34 ? 'mushroom' : kind < 0.6 ? 'sapling' : kind < 0.82 ? 'stump' : 'log';
+        const species = kind < 0.4 ? 'mushroom' : kind < 0.7 ? 'sapling' : 'stump';
         if (species === 'log') {
           // lay the log along the slope it rests on
           const Lh = 1.6, ux = Math.cos(yaw), uz = -Math.sin(yaw);

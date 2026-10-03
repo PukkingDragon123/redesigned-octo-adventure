@@ -57,7 +57,15 @@ class Input {
     this.lastDevice = 'keyboard';
     this.enabled = true;
     this.mouse = { dx: 0, dy: 0, down: false };
+    this.zoomLog = 0; // camera zoom request (log of the distance factor): wheel and pinch add to it
     if (typeof window === 'undefined') return;
+    // the mouse wheel over the game picture (not over menus, which scroll) zooms the camera
+    window.addEventListener('wheel', (e) => {
+      const t = e.target;
+      if (!(t instanceof HTMLCanvasElement) && t?.id !== 'stage' && t !== document.body && t?.id !== 'ui') return;
+      const px = e.deltaMode === 1 ? e.deltaY * 33 : e.deltaMode === 2 ? e.deltaY * 400 : e.deltaY;
+      this.zoomLog += Math.max(-0.5, Math.min(0.5, px * 0.0012));
+    }, { passive: true });
     window.addEventListener('keydown', (e) => {
       if (e.code === 'Tab') e.preventDefault();
       if (e.code === 'Space' && e.target === document.body) e.preventDefault();
@@ -187,6 +195,12 @@ class Input {
     }
     if (this.touch.stickThrottle || this.touch.stickBrake) y = this.touch.stickThrottle - this.touch.stickBrake;
     return this.enabled ? Math.max(-1, Math.min(1, y)) : 0;
+  }
+  // camera zoom asked for since the last call (log scale; + is further out)
+  takeZoom() {
+    const z = this.zoomLog;
+    this.zoomLog = 0;
+    return z;
   }
   // right stick / mouse for camera orbit
   look() {

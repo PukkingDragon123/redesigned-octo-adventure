@@ -7,6 +7,8 @@ import * as THREE from 'three';
 import { G, NOISE_GLSL } from './shaderlib.js';
 import { SKY } from './sky.js';
 
+const _v1 = new THREE.Vector3(), _v2 = new THREE.Vector3();
+
 const FS_VERT = /* glsl */ `
 varying vec2 vUv;
 void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }
@@ -84,6 +86,9 @@ uniform vec3 uSunGlow;
 uniform vec2 uSunScreen;
 uniform float uSunVisible;
 uniform float uFogDensity;
+uniform float uFogScale;
+uniform float uRaysOn;
+uniform float uBloomOn;
 uniform float uFogHeight;
 uniform float uFogMax;
 uniform float uRays;
@@ -132,7 +137,7 @@ void main() {
   vec3 fogCol = mix(uFogColor, uSunGlow * 1.2 + uFogColor * 0.6, sunAmt);
   if (!sky) {
     float hgt = exp(-max(wp.y - 2.0, 0.0) * uFogHeight);
-    float f = 1.0 - exp(-dist * uFogDensity * (0.55 + 0.45 * hgt));
+    float f = 1.0 - exp(-dist * uFogDensity * uFogScale * (0.55 + 0.45 * hgt));
     f = min(f, uFogMax);
     col = mix(col, fogCol, f);
   }
@@ -155,10 +160,10 @@ void main() {
   }
 
   // --- god rays: radial march of the bright sky towards the sun
-  if (uRays > 0.0 && uSunVisible > 0.0) {
+  if (uRaysOn > 0.0 && uRays > 0.0 && uSunVisible > 0.0) {
     vec2 delta = (uSunScreen - uv);
     float dl = length(delta);
-    const int N = 40;
+    const int N = 24;
     vec2 stepv = delta / float(N) * min(1.0, 0.85 / max(dl, 1e-3));
     vec2 p = uv;
     float acc = 0.0, w = 1.0;
@@ -172,7 +177,7 @@ void main() {
         vec3 sc = texture2D(tColor, p).rgb;
         acc += w * smoothstep(0.6, 2.2, dot(sc, vec3(0.33)));
       }
-      w *= 0.965;
+      w *= 0.945;
     }
     acc /= float(N);
     float aspectFix = 1.0 - smoothstep(0.0, 1.1, dl);
@@ -180,7 +185,7 @@ void main() {
   }
 
   // --- bloom
-  col += texture2D(tBloom, uv).rgb * uBloom;
+  if (uBloomOn > 0.0) col += texture2D(tBloom, uv).rgb * uBloom;
 
   // --- exposure & tonemap
   col *= uExposure;
@@ -224,12 +229,19 @@ export class Pipeline {
     this.renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
     this.renderer.toneMapping = THREE.NoToneMapping;
     this.pixelScale = 1;
-    this.fxaa = true;
+    // FXAA softens the pixel art; off unless asked for (crisp edges win)
+    this.fxaa = false;
     // pixel budget: phones are dense but small GPUs; desktops can afford more
     const touch = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches;
-    this.maxPixels = touch ? 2.8e6 : 5.2e6;
-    this.supersample = touch ? 1 : 1.5; // set by the graphics quality (game.applySettings)
-    this.reflections = true;
+    this.touch = touch;
+    this.maxPixels = touch ? 1.4e6 : 5.2e6;
+    this.maxDpr = touch ? 1.5 : 3; // device pixels per CSS pixel we ever render
+    this.supersample = 1; // set by the graphics quality (game.applySettings)
+    this.reflections = !touch;
+    this.bloom = !touch;
+    this.rays = !touch;
+    this.shadowEvery = touch ? 2 : 1; // shadow map refresh every N frames
+    this._frame = 0;
     this.fsCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
     this.fsGeo = new THREE.PlaneGeometry(2, 2);
     this.fsMesh = new THREE.Mesh(this.fsGeo);
@@ -257,6 +269,9 @@ export class Pipeline {
       uSunScreen: { value: new THREE.Vector2(0.5, 0.5) },
       uSunVisible: { value: 0 },
       uFogDensity: { value: 0.006 },
+      uFogScale: { value: 0.7 }, // thinner haze: the far hills and the cove read
+      uRaysOn: { value: 1 },
+      uBloomOn: { value: 1 },
       uFogHeight: { value: 0.04 },
       uFogMax: { value: 0.85 },
       uRays: { value: 1 },
@@ -337,15 +352,25 @@ export class Pipeline {
       // native device pixels, capped by a pixel budget for very large or very dense screens
       // HD supersamples above the screen's pixels where the budget allows (crisper
       // edges on voxels, leaves and wires), then the browser filters it down
+      // Below the screen's own density we drop by WHOLE device pixels (2x2, 3x3)
+      // and upscale nearest, so the picture stays sharp instead of smeared.
       const dpr = Math.max(0.5, window.devicePixelRatio || 1);
       const ss = s <= 1 ? this.supersample : 1;
-      s = Math.max(Math.max(1, s) / (dpr * ss), Math.sqrt((W * H) / this.maxPixels));
-      this.w = Math.max(2, Math.round(W / s));
-      this.h = Math.max(2, Math.round(H / s));
+      const devW = W * dpr, devH = H * dpr;
+      const want = Math.min(dpr * ss, this.maxDpr) / dpr; // fraction of device pixels
+      const budget = Math.sqrt(this.maxPixels / (devW * devH));
+      let k = Math.min(want, budget) / (s > 1 ? s : 1);
+      let crisp = true;
+      if (k > 1.01) crisp = false; // supersampled: the browser filters it down
+      else if (k < 0.99) k = 1 / Math.ceil(1 / k - 0.02);
+      else k = 1;
+      this.w = Math.max(2, Math.round(devW * k));
+      this.h = Math.max(2, Math.round(devH * k));
       this.canvas.style.width = `${W}px`;
       this.canvas.style.height = `${H}px`;
+      this.crisp = crisp;
     }
-    this.canvas.style.imageRendering = this.retro ? 'pixelated' : 'auto';
+    this.canvas.style.imageRendering = this.retro || this.crisp ? 'pixelated' : 'auto';
     this.renderer.setSize(this.w, this.h, false);
     this.post.uRes.value.set(this.w, this.h);
     const P = this.post;
@@ -371,8 +396,8 @@ export class Pipeline {
     const rc = this.reflCam;
     rc.copy(camera);
     // mirror camera across the water plane (same construction as three's Reflector)
-    const p = camera.position.clone();
-    const target = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion).add(p);
+    const p = _v1.copy(camera.position);
+    const target = _v2.set(0, 0, -1).applyQuaternion(camera.quaternion).add(p);
     p.y = 2 * waterY - p.y;
     target.y = 2 * waterY - target.y;
     rc.position.copy(p);
@@ -407,11 +432,18 @@ export class Pipeline {
       r.shadowMap.needsUpdate = false;
       this.renderReflection(scene, camera, 0);
     }
-    r.shadowMap.needsUpdate = true;
+    this._frame++;
+    r.shadowMap.needsUpdate = this.shadowEvery <= 1 || this._frame % this.shadowEvery === 0 || this._frame < 4;
     r.setRenderTarget(this.sceneRT);
     r.render(scene, camera);
+    const P = this.post;
+    P.uRaysOn.value = this.rays ? 1 : 0;
+    P.uBloomOn.value = this.bloom ? 1 : 0;
+    if (this.bloom) this.renderBloom();
+    this.composite(camera);
+  }
 
-    // bloom
+  renderBloom() {
     this.brightMat.uniforms.tColor.value = this.sceneRT.texture;
     this.brightMat.uniforms.uTexel.value.set(1 / this.w, 1 / this.h);
     this.fs(this.brightMat, this.bloomA);
@@ -424,8 +456,9 @@ export class Pipeline {
       this.blurMat.uniforms.uDir.value.set(0, (1 + i) / bh);
       this.fs(this.blurMat, this.bloomA);
     }
+  }
 
-    // composite
+  composite(camera) {
     const P = this.post;
     P.tColor.value = this.sceneRT.texture;
     P.tDepth.value = this.sceneRT.depthTexture;
@@ -433,9 +466,9 @@ export class Pipeline {
     P.uInvProj.value.copy(camera.projectionMatrixInverse);
     P.uInvView.value.copy(camera.matrixWorld);
     P.uCamPos.value.copy(camera.position);
-    const sp = camera.position.clone().addScaledVector(G.uSunDir.value, 1000).project(camera);
+    const sp = _v1.copy(camera.position).addScaledVector(G.uSunDir.value, 1000).project(camera);
     P.uSunScreen.value.set(sp.x * 0.5 + 0.5, sp.y * 0.5 + 0.5);
-    const facing = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion).dot(G.uSunDir.value);
+    const facing = _v2.set(0, 0, -1).applyQuaternion(camera.quaternion).dot(G.uSunDir.value);
     P.uSunVisible.value = Math.max(0, Math.min(1, (facing + 0.1) * 3)) * Math.max(0, Math.min(1, G.uSunDir.value.y * 8 + 0.4));
     if (this.fxaa && !this.retro) {
       this.fs(this.compMat, this.ldrRT);

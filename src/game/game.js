@@ -392,28 +392,39 @@ export class Game {
     if (q !== this._quality) {
       this._quality = q;
       const sun = this.world.sun;
-      const size = q === 'low' ? 1024 : q === 'medium' ? 2048 : 4096;
-      // sharper picture on high: supersample (desktops) and a bigger pixel budget
       const touch = matchMedia?.('(pointer: coarse)').matches;
-      this.pipeline.supersample = q === 'high' ? (touch ? 1.25 : 1.5) : 1;
-      this.pipeline.maxPixels = q === 'low' ? 1.6e6 : touch ? 2.8e6 : 5.2e6;
-      this.pipeline.resize();
-      this.camera.aspect = this.pipeline.w / this.pipeline.h;
+      const hi = q === 'high', lo = q === 'low';
+      const size = lo ? 1024 : hi && !touch ? 4096 : 2048;
+      const P = this.pipeline;
+      // high on a desktop supersamples; everything else renders at (or in whole
+      // steps below) the screen's own pixels, which keeps it crisp and cheap
+      P.supersample = hi && !touch ? 1.5 : 1;
+      P.maxDpr = touch ? (hi ? 2 : lo ? 1 : 1.5) : 3;
+      P.maxPixels = touch ? (hi ? 2.4e6 : lo ? 0.9e6 : 1.4e6) : lo ? 1.6e6 : q === 'medium' ? 3.2e6 : 5.2e6;
+      P.bloom = hi;
+      P.rays = hi && !touch;
+      P.shadowEvery = hi && !touch ? 1 : lo ? 3 : 2;
+      P.resize();
+      this.camera.aspect = P.w / P.h;
       this.camera.updateProjectionMatrix();
       if (sun.shadow.mapSize.x !== size) {
         sun.shadow.mapSize.set(size, size);
         sun.shadow.map?.dispose();
         sun.shadow.map = null;
       }
-      this.pipeline.reflections = q !== 'low';
+      // the water mirror is a whole second scene render: high on desktops only
+      this.pipeline.reflections = hi && !touch;
       this.world.voxel?.setBuildingDetail?.(q); // full-detail houses up close (none on low)
-      this.world.water.material.uniforms.uReflOn.value = q !== 'low' ? 1 : 0;
-      this.world.forest.lodScale = q === 'low' ? 0.55 : q === 'medium' ? 0.8 : 1;
+      this.world.water.material.uniforms.uReflOn.value = this.pipeline.reflections ? 1 : 0;
+      this.world.forest.lodScale = lo ? 0.55 : q === 'medium' ? 0.8 : 1;
       if (this.world.voxelForest) {
-        this.world.voxelForest.lodScale = q === 'low' ? 0.7 : q === 'medium' ? 0.85 : 1.15;
+        // 3D trees only up close; past that the pixel-art cards carry the forest
+        this.world.voxelForest.lodScale = lo ? 0.42 : q === 'medium' ? 0.6 : touch ? 0.8 : 1;
         this.world.voxelForest.last.set(1e9, 0, 1e9);
+        const L3 = this.world.voxelForest.f3d?.L;
+        if (L3) L3.mid.mesh.castShadow = hi; // the far 3D band adds little to the shadow map
       }
-      const grid = q === 'low' ? 90 : q === 'medium' ? 120 : 150;
+      const grid = lo ? 70 : q === 'medium' ? (touch ? 96 : 120) : touch ? 120 : 150;
       if (this.world.grass.gridN !== grid) {
         this.scene.remove(this.world.grass.mesh);
         this.world.grass = new Grass(this.world.grassMask, { gridN: grid, spacing: 0.42 * (150 / grid) ** 0.35 });
