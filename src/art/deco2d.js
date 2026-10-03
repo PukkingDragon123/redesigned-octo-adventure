@@ -679,3 +679,5 @@ function rnd(seed) {
   return () => (s = (s * 9301 + 49297) % 233280) / 233280;
 }
 export { INK };
+// shared with the furniture art (furniture2d.js)
+export { MATS, M as mat, cyl, paintRows, px, rnd, MAPLE, ALL5, FRONT3, blit };
