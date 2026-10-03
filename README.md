@@ -1,6 +1,6 @@
 # Deli-very-dead
 
-A cozy 3D voxel delivery game set in a Halloween-decorated autumn Canada.
+A cozy 3D voxel and pixel-art delivery game set in autumn Canada.
 
 Hank the lumberjack was buried alive by accident during an extremely long nap.
 The Grim Reaper, embarrassed by the paperwork, brings him back as a rattling
@@ -69,13 +69,17 @@ now; tap it.
 - Deliver Nana's cocoa before it cools. Each cup uses ingredients from her
   pantry; when something runs out, shop at Moose & Goose on the boardwalk and
   bring the groceries home.
-- Hop off the bike anywhere. Kick, roll and smash pumpkins and
-  jack-o'-lanterns, sit on benches, bonk the giant skeleton bobblehead, stir
-  the cauldron, carve a jack-o'-lantern on Nana's porch.
+- Pick the day's orders in Nana's order book, carry the cups out and load
+  them into Bessie's crate; they ride behind the saddle, steaming.
+- Hop off the bike anywhere. Kick pumpkins, knock over trash cans, fences,
+  crates and barrels, upset the fish stall on the boardwalk (the fish flop),
+  sit on benches, and walk around inside Nana's cabin: sit by the fire, look
+  at Harold's photos, talk to Nana.
+- Ride into a tree and Hank goes flying while the tree shakes its leaves loose.
 - Chat with villagers for favours: Agnes's three lost cats, lost glasses, puck,
   compass, stethoscope and Mountie hat, six saplings to plant for Gus, bird
-  photos for Birdie, a secret letter, pumpkins for the café, pumpkin bowling,
-  trick-or-treating after dark, and three flaming trick hoops.
+  photos for Birdie, a secret letter, pumpkins for the café, lawn bowling,
+  harvest supper invitations, and three harvest hoops to jump through.
 - Crash badly and Hank bursts into bones, then zips back together.
 
 ## How it's made
@@ -95,14 +99,22 @@ now; tap it.
   pixel logo painted in code.
 - **Voxels** (`src/voxel`): models are painted in code into voxel grids and
   meshed with face culling, baked ambient occlusion and greedy merging.
-  Buildings, Halloween props, food, animals and characters each have a model
+  Buildings, props, food, animals, characters and the cabin interior each have a model
   module; `tools/voxpreview.html?mod=/src/voxel/models/props.js` previews any
   of them, `tools/charpreview.html` previews the characters.
-- **Forest** (`src/world/voxelForest.js`, `src/voxel/models/trees.js`): every
-  tree is voxel, from 0.125 m voxels up close to coarser LODs and camera-facing
-  cards rendered from the same models at the horizon. Models are baked in Web
-  Workers, instanced, culled to the view, and sway in the wind. Mushrooms,
-  saplings, stumps and mossy logs fill the forest floor.
+- **Forest** (`src/world/forest2d.js`, `src/art/trees2d.js`): every tree is
+  pixel art: maples, birches, aspens, oaks, spruces, pines, tamaracks, bushes,
+  ferns, saplings, stumps, logs and mushrooms are sculpted in code into
+  outlined, shaded sprites (with baked normals so the sun lights them from the
+  side), baked in Web Workers into one atlas and drawn as one instanced batch
+  of upright camera-facing cards that sway, cast shadows and shake when hit.
+- **Street clutter** (`src/art/deco2d.js`, `src/world/deco2d.js`,
+  `src/game/deco2d.js`): 2D fences, bins, crates, barrels, hay, mailboxes,
+  market stalls with fish, lamp posts and more, with simple physics so they
+  tip over, roll and spill when knocked, then tidy themselves up off-screen.
+- **Nana's cabin** (`src/world/cabinInterior.js`, `src/game/interior.js`,
+  `src/voxel/models/interior.js`): a walkable voxel room inside the real
+  cabin, with its own colliders, camera box, firelight and things to use.
 - **World** (`src/world`): a heightmap valley with a river, beaches and roads
   stamped into it from `layout.js`. Maple Cove has a straight Main Street with
   sidewalks, crosswalks and lamp posts, a post office, donut shop, Café Érable,
@@ -124,12 +136,13 @@ now; tap it.
   voxel animals and react to Hank. Particles are instanced: outlined toon
   smoke, impact stars, bouncing debris, skid marks, splash crowns and anime
   speed lines.
-- **UI** (`src/ui`): a pixel kit of leather panels with gold filigree, buttons,
+- **UI** (`src/ui`): a pixel kit of carved wood panels with brass nails, buttons,
   slots, books and bezels (`kit.js`, `kitart.js`), shaded 32 px icons
   (`src/art/icons.js`), and black-and-white speech bubbles over the real 3D
   speaker. Everything is drawn on one integer pixel grid so it stays crisp.
-  Touch controls have a steering wheel and chunky buttons for pedal, brake,
-  hop, drift, wheelie and stoppie.
+  Orders and customers live in a spiral notebook. Touch controls have a
+  floating thumb stick (pull back to wheelie, push to stoppie), pedal, brake,
+  hop, an auto-pedal switch and one trick button.
 - **Rendering** (`src/render`): three.js renders at native resolution (or
   above it on high-DPI screens) into an HDR target. A post pass adds height fog
   with sun scattering, cartoon depth-edge outlines, screen-space god rays,
@@ -158,7 +171,8 @@ These are useful while developing:
   `&assist=1` / `&assist=0` to force riding assists, `&nofreeze` to turn off
   hit-stop, `&cat=1`)
 - `?start=intro` plays the new-game story
-- `?scene=lumberCamp|funeral|yearsPass|revival|nanaFindsHank` plays one part of
+- `?scene=cabinArrive|cabinSofa|loadCargo` plays the cabin and cargo-loading
+  beats; `?scene=lumberCamp|funeral|yearsPass|revival|nanaFindsHank` plays one part of
   the prologue; `?scene=cabinNight|morning|garageReveal|villagePanic|catRescue|ending`
   plays a later story beat (add `&autotalk` to advance the dialogue by itself)
 - `?loaderonly=60` shows just the loading scene for 60 seconds (`&pop=1` drops
