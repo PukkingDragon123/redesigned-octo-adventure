@@ -18,7 +18,7 @@
 // Before each message the corner is chosen so nothing covers the touch controls or
 // the HUD (Nana's list, the speedometer, the prompt).
 import { sound } from '../game/sound.js';
-import { charSnapshot } from './snapshots.js';
+import { charSnapshot, snapshotTop } from './snapshots.js';
 import { frame, tail, tokenize, layoutText } from './bubbles.js';
 import { BUBBLE_JOIN } from './kitart.js';
 import { el, scale, snap } from './kit.js';
@@ -89,7 +89,8 @@ export class Popups {
 
   blocked() {
     const g = this.game, ui = this.ui;
-    return g.mode !== 'ride' || !!g.currentScene || !!ui.dialogueTick || ui.menuStack.length > 0 || ui.root.classList.contains('letterbox');
+    // menus are fine (Mo can grumble over the shop, Nana over the order book): the pop-up sits above them
+    return (g.mode !== 'ride' && g.mode !== 'menu') || !!g.currentScene || !!ui.dialogueTick || ui.root.classList.contains('letterbox');
   }
 
   update(dt) {
@@ -282,7 +283,7 @@ export class Popups {
       const hx = cx - P / 2, hy = base - P * 0.98;
       let bx = right ? cx + P * 0.3 - bw : cx - P * 0.3;
       bx = Math.max(m, Math.min(W - bw - m, bx));
-      const by = base - P * 0.96 - tailH - bh;
+      const by = base - P * (1 - snapshotTop(c.img.src)) + 3 * u - tailH - bh;
       return { right, bx, by, list: [[hx, hy, hx + P, base], [bx, by - nameH, bx + bw, by + bh + tailH]] };
     };
     const overlap = (B) => {

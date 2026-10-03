@@ -9,6 +9,9 @@ import { VoxelCharacter } from '../game/vchar.js';
 import { G } from '../render/shaderlib.js';
 
 const CACHE = new Map();
+const TOPS = new Map();
+// how far down the image the top of the character starts (0..1), for a snapshot url
+export const snapshotTop = (url) => TOPS.get(url) ?? 0.05;
 const ID = (id) => (id === 'kids' ? 'pip' : id === 'lou_lh' ? 'ollie' : id);
 const INK = [30, 20, 24];
 const STUDIO = [
@@ -87,6 +90,9 @@ export function charSnapshot(game, id, expr = 'happy', size = 96, { bust = false
     }
     g.putImageData(img, 0, 0);
     url = c.toDataURL();
+    let top = 0;
+    while (top < size - 1 && ![...Array(size).keys()].some((x) => D[(top * size + x) * 4 + 3] > 0)) top++;
+    TOPS.set(url, top / size);
   } catch (e) {
     console.warn('snapshot failed', id, e);
   }

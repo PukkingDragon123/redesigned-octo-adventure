@@ -185,7 +185,7 @@ export class Menus {
         st.money -= total();
         for (const [k, n] of Object.entries(cart)) st.bag[k] = (st.bag[k] || 0) + n * 2;
         g.sound.play('cash_coins');
-        ui.toast('Groceries bagged! Bring them home to Nana.', 'basket', 2400);
+        ui.pop('Groceries bagged! Now home to Nana before the milk gets ideas.', { expr: 'happy' });
         g.save();
       }
       ui.closeOverlay(m);
@@ -206,7 +206,7 @@ export class Menus {
       const e = el('button', 'k-plate k-parchment shopitem pick', `<img class="fi" src="${foodIconURL(k)}"><span class="nm">${esc(SHOP_NAME[k] || info.label)}</span><span class="pr"><b>$${info.price}</b></span><span class="k-count qty"></span>`);
       e.sync = () => { const q = e.querySelector('.qty'); q.textContent = cart[k] ? `${cart[k]}` : ''; q.style.visibility = cart[k] ? '' : 'hidden'; e.classList.toggle('taken', !!cart[k]); };
       e.addEventListener('click', () => {
-        if (total() + info.price > st.money) { g.sound.play('ui_error'); ui.toast("Mo: 'That's a little more than you've got, Hank!'", 'coin', 1800); return; }
+        if (total() + info.price > st.money) { g.sound.play('ui_error'); ui.pop("That's a little more than you've got, Hank!", { who: 'mo', name: 'Mo', expr: 'sheepish', key: 'shop' }); return; }
         cart[k] = (cart[k] || 0) + 1;
         g.sound.play('register', { volume: 0.5 });
         render();
@@ -367,10 +367,10 @@ export class Menus {
           g.sound.play('ui_error');
           const miss = O.missing ? O.missing(o) : [];
           if (miss.length) {
-            ui.toast(`Nana: "We're out of <b>${miss.map((k) => FOOD_INFO[k]?.label || k).join(' &amp; ')}</b>! Could you pop over to Moose &amp; Goose?"`, 'basket', 3600);
+            ui.pop(`We're out of *${miss.map((k) => FOOD_INFO[k]?.label || k).join(' & ')}*, dear! Could you pop over to Moose & Goose?`, { who: 'grandma', expr: 'worried', key: 'pack' });
             const q = g.quests.q('groceries');
             if (q.state !== 'active') { q.state = 'active'; g.sound.play('quest_new'); }
-          } else ui.toast(`Bessie only holds ${O.capacity()} cocoas: two in the basket, one in the crate.`, 'basket');
+          } else ui.pop(`Bessie only holds ${O.capacity()} cocoas: two in the basket, one in the crate.`, { expr: 'sheepish', key: 'pack' });
         } else {
           g.sound.play('cup');
           packed = true;

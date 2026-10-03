@@ -59,7 +59,7 @@
 @keyframes k-rise { 0% { transform: translateY(calc(var(--u) * 4)); } 50% { transform: translateY(calc(var(--u) * 2)); } }
 
 /* ---------------------------------------------------------------- pop-ups (popup.js): Hank peeks up and says it */
-.pop-layer { position: absolute; inset: 0; pointer-events: none; z-index: 3; overflow: hidden; }
+.pop-layer { position: absolute; inset: 0; pointer-events: none; z-index: 6; overflow: hidden; }
 .pop-layer * { pointer-events: none !important; }
 .pop { position: absolute; inset: 0; }
 .pop-clip { position: absolute; left: 0; top: 0; width: 100%; overflow: hidden; }

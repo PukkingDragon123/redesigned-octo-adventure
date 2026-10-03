@@ -100,7 +100,7 @@ export class UI {
   pop(text, opts = {}) {
     const who = opts.who || 'hank';
     const name = who === 'hank' ? '' : opts.name ?? (who === 'cat' ? 'Poutine' : who === 'grandma' ? 'Nana' : CHARACTERS[who]?.name ?? '');
-    this.popups.push(text, { ...opts, who, name, voice: VOICE[who] || 'hank' });
+    this.popups.push(text, { ...opts, who, name, voice: VOICE[who] || CHARACTERS[who]?.voice || 'narrator' });
   }
   // old-style calls still work: they become Hank saying the same words
   toast(text, icon = null, ms) {
