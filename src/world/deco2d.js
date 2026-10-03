@@ -58,6 +58,7 @@ export function placeDeco2D(vw) {
   const W = vw.world, PH = W.physics, T = W.terrain;
   const items = [];
   const cards = [];
+  const lawns = [];
   const placed = new SpatialHash(6);
   const rng = new RNG(2718);
   const gy = (x, z) => PH.groundAt(x, z, 60).h;
@@ -84,37 +85,45 @@ export function placeDeco2D(vw) {
   }
   const inDoorway = (x, z, r) => doors.some((d) => {
     const t = Math.max(-0.3, Math.min(d.len, (x - d.x) * d.fx + (z - d.z) * d.fz));
-    return Math.hypot(x - d.x - d.fx * t, z - d.z - d.fz * t) < 0.75 + r;
+    return Math.hypot(x - d.x - d.fx * t, z - d.z - d.fz * t) < 0.6 + r;
   });
   // is (x, z) free for something of radius r? opts: road (allow on a road), water, solids,
   // y (stands on a deck at this height), hang (hangs from a beam: no ground checks),
   // level (the furniture: the ground under the whole footprint must be within tol of the centre)
+  let why = '';
+  const no = (w) => { why = w; return false; };
   const free = (x, z, r, o = {}) => {
-    if (Math.abs(x) > L.WORLD_HALF - 12 || Math.abs(z) > L.WORLD_HALF - 12) return false;
-    if (!kept(x, z)) return false;
-    if (o.level && !o.hang && inDoorway(x, z, r * 0.7)) return false;
+    if (Math.abs(x) > L.WORLD_HALF - 12 || Math.abs(z) > L.WORLD_HALF - 12) return no('edge');
+    if (!kept(x, z)) return no('keepout');
+    if (o.level && !o.hang && inDoorway(x, z, r * 0.5)) return no('door');
     const g = PH.groundAt(x, z, o.y != null ? o.y + 0.5 : 60);
-    if (o.y != null && !o.hang && Math.abs(g.h - o.y) > 0.35) return false;
-    if (!o.hang) {
-      if (!o.water && (g.water || g.h < 0.2)) return false;
-      if (!o.road && !g.platform && T.splatAt(x, z).road > 0.3) return false;
+    if (o.deck && !o.hang) {
+      // on a porch deck (o.y is its floor): the footprint stays on the deck, nothing solid sticks up through it
+      if (!o.deck(x, z, r)) return no('deck');
+      if (g.h > o.y + 0.3) return no('deck');
+    } else if (o.y != null && !o.hang && Math.abs(g.h - o.y) > 0.35) return no('deck');
+    if (!o.hang && !o.deck) {
+      if (!o.water && (g.water || g.h < 0.2)) return no('water');
+      if (!o.road && !g.platform && T.splatAt(x, z).road > 0.3) return no('road');
       if (o.level) {
         const tol = o.tol ?? 0.09, rr = Math.max(0.1, r * 0.85);
         for (let k = 0; k < 6; k++) {
           const a = (k / 6) * Math.PI * 2;
           const h = PH.groundAt(x + Math.cos(a) * rr, z + Math.sin(a) * rr, g.h + 0.5).h;
-          if (Math.abs(h - g.h) > tol) return false;
+          if (Math.abs(h - g.h) > tol) return no('slope');
         }
       }
     }
     if (o.solids !== false && !o.hang) {
       probe.x = x; probe.y = o.y ?? g.h; probe.z = z;
-      if (PH.resolve(probe, r, 1.0)) return false;
+      const hit = PH.resolve(probe, r, 1.0);
+      if (hit) return no('solid');
     }
     let hit = false;
-    placed.query(x, z, r + 2, (it) => { if (!hit && Math.hypot(it.x - x, it.z - z) < r + (it.r ?? 0.3) + 0.05) hit = true; });
-    return !hit;
+    placed.query(x, z, r + 2, (it) => { if (!hit && !!it.hang === !!o.hang && Math.hypot(it.x - x, it.z - z) < r + (it.r ?? 0.3) + 0.05) hit = true; });
+    return hit ? no('overlap') : true;
   };
+  const fails = {};
   // axis of the piece's width (three.js local x after rotation.y = yaw)
   const across = (yaw) => [Math.cos(yaw), -Math.sin(yaw)];
   const fits = (kind, x, z, yaw, o) => {
@@ -129,17 +138,24 @@ export function placeDeco2D(vw) {
   const put = (kind, x, z, yaw, o = {}) => {
     const F = FOOT[kind] || { r: 0.2, h: 0.4 };
     if (FOOT2[kind]) o = { level: true, hang: !!F.hang, ...o };
-    if (!o.force && !fits(kind, x, z, yaw, o)) return null;
+    if (!o.force && !fits(kind, x, z, yaw, o)) { if (FOOT2[kind]) { const fk = (fails[kind] ||= {}); fk[why] = (fk[why] || 0) + 1; } return null; }
     const it = { kind, x, y: o.y ?? gy(x, z), z, yaw, r: F.r, len: F.len || 0, h: F.h, axis: F.axis || 'z', fixed: !!F.fixed, stall: F.stall ? [] : null, v: o.v || 0 };
+    // porch things keep to the deck's floor when knocked about (the physics may not have the deck)
+    if (o.deck && o.y != null) it.floor = { y: o.y, inside: o.deck };
     items.push(it);
     // the long pieces register a few points so later checks see all of them
     const [ax, az] = it.axis === 'x' ? [Math.sin(yaw), Math.cos(yaw)] : across(yaw);
     const n = Math.max(0, Math.round(it.len / 0.8));
     for (let k = -n; k <= n; k++) {
       const px = x + (n ? (ax * it.len * k) / n : 0), pz = z + (n ? (az * it.len * k) / n : 0);
-      placed.insert({ x: px, z: pz, r: it.r }, px, pz, it.r);
+      placed.insert({ x: px, z: pz, r: it.r, hang: !!o.hang }, px, pz, it.r);
     }
     if (it.fixed) collider(it);
+    // the furniture stands on mown grass (the tall tufts would swallow it)
+    if (FOOT2[kind] && !o.hang && !PH.groundAt(x, z, it.y + 0.5).platform) {
+      const s = 2 * (it.r + it.len) + 0.8;
+      lawns.push({ x, z, w: s, d: s, yaw: 0, keep: kind === 'flowerbed' ? 0 : 0.35, short: true });
+    }
     if (o.sit) vw.spot(it.x, it.z, 1.4, kind === 'bench2d' ? 'Sit on the bench' : 'Sit down', 'sit', { yaw, y: it.y });
     return it;
   };
@@ -320,5 +336,5 @@ export function placeDeco2D(vw) {
   placeFurniture(vw, { put, tryAt, card, rng, PH, local });
   // start baking the sprites now, so they are ready when the game starts (screenshots bake their own)
   const shots = typeof location !== 'undefined' && new URLSearchParams(location.search).has('frames');
-  return { items, cards, paint: shots ? null : startDecoPaint() };
+  return { items, cards, lawns, fails, paint: shots ? null : startDecoPaint() };
 }

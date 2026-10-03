@@ -113,7 +113,13 @@ export function placeFurniture(vw, K) {
     }
     if (deck) {
       const y = F.floorY != null ? F.floorY + (deck.y || 0) : null;
-      const on = { y, deck: true };
+      // is a footprint of radius r at (x, z) on the deck? (in the building's frame)
+      const inside = (x, z, r2 = 0) => {
+        const dx = x - F.b.x, dz = z - F.b.z;
+        const lx = dx * F.c - dz * F.s, lz = dx * F.s + dz * F.c;
+        return lx > deck.x0 + r2 && lx < deck.x1 - r2 && lz > Math.max(deck.z0, front) + r2 * 0.6 && lz < deck.z1 - r2;
+      };
+      const on = y != null ? { y, deck: inside } : {};
       const z0 = Math.max(deck.z0, front), z1 = deck.z1;
       const left = [deck.x0 + 0.55, doorX - 1.15], right = [doorX + 1.15, deck.x1 - 0.55];
       const sides = r() < 0.5 ? [left, right] : [right, left];
@@ -123,8 +129,8 @@ export function placeFurniture(vw, K) {
         const x = a[0] + (a[1] - a[0]) * 0.5;
         const [rx, rz] = P(x, z0 + 0.7);
         if (put('rocker', rx, rz, f + (r() - 0.5) * 0.5, on)) {
-          const tx = x + (x < doorX ? 0.62 : -0.62);
-          const [sx, sz] = P(tx, z0 + 0.45);
+          const tx = x + (x < doorX ? 0.68 : -0.68);
+          const [sx, sz] = P(tx, z0 + 0.5);
           put('sidetable', sx, sz, f, on);
         }
       }
@@ -143,7 +149,7 @@ export function placeFurniture(vw, K) {
       // potted mums either side of the steps, a fern by the door
       const mv = Math.floor(r() * 4);
       for (const sd of [-1, 1]) { const [mx, mz] = P(doorX + sd * 0.95, z1 - 0.32); put('mum', mx, mz, f, { ...on, v: (mv + (sd > 0 ? 1 : 0)) % 4 }); }
-      { const [fx, fz] = P(doorX + (r() < 0.5 ? -0.85 : 0.85), z0 + 0.3); if (r() < 0.6) put('fern', fx, fz, f, on); else put('bootrack', fx, fz, f, on); }
+      { const [fx, fz] = P(doorX + (r() < 0.5 ? -0.9 : 0.9), z0 + 0.52); if (r() < 0.6) put('fern', fx, fz, f, on); else put('bootrack', fx, fz, f, on); }
       // hanging baskets and wind chimes under the beam at the front
       if (y != null) {
         const hv = Math.floor(r() * 2);
@@ -154,7 +160,7 @@ export function placeFurniture(vw, K) {
         }
       }
       // a box of firewood at the end of the porch for the country houses
-      if (country) { const [wx, wz] = P(r() < 0.5 ? deck.x0 + 0.45 : deck.x1 - 0.45, z0 + 0.45); put('woodbox', wx, wz, f + Math.PI / 2, on); }
+      if (country) { const [wx, wz] = P(r() < 0.5 ? deck.x0 + 0.65 : deck.x1 - 0.65, z0 + 0.52); put('woodbox', wx, wz, f, on); }
     } else {
       // a stoop: mums on the ground either side of it
       const mv = Math.floor(r() * 4);
@@ -196,7 +202,7 @@ export function placeFurniture(vw, K) {
       const t = put('umbrellatable', x, z, yaw, { v: cols });
       if (!t) continue;
       made++;
-      for (const [dx, dz, cy] of [[0.62, 0.0, -Math.PI / 2], [-0.62, 0.0, Math.PI / 2], [0.0, 0.62, Math.PI]]) {
+      for (const [dx, dz, cy] of [[0.72, 0.0, -Math.PI / 2], [-0.72, 0.0, Math.PI / 2], [0.0, 0.72, Math.PI]]) {
         if (dz && k % 2) continue;
         const px = x + ax * dx + fx * dz, pz = z + az * dx + fz * dz;
         put('bistrochair', px, pz, yaw + cy + (rng.next() - 0.5) * 0.4);
@@ -215,6 +221,16 @@ export function placeFurniture(vw, K) {
     // menu easels and planters at the sidewalk
     for (const [x, z, yaw] of [[cafe.x - cafe.w / 2 - 1.0, walkN - 0.6, 0.3], [donuts.x + donuts.w / 2 + 1.2, walkN - 0.6, -0.3], [bakery.x + bakery.w / 2 + 1.2, walkS + 0.6, Math.PI + 0.3]]) put('easel', x, z, yaw, { road: true });
     for (const [x, z, v] of [[cafe.x - cafe.w / 2 - 5.6, walkN - 0.6, 0], [donuts.x + donuts.w / 2 + 5.4, walkN - 0.6, 1], [bakery.x + bakery.w / 2 + 5.6, walkS + 0.6, 2]]) put('barrelplanter', x, z, 0, { road: true, v });
+  }
+  // bistro sets along the bakery's and the donut shop's fronts, either side of the door
+  for (const id of ['house7', 'donuts']) {
+    const F = frame(B(id));
+    for (const lx of [-F.b.w / 2 + 1.4, F.b.w / 2 - 1.4, F.doorX + (F.doorX > 0 ? -2.6 : 2.6)]) {
+      if (Math.abs(lx - F.doorX) < 1.8) continue;
+      const [tx, tz] = F.P(lx, F.front + 0.62);
+      if (!put('bistrotable', tx, tz, F.f, { road: true })) continue;
+      for (const sd of [-1, 1]) { const [cx, cz] = F.P(lx + sd * 0.66, F.front + 0.6); put('bistrochair', cx, cz, F.f + sd * Math.PI / 2 + (rng.next() - 0.5) * 0.3, { road: true }); }
+    }
   }
   // newspaper boxes by the post office and the café, a phone booth beside the post office
   {
@@ -278,7 +294,7 @@ export function placeFurniture(vw, K) {
       let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
       for (let j = 0; j < 4; j++) { const x = P.getX(i + j), y = P.getY(i + j); x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
       const q = { x0, x1, y0, y1, z: P.getZ(i) };
-      if (q.z > F.front - 1.0 && keep(q)) out.push(q);
+      if (q.z > F.front - 3.6 && keep(q)) out.push(q);
     }
     return out;
   }
@@ -299,15 +315,16 @@ export function placeFurniture(vw, K) {
   const sea = 0; // the sea is to the south (+z): yaw 0 faces it
   for (const x of [140, 196, 214, 240]) put('bench2d', x, bw.a[1] + bw.w / 2 - 0.55, sea, { v: 1, sit: true });
   for (const d of L.DOCKS) {
-    // a life ring on a post at the head of each dock, rods and a cooler on the dock, deck chairs further out
-    put('lifering', d.a[0] + d.w / 2 + 0.25, bw.a[1] + bw.w / 2 + 0.4, Math.PI / 2);
-    const dx = (d.b[0] - d.a[0]) / (d.b[1] - d.a[1]);
-    const on = (t, side) => [d.a[0] + dx * (d.a[1] + t - d.a[1]) + side * (d.w / 2 - 0.45), d.a[1] + t];
-    put('rods', ...on(4, -1), Math.PI / 2);
-    put('cooler', ...on(5.2, -1), Math.PI / 2 + 0.2, { v: d.a[0] % 2 });
+    // (the first 6 m of a dock is the ramp down from the boardwalk) rods and a cooler where it levels out,
+    // deck chairs further along, a life ring on a post at the end
+    const dx = (d.b[0] - d.a[0]) / (d.b[1] - d.a[1]), len = d.b[1] - d.a[1];
+    const on = (t, side) => [d.a[0] + dx * t + side * (d.w / 2 - 0.45), d.a[1] + t];
+    put('rods', ...on(7.5, -1), Math.PI / 2);
+    put('cooler', ...on(8.6, -1), Math.PI / 2 + 0.2, { v: d.a[0] % 2 });
+    put('lifering', ...on(len - 0.8, 1), -Math.PI / 2);
     put('deckchair', ...on(12, 1), -Math.PI / 2 + 0.5, { v: d.a[0] % 3 });
     put('deckchair', ...on(13.1, 1), -Math.PI / 2 + 0.2, { v: (d.a[0] + 1) % 3 });
-    put('netpile', ...on(20, -1), rng.range(0, 3));
+    put('netpile', ...on(len - 3, -0.6), rng.range(0, 3), { tol: 0.15 });
   }
   {
     const fm = frame(B('fishmarket'));

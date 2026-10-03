@@ -115,6 +115,8 @@ const SMALL = 55;
 const ANIM = { laundry: 1.6, scarecrow: 0.5, chimes: 1.3 };
 
 const _right = new THREE.Vector3(), _fwd = new THREE.Vector3(), _p = new THREE.Vector3();
+// porch pieces land on their deck's floor while they are over it (the physics may not have the deck)
+const floorAt = (fl, x, z, h) => (fl && h < fl.y && fl.inside(x, z, 0) ? fl.y : h);
 
 export class Deco2D {
   constructor(game) {
@@ -354,7 +356,7 @@ export class Deco2D {
     }
     const D = CATALOGUE[kind];
     if (!D) return;
-    this.bits.push({ kind, x, y, z, vx, vy, vz, spin: Math.random() * TAU, spinV: o.spinV ?? (Math.random() - 0.5) * 12, yaw: o.yaw ?? Math.random() * TAU, parent, t: 0, rest: false, ring: !!o.ring });
+    this.bits.push({ kind, x, y, z, vx, vy, vz, spin: Math.random() * TAU, spinV: o.spinV ?? (Math.random() - 0.5) * 12, yaw: o.yaw ?? Math.random() * TAU, parent, t: 0, rest: false, ring: !!o.ring, leaf: kind.startsWith('bit_leaf') });
   }
 
   // ---------------------------------------------------------------- per frame
@@ -428,9 +430,10 @@ export class Deco2D {
       }
     }
     const gr = PH.groundAt(it.x, it.z, it.y + 0.5);
+    const gh = floorAt(it.floor, it.x, it.z, gr.h);
     let ground = false;
-    if (it.y <= gr.h) {
-      it.y = gr.h;
+    if (it.y <= gh) {
+      it.y = gh;
       ground = true;
       if (it.vy < -3) this.sfx(D.mode === 'flop' ? 'squish' : D.sound, it.x, it.y, it.z, Math.min(0.5, -it.vy * 0.06), 1.1);
       it.vy = it.vy < -1.5 ? -it.vy * 0.28 : 0;
@@ -500,11 +503,19 @@ export class Deco2D {
     const PH = this.game.physics;
     b.t += dt;
     b.vy -= 15 * dt;
+    if (b.leaf) {
+      // leaves flutter: they fall slowly and drift side to side
+      b.vy = Math.max(b.vy, -1.1);
+      const sway = Math.sin(b.t * 4.2 + b.spin) * 1.6;
+      b.vx += (sway * this.rz * 0.6 - b.vx * 1.2) * dt; b.vz += (-sway * this.rx * 0.6 - b.vz * 1.2) * dt;
+      b.spinV = Math.sin(b.t * 3 + b.yaw) * 5;
+    }
     b.x += b.vx * dt; b.y += b.vy * dt; b.z += b.vz * dt;
     b.spin += b.spinV * dt;
     const gr = PH.groundAt(b.x, b.z, b.y + 0.4);
-    if (b.y <= gr.h) {
-      b.y = gr.h;
+    const gh = floorAt(b.parent?.floor, b.x, b.z, gr.h);
+    if (b.y <= gh) {
+      b.y = gh;
       if (b.vy < -2.5 && b.kind === 'lid') this.sfx('plate', b.x, b.y, b.z, 0.35);
       b.vy = b.vy < -1.2 ? -b.vy * 0.3 : 0;
       const e = Math.exp(-(b.kind === 'bit_apple' || b.kind === 'bit_appleG' || b.kind === 'bit_can' || b.kind === 'lid' ? 1.2 : 5) * dt);
