@@ -675,9 +675,9 @@ const ICONS = {
   pumpkin(c) {
     c.tube([[16, 9], [17.6, 3.6], [20, 3]], 1.4, R.moss);
     for (const [x, rx] of [[9.4, 6.4], [22.6, 6.4], [13, 7], [19, 7], [16, 7.4]]) c.ball(x, 18, rx, 10.4, R.pumpkin, { line: x !== 9.4 ? 2 : undefined });
-    c.poly([[10, 14.6], [14, 14.6], [12, 11.6]], R.yellow, { t: 4 }); c.poly([[18, 14.6], [22, 14.6], [20, 11.6]], R.yellow, { t: 4 });
-    c.poly([[9, 19.6], [23, 19.6], [21, 24], [11, 24]], R.yellow, { t: 4 });
-    c.face(rrect(13.4, 19.6, 15, 21.4, 0), R.pumpkin, { t: 3 }); c.face(rrect(17, 22.4, 18.6, 24, 0), R.pumpkin, { t: 3 });
+    // a plain harvest pumpkin: a curly vine and a leaf, no carved face
+    c.tube([[17.6, 4], [21, 2.6], [23.4, 4.6], [22, 6.4]], 0.6, R.moss, { spec: false });
+    c.pillow(mapleLeaf(11.6, 6, 3.4), R.moss, { rad: 0.8 });
   },
   axe(c) {
     c.tube([[7, 29], [21, 6]], 1.4, R.timber);
@@ -691,11 +691,6 @@ const ICONS = {
     c.poly([[14.6, 20.6], [17.4, 20.6], [16, 18.4]], R.black, { t: 1 });
     for (const x of [12.6, 15, 17.4, 19.8]) c.line(x, 23.6, x, 26.6, 0x5e4c3e);
     c.dots([[9, 8], [10, 7]], 0xffffff);
-  },
-  candy(c) {
-    c.poly([[2, 10], [9, 14], [9, 18], [2, 22], [4, 16]], R.yellow, { rad: 1 });
-    c.poly([[30, 10], [23, 14], [23, 18], [30, 22], [28, 16]], R.yellow, { rad: 1 });
-    c.ball(16, 16, 8.6, 6.4, R.orange, { tex: (x, y, t) => (Math.floor(x - y * 0.6) % 4 < 2 ? t : Math.min(5, t + 1)) });
   },
 
   // ---- skills (bike moves)
