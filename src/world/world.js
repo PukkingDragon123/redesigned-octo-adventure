@@ -25,6 +25,8 @@ import * as VOXPROPS from '../voxel/models/props.js';
 import { meshVox } from '../voxel/mesh.js';
 import { voxMesh, sharedVoxelMaterial } from '../render/voxelMaterial.js';
 
+const _fwd = new THREE.Vector3(), _up = new THREE.Vector3(), _right = new THREE.Vector3(), _lup = new THREE.Vector3(), _snap = new THREE.Vector3();
+
 export class World {
   constructor(pipeline, progress = () => {}) {
     this.pipeline = pipeline;
@@ -240,14 +242,14 @@ export class World {
     const texel = size / sun.shadow.mapSize.x;
     const dir = G.uSunDir.value;
     // build light space basis
-    const fwd = dir.clone().negate();
-    const up = Math.abs(fwd.y) > 0.99 ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 1, 0);
-    const right = new THREE.Vector3().crossVectors(up, fwd).normalize();
-    const lup = new THREE.Vector3().crossVectors(fwd, right).normalize();
+    const fwd = _fwd.copy(dir).negate();
+    const up = Math.abs(fwd.y) > 0.99 ? _up.set(1, 0, 0) : _up.set(0, 1, 0);
+    const right = _right.crossVectors(up, fwd).normalize();
+    const lup = _lup.crossVectors(fwd, right).normalize();
     const px = Math.round(focus.dot(right) / texel) * texel;
     const py = Math.round(focus.dot(lup) / texel) * texel;
     const pz = focus.dot(fwd);
-    const snapped = new THREE.Vector3().addScaledVector(right, px).addScaledVector(lup, py).addScaledVector(fwd, pz);
+    const snapped = _snap.set(0, 0, 0).addScaledVector(right, px).addScaledVector(lup, py).addScaledVector(fwd, pz);
     sun.target.position.copy(snapped);
     sun.position.copy(snapped).addScaledVector(dir, 200);
     sun.target.updateMatrixWorld();
