@@ -490,13 +490,10 @@ export class Game {
     else if (near(L.HOME_SPOTS.porch.x, L.HOME_SPOTS.porch.z, L.HOME_SPOTS.porch.r + 1.5) && slow && !(this.onFoot && this.interior?.nearDoorOutside(p, 3))) action = { text: 'Talk to Nana', fn: () => this.story.homeTalk() };
     else if (near(L.HOME_SPOTS.garage.x, L.HOME_SPOTS.garage.z, L.HOME_SPOTS.garage.r + 1) && slow) action = { text: "Harold's riding notes", fn: () => this.openSkillBook() };
     if (!action) {
+      // (scared customers snatch the cup at arm's length, or want it left on the step)
       for (const o of this.orders.carried()) {
-        const a = this.villagers.get(o.spot);
-        if (!a) continue;
-        if (near(a.pos.x, a.pos.z, 4.5) && slow && Math.abs(a.pos.y - p.y) < 2.5) {
-          action = { text: `Deliver ${o.label} to ${a.char === 'pip' ? 'Pip & Pop' : this.villagerName(a.char)}`, fn: () => this.story.deliver(o, a) };
-          break;
-        }
+        action = this.villagers.deliveryAction(o, p, slow);
+        if (action) break;
       }
     }
     if (!action && this.catEventActive && near(L.POI.catLog.x, L.POI.catLog.z, 7) && slow) action = { text: 'Investigate the meowing', fn: () => this.story.catRescue() };
@@ -523,13 +520,13 @@ export class Game {
   }
 
   villagerName(char) {
-    return { gus: 'Gus', marie: 'Marie-Claude', birdie: 'Captain Birdie', agnes: 'Agnes', doug: 'Constable Doug', ingrid: 'Dr. Ingrid', lou: 'Big Lou', ollie: 'Old Ollie', mo: 'Mo', pip: 'Pip', pop: 'Pop', grandma: 'Nana' }[char] || char;
+    return { gus: 'Gus', marie: 'Marie-Claude', birdie: 'Captain Birdie', agnes: 'Agnes', doug: 'Constable Doug', ingrid: 'Dr. Ingrid', lou: 'Big Lou', ollie: 'Old Ollie', mo: 'Mo', pip: 'Pip', pop: 'Pop', josee: 'Josée', grandma: 'Nana' }[char] || char;
   }
 
   compassMarkers() {
     const m = [];
     for (const o of this.orders.carried()) {
-      const c = L.CUSTOMERS[o.spot];
+      const c = this.villagers.markerFor(o.spot) || L.CUSTOMERS[o.spot];
       m.push({ id: `o${o.id}`, x: c.x, z: c.z, icon: 'cocoa' });
     }
     if (!this.orders.carried().length) m.push({ id: 'home', x: L.POI.cabin.x + 8, z: L.POI.cabin.z, icon: 'home' });
@@ -604,13 +601,7 @@ export class Game {
         this.freeze(e.soft ? 0.07 : 0.12);
         ch.punch(-8);
         this.crashGag(e);
-        // onlookers gasp... then can't help laughing
-        for (const a of Object.values(this.villagers.actors)) {
-          if (!a.visible || a.scripted || a.pos.distanceTo(b.pos) > 16) continue;
-          a.faceTowards(b.pos.x, b.pos.z);
-          a.react(this.villagers.scaredOfHank ? 'flinch' : 'gasp');
-          if (!this.villagers.scaredOfHank) this.wait(1.0 + Math.random() * 0.5).then(() => a.react('laugh'));
-        }
+        // (onlookers gasp, laugh or run over to help: villagers.onBikeEvent)
         break;
       case 'reassemble': break;
       case 'bonk':

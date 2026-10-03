@@ -77,4 +77,30 @@ export const SFX4 = {
     setWet(c, 0.35);
     upto(c, 2.2);
   },
+  // village life: a constable's pea whistle (two blasts) and a door slammed in fright
+  whistle(c) {
+    for (const [t, d] of [[0, 0.22], [0.3, 0.55]]) {
+      T(c, { t, dur: d, f: 2750, f2: 2700, v: 0.16, a: 0.01, am: [34, 0.75, 'square'] });
+      T(c, { t, dur: d, f: 2950, v: 0.05, a: 0.01, am: [34, 0.7, 'square'] });
+      N(c, { t, dur: d, bp: 2800, q: 3, v: 0.12, a: 0.01 });
+    }
+    setWet(c, 0.15);
+    upto(c, 1.0);
+  },
+  bark(c) {
+    for (const t of [0, 0.2]) {
+      T(c, { t, dur: 0.13, type: 'sawtooth', f: rand(400, 440), f2: 240, g: 0.05, v: 0.2, lp: 1500, a: 0.004 });
+      N(c, { t, dur: 0.1, bp: 850, q: 1.6, v: 0.32, a: 0.003 });
+    }
+    setWet(c, 0.12);
+    upto(c, 0.5);
+  },
+  door_slam(c) {
+    T(c, { dur: 0.32, f: 120, f2: 48, g: 0.09, v: 0.8 });
+    N(c, { dur: 0.25, buf: 'brown', lp: 600, v: 0.8, a: 0.001 });
+    N(c, { dur: 0.06, bp: 1400, q: 1.2, v: 0.3 });
+    for (let i = 0; i < 4; i++) N(c, { t: 0.08 + i * 0.045, dur: 0.03, bp: rand(2200, 3600), q: 4, v: 0.08 }); // the latch and the window panes rattling
+    setWet(c, 0.25);
+    upto(c, 0.9);
+  },
 };

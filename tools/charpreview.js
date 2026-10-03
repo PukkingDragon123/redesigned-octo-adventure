@@ -5,10 +5,15 @@ import { createVoxelMaterial } from '../src/render/voxelMaterial.js';
 import { G } from '../src/render/shaderlib.js';
 
 const P = new URLSearchParams(location.search);
+// &mod=/src/game/npcPoses.js registers extra poses (and characters) first
+for (const m of (P.get('mod') || '').split(',').filter(Boolean)) await import(/* @vite-ignore */ m);
 let names = Object.keys(CHARACTERS);
 if (P.get('only')) names = P.get('only').split(',');
 const exprs = P.get('exprs') ? P.get('exprs').split(',') : null;
 if (exprs) names = exprs.map(() => names[0]);
+// &poses=cower,peek,pray shows one character in several poses
+const poses = P.get('poses') ? P.get('poses').split(',') : null;
+if (poses) names = poses.map((_, i) => names[i % names.length]);
 const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
 renderer.setPixelRatio(1);
 renderer.setSize(innerWidth, innerHeight);
@@ -32,7 +37,7 @@ sun.shadow.bias = -0.0008;
 const game = { scene, physics: null, sound: null };
 const spacing = +(P.get('cell') || 1.2);
 const chars = names.map((n, i) => {
-  const c = new VoxelCharacter(game, n, { x: (i - (names.length - 1) / 2) * spacing, z: 0, y: 0, yaw: +(P.get('yaw') ?? 0.35), anim: P.get('pose') || 'idle', expr: exprs ? exprs[i] : P.get('expr') || 'neutral' });
+  const c = new VoxelCharacter(game, n, { x: (i - (names.length - 1) / 2) * spacing, z: 0, y: 0, yaw: +(P.get('yaw') ?? 0.35), anim: poses ? poses[i] : P.get('pose') || 'idle', expr: exprs ? exprs[i] : P.get('expr') || 'neutral' });
   if (P.get('walk')) c.speedOverride = +P.get('walk');
   if (P.get('talk')) c.talking = 999;
   return c;
@@ -72,7 +77,7 @@ renderer.render(scene, cam);
 const v = new THREE.Vector3();
 document.getElementById('lbl').innerHTML = chars.map((c) => {
   v.copy(c.root.position).project(cam);
-  return `<div style="position:absolute;left:${(v.x * 0.5 + 0.5) * innerWidth}px;top:${(-v.y * 0.5 + 0.5) * innerHeight + 8}px;transform:translateX(-50%)">${exprs ? c.expr : c.char}</div>`;
+  return `<div style="position:absolute;left:${(v.x * 0.5 + 0.5) * innerWidth}px;top:${(-v.y * 0.5 + 0.5) * innerHeight + 8}px;transform:translateX(-50%)">${exprs ? c.expr : poses ? c.anim : c.char}</div>`;
 }).join('');
 window.__ready = window.__done = true;
 let last = performance.now();
