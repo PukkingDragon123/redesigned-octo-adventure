@@ -2,7 +2,7 @@
 // about is src/game/deco2d.js): split-rail fences along the country roads,
 // white pickets round the yards and down Wharf Street, trash cans, recycling
 // bins, mailboxes, sandwich boards, bikes and flower boxes on Main Street, the
-// fish stall and the maple syrup stand at the bottom of Wharf Street, a poutine
+// fish stall and the maple syrup stand on the boardwalk by Wharf Street, a poutine
 // cart on the green, lobster traps, buoys and barrels on the waterfront, hay
 // bales in the fields, firewood by the cabins, laundry lines behind the houses,
 // scarecrows and a few lamp posts along the dark country road.
