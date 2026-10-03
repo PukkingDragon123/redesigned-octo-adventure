@@ -68,16 +68,34 @@ for (const b of BUILDINGS) {
       if (gap > 0.05) { n += 16; if (gap > maxGap) { maxGap = gap; at = [q.x, q.z]; } }
     }
   }
-  if (!(b.stilts && r.meta.stiltPosts?.length)) for (let z = 0; z < v.d; z++) for (let x = 0; x < v.w; x++) {
-    const y = low[x + v.w * z];
-    if (y < 0) continue;
-    const ly = (y - oy) * size; // local metres, floor = 0
-    const stiltPost = b.stilts && ly < -1.0;
-    if (b.stilts ? !stiltPost : ly > 0.3) continue; // eaves, awnings, signs... hang in the air on purpose
-    const lx = (x - ox + 0.5) * size, lz = (z - oz + 0.5) * size;
-    const [wx, wz] = localToWorld(b, lx, lz);
-    const gap = y0 + ly - terrain.heightAt(wx, wz);
-    if (gap > 0.05) { n++; if (gap > maxGap) { maxGap = gap; at = [lx, lz]; } }
+  if (!(b.stilts && r.meta.stiltPosts?.length)) {
+    // gap per base column (NaN: not a base column)
+    const gaps = new Float32Array(v.w * v.d).fill(NaN);
+    for (let z = 0; z < v.d; z++) for (let x = 0; x < v.w; x++) {
+      const y = low[x + v.w * z];
+      if (y < 0) continue;
+      const ly = (y - oy) * size; // local metres, floor = 0
+      if (ly > 0.3) continue; // eaves, awnings, signs... hang in the air on purpose
+      const lx = (x - ox + 0.5) * size, lz = (z - oz + 0.5) * size;
+      const [wx, wz] = localToWorld(b, lx, lz);
+      gaps[x + v.w * z] = y0 + ly - terrain.heightAt(wx, wz);
+    }
+    // a column within 3 voxels (19 cm) of a grounded one is an overhang (a sill, a drip cap, a
+    // pumpkin's belly), not a floating base
+    const near = new Uint8Array(v.w * v.d);
+    for (let z = 0; z < v.d; z++) for (let x = 0; x < v.w; x++) {
+      if (!(gaps[x + v.w * z] <= 0.05)) continue;
+      for (let dz = -3; dz <= 3; dz++) for (let dx = -3; dx <= 3; dx++) {
+        const xx = x + dx, zz = z + dz;
+        if (xx >= 0 && zz >= 0 && xx < v.w && zz < v.d) near[xx + v.w * zz] = 1;
+      }
+    }
+    for (let z = 0; z < v.d; z++) for (let x = 0; x < v.w; x++) {
+      const gap = gaps[x + v.w * z];
+      if (!(gap > 0.05) || near[x + v.w * z]) continue;
+      n++;
+      if (gap > maxGap) { maxGap = gap; at = [(x - ox + 0.5) * size, (z - oz + 0.5) * size]; }
+    }
   }
   const fh = footprintHeights(terrain, { ...b, w: b.w - 0.2, d: b.d - 0.2 });
   const buried = b.stilts || b.kind === 'lighthouse' ? 0 : Math.max(0, fh.mx - y0);
