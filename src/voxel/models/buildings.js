@@ -1002,7 +1002,10 @@ function doorOn(ctx, F, uc, o = {}) {
   }
   return { u0, u1, uc, h, y0, top: hTop };
 }
+// Name boards: the town reads without lettering on its houses. Only boards a facade needs (shop
+// fascias, o.board) are still built, blank; everything else is skipped.
 function signOn(ctx, F, uc, y0, wv, hv, text, o = {}) {
+  if (!o.board) return;
   const u0 = uc - (wv >> 1), u1 = u0 + wv - 1, y1 = y0 + hv - 1;
   const bg = o.bg ?? P.cream, edge = o.edge ?? P.woodDark, n0 = o.n ?? 1;
   F.fill(u0 - 1, y0 - 1, n0, u1 + 1, y1 + 1, n0 + 1, edge);
@@ -1012,13 +1015,10 @@ function signOn(ctx, F, uc, y0, wv, hv, text, o = {}) {
   F.fill(u0 - 1, y0, n0 + 2, u0 - 1, y1, n0 + 2, edge);
   F.fill(u1 + 1, y0, n0 + 2, u1 + 1, y1, n0 + 2, edge);
   F.occ.push([u0 - 1, y0 - 1, u1 + 1, y1 + 1]);
-  const c = F.pt(uc - 0.5, y0 + hv / 2 - 0.5, n0 + 1);
-  const nrm = [F.nx, 0, F.nz];
-  const pos = M3(c[0] + nrm[0] * 0.5, c[1], c[2] + nrm[2] * 0.5);
-  ctx.signs.push({ x: r3(pos.x + nrm[0] * 0.012), y: pos.y, z: r3(pos.z + nrm[2] * 0.012), w: wv / VPM, h: hv / VPM, text, normal: nrm, bg: hexs(bg), fg: o.fg ?? '#3a2418', kind: o.kind ?? 'board' });
 }
 // a free-standing / hanging board facing +z with its plain face at z = zf (voxel layer)
 function signFree(ctx, x0, y0, zf, wv, hv, text, o = {}) {
+  if (!o.board) return;
   const vb = ctx.vb, bg = o.bg ?? P.cream, edge = o.edge ?? P.woodDark;
   vb.fill(x0 - 1, y0 - 1, zf - 1, x0 + wv, y0 + hv, zf - 1, edge);
   vb.fill(x0, y0, zf, x0 + wv - 1, y0 + hv - 1, zf, bg);
@@ -1026,8 +1026,6 @@ function signFree(ctx, x0, y0, zf, wv, hv, text, o = {}) {
   vb.fill(x0 - 1, y0 + hv, zf, x0 + wv, y0 + hv, zf + 1, edge);
   vb.fill(x0 - 1, y0, zf, x0 - 1, y0 + hv - 1, zf + 1, edge);
   vb.fill(x0 + wv, y0, zf, x0 + wv, y0 + hv - 1, zf + 1, edge);
-  const p = M3(x0 + wv / 2, y0 + hv / 2, zf + 1);
-  ctx.signs.push({ x: p.x, y: p.y, z: r3(p.z + 0.012), w: wv / VPM, h: hv / VPM, text, normal: [0, 0, 1], bg: hexs(bg), fg: o.fg ?? '#3a2418', kind: o.kind ?? 'board' });
 }
 // striped awning on a frame, from the wall (y = yTop) out to n = depth
 function awningOn(F, u0, u1, yTop, depth, cols, o = {}) {
@@ -1705,15 +1703,7 @@ function buildHouse(spec, ctx) {
   // gable: sign or attic window
   if (cfg.axis === 'z' && !ff) {
     const gy = H + Math.round((Rf.ridge - H) * 0.3);
-    if (cfg.gableSign && spec.sign) {
-      const sh = 8, sy = cfg.porch ? H + 4 : H + 1;
-      // widest board whose top corners stay below the bargeboard + hanging string lights
-      let hwS = 4;
-      while (hwS < 23 && Rf.top(hwS + 2) - Rf.t - 5 > sy + sh + 1 && Rf.top(-hwS - 3) - Rf.t - 5 > sy + sh + 1) hwS++;
-      const sw = hwS * 2;
-      signOn(ctx, Ff, 0, sy, sw, sh, spec.sign, { bg: cfg.police ? 0x2c3c64 : cfg.clinic ? P.white : 0x2e5a40, fg: cfg.police || !cfg.clinic ? '#f2e8d4' : '#b02a24', edge: cfg.clinic ? 0xb02a24 : P.trim });
-      if (Rf.ridge - (sy + sh + 4) > 12) windowOn(ctx, Ff, -2, sy + sh + 4, { w: 4, h: 4, mull: false });
-    } else if (cfg.porthole) portholeOn(ctx, Ff, 0, gy + 4, 4);
+    if (cfg.porthole) portholeOn(ctx, Ff, 0, gy + 4, 4);
     else windowOn(ctx, Ff, -3, gy, { w: 6, h: 7, curtain: R() < 0.5 ? pick(CURTAINS, R()) : null, lit: false, jack: hw && cfg.spooky });
     const Fb = F.back;
     windowOn(ctx, Fb, -3, gy, { w: 6, h: 7 });
@@ -1722,7 +1712,6 @@ function buildHouse(spec, ctx) {
     const gy = H + Math.round((Rf.ridge - H) * 0.25);
     for (const f of ['left', 'right']) windowOn(ctx, F[f], -3, gy, { w: 6, h: 7, curtain: pick(CURTAINS, R()) });
   }
-  if (ff && spec.sign) signOn(ctx, Ff, 0, H + 3, Math.round(W * 0.6), 13, spec.sign, { bg: P.cream, fg: '#8a2a22', edge: P.trim, n: 1 });
 
   // ---- sides & back
   for (const f of ['left', 'right']) {
@@ -2092,13 +2081,6 @@ function buildCabin(spec, ctx) {
     const pr = porchOn(ctx, Ff, { ua, ub, depth: pd, posts, gap: [dr.u0 - 3, dr.u1 + 3], yPost: 20, yRoofA: H - 1, roofStyle: { ...st, barge: P.woodDark }, postCol: 0x7a5232, railCol: 0x8a5a34, deckCol: P.plank });
     for (const sp of pr.spots) jackSpots.push({ u: sp.u, y: sp.y, n: sp.n, s: 1 });
     jackSpots.push({ u: posts[0], y: 9, n: pd - 1, s: 1 }, { u: posts[posts.length - 1] + 1, y: 9, n: pd - 1, s: 1 });
-    // hanging sign under the porch beam
-    if (cfg.sign) {
-      const sw = 26, sh = 5;
-      const p = Ff.pt(-sw / 2, 0, pd).map(Math.floor);
-      signFree(ctx, p[0], 13, p[2] + 1, sw, sh, cfg.sign, { bg: 0xf0e0c0, edge: 0x5c3c26, fg: '#6a2a1a' });
-      for (const sx of [p[0] + 1, p[0] + sw - 2]) vb.fill(sx, 19, p[2], sx, 19, p[2], P.iron);
-    }
     if (cfg.rocker) rockingChair(ctx, Ff, b.x0 + 10, 5, { quilt: true });
     bench(ctx, Ff, b.x1 - 22, 2, 14, { col: 0x8a5a30 });
     Ff.fill(b.x1 - 21, 4, 3, b.x1 - 10, 4, 4, (u, y, n) => ((u + n) % 2 ? 0xc84a3a : 0xf0d890));
@@ -2630,11 +2612,7 @@ function buildSawmill(spec, ctx) {
   vb.fill(0, H - 4, b.z0 + 26, 0, H - 2, b.z0 + 26, P.iron);
   vb.fill(-1, H - 7, b.z0 + 25, 0, H - 5, b.z0 + 26, P.lamp);
   addLight(ctx, [0, H - 6, b.z0 + 26], [1.0, 0.75, 0.45], 9, 'lantern');
-  // sign under the front eave
   const Ff = F.front;
-  const sw = 34, sh = 7;
-  signFree(ctx, -sw / 2, H - 12, b.z1 + 1, sw, sh, spec.sign || 'SAWMILL', { bg: 0xe8d4a8, edge: P.woodDark, fg: '#5c2a1a' });
-  vb.fill(-sw / 2 + 1, H - 4, b.z1, -sw / 2 + 1, H - 4, b.z1, P.iron);
   vb.fill(sw / 2 - 2, H - 4, b.z1, sw / 2 - 2, H - 4, b.z1, P.iron);
   ctx.door = { ...M3((px[2] + 3 + px[3]) / 2, 0, b.z1 + 0.5), face: 'front', w: 3.5 };
   // stacked logs out front-left (along z), with end grain rings
@@ -2903,7 +2881,7 @@ function buildShop(spec, ctx) {
     Ff.fill(hb - 3, 8, 1, hb - 3, 10, 1, 0xc8302a);
     awningOn(Ff, ha - 2, hb + 2, 20, 8, cfg.awning, { drop: 2, stripe: 3 });
     Ff.occ.push([ha - 2, 6, hb + 2, 21]);
-    signOn(ctx, Ff, 0, 1, W - 16, 4, 'MENU', { bg: P.chalk, fg: '#f0f0e4', edge: P.woodDark, kind: 'chalk' });
+    signOn(ctx, Ff, 0, 1, W - 16, 4, '', { bg: P.chalk, edge: P.woodDark, board: true });
     doorOn(ctx, F.left, 0, { color: acc, h: 17, lanternOpts: { radius: 5 } });
     stoopOn(ctx, F.left, -6, 5, G);
     windowOn(ctx, F.right, -3, 8, { w: 6, h: 6, lit: true, box: false });
@@ -2926,7 +2904,7 @@ function buildShop(spec, ctx) {
       lanternOn(ctx, Ff, doorU + doorW / 2 + 2, 11, { radius: 6 });
     }
     // fascia board with the name, and a bracketed cornice
-    signOn(ctx, Ff, 0, SF.fas0, W - 10, SF.fas1 - SF.fas0 + 1, spec.sign || '', { bg: cfg.fascia, fg: cfg.fg, edge: trim, n: recess ? 1 : 1 });
+    signOn(ctx, Ff, 0, SF.fas0, W - 10, SF.fas1 - SF.fas0 + 1, spec.sign || '', { bg: cfg.fascia, fg: cfg.fg, edge: trim, n: 1, board: true });
     Ff.fill(b.x0 - 1, SF.cor, 1, b.x1 + 1, SF.cor + 1, 2, trim);
     for (let u = b.x0 + 1; u <= b.x1 - 1; u += 6) Ff.fill(u, SF.cor - 2, 1, u, SF.cor - 1, 1, trim);
     if (cfg.awning) awningOn(Ff, b.x0 + 3, b.x1 - 3, SF.fas0 - 1, 9, cfg.awning, { drop: 4 });
@@ -2970,7 +2948,7 @@ function buildShop(spec, ctx) {
     crate(ctx, b.x1 - 10, 0, b.z1 - 8, 7, 3, 5, 'squash');
     crate(ctx, b.x1 - 18, 0, b.z1 - 8, 7, 3, 5, 'potato');
     for (const u of [Math.round(-W * 0.18), Math.round(W * 0.18) - 1]) { const p = Ff.pt(u, porchH - 4, -2).map(Math.floor); vb.fill(p[0], p[1], p[2] - 1, p[0] + 1, p[1] + 2, p[2], P.lamp); addLight(ctx, [p[0] + 1, p[1], p[2]], [1.0, 0.72, 0.4], 6, 'porch'); }
-    signOn(ctx, Ff, 0, porchH + 2, W - 12, 5, spec.sign || '', { bg: cfg.fascia, fg: cfg.fg, edge: trim, n: 1 });
+    signOn(ctx, Ff, 0, porchH + 2, W - 12, 5, spec.sign || '', { bg: cfg.fascia, fg: cfg.fg, edge: trim, n: 1, board: true });
     chalkboard(ctx, b.x1 - 12, 0, b.z1 + 4, 'PUMPKINS 3$');
     ctx.mo = M3(0, 0, cz - 6);
   }
@@ -3501,14 +3479,10 @@ function buildCoveredBridge(spec, ctx) {
   const st = roofStyle(spec.roof ?? 'dark', ctx.seed, { gutter: false });
   for (let z = z0; z <= z1; z++) for (let x = x0 + 1; x <= x1 - 1; x++) for (let y = H + 1; y < Rf.topAt(x, z) - Rf.t; y++) if (z === z0 || z === z1) vb.set(x, y, z, red);
   drawRoof(vb, Rf, st);
-  // portals: gable boards with the name, white posts, a lantern inside each end
+  // portals: white posts and trim, a lantern inside each end
   for (const [z, face] of [[z1, 1], [z0, -1]]) {
     for (let x = x0 - 1; x <= x1 + 1; x++) for (let y = H - 3; y <= H; y++) vb.set(x, y, z + face, P.trim);
     for (const x of [x0 - 1, x1 + 1]) vb.fill(x, 0, z + face, x, H, z + face, P.trim);
-    const sw = Math.min(Wd - 8, 34), sh = 6;
-    vb.fill(-sw / 2 - 1, H + 2, z + face, sw / 2, H + 3 + sh, z + face, P.woodDark);
-    const p = M3(-0.5, H + 3 + sh / 2, z + face + (face > 0 ? 1 : 0));
-    ctx.signs.push({ x: p.x, y: p.y, z: r3(p.z + face * 0.012), w: sw / VPM, h: sh / VPM, text: 'BEAVER CREEK', normal: [0, 0, face], bg: '#5a3a22', fg: '#f6e7c8' });
     vb.fill(-1, H - 5, z - face * 10, 0, H - 3, z - face * 10, P.lamp);
     addLight(ctx, [-0.5, H - 6, z - face * 10], [1.0, 0.7, 0.35], 8, 'lamp');
   }

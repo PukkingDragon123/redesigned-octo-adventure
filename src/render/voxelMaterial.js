@@ -6,6 +6,8 @@ import { worldUniforms, LIGHT_PARS_VERT, SHADOW_VERT, LIGHT_PARS_FRAG, NOISE_GLS
 const VERT = /* glsl */ `
 ${LIGHT_PARS_VERT}
 attribute vec4 color4;
+attribute vec4 detail;
+varying vec3 vDetail;
 uniform float uSway;      // wind sway amount per metre of height (trees)
 uniform float uSwayY0;    // height (model space) where sway starts
 uniform float uWobble;    // jelly wobble (squash bounce on props)
@@ -14,6 +16,7 @@ varying vec3 vWorldPos;
 varying vec3 vNormal;
 void main() {
   vColor = color4;
+  vDetail = detail.xyz;
   vec3 p = position;
   mat4 M = modelMatrix;
   #ifdef USE_INSTANCING
@@ -45,13 +48,34 @@ uniform float uFade;
 uniform float uFlash;
 uniform vec3 uFlashColor;
 uniform float uHighlight;
+uniform sampler2D uDetailMap;
 varying vec4 vColor;
 varying vec3 vWorldPos;
 varying vec3 vNormal;
+varying vec3 vDetail;
+// pixel-art surface detail: 4 texels per voxel, 16x16-texel tiles (4x4 voxels) from a 4x4 atlas,
+// point sampled; fades to flat once a texel gets smaller than a screen pixel (no shimmer)
+float surfaceDetail() {
+  float id = floor(vDetail.z + 0.5);
+  if (id < 0.5) return 1.0;
+  vec2 g = vDetail.xy;
+  vec2 fw = fwidth(g);
+  float fade = 1.0 - smoothstep(0.14, 0.3, max(fw.x, fw.y));
+  if (fade <= 0.0) return 1.0;
+  vec2 blk = floor(g * 0.25);
+  float h = hash12(blk + id * 17.0);
+  vec2 t = floor(mod(g * 4.0, 16.0));
+  // mirror some blocks so the tiling doesn't read (grain keeps running along u)
+  if (h > 0.5) t.x = 15.0 - t.x;
+  if (fract(h * 7.31) > 0.5 && id != 2.0 && id != 5.0) t.y = 15.0 - t.y;
+  vec2 cell = vec2(mod(id, 4.0), floor(id * 0.25));
+  float m = texture2D(uDetailMap, (cell * 16.0 + t + 0.5) / 64.0).r * 2.0;
+  return mix(1.0, m, fade);
+}
 void main() {
   if (vWorldPos.y < uClipY) discard;
   if (uFade > 0.0 && bayer4(gl_FragCoord.xy) < uFade) discard;
-  vec3 albedo = vColor.rgb * uTint;
+  vec3 albedo = vColor.rgb * uTint * surfaceDetail();
   vec3 n = normalize(vNormal);
   // snow settles on upward faces
   if (uSnow > 0.0 && n.y > 0.6) {
@@ -101,8 +125,81 @@ void main() {
 `;
 const DEPTH_FRAG = /* glsl */ `void main() { gl_FragColor = vec4(1.0); }`;
 
+// ---- the pixel-art detail atlas: 4x4 tiles of 16x16 texels, red = brightness x 0.5
+// tiles: 0 none, 1 dither, 2 wood grain, 3 brick clay, 4 stone, 5 paint, 6 foliage, 7 fabric, 8 metal
+let detailTex = null;
+function detailAtlas() {
+  if (detailTex) return detailTex;
+  const S = 64, data = new Uint8Array(S * S * 4);
+  let seed = 1234567;
+  const rnd = () => ((seed = (seed * 1103515245 + 12345) >>> 0) >>> 8) / 16777216;
+  const tiles = [];
+  const tile = (fn) => {
+    const t = new Float32Array(256).fill(1);
+    fn(t, (x, y) => ((y & 15) << 4) | (x & 15));
+    tiles.push(t);
+  };
+  tile(() => {}); // 0 none
+  tile((t) => { for (let i = 0; i < 256; i++) { const r = rnd(); t[i] = r < 0.18 ? 0.92 : r > 0.86 ? 1.06 : 1; } }); // 1 dither
+  tile((t, I) => { // 2 wood: grain streaks along u, a knot, darker plank edge every 8 texels
+    for (let y = 0; y < 16; y++) {
+      const base = (y % 8 === 7) ? 0.86 : (y % 8 === 0 ? 1.06 : 1);
+      for (let x = 0; x < 16; x++) t[I(x, y)] = base;
+    }
+    for (let k = 0; k < 9; k++) {
+      let y = Math.floor(rnd() * 16), x = Math.floor(rnd() * 16);
+      const len = 4 + Math.floor(rnd() * 9), dk = rnd() < 0.6 ? 0.9 : 1.07;
+      for (let j = 0; j < len; j++) { if (y % 8 !== 7) t[I(x + j, y)] = dk; if (rnd() < 0.15) y = (y + (rnd() < 0.5 ? 1 : 15)) % 16; }
+    }
+    const kx = 3 + Math.floor(rnd() * 10), ky = 2 + Math.floor(rnd() * 4);
+    t[I(kx, ky)] = 0.78; t[I(kx + 1, ky)] = 0.84; t[I(kx - 1, ky)] = 0.92; t[I(kx, ky + 1)] = 0.9;
+  });
+  tile((t) => { for (let i = 0; i < 256; i++) { const r = rnd(); t[i] = r < 0.12 ? 0.86 : r < 0.3 ? 0.94 : r > 0.9 ? 1.08 : 1; } }); // 3 brick clay pits
+  tile((t, I) => { // 4 stone: speckle, flat chips, a hairline crack
+    for (let i = 0; i < 256; i++) { const r = rnd(); t[i] = r < 0.1 ? 0.9 : r > 0.88 ? 1.07 : 1; }
+    for (let k = 0; k < 4; k++) { const x = Math.floor(rnd() * 15), y = Math.floor(rnd() * 15), v = rnd() < 0.5 ? 0.94 : 1.05; t[I(x, y)] = t[I(x + 1, y)] = t[I(x, y + 1)] = t[I(x + 1, y + 1)] = v; }
+    let x = Math.floor(rnd() * 16), y = 0;
+    for (; y < 9; y++) { t[I(x, y + 4)] = 0.82; if (rnd() < 0.5) x += rnd() < 0.5 ? 1 : -1; }
+  });
+  tile((t, I) => { // 5 paint: faint brush strokes along u, a little chipping
+    for (let y = 0; y < 16; y++) { const v = (y % 4 === 3) ? 0.96 : 1; for (let x = 0; x < 16; x++) t[I(x, y)] = v; }
+    for (let k = 0; k < 6; k++) { const y = Math.floor(rnd() * 16), x = Math.floor(rnd() * 16), l = 3 + Math.floor(rnd() * 6); for (let j = 0; j < l; j++) t[I(x + j, y)] = 1.04; }
+    for (let k = 0; k < 3; k++) t[I(Math.floor(rnd() * 16), Math.floor(rnd() * 16))] = 0.86;
+  });
+  tile((t, I) => { // 6 foliage: clumped light/dark speckles
+    for (let i = 0; i < 256; i++) t[i] = 1;
+    for (let k = 0; k < 22; k++) { const x = Math.floor(rnd() * 16), y = Math.floor(rnd() * 16), v = rnd() < 0.55 ? 0.84 : 1.12; t[I(x, y)] = v; if (rnd() < 0.5) t[I(x + 1, y)] = v; if (rnd() < 0.4) t[I(x, y + 1)] = v; }
+  });
+  tile((t, I) => { // 7 fabric: a fine 2x2 weave with a seam every 8 texels
+    for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) t[I(x, y)] = ((x >> 1) + (y >> 1)) & 1 ? 0.95 : 1.03;
+    for (let x = 0; x < 16; x++) t[I(x, 15)] = 0.9;
+  });
+  tile((t, I) => { // 8 metal: smooth, a few bright scratches and rivet glints
+    for (let i = 0; i < 256; i++) t[i] = rnd() < 0.06 ? 0.94 : 1;
+    for (let k = 0; k < 3; k++) { const x = Math.floor(rnd() * 12), y = Math.floor(rnd() * 16); for (let j = 0; j < 4; j++) t[I(x + j, y + (j >> 1))] = 1.12; }
+  });
+  tiles.forEach((t, id) => {
+    const cx = (id & 3) * 16, cy = (id >> 2) * 16;
+    for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
+      const o = ((cy + y) * S + cx + x) * 4;
+      data[o] = data[o + 1] = data[o + 2] = Math.max(0, Math.min(255, Math.round(t[(y << 4) | x] * 128)));
+      data[o + 3] = 255;
+    }
+  });
+  for (let id = tiles.length; id < 16; id++) { // unused slots: neutral
+    const cx = (id & 3) * 16, cy = (id >> 2) * 16;
+    for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const o = ((cy + y) * S + cx + x) * 4; data[o] = data[o + 1] = data[o + 2] = 128; data[o + 3] = 255; }
+  }
+  detailTex = new THREE.DataTexture(data, S, S, THREE.RGBAFormat);
+  detailTex.magFilter = detailTex.minFilter = THREE.NearestFilter;
+  detailTex.generateMipmaps = false;
+  detailTex.needsUpdate = true;
+  return detailTex;
+}
+
 export function createVoxelMaterial(opts = {}) {
   const uniforms = worldUniforms({
+    uDetailMap: { value: detailAtlas() },
     uTint: { value: new THREE.Color(1, 1, 1) },
     uFade: { value: 0 },
     uFlash: { value: 0 },
