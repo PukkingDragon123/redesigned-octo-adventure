@@ -146,12 +146,12 @@ function lumberCamp(story) {
     await S.wait(1.4);
     await S.narrate('Autumn. Somewhere in the wilds of Canada...');
     await S.narrate('This is Hank. Hank was a lumberjack. A good one, mostly.');
-    await shotAt(H.pos, 0.7, 2.0, 1.55, H.pos, 1.35, 1.2, 40);
+    await shotAt(H.pos, 1.2, 3.1, 1.85, H.pos, 1.45, 1.2, 44);
     await S.say('hank', 'Hup! ...Hup! ...HUP!', { actor: H, expr: 'determined', name: 'Hank' });
-    await shotAt(L.pos, 2.2, 1.6, 1.8, L.pos, 1.5, 1.0, 42);
+    await shotAt(C, -0.4, -1.4, 1.9, L.pos, 1.65, 1.0, 44);
     L.play('idle', 'happy');
     await S.say('lou', "Atta boy, Hank! That's the biggest maple on the whole ridge!", { actor: L, expr: 'happy' });
-    await shotAt(H.pos, 1.0, 1.7, 1.45, H.pos, 1.4, 1.0, 38);
+    await shotAt(H.pos, 0.7, 3.3, 1.75, H.pos, 1.5, 1.0, 42);
     await S.say('hank', "She's a stubborn one, Lou. Like my Aunt Bev. ...One more ought to do it.", { actor: H, expr: 'smug', name: 'Hank' });
     // the last swing, then the creak
     await S.wait(CHOP_CYCLE * 1.1);
@@ -170,7 +170,7 @@ function lumberCamp(story) {
     const FALL = 1.7;
     S.wait(FALL - 0.85).then(() => S.sfx('tree_fall'));
     await S.anim(FALL, (k) => {
-      pivot.quaternion.copy(q0).premultiply(new THREE.Quaternion().setFromAxisAngle(axis, -(Math.PI / 2) * 0.97 * easeIn(k)));
+      pivot.quaternion.copy(q0).premultiply(new THREE.Quaternion().setFromAxisAngle(axis, (Math.PI / 2) * 0.97 * easeIn(k)));
     });
     // BOOM: shake, dust along the trunk, a blizzard of leaves
     g.chase.shake(1.3);
@@ -191,7 +191,7 @@ function lumberCamp(story) {
     const toCam = off(H.pos, -0.4, 4);
     H.faceTowards(toCam.x, toCam.z);
     H.play('flex', 'happy');
-    await shotAt(H.pos, 0.2, 2.1, 1.5, H.pos, 1.3, 0.8, 38);
+    await shotAt(H.pos, 0.4, 3.2, 1.75, H.pos, 1.4, 0.8, 42);
     await S.say('hank', "Ha! Still got it.", { actor: H, expr: 'happy', name: 'Hank' });
     L.play('cheer', 'laugh');
     await S.say('lou', "Legend! I'll go grab us some lunch. Back in ten — don't go anywhere!", { actor: L, expr: 'laugh' });
