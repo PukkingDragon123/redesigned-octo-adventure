@@ -218,6 +218,8 @@ export class Terrain {
     }
     // 6: roads (stamped)
     this.stampRoads();
+    // 7: building pads (sloped lots get levelled under and around the house)
+    this.stampBuildingPads();
     this.buildSplat();
   }
 
@@ -406,6 +408,41 @@ export class Terrain {
           c++;
         }
         H[id] = lerp(tmp[id], s / c, 0.6 * rw);
+      }
+    }
+  }
+
+  // Level the ground under buildings that stand on a slope: the terrain inside the footprint
+  // (plus a yard strip, wider at the front for porches and steps) is pulled to the footprint's
+  // average height, fading out over a few metres. Road surfaces are left alone, gentle lots
+  // (under ~0.4 m of fall) too; the voxel foundations take care of what is left.
+  stampBuildingPads() {
+    const n = this.n, H = this.h;
+    for (const b of L.BUILDINGS) {
+      if (b.stilts || b.kind === 'lighthouse') continue;
+      const c = Math.cos(b.facing || 0), s = Math.sin(b.facing || 0);
+      const toW = (lx, lz) => [b.x + lx * c + lz * s, b.z - lx * s + lz * c];
+      let mn = Infinity, mx = -Infinity, sum = 0, cnt = 0;
+      for (let j = 0; j <= 8; j++) for (let i = 0; i <= 8; i++) {
+        const [x, z] = toW(-b.w / 2 + (b.w * i) / 8, -b.d / 2 + (b.d * j) / 8);
+        const h = this.sampleGrid(H, x, z);
+        mn = Math.min(mn, h); mx = Math.max(mx, h); sum += h; cnt++;
+      }
+      if (mx - mn < 0.4) continue;
+      const target = sum / cnt;
+      const side = 1.2, back = 1.2, front = b.porch ? 4.5 : 3, blend = 6;
+      const ax = b.w / 2 + side, z0 = -b.d / 2 - back, z1 = b.d / 2 + front;
+      const R = Math.hypot(b.w / 2 + side + blend, Math.max(b.d / 2 + front, b.d / 2 + back) + blend);
+      const i0 = Math.max(0, Math.floor((b.x - R + HALF) / H_RES)), i1 = Math.min(n - 1, Math.ceil((b.x + R + HALF) / H_RES));
+      const j0 = Math.max(0, Math.floor((b.z - R + HALF) / H_RES)), j1 = Math.min(n - 1, Math.ceil((b.z + R + HALF) / H_RES));
+      for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+        const x = -HALF + i * H_RES, z = -HALF + j * H_RES;
+        const dx = x - b.x, dz = z - b.z;
+        const lx = c * dx - s * dz, lz = s * dx + c * dz;
+        const ox = Math.max(0, Math.abs(lx) - ax), oz = Math.max(0, z0 - lz, lz - z1);
+        const w = (1 - smoothstep(0, blend, Math.hypot(ox, oz))) * (1 - Math.min(1, this.roadW[j * n + i] * 1.5));
+        if (w <= 0) continue;
+        H[j * n + i] = lerp(H[j * n + i], target, w);
       }
     }
   }

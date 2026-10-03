@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import * as L from './layout.js';
 import { decor } from './decor.js';
+import { floorY, footprintHeights } from './foundations.js';
 
 const TM = 2.5; // metres per wall/roof tile
 const TRIM = 0xf2ece0;
@@ -22,18 +23,6 @@ export function buildingMatrix(x, y, z, yaw) {
 // world position of a building-local point
 export function toWorld(M, x, y, z) {
   return new THREE.Vector3(x, y, z).applyMatrix4(M);
-}
-
-function footprintHeights(terrain, b) {
-  const c = Math.cos(b.facing || 0), s = Math.sin(b.facing || 0);
-  let mn = Infinity, mx = -Infinity;
-  for (const [lx, lz] of [[-b.w / 2, -b.d / 2], [b.w / 2, -b.d / 2], [-b.w / 2, b.d / 2], [b.w / 2, b.d / 2], [0, 0]]) {
-    const x = b.x + lx * c + lz * s, z = b.z - lx * s + lz * c;
-    const h = terrain.heightAt(x, z);
-    mn = Math.min(mn, h);
-    mx = Math.max(mx, h);
-  }
-  return { mn, mx };
 }
 
 // ---------------------------------------------------------------- shared parts
@@ -142,7 +131,7 @@ function stilts(B, M, w, d, y0, terrain, Mworld, { extraFront = 0 } = {}) {
 function house(ctx, B, b) {
   const { terrain, physics } = ctx;
   const fh = footprintHeights(terrain, b);
-  const y0 = b.stilts ? L.BOARDWALK[0].h + 0.02 : fh.mx + 0.35;
+  const y0 = floorY(terrain, b);
   const M = buildingMatrix(b.x, y0, b.z, b.facing || 0);
   const w = b.w, d = b.d, H = b.floors * 2.7 + 0.3;
   const sid = `siding_${b.color}`;
@@ -221,7 +210,7 @@ function house(ctx, B, b) {
 function cabin(ctx, B, b) {
   const { terrain, physics } = ctx;
   const fh = footprintHeights(terrain, b);
-  const y0 = fh.mx + 0.45;
+  const y0 = floorY(terrain, b);
   const M = buildingMatrix(b.x, y0, b.z, b.facing || 0);
   const w = b.w, d = b.d, H = 3.0;
   // log walls + protruding corner log ends
@@ -294,7 +283,7 @@ function cabin(ctx, B, b) {
 function shed(ctx, B, b) {
   const { terrain, physics } = ctx;
   const fh = footprintHeights(terrain, b);
-  const y0 = fh.mx + 0.15;
+  const y0 = floorY(terrain, b);
   const M = buildingMatrix(b.x, y0, b.z, b.facing || 0);
   const w = b.w, d = b.d, H = b.kind === 'outhouse' ? 2.2 : 3.2;
   const tile = b.kind === 'outhouse' ? 'battenGrey' : 'battenRed';
@@ -335,7 +324,7 @@ function shed(ctx, B, b) {
 function chapel(ctx, B, b) {
   const { terrain, physics } = ctx;
   const fh = footprintHeights(terrain, b);
-  const y0 = fh.mx + 0.4;
+  const y0 = floorY(terrain, b);
   const M = buildingMatrix(b.x, y0, b.z, b.facing || 0);
   const w = b.w, d = b.d, H = 4.2;
   B.box([0, H / 2, 0], [w, H, d], { tile: 'siding_white', tileMeters: TM }, null, M);
@@ -368,7 +357,7 @@ function chapel(ctx, B, b) {
 
 function lighthouse(ctx, B, b) {
   const { terrain, physics } = ctx;
-  const y0 = terrain.heightAt(b.x, b.z) - 0.2;
+  const y0 = floorY(terrain, b);
   const M = buildingMatrix(b.x, y0, b.z, 0);
   B.geom(new THREE.CylinderGeometry(3.2, 3.6, 1.2, 10), [0, 0.3, 0], null, [1, 1, 1], { tile: 'stone', tileMeters: 2 }, M);
   const Ht = 13;
@@ -397,7 +386,7 @@ function lighthouse(ctx, B, b) {
 function sawmill(ctx, B, b) {
   const { terrain, physics } = ctx;
   const fh = footprintHeights(terrain, b);
-  const y0 = fh.mx + 0.2;
+  const y0 = floorY(terrain, b);
   const M = buildingMatrix(b.x, y0, b.z, b.facing || 0);
   const w = b.w, d = b.d, H = 4.4;
   // open shed: posts, back wall, half side walls
@@ -467,7 +456,7 @@ function generic(ctx, B, b) {
   const { terrain, physics } = ctx;
   const g = GENERIC[b.kind];
   const fh = footprintHeights(terrain, b);
-  const y0 = (g.open && !g.top ? fh.mn : fh.mx) + g.lift;
+  const y0 = floorY(terrain, b);
   const M = buildingMatrix(b.x, y0, b.z, b.facing || 0);
   const H = g.H(b);
   // a recessed shopfront (the general store's porch) leaves its front strip walkable

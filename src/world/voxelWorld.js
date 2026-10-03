@@ -15,6 +15,7 @@ import { Vox } from '../voxel/vox.js';
 import { nearestRoad } from './terrain.js';
 import { dressPlaces } from './places.js';
 import { placeDeco2D } from './deco2d.js';
+import { buildingSpecPure } from './foundations.js';
 
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _s = new THREE.Vector3(1, 1, 1), _p = new THREE.Vector3();
 const UP = new THREE.Vector3(0, 1, 0);
@@ -100,8 +101,7 @@ export class VoxelWorld {
       const at = placed[b.id];
       if (!at) continue;
       const yaw = b.facing || 0;
-      let y = at.y0;
-      if (b.kind === 'lighthouse') y += 0.3;
+      const y = at.y0;
       let geoHi, geoLo, r;
       const job = pre ? await pre.get(b.id) : null;
       if (job && !job.error) {
@@ -406,19 +406,9 @@ export class VoxelWorld {
   }
 }
 
-// The spec a building's voxel model is built from (stilt houses reach down to the seabed)
+// The spec a building's voxel model is built from (floor height, stilts, the ground around it)
 export function buildingSpec(b, terrain) {
-  const opts = { seed: hashStr(b.id) };
-  if (b.stilts) {
-    const yaw = b.facing || 0, y = L.BOARDWALK[0].h + 0.02;
-    let low = 1e9;
-    for (const [lx, lz] of [[-b.w / 2, -b.d / 2], [b.w / 2, -b.d / 2], [-b.w / 2, b.d / 2], [b.w / 2, b.d / 2], [0, 0]]) {
-      const c = Math.cos(yaw), s = Math.sin(yaw);
-      low = Math.min(low, terrain.heightAt(b.x + lx * c + lz * s, b.z - lx * s + lz * c));
-    }
-    opts.stilt = Math.max(1.5, y - Math.min(low, -0.4) + 0.6);
-  }
-  return { ...b, ...opts };
+  return buildingSpecPure(b, terrain);
 }
 
 // Start building every voxel building in Web Workers (in parallel with the forest on the main
@@ -565,9 +555,4 @@ function drawSign(g, sg, pad) {
 function toCss(c) {
   if (typeof c === 'string') return c; // models hand over '#rrggbb' already
   return `#${(c & 0xffffff).toString(16).padStart(6, '0')}`;
-}
-function hashStr(s) {
-  let h = 7;
-  for (const ch of s) h = (h * 31 + ch.charCodeAt(0)) | 0;
-  return Math.abs(h);
 }
