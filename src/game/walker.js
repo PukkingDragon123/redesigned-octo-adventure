@@ -21,6 +21,8 @@ export class Walker {
     this.vy = 0;
     this.kickT = 0;
     this.events = [];
+    this.phys = null;
+    this.frozen = false;
   }
 
   place(x, y, z, yaw) {
@@ -32,8 +34,11 @@ export class Walker {
   }
 
   // c: { mx, mz } camera-relative stick (-1..1), run, jumpPressed, kickPressed
+  // phys: an optional stand-in physics (Nana's cabin has its own floor and walls);
+  // frozen: no input (door transitions, sitting down)
   update(dt, c, camYaw) {
-    const ph = this.game.physics;
+    const ph = this.phys || this.game.physics;
+    if (this.frozen) c = { mx: 0, mz: 0 };
     this.events.length = 0;
     // stick -> world direction (forward = away from the camera)
     const fx = Math.sin(camYaw), fz = Math.cos(camYaw);

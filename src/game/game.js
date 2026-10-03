@@ -11,6 +11,7 @@ import { buildSheets } from '../art/sheets.js';
 import { VoxelRider } from './rider3d.js';
 import { Emotes3D } from './emotes3d.js';
 import { Walker } from './walker.js';
+import { Interior } from './interior.js';
 import { Interactables } from './interact.js';
 import { Tricks } from './tricks.js';
 import { Quests } from './quests.js';
@@ -96,6 +97,7 @@ export class Game {
     this.state = newState();
     this.villagers = new Villagers(this);
     this.keepsakes = new Keepsakes(this);
+    this.interior = new Interior(this);
     this.headlamp = this.lightPool.addDynamic({ pos: new THREE.Vector3(), color: [1.0, 0.9, 0.7], radius: 16, intensity: 0, on: false });
     this.applySettings();
     this.bike.reset(L.HOME_SPAWN.x, L.HOME_SPAWN.z, L.HOME_SPAWN.yaw);
@@ -269,6 +271,7 @@ export class Game {
   }
 
   beginRide() {
+    this.interior?.reset();
     this.quests?.sync();
     this.mode = 'ride';
     this.setBikeVisible(true);
@@ -473,7 +476,18 @@ export class Game {
     const slow = this.onFoot || b.speed < 4;
     let action = null;
     const near = (x, z, r) => Math.hypot(p.x - x, p.z - z) < r;
-    if (near(L.HOME_SPOTS.porch.x, L.HOME_SPOTS.porch.z, L.HOME_SPOTS.porch.r + 1.5) && slow) action = { text: 'Talk to Nana', fn: () => this.story.homeTalk() };
+    // inside Nana's cabin only the room's own things are on offer
+    if (this.interior?.active) {
+      action = this.interior.action();
+      ui.prompt(action?.text || null, 'E');
+      if (action && !action.passive && input.pressed('interact') && !ui.inputSwallowed()) {
+        ui.prompt(null);
+        action.fn();
+      }
+      return;
+    }
+    if (this.onFoot && this.interior?.nearDoorOutside(p)) action = { text: "Go inside Nana's cabin", fn: () => this.interior.enter() };
+    else if (near(L.HOME_SPOTS.porch.x, L.HOME_SPOTS.porch.z, L.HOME_SPOTS.porch.r + 1.5) && slow && !(this.onFoot && this.interior?.nearDoorOutside(p, 3))) action = { text: 'Talk to Nana', fn: () => this.story.homeTalk() };
     else if (near(L.HOME_SPOTS.garage.x, L.HOME_SPOTS.garage.z, L.HOME_SPOTS.garage.r + 1) && slow) action = { text: "Harold's riding notes", fn: () => this.openSkillBook() };
     if (!action) {
       for (const o of this.orders.carried()) {
@@ -527,6 +541,7 @@ export class Game {
   }
 
   objective() {
+    if (this.interior?.hint) return this.interior.hint;
     const carried = this.orders.carried().length;
     const board = this.orders.board().length;
     if (this.catEventActive) return 'Something is meowing by the road home...';
@@ -690,7 +705,7 @@ export class Game {
         this.villagers.onBell();
       }
       this.interactions();
-      if (this.world.atmosphere.hour > 23.6 && !this.forcedHome) this.forceHome();
+      if (this.world.atmosphere.hour > 23.6 && !this.forcedHome && !this.interior?.active) this.forceHome();
     } else if (this.mode === 'cutscene' && this.currentScene && input.pressed('pause')) {
       this.currentScene.skip = true;
       this.ui.hideDialogue();
@@ -730,6 +745,7 @@ export class Game {
     G.uPlayer.value.copy(this.playerPos);
     if (this.mode === 'title') this.title ? this.title.update(dt) : this.titleCamera(dt);
     else {
+      this.interior.update(dt);
       this.chase.walk = this.onFoot;
       this.chase.update(dt, this.onFoot ? this.walker : this.bike, this.mode === 'ride' && !busy ? input.look() : { x: 0, y: 0 });
     }
@@ -786,7 +802,7 @@ export class Game {
     for (const e of ev) {
       if (e.type === 'jump') { sound.play('jump_foot'); ch.kick('sq', 1.25); }
       if (e.type === 'land') { sound.play('land_foot', { volume: Math.min(1, e.impact / 8) }); ch.kick('sq', 0.75); }
-      if (e.type === 'kick') { ch.play('kick'); ch.animT = 0; this.world.interactables?.kick(W.pos, W.yaw, this); this.wait(0.2).then(() => this.world.forest?.kick?.(W.pos, W.yaw)); }
+      if (e.type === 'kick') { ch.play('kick'); ch.animT = 0; if (!this.interior?.active) { this.world.interactables?.kick(W.pos, W.yaw, this); this.wait(0.2).then(() => this.world.forest?.kick?.(W.pos, W.yaw)); } }
     }
   }
 

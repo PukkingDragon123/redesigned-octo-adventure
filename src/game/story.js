@@ -4,8 +4,6 @@ import * as THREE from 'three';
 import { Scene } from './cutscene.js';
 import { runPrologue, PROLOGUE } from './prologue.js';
 import { Billboard } from '../render/sprites.js';
-import { Builder } from '../render/builder.js';
-import { propMesh } from '../render/propMaterial.js';
 import { POI, CUSTOMERS, KEEPSAKES, HOME_SPOTS, HOME_SPAWN } from '../world/layout.js';
 import { CHARACTERS } from '../art/characters.js';
 import { P } from '../render/particles.js';
@@ -121,85 +119,206 @@ export class Story {
   revival() { return PROLOGUE.revival(this); }
   nanaFindsHank() { return PROLOGUE.nanaFindsHank(this); }
 
-  // ---------------------------------------------------------------- 2. by the fire
-  cabinNight() {
+  // ---------------------------------------------------------------- 2. by the fire, inside Nana's cabin
+  // Nana brings Hank up the porch and inside; the player looks around (free control) and sits on
+  // the sofa by the fire; Nana covers him with Harold's quilt and the talk goes on from there.
+  async cabinNight() {
     const g = this.g;
+    this.nanaCalled = true;
+    await this.cabinArrive();
+    await this.cabinLookAround();
+    await this.cabinSofa();
+    g.interior.reset();
+    g.villagers.setVisible('grandma', true);
+    this.flag('cabin', true);
+    g.world.atmosphere.cold = 0;
+  }
+  // (test entry points: ?scene=cabinArrive | cabinSofa)
+  // 1. up the yard and in through the front door
+  cabinArrive() {
+    const g = this.g;
+    const I = g.interior, R = I.room;
+    const A = g.world.atmosphere;
+    const L = (x, y, z) => R.wp(x, y, z); // room-local -> world
     return this.scene(async (S) => {
-      const A = g.world.atmosphere;
-      A.hour = 23.9;
+      A.hour = 22.6;
       A.setWeather('clear', true);
       A.cold = 0.25;
       g.setBikeVisible(false);
+      g.setOutfit('hankBuried');
+      g.rider.visible = false;
       g.villagers.setVisible('grandma', false);
       S.music('cabin');
-      // the campfire by Nana's cabin (the village has its own fires too)
-      const fire = g.world.ctx.fires.reduce((a, f) => (Math.hypot(f.x - POI.cabin.x, f.z - POI.cabin.z) < Math.hypot(a.x - POI.cabin.x, a.z - POI.cabin.z) ? f : a));
-      const fx = fire.x, fz = fire.z;
-      const fy = g.physics.groundAt(fx, fz).h;
-      // Hank on the stump by the fire, Nana opposite with her knitting
-      const seat = { x: fx + Math.cos(4.2) * 2.0, z: fz + Math.sin(4.2) * 2.0 };
-      const H = S.actor('hankBuried', seat.x, seat.z, 0.6, 'shiver');
-      H.faceTowards(fx, fz);
-      const N = S.actor('grandma', fx + Math.cos(5.4) * 2.2, fz + Math.sin(5.4) * 2.2, -0.6, 'idle');
-      N.faceTowards(fx, fz);
-      H.yaw = H.targetYaw;
-      N.yaw = N.targetYaw;
-      // establishing: the cabin glowing in the dark woods, smoke curling from the chimney
-      const cab = POI.cabin;
-      await S.cam(V(fx + 9, fy + 6.5, fz + 11), V(cab.x, fy + 2.4, cab.z), 0, 50);
-      S.cam(V(fx + 4.2, fy + 2.4, fz + 6.2), V(fx - 0.4, fy + 1.0, fz - 0.8), 5.5, 46);
-      await S.fade(0, 1.8);
+      const h0 = L(0.8, 0, 12.6), n0 = L(-0.5, 0, 11.4);
+      const H = S.actor('hankBuried', h0.x, h0.z, R.wyaw(Math.PI), 'walk+shiver');
+      const N = S.actor('grandma', n0.x, n0.z, R.wyaw(Math.PI), 'walk+lantern');
+      const lamp = g.lightPool.addDynamic({ pos: N.pos.clone(), color: [1.0, 0.7, 0.35], radius: 8, intensity: 1.2 });
+      S.temp.push({ remove: () => g.lightPool.removeDynamic(lamp) });
+      S.every(() => void lamp.pos.set(N.pos.x, N.pos.y + 1.0, N.pos.z));
+      // the cabin glowing in the dark woods, smoke curling from the chimney
+      await S.cam(L(8.5, 3.8, 17.5), L(0, 2.0, 4.5), 0, 46);
+      S.cam(L(5.6, 2.7, 13.2), L(-0.1, 1.4, 6.0), 6.5, 44);
+      await S.fade(0, 1.6);
       S.sfx('owl', { volume: 0.5 });
-      await S.wait(2.4);
-      await S.cam(V(fx + 0.6, fy + 1.7, fz + 5.0), V(fx - 0.1, fy + 0.9, fz - 1.4), 1.6, 45);
-      await S.say('grandma', 'There we are. Sit close, dear. Get that fire into you.', { actor: N, expr: 'happy' });
-      H.play('sit', 'scared');
-      H.yOffset = 0.14;
-      g.effects.frost(H.pos.x, H.pos.y + 0.3, H.pos.z, 8);
-      S.sfx('brrr', { volume: 0.6 });
-      await S.frame(H, [1.0, 0.4, 2.4], 0.8, 40, 0.8);
-      await S.say('hankBuried', "Th-thank you, ma'am. My t-teeth won't stop chattering.", { actor: H, expr: 'scared' });
-      S.sfx('jaw_chatter', { volume: 0.6 });
-      await S.say('grandma', "Marguerite, dear. Everyone calls me Nana. Here, these were my Harold's. His good sweater, and his lucky toque.", { actor: N, expr: 'neutral' });
+      const nw = N.walkTo([L(-0.45, 0, 7.8), L(-0.2, 0, 5.3)], 1.0, 'walk+lantern');
+      const hw = H.walkTo([L(0.5, 0, 8.6), L(0.3, 0, 6.2)], 0.85, 'walk+shiver');
+      await S.wait(2.2);
+      await S.say('grandma', 'Here we are. Mind the step, dear, it creaks. So does the next one. So do I.', { actor: N, expr: 'happy' });
+      await nw;
+      N.faceTowards(L(0, 0, 4.4).x, L(0, 0, 4.4).z);
+      N.play('lantern');
+      S.sfx('door_creak', { volume: 0.8 });
+      await hw;
+      await S.fade(1, 0.6);
+      // inside: the door swings open and in they come
+      I.stage(true);
+      R.setDoor(1);
+      R.doorOpen = 1;
+      N.path = H.path = null;
+      N.pos.copy(L(-0.15, 0, 4.75));
+      H.pos.copy(L(0.35, 0, 5.7));
+      N.yaw = N.targetYaw = R.wyaw(Math.PI);
+      H.yaw = H.targetYaw = R.wyaw(Math.PI);
+      await S.cam(L(-2.0, 2.05, 0.5), L(0, 1.05, 3.7), 0, 50);
+      await S.fade(0, 0.6);
+      const n2 = N.walkTo([L(-0.95, 0, 2.6)], 1.0, 'walk+lantern');
+      await S.wait(0.6);
+      const h2 = H.walkTo([L(0.25, 0, 3.1)], 0.7, 'walk+shiver');
+      await S.say('grandma', 'Come in, come in, out of that cold.', { actor: N, expr: 'happy' });
+      await h2;
+      await n2;
+      R.setDoor(0);
+      S.sfx('door', { volume: 0.5 });
+      // side by side, taking in the room
+      N.face(R.wyaw(Math.PI - 0.45));
+      H.face(R.wyaw(Math.PI + 0.2));
+      N.play('idle');
+      H.play('shiver', 'surprised');
+      g.effects.frost(H.pos.x, H.pos.y + 0.3, H.pos.z, 6);
+      await S.cam(L(-0.35, 1.65, 0.4), L(-0.35, 1.15, 2.8), 0.8, 46);
+      await S.faceShot(H, { dist: 2.3, side: -0.6, dur: 0.8 });
+      await S.say('hankBuried', "Oh... it's *warm* in here. And it smells like... cinnamon? I think? I can't actually smell.", { actor: H, expr: 'happy' });
+      await S.faceShot(N, { dist: 2.3, side: 0.6, dur: 0.8 });
+      await S.say('grandma', "Make yourself at home, dear. Have a look around. Then sit yourself down on the sofa by the fire, and I'll fix you something warm.", { actor: N, expr: 'happy' });
+      // she heads for the stove; a look across the room at the fire
+      const nk = N.walkTo([L(-1.9, 0, 0.2), L(-3.75, 0, -2.35)], 1.1, 'walk');
+      await S.cam(L(-1.05, 2.35, 3.35), L(3.0, 0.9, -1.4), 3.2, 52);
+      await Promise.race([nk, S.wait(2.5)]);
+      if (N.path) { N.path = null; N.pos.copy(L(-3.75, 0, -2.35)); }
+    });
+  }
+  // 2. free to look around; sitting on the sofa moves the story on
+  cabinLookAround() {
+    const g = this.g, I = g.interior;
+    g.villagers.setVisible('grandma', true);
+    I.moveNana(true);
+    return I.freeRoam({
+      at: { x: 0.25, z: 3.1, yaw: Math.PI },
+      hint: 'Sit on the sofa by the fire',
+      toast: "Have a look around Nana's cabin. When you're ready, sit on the sofa by the fire.",
+    });
+  }
+  // 3. on the sofa, under Harold's quilt
+  cabinSofa() {
+    const g = this.g;
+    const I = g.interior, R = I.room;
+    const A = g.world.atmosphere;
+    const L = (x, y, z) => R.wp(x, y, z); // room-local -> world
+    const Q = Math.PI / 2;
+    return this.scene(async (S) => {
+      I.stage(true);
+      A.hour = Math.max(A.hour, 22.7);
+      g.setBikeVisible(false);
+      g.villagers.setVisible('grandma', false);
+      g.rider.visible = false;
+      const seat = L(1.98, 0, -1.31);
+      const H = S.actor('hankBuried', seat.x, seat.z, R.wyaw(Q), 'sitShiver');
+      H.yaw = H.targetYaw;
+      const nh = L(-3.75, 0, -2.35);
+      const N = S.actor('grandma', nh.x, nh.z, R.wyaw(Q), 'carry');
+      const fq = R.foldedQuilt;
+      fq.visible = true;
+      fq.position.set(0, -0.05, 0.12);
+      fq.rotation.set(0, 0, 0);
+      N.hold(fq);
+      S.temp.push({ remove: () => { R.root.add(fq); fq.visible = false; R.lapQuilt.visible = false; } });
+      await S.cam(L(3.8, 1.5, 0.3), L(2.15, 0.75, -1.4), 0, 48);
+      S.sfx('brrr', { volume: 0.5 });
+      g.effects.frost(H.pos.x, H.pos.y + 0.6, H.pos.z, 6);
+      const walk = N.walkTo([L(-1.6, 0, -2.9), L(0.4, 0, -3.15), L(2.6, 0, -3.05), L(2.75, 0, -2.6)], 1.15, 'carry');
+      await S.say('grandma', 'There we are. Now, let me get you properly warm.', { actor: N, expr: 'happy' });
+      await walk;
+      N.faceTowards(H.pos.x, H.pos.z);
       N.play('offer');
+      await S.wait(0.45);
+      // Harold's quilt billows out and settles over his lap
+      N.hold(null);
+      R.root.add(fq);
+      fq.visible = false;
+      const lq = R.lapQuilt;
+      lq.position.set(1.98, 0, -1.31);
+      lq.rotation.set(0, Q, 0);
+      lq.visible = true;
+      S.sfx('whoosh', { volume: 0.35, pitch: 0.7 });
+      const back = (k) => 1 + 2.2 * Math.pow(k - 1, 3) + 1.2 * Math.pow(k - 1, 2);
+      await S.anim(0.75, (k) => {
+        const e = back(k);
+        lq.scale.set(0.35 + 0.65 * e, 0.2 + 0.8 * e, 0.35 + 0.65 * e);
+        lq.position.y = (1 - k) * 0.45;
+      });
+      g.effects.poof?.(H.pos.x, H.pos.y + 0.6, H.pos.z, { scale: 0.7, color: [1, 0.95, 0.85], count: 5 });
+      lq.userData.breathe = true;
+      H.play('sit', 'happy');
+      N.play('idle');
+      await S.faceShot(H, { dist: 2.5, side: -0.6, up: 0.3, dur: 0.7, fov: 42 });
+      await S.say('grandma', 'Harold\'s quilt. Forty-one patches, one for every winter we had together. Sit close, dear. Get that fire into you.', { actor: N, expr: 'happy' });
+      H.play('sitShiver', 'scared');
+      S.sfx('jaw_chatter', { volume: 0.6 });
+      await S.say('hankBuried', "Th-thank you, ma'am. My t-teeth won't stop chattering.", { actor: H, expr: 'scared' });
+      await S.cam(L(0.6, 2.0, -1.9), L(2.75, 1.25, -2.6), 0.8, 42);
+      N.play('talk');
+      await S.say('grandma', "Marguerite, dear. Everyone calls me Nana. Here, these were my Harold's. His good sweater, and his lucky toque.", { actor: N, expr: 'neutral' });
+      N.play('hug');
       await S.wait(0.6);
       // outfit change, ta-da!
-      H.yOffset = 0;
-      H.play('idle', 'surprised');
+      await S.cam(L(3.8, 1.5, 0.3), L(2.1, 0.85, -1.35), 0, 46);
+      H.play('sit', 'surprised');
       S.sfx('magic');
       g.effects.magic(H.pos.x, H.pos.y + 1, H.pos.z, 20, [1, 0.85, 0.5]);
       g.effects.confetti(H.pos.x, H.pos.y + 1.4, H.pos.z, 24);
-      g.effects.poof?.(H.pos.x, H.pos.y + 0.8, H.pos.z, { scale: 1.2, color: [1, 0.92, 0.8], count: 6 });
+      g.effects.poof?.(H.pos.x, H.pos.y + 0.9, H.pos.z, { scale: 1.1, color: [1, 0.92, 0.8], count: 6 });
       H.char = 'hank';
       H.bounce(0.5);
-      H.react('spin');
       g.setOutfit('hank');
       N.play('idle');
-      await S.frame(H, [0.9, 0.7, 2.6], 0.6, 38, 1.0);
+      await S.wait(0.5);
+      await S.faceShot(H, { dist: 2.5, side: -0.6, up: 0.3, dur: 0.6, fov: 42 });
       await S.say('hank', "Oh... oh, that's *cozy.*", { actor: H, expr: 'happy' });
+      await S.cam(L(0.6, 2.0, -1.9), L(2.75, 1.25, -2.6), 0.7, 42);
       await S.say('grandma', 'Harold was a hunter. A terrible one. Fifty years and he never hit a single thing. Too soft-hearted.', { actor: N, expr: 'laugh' });
+      // the famous cocoa
       N.play('offer');
-      await S.cam(V(fx + 1.8, fy + 1.4, fz + 2.6), V((H.pos.x + N.pos.x) / 2, fy + 1.0, (H.pos.z + N.pos.z) / 2), 1.0, 40);
+      await S.cam(L(4.05, 1.55, -0.55), L(2.35, 1.0, -1.95), 1.0, 44);
       await S.say('grandma', 'And this... is my famous hot cocoa. Fifty years, and not one complaint.', { actor: N, expr: 'smug' });
+      N.play('idle');
       // the first sip... straight through the ribs
-      H.play('sip');
+      H.play('sitSip');
       S.sfx('slurp');
-      await S.frame(H, [0.8, 0.4, 1.8], 0.8, 34, 0.9);
+      await S.faceShot(H, { dist: 2.3, side: -0.55, up: 0.25, dur: 0.7, fov: 40 });
       await S.wait(0.5);
       S.sfx('pour_cocoa', { volume: 0.6 });
-      for (let k = 0; k < 18; k++) g.effects.ps.spawn({ x: H.pos.x + (Math.random() - 0.5) * 0.12, y: H.pos.y + 0.75, z: H.pos.z + (Math.random() - 0.5) * 0.12, vy: -0.4, life: 0.9, size: 0.06, sprite: P.drop, color: [0.45, 0.24, 0.12], gravity: 9, drag: 0.2, ground: true, rest: 0.6 });
+      for (let k = 0; k < 18; k++) g.effects.ps.spawn({ x: H.pos.x + (Math.random() - 0.5) * 0.12, y: H.pos.y + 0.8, z: H.pos.z + (Math.random() - 0.5) * 0.12, vy: -0.4, life: 0.9, size: 0.06, sprite: P.drop, color: [0.45, 0.24, 0.12], gravity: 9, drag: 0.2, ground: true, rest: 0.6 });
       await S.wait(1.0);
       N.react('gasp');
-      await S.say('grandma', '...Oh. Oh dear.', { actor: N, expr: 'surprised' });
+      await S.say('grandma', '...Oh. Oh dear. That quilt has seen worse. Harold once spilled a whole moose stew on it.', { actor: N, expr: 'surprised' });
+      H.play('sit', 'happy');
       await S.say('hank', "...I can't taste a thing. But it's *warm.* I can feel it all the way down.", { actor: H, expr: 'happy' });
       await S.say('hank', '...And all the way out, apparently.', { actor: H, expr: 'sheepish' });
       N.react('laugh');
-      H.play('idle', 'happy');
-      N.play('idle');
-      await S.cam(V(fx + 0.6, fy + 1.7, fz + 5.0), V(fx - 0.1, fy + 0.9, fz - 1.4), 1.0, 45);
+      await S.cam(L(4.05, 1.55, -0.55), L(2.35, 1.0, -1.95), 0.8, 44);
       await S.say('grandma', 'Now then. Tell me: can you feel the cold, dear?', { actor: N, expr: 'neutral' });
       await S.say('hank', 'Not anymore. Not... really anything, actually.', { actor: H, expr: 'neutral' });
-      await S.frame(N, [-1.0, 0.5, 2.2], 0.8, 40, 1.0);
+      await S.cam(L(0.6, 2.0, -1.9), L(2.75, 1.25, -2.6), 0.8, 40);
       await S.say('grandma', 'Perfect. Then I have a proposition for you.', { actor: N, expr: 'smug' });
       await S.say('grandma', "My cocoa keeps half of Maple Cove going through the autumn, and my knees aren't what they used to be.", { actor: N, expr: 'neutral' });
       const c = await S.say('grandma', "How would you like a job? Delivering cocoa. Harold's old bicycle is just sitting in the garage.", { actor: N, expr: 'happy', choices: ["I'd love to!", 'Do I get paid?', 'Will people scream at me?'] });
@@ -208,25 +327,34 @@ export class Story {
       else await S.say('grandma', 'Wonderful!', { actor: N, expr: 'laugh' });
       await S.say('grandma', 'We start at sunrise. Sleep well, dear. ...Do you sleep?', { actor: N, expr: 'surprised' });
       H.react('headpop');
+      await S.faceShot(H, { dist: 2.5, side: -0.6, up: 0.3, dur: 0.6, fov: 42 });
       await S.say('hank', "Oh, I *sleep.* That's how I got into this mess.", { actor: H, expr: 'sheepish' });
-      // pull back to the stars, the fire popping
-      S.cam(V(fx + 7, fy + 5, fz + 9), V(fx, fy + 1.2, fz), 4, 48);
-      for (let k = 0; k < 12; k++) g.effects.ps.spawn({ x: fx, y: fy + 0.5, z: fz, vx: (Math.random() - 0.5) * 0.6, vy: 1.5 + Math.random() * 1.5, vz: (Math.random() - 0.5) * 0.6, life: 1.6, size: 0.06, sprite: P.ember, color: [1, 0.7, 0.3], emissive: 1, drag: 0.6, blink: 8 });
-      await S.wait(2.2);
-      await S.fade(1, 1.4);
-      g.villagers.setVisible('grandma', true);
-      this.flag('cabin', true);
-      A.cold = 0;
+      // she tucks the quilt in and turns the lamp down; he dozes off by the fire
+      N.walkTo([L(2.55, 0, -0.75)], 0.8, 'walk');
+      await S.wait(0.8);
+      N.play('hug');
+      H.play('sitSleep', 'sleepy');
+      S.sfx('big_snore', { volume: 0.35 });
+      await S.cam(L(-1.3, 2.55, 2.4), L(2.6, 0.8, -1.35), 0, 50);
+      S.cam(L(-0.6, 2.4, 1.6), L(2.6, 0.8, -1.35), 5, 48);
+      H.showEmote('zzz', 5);
+      await S.wait(3.2);
+      await S.fade(1, 1.6);
     });
   }
 
-  // ---------------------------------------------------------------- 3. mornings
+  // ---------------------------------------------------------------- 3. mornings, at Nana's table
   morning(day) {
     const g = this.g;
+    const I = g.interior, R = I.room;
+    const L = (x, y, z) => R.wp(x, y, z);
     return this.scene(async (S) => {
       const A = g.world.atmosphere;
       A.hour = 8.2;
       A.cold = 0;
+      I.reset();
+      I.stage(true);
+      S.temp.push({ remove: () => I.stage(false) });
       g.setBikeVisible(true);
       g.parkBike();
       g.rider.visible = false;
@@ -234,36 +362,37 @@ export class Story {
       g.ui.banner(`DAY ${day}`, weatherLine(g.state.weather, day), 2800);
       S.sfx('day_start');
       const b = BREAKFAST[day];
-      // breakfast in the yard, with the porch and Nana's sign behind
-      const tx = -165.2, tz = 68.2;
-      const ty = g.physics.groundAt(tx, tz).h;
-      const table = this.table || (this.table = makeTable(g, tx, ty, tz));
-      table.visible = true;
-      // breakfast on the table, steaming hot (Hank's plate and Nana's cocoa)
-      const plate = b ? voxelFood(g, FOOD[FOOD_FOR[b.food] || 'pancakes'], tx - 0.3, ty + 0.77, tz, Math.PI / 2) : voxelFood(g, FOOD.soupBowl, tx - 0.3, ty + 0.77, tz);
-      const mug = voxelFood(g, FOOD.cocoaMaple, tx + 0.28, ty + 0.77, tz + 0.18, -1.2);
+      // breakfast on the table by the front windows, steaming hot (Hank's plate and Nana's cocoa)
+      const top = R.floorY + 0.8;
+      const pp = L(-2.6, 0, 1.62), mp = L(-3.55, 0, 1.95);
+      const plate = b ? voxelFood(g, FOOD[FOOD_FOR[b.food] || 'pancakes'], pp.x, top, pp.z, R.wyaw(Math.PI / 2)) : voxelFood(g, FOOD.soupBowl, pp.x, top, pp.z);
+      const mug = voxelFood(g, FOOD.cocoaMaple, mp.x, top, mp.z, R.wyaw(-1.2));
       this.steamers = [...plate.steam, ...mug.steam];
       S.temp.push({ remove: () => { g.scene.remove(plate.mesh); g.scene.remove(mug.mesh); this.steamers = []; } });
       g.villagers.setVisible('grandma', false);
-      const H = S.actor('hank', tx - 0.85, tz, Math.PI / 2, 'sit');
-      const N = S.actor('grandma', tx + 0.25, tz + 1.05, Math.PI, 'idle');
+      const hc = L(-2.6, 0, 1.22), nc = L(-4.55, 0, 1.9);
+      const H = S.actor('hank', hc.x, hc.z, R.wyaw(0), 'sit');
+      const N = S.actor('grandma', nc.x, nc.z, R.wyaw(Math.PI), 'idle');
+      H.faceTowards(L(-2.6, 0, 3).x, L(-2.6, 0, 3).z);
+      N.faceTowards(H.pos.x, H.pos.z);
       H.yaw = H.targetYaw;
       N.yaw = N.targetYaw;
       let cat = null;
       if (g.state.cat) {
         cat = voxelPoutine(g);
-        cat.mesh.position.set(tx + 0.1, ty, tz - 0.95);
+        cat.mesh.position.copy(L(-1.7, 0, 1.0));
+        cat.mesh.rotation.y = R.wyaw(-2.4);
         g.scene.add(cat.mesh);
         S.temp.push({ remove: () => g.scene.remove(cat.mesh) });
       }
-      await S.cam(V(tx + 7.0, ty + 2.5, tz + 1.5), V(tx - 0.7, ty + 0.5, tz + 0.2), 0, 40);
+      const wide = [L(-1.1, 1.95, 3.55), L(-3.2, 0.95, 1.7)];
+      await S.cam(wide[0], wide[1], 0, 46);
       await S.fade(0, 1.2);
       if (b) {
         for (const [who, text, expr] of b.lines) await S.say(who, text, { expr, actor: who === 'hank' ? H : N });
         // close on Hank for the big bite...
-        const wide = [g.chase.pos.clone(), g.chase.look.clone()];
-        await S.cam(V(tx + 2.7, ty + 1.65, tz - 2.4), V(tx - 0.85, ty + 0.8, tz), 0.5, 40);
-        H.play('eat');
+        await S.cam(L(-2.05, 1.5, 3.25), L(-2.6, 0.95, 1.35), 0.5, 40);
+        H.play('sitEat');
         await S.wait(0.8);
         // ...and the food falls straight through him
         S.sfx('food_fall');
@@ -272,10 +401,11 @@ export class Story {
         const bites = fragmentVox(plate.res.vox, 4, Vox).filter((f) => f.n > 6).slice(0, 3);
         for (let k = 0; k < 3; k++) {
           const f = bites[k % Math.max(1, bites.length)];
+          const at = V(H.pos.x + toCam.x, R.floorY + 1.2 - k * 0.06, H.pos.z + toCam.z);
           if (f) {
             const m = voxMesh(meshVox(f.vox, { size: plate.res.size, origin: [f.vox.w / 2, f.vox.h / 2, f.vox.d / 2] }), sharedVoxelMaterial());
-            this.dropMesh(m, V(H.pos.x + toCam.x, ty + 1.2 - k * 0.06, H.pos.z + toCam.z), V((Math.random() - 0.5) * 0.5, -0.4, (Math.random() - 0.5) * 0.5));
-          } else this.drop(`food:${b.food}`, V(H.pos.x + toCam.x, ty + 1.2 - k * 0.06, H.pos.z + toCam.z), V(0, -0.4, 0), 1.2);
+            this.dropMesh(m, at, V((Math.random() - 0.5) * 0.5, -0.4, (Math.random() - 0.5) * 0.5));
+          } else this.drop(`food:${b.food}`, at, V(0, -0.4, 0), 1.2);
           await S.wait(0.22);
         }
         plate.mesh.scale.setScalar(0.7);
@@ -285,7 +415,7 @@ export class Story {
         H.showEmote('sweat', 2.2);
         N.showEmote('question', 2.2);
         await S.wait(1.2);
-        await S.cam(wide[0], wide[1], 0.6, 40);
+        await S.cam(wide[0], wide[1], 0.6, 46);
         if (cat && day >= 3) {
           cat.setFrame('cat:walk:side:0');
           S.sfx('purr');
@@ -306,11 +436,12 @@ export class Story {
         await S.say(gg[0], gg[1], { expr: gg[2], actor: gg[0] === 'hank' ? H : N });
       }
       if (day === 2) {
+        await S.faceShot(N, { dist: 2.0, side: 0.6, dur: 0.6 });
         await S.say('grandma', 'Oh! Harold kept his riding notes in the garage, dear. Wheelies, hops, all sorts of nonsense. Have a read when you pass by.', { actor: N, expr: 'happy' });
       }
       await S.say('grandma', day === 1 ? 'Now, the orders are pinned on the board. Two to start — Gus and Marie-Claude, down in Maple Cove.' : "Today's orders are on the board, dear. Bundle up! ...Out of habit.", { actor: N, expr: 'neutral' });
       await S.fade(1, 0.5);
-      table.visible = false;
+      I.stage(false);
       g.villagers.setVisible('grandma', true);
       g.parkBike();
       g.chase.release();
@@ -587,6 +718,8 @@ export class Story {
       const what = opts[ch][1];
       if (what === 'board') {
         await new Promise((res) => g.menus.orderBoard(res));
+        // the cups go out to Bessie's crate, so out of the cabin first
+        if (g.orders.carried().length && g.interior?.active) await g.interior.leave();
         await g.loadCargo?.();
         if (g.orders.carried().length) g.ui.toast(`Packed ${g.orders.carried().length} hot cocoa${g.orders.carried().length > 1 ? 's' : ''}. Go go go!`, 'cocoa');
         g.refillBoosts();
@@ -758,18 +891,4 @@ export class Story {
 
 function weatherLine(w, day) {
   return { clear: 'Crisp and clear', breezy: 'Breezy — leaves everywhere', misty: 'Misty morning', overcast: 'Grey and gentle', rain: 'Rainy day — cocoa weather', snow: 'First snow!' }[w] || '';
-}
-
-function makeTable(g, x, y, z) {
-  const B = new Builder();
-  B.box([0, 0.72, 0], [1.1, 0.06, 0.8], { tile: 'planks', tileMeters: 2.5 });
-  for (const [a, b] of [[-0.45, -0.3], [0.45, -0.3], [-0.45, 0.3], [0.45, 0.3]]) B.box([a, 0.36, b], [0.07, 0.72, 0.07], { color: 0x6a4428 });
-  B.box([-0.85, 0.42, 0], [0.4, 0.06, 0.45], { color: 0x8a5a30 });
-  B.box([0, 0.76, 0], [0.8, 0.01, 0.55], { color: 0xc8361f });
-  for (const [a, b] of [[-0.25, 0], [0.25, 0.1]]) B.tube([a, 0.76, b], [a, 0.79, b], 0.13, 0.13, { color: 0xf4f0e6 }, 10);
-  B.tube([0.05, 0.76, -0.2], [0.05, 0.86, -0.2], 0.04, 0.045, { color: 0xf4ecdc }, 7);
-  const m = propMesh(B.build(), g.world.propMat);
-  m.position.set(x, y, z);
-  g.scene.add(m);
-  return m;
 }

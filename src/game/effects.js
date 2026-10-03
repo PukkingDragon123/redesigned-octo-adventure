@@ -189,7 +189,9 @@ export class Effects {
       this.spawnLeaf(x, h + rng.range(5, 13), z);
     }
     // --- golden motes floating in sunbeams (day) / fireflies (night)
-    if (night < 0.5) {
+    if (this.game.interior?.indoors) {
+      // no motes or fireflies drifting through the cabin walls
+    } else if (night < 0.5) {
       this.acc.motes += dt * 7;
       while (this.acc.motes > 1) {
         this.acc.motes -= 1;
@@ -233,7 +235,9 @@ export class Effects {
     this.updateCauldron(dt, cam);
     // --- weather
     const rain = atm.weather.rain, snow = atm.weather.snow;
-    if (rain > 0.05) {
+    // nothing falls inside Nana's cabin
+    const indoors = !!this.game.interior?.indoors;
+    if (rain > 0.05 && !indoors) {
       // most drops fall in front of the lens, where they're actually seen
       cam.getWorldDirection(this._fwd || (this._fwd = cam.position.clone()));
       const fx = this._fwd.x, fz = this._fwd.z;
@@ -245,7 +249,7 @@ export class Effects {
         ps.spawn({ x, y: cam.position.y + rng.range(2, 10), z, vx: W.x * 2, vy: -15, vz: W.y * 2, life: 1.3, size: 0.46, sprite: P.rain, color: [0.78, 0.84, 0.95], drag: 0, ground: true, rest: 0.03, alpha: 0.85, phase: 0 });
       }
     }
-    if (snow > 0.05) {
+    if (snow > 0.05 && !indoors) {
       this.acc.snow += dt * 160 * snow;
       while (this.acc.snow > 1) {
         this.acc.snow -= 1;
