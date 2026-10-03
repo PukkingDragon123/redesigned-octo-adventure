@@ -102,10 +102,9 @@ export class VoxelWorld {
       if (!at) continue;
       const yaw = b.facing || 0;
       const y = at.y0;
-      let geoHi, geoLo, r;
+      let geoHi = null, geoLo, r;
       const job = pre ? await pre.get(b.id) : null;
       if (job && !job.error) {
-        geoHi = geometryOf(job.hi);
         geoLo = geometryOf(job.lo);
         r = { meta: job.meta };
       } else {
@@ -116,14 +115,16 @@ export class VoxelWorld {
           console.warn('voxel building failed', b.id, e);
           continue;
         }
-        geoHi = meshVox(r.vox, { size: r.size, origin: r.origin, jitter: 0 });
+        geoHi = meshVox(r.vox, { size: r.size, origin: r.origin, jitter: 0, compact: true });
         const lr = lowDetail(r);
-        geoLo = meshVox(lr.vox, { size: lr.size, origin: lr.origin, jitter: 0 });
+        geoLo = meshVox(lr.vox, { size: lr.size, origin: lr.origin, jitter: 0, compact: true });
       }
-      // near: the 1/16 m model; past a few dozen metres the 1/8 m one (see setBuildingDetail)
+      // near: the 1/16 m model; past a few dozen metres the 1/8 m one (see setBuildingDetail).
+      // Worker-built buildings start with the far model only; the near one streams in later.
       const mesh = new THREE.LOD();
-      mesh.addLevel(voxMesh(geoHi, mat), 0);
-      mesh.addLevel(voxMesh(geoLo, mat), this.lodDist, 0.1);
+      mesh.addLevel(lodMesh(geoLo, mat), 0, 0.1);
+      mesh.userData.id = b.id;
+      if (geoHi) this.attachNear(mesh, geoHi);
       mesh.position.set(b.x, y, b.z);
       mesh.rotation.y = yaw;
       mesh.name = `building:${b.id}`;
@@ -132,6 +133,7 @@ export class VoxelWorld {
       this.scene.add(mesh);
       this.meshes.push(mesh);
       (this.lods ||= []).push(mesh);
+      (this.lodById ||= {})[b.id] = mesh;
       const M = mesh.matrix;
       const meta = r.meta || {};
       for (const s of meta.signs || []) this.sign(s, M, b);
@@ -159,13 +161,46 @@ export class VoxelWorld {
         }
       }
     }
+      // the near meshes: right away in test runs (and waited for), otherwise once the game has
+    // said which detail it wants (setBuildingDetail), or after a moment if it never does
+    const P = new URLSearchParams(typeof location !== 'undefined' ? location.search : '');
+    if (P.has('frames') || P.has('cam')) await this.startNear();
+    else setTimeout(() => { if (!this.detailSet) this.setBuildingDetail('high'); }, 2000);
+  }
+
+  // the full-detail mesh joins a building's LOD (the far one moves out to lodDist)
+  attachNear(lod, geo) {
+    if (lod.userData.near) return;
+    const far = lod.levels[lod.levels.length - 1];
+    far.distance = this.lodDist;
+    lod.addLevel(lodMesh(geo, sharedVoxelMaterial()), 0);
+    lod.userData.near = true;
+  }
+
+  // Stream the 1/16 m meshes in from workers, nearest to the player's start first. Test runs
+  // (?frames / ?cam) wait for all of them so screenshots are complete.
+  startNear() {
+    if (this.nearStarted || !this.world.buildingJobs?.near) return this.nearDone;
+    this.nearStarted = true;
+    const P = new URLSearchParams(typeof location !== 'undefined' ? location.search : '');
+    const sp = (P.get('spawn') || P.get('cam') || '').split(',').map(Number);
+    const from = sp.length >= 2 && !isNaN(sp[0]) ? { x: sp[0], z: P.get('cam') ? sp[2] : sp[1] } : L.POI.cabin;
+    const ids = L.BUILDINGS.filter((b) => this.lodById?.[b.id] && !this.lodById[b.id].userData.near)
+      .sort((a, b) => Math.hypot(a.x - from.x, a.z - from.z) - Math.hypot(b.x - from.x, b.z - from.z)).map((b) => b.id);
+    this.nearDone = this.world.buildingJobs.near(ids, (id, data) => {
+      const lod = this.lodById[id];
+      if (lod && data.hi) this.attachNear(lod, geometryOf(data.hi));
+    });
+    return this.nearDone;
   }
 
   // Building detail by graphics quality: how far out the full-resolution models are used
   // ('low' always shows the 1/8 m ones).
   setBuildingDetail(q = 'high') {
+    this.detailSet = true;
     this.lodDist = q === 'low' ? 0 : q === 'medium' ? 30 : 48;
-    for (const l of this.lods || []) l.levels[1].distance = this.lodDist;
+    for (const l of this.lods || []) if (l.levels.length > 1) l.levels[l.levels.length - 1].distance = this.lodDist;
+    if (q !== 'low') this.startNear();
   }
 
   // hand-lettered signs: queued here, painted into a shared atlas and merged into a few meshes by
@@ -415,44 +450,65 @@ export function buildingSpec(b, terrain) {
 // thread). Returns a Map id -> Promise<{ pos, nor, col, idx, meta } | { error }>, or null.
 export function startBuildingJobs(terrain) {
   if (typeof Worker === 'undefined') return null;
-  const cores = Math.max(1, Math.min(3, (navigator.hardwareConcurrency || 2) - 1));
-  let workers;
-  try {
-    workers = Array.from({ length: cores }, () => new BuildWorker());
-  } catch {
-    return null;
-  }
+  const cores = Math.max(1, Math.min(4, (navigator.hardwareConcurrency || 2) - 1));
+  const specs = new Map(L.BUILDINGS.map((b) => [b.id, buildingSpec(b, terrain)]));
+  // run a list of jobs on a fresh pool; onMsg(data) per result, onFail(id, err) for jobs a broken worker owned
+  const run = (ids, near, onMsg, onFail) => {
+    let workers;
+    try {
+      workers = Array.from({ length: Math.min(cores, ids.length) }, () => new BuildWorker());
+    } catch {
+      return false;
+    }
+    const lists = workers.map(() => []);
+    ids.forEach((id, i) => lists[i % workers.length].push({ id, spec: specs.get(id) }));
+    let left = ids.length;
+    workers.forEach((w, k) => {
+      w.onmessage = (e) => {
+        onMsg(e.data);
+        if (--left === 0) for (const ww of workers) ww.terminate();
+      };
+      w.onerror = (e) => {
+        for (const j of lists[k]) onFail(j.id, e.message || 'worker failed');
+        e.preventDefault?.();
+      };
+      w.postMessage({ jobs: lists[k], near });
+    });
+    return true;
+  };
   const waiting = new Map(), jobs = new Map();
-  const lists = workers.map(() => []);
-  // biggest first, dealt round-robin so the workers finish together
-  const order = L.BUILDINGS.slice().sort((a, b) => b.w * b.d * (b.floors || 1) - a.w * a.d * (a.floors || 1));
-  order.forEach((b, i) => lists[i % workers.length].push({ id: b.id, spec: buildingSpec(b, terrain) }));
   for (const b of L.BUILDINGS) jobs.set(b.id, new Promise((res) => waiting.set(b.id, res)));
-  let left = L.BUILDINGS.length;
-  workers.forEach((w, k) => {
-    w.onmessage = (e) => {
-      waiting.get(e.data.id)?.(e.data);
-      if (--left === 0) for (const ww of workers) ww.terminate();
-    };
-    w.onerror = (e) => {
-      // a worker that can't even start: everything it owned falls back to the main thread
-      for (const j of lists[k]) waiting.get(j.id)?.({ id: j.id, error: e.message || 'worker failed' });
-      e.preventDefault?.();
-    };
-    w.postMessage({ jobs: lists[k] });
+  // far meshes first (the loading screen waits for these), biggest first so the workers finish together
+  const order = L.BUILDINGS.slice().sort((a, b) => b.w * b.d * (b.floors || 1) - a.w * a.d * (a.floors || 1)).map((b) => b.id);
+  const ok = run(order, false, (d) => waiting.get(d.id)?.(d), (id, err) => waiting.get(id)?.({ id, error: err }));
+  if (!ok) return null;
+  // then the near meshes, in the order asked for; resolves when all have arrived
+  jobs.near = (ids, onMesh) => new Promise((done) => {
+    if (!ids.length) return done();
+    let left = ids.length;
+    const one = () => { if (--left === 0) done(); };
+    const started = run(ids, true, (d) => { if (!d.error) onMesh(d.id, d); else console.warn('near mesh failed', d.id, d.error); one(); }, (id) => one());
+    if (!started) done();
   });
   return jobs;
 }
 
+// a worker's mesh arrays -> geometry (compact meshes: Int16 grid positions, see meshVox)
 function geometryOf(a) {
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.BufferAttribute(a.pos, 3));
-  geo.setAttribute('normal', new THREE.BufferAttribute(a.nor, 3));
-  geo.setAttribute('color4', new THREE.BufferAttribute(a.col, 4));
+  geo.setAttribute('normal', new THREE.BufferAttribute(a.nor, 3, !(a.nor instanceof Float32Array)));
+  geo.setAttribute('color4', new THREE.BufferAttribute(a.col, 4, !(a.col instanceof Float32Array)));
   geo.setIndex(new THREE.BufferAttribute(a.idx, 1));
   geo.computeBoundingSphere();
   geo.computeBoundingBox();
+  geo.userData.scale = a.scale ?? 1;
   return geo;
+}
+function lodMesh(geo, mat) {
+  const m = voxMesh(geo, mat);
+  m.scale.setScalar(geo.userData.scale ?? 1);
+  return m;
 }
 
 // Nana's old TV on the porch: Maple Cove TV with the weather and town news

@@ -22,7 +22,7 @@ const AX = [
   { a: 2, u: 0, v: 1, flip: 1 },
 ];
 
-// opts: size (m per voxel), origin [x,y,z] in voxel units (the pivot), greedy, jitter, seed, aoStrength
+// opts: size (m per voxel), origin [x,y,z] in voxel units (the pivot), greedy, jitter, seed, aoStrength, compact
 export function meshVox(vox, opts = {}) {
   const size = opts.size ?? 0.05;
   const [ox, oy, oz] = opts.origin ?? [vox.w / 2, 0, vox.d / 2];
@@ -30,6 +30,8 @@ export function meshVox(vox, opts = {}) {
   const greedy = opts.greedy ?? jitter === 0;
   const seed = opts.seed ?? 0;
   const aoK = opts.aoStrength ?? 1;
+  // compact: small integer vertex formats (needs a whole-voxel origin); see the output below
+  const compact = !!opts.compact && (opts.origin ?? [0, 0, 0]).every((v) => Number.isInteger(v));
   const W = vox.w, H = vox.h, D = vox.d;
   const dims = [W, H, D];
   const data = vox.data || null;
@@ -242,9 +244,21 @@ export function meshVox(vox, opts = {}) {
   }
 
   const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.BufferAttribute(pos.slice(0, vcount * 3), 3));
-  g.setAttribute('normal', new THREE.BufferAttribute(nor.slice(0, vcount * 3), 3));
-  g.setAttribute('color4', new THREE.BufferAttribute(col.slice(0, vcount * 4), 4));
+  if (compact) {
+    // 17 bytes a vertex instead of 40: grid positions as Int16 (the mesh gets scale = size),
+    // axis normals as normalized Int8, colours as normalized Uint16
+    const P16 = new Int16Array(vcount * 3), N8 = new Int8Array(vcount * 3), C16 = new Uint16Array(vcount * 4);
+    for (let i = 0; i < vcount * 3; i++) { P16[i] = Math.round(pos[i] / size); N8[i] = nor[i] * 127; }
+    for (let i = 0; i < vcount * 4; i++) C16[i] = Math.round(Math.min(1, col[i]) * 65535);
+    g.setAttribute('position', new THREE.BufferAttribute(P16, 3));
+    g.setAttribute('normal', new THREE.BufferAttribute(N8, 3, true));
+    g.setAttribute('color4', new THREE.BufferAttribute(C16, 4, true));
+    g.userData.scale = size;
+  } else {
+    g.setAttribute('position', new THREE.BufferAttribute(pos.slice(0, vcount * 3), 3));
+    g.setAttribute('normal', new THREE.BufferAttribute(nor.slice(0, vcount * 3), 3));
+    g.setAttribute('color4', new THREE.BufferAttribute(col.slice(0, vcount * 4), 4));
+  }
   g.setIndex(vcount > 65535 ? new THREE.BufferAttribute(idx.slice(0, nIdx), 1) : new THREE.BufferAttribute(Uint16Array.from(idx.subarray(0, nIdx)), 1));
   g.computeBoundingSphere();
   g.computeBoundingBox();

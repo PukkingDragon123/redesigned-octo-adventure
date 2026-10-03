@@ -145,6 +145,27 @@ class VB {
   fclear(X0, Y0, Z0, X1, Y1, Z1) {
     for (let z = Math.min(Z0, Z1); z <= Math.max(Z0, Z1); z++) for (let y = Math.min(Y0, Y1); y <= Math.max(Y0, Y1); y++) for (let x = Math.min(X0, X1); x <= Math.max(X0, X1); x++) this.fset(x, y, z, 0);
   }
+  // a solid box of one colour (fine coordinates, inclusive), written a brick row at a time
+  box(X0, Y0, Z0, X1, Y1, Z1, c) {
+    const v = c >>> 0;
+    const ax = Math.max(0, X0 - this.fx0), bx = Math.min(this.FW - 1, X1 - this.fx0);
+    const ay = Math.max(0, Y0 - this.fy0), by = Math.min(this.FH - 1, Y1 - this.fy0);
+    const az = Math.max(0, Z0 - this.fz0), bz = Math.min(this.FD - 1, Z1 - this.fz0);
+    if (ax > bx || ay > by || az > bz) return;
+    for (let z = az; z <= bz; z++) for (let y = ay; y <= by; y++) {
+      const rowB = this.bw * ((y >> 4) + this.bh * (z >> 4)), r = (y & 15) | ((z & 15) << 4), cell = ((y & 15) << 4) | ((z & 15) << 8);
+      for (let bxi = ax >> 4; bxi <= bx >> 4; bxi++) {
+        const bi = bxi + rowB;
+        let br = this.bricks[bi];
+        if (!br) { br = this.bricks[bi] = new Uint32Array(4096); this.rbits[bi] = new Uint16Array(256); }
+        const xa = Math.max(ax, bxi << 4) & 15, xe = Math.min(bx, (bxi << 4) + 15) & 15;
+        if (xe - xa >= 7) br.fill(v, cell + xa, cell + xe + 1); else for (let i = cell + xa; i <= cell + xe; i++) br[i] = v;
+        this.rbits[bi][r] |= ((1 << (xe + 1)) - 1) & ~((1 << xa) - 1);
+      }
+    }
+    this._grow(ax, ay, az, 0);
+    this._grow(bx, by, bz, 0);
+  }
   // ---- coarse voxels (2x2x2 fine blocks)
   set(x, y, z, c) {
     const lx = Math.round(x) * K - this.fx0, ly = Math.round(y) * K - this.fy0, lz = Math.round(z) * K - this.fz0;
@@ -173,6 +194,7 @@ class VB {
     const ay = Math.round(Math.min(y0, y1)), by = Math.round(Math.max(y0, y1));
     const az = Math.round(Math.min(z0, z1)), bz = Math.round(Math.max(z0, z1));
     const fn = typeof c === 'function';
+    if (!fn && bx - ax >= 6 && (bx - ax + 1) * (by - ay + 1) * (bz - az + 1) >= 256) { if (c) this.box(ax * K, ay * K, az * K, bx * K + 1, by * K + 1, bz * K + 1, c); return; }
     for (let z = az; z <= bz; z++) for (let y = ay; y <= by; y++) for (let x = ax; x <= bx; x++) {
       const v = fn ? c(x, y, z) : c;
       if (v) this.set(x, y, z, v);
@@ -297,6 +319,13 @@ class BrickVol {
         const pc = POP2[(rb[r0] >> sh) & 3] + POP2[(rb[r0 + 1] >> sh) & 3] + POP2[(rb[r0 + 16] >> sh) & 3] + POP2[(rb[r0 + 17] >> sh) & 3];
         if (pc < 4) continue;
         const base = (ix << 1) | (iy << 5) | (iz << 9);
+        if (pc === 8 && br[base] === br[base + 273] && br[base + 1] === br[base + 272]) {
+          if (br[base] === br[base + 1]) {
+            const ox = (bx << 3) + ix - cx0, oy = (by << 3) + iy - cy0, oz = (bz << 3) + iz - cz0;
+            if (ox >= 0 && oy >= 0 && oz >= 0 && ox < OW && oy < OH && oz < out.d) od[ox + OW * (oy + OH * oz)] = br[base];
+            continue;
+          }
+        }
         let n = 0;
         for (let q = 0; q < 8; q++) { const c = br[base + (q & 1) + ((q & 2) << 3) + ((q & 4) << 6)]; if (c) cs[n++] = c; }
         let best = cs[0], bc = 0;
@@ -374,15 +403,21 @@ const frames = (vb, b) => ({ front: mkFrame(vb, b, 'front'), back: mkFrame(vb, b
 // ------------------------------------------------------------------ surface patterns
 const BOARD_T = [0, 0.05, -0.04, 0.025, -0.02, 0.035];
 function boardTone(base, k, seed = 0) { return tone(base, BOARD_T[Math.floor(vhash(k, 11, 3, seed) * BOARD_T.length)]); }
-// clapboard: 2-voxel boards, the bottom row of each board sticks out (n = 1)
+// lap siding: boards 3 fine voxels (19 cm) tall, the bottom row of each lapping out over the
+// board below (N = 1) so every course casts a thin shadow line. Each course has its own faint
+// tone, the lapped edge catches a little more light, and the two lowest courses are a touch
+// darker where rain splashes up. (Whole courses share a colour so they mesh into long strips.)
 function clapboard(F, base, y0, y1, seed = 0) {
-  for (let y = y0; y <= y1; y++) {
-    const c = boardTone(base, y >> 1, seed);
-    const lip = (y & 1) === 0;
-    for (let u = F.umin + 2; u <= F.umax - 2; u++) {
-      if (!F.get(u, y, 0)) continue;
-      F.set(u, y, 0, c);
-      if (lip && !F.get(u, y, 1)) F.set(u, y, 1, c);
+  const Ua = (F.umin + 2) * K, Ub = (F.umax - 2) * K + 1;
+  for (let Y = y0 * K; Y <= y1 * K + 1; Y++) {
+    const k = Math.floor(Y / 3), lip = ((Y % 3) + 3) % 3 === 0;
+    let c = boardTone(base, k, seed);
+    if (k < 2) c = tone(c, -0.05);
+    if (lip) c = tone(c, 0.035);
+    for (let U = Ua; U <= Ub; U++) {
+      if (!F.fg(U, Y, 0)) continue;
+      F.fs(U, Y, 0, c);
+      if (lip && !F.fg(U, Y, 1)) F.fs(U, Y, 1, c);
     }
   }
 }
@@ -463,10 +498,10 @@ function roofGeom(o) {
   return { axis, b, H, p, oh, t, s0, s1, r0, r1, S0, S1, R0, R1, base, top, sr, xz, topAt, ridge };
 }
 function fillBody(vb, b, H, R, c, y0 = 0) {
-  for (let z = b.z0; z <= b.z1; z++) for (let x = b.x0; x <= b.x1; x++) {
-    let yt = H - 1;
-    if (R) yt = Math.max(yt, R.topAt(x, z) - R.t);
-    for (let y = y0; y <= yt; y++) vb.set(x, y, z, c);
+  vb.fill(b.x0, y0, b.z0, b.x1, H - 1, b.z1, c);
+  if (R) for (let z = b.z0; z <= b.z1; z++) for (let x = b.x0; x <= b.x1; x++) {
+    const yt = R.topAt(x, z) - R.t;
+    if (yt >= H) vb.fill(x, H, z, x, yt, z, c);
   }
 }
 function roofStyle(kind, seed, extra = {}) {
@@ -492,50 +527,125 @@ function shingle(st, s, r, yt) {
   if (seam) return tone(col, -0.16);
   return [col, tone(col, -0.07), tone(col, 0.07)][course];
 }
+// fine shingle colour. c: course (counted from the eave), r: fine position along the ridge.
+// Shingles: tabs 6 voxels wide, staggered every course, three close tones and the odd darker
+// replacement; the course's butt row is in shadow. Tin: standing seams every 10 voxels, and rust
+// that runs down from them. Moss: green patches that grow thickest low on the roof.
+function shingleF(st, c, r, butt, S = 0) {
+  const col = st.col;
+  if (st.kind === 'tin') {
+    const rr = ((r % 10) + 10) % 10;
+    if (rr === 0) return tone(col, 0.1);
+    if (rr === 1) return tone(col, -0.1);
+    const streak = vnoise(r * 2.5, c * 0.35, 9, st.seed);
+    const n = vnoise(r, c, 14, st.seed + 2);
+    if (streak > 0.72 && (rr <= 3 || rr >= 8)) return mixc(col, 0x6a2e14, 0.55);
+    return n > 0.7 ? mixc(col, 0x7a3a1c, 0.35) : n < 0.25 ? tone(col, 0.07) : col;
+  }
+  // course tones cycle; only the odd weathered tab breaks a course (long runs mesh cheaply)
+  const tab = Math.floor((r + (c & 1) * 3 + ((c * 7) % 5)) / 6);
+  const h = vhash(tab, c, 13, st.seed);
+  let t = [0, -0.05, 0.035][((c % 3) + 3) % 3];
+  if (h > 0.975) t = -0.17;
+  else if (h < 0.02) t += 0.08;
+  let cc = tone(col, t);
+  if (st.kind === 'moss') {
+    const n = vnoise(r, S, 14, st.seed) * 0.7 + vnoise(r, S, 5, st.seed + 1) * 0.3 + Math.max(0, 0.18 - c * 0.012);
+    if (n > 0.6) cc = n > 0.72 ? P.mossB : n > 0.66 ? P.moss : mixc(cc, P.moss, 0.5);
+  } else if (c < 3 && vhash(tab, c, 17, st.seed) < 0.3) cc = mixc(cc, P.moss, 0.25); // a little lichen down at the eaves
+  if (butt) cc = tone(cc, -0.2);
+  return cc;
+}
+// Gable roof at 1/16 m: shingle courses step up every two voxels (tin sheets every voxel), with a
+// ridge cap, fascia boards along the eaves, rake boards up the gables, a U-section gutter on
+// hangers and downspouts that come back to the wall and run down to a splash block.
 function drawRoof(vb, R, st) {
-  const cap = Math.max(1, Math.ceil(R.p));
-  const mid = Math.floor((R.S0 + R.S1) / 2);
-  const dmax = Math.min(mid - R.S0, R.S1 - mid);
-  for (let s = R.S0; s <= R.S1; s++) {
-    const yt = R.top(s);
-    const de = Math.min(s - R.S0, R.S1 - s);
-    for (let r = R.R0; r <= R.R1; r++) {
-      const [x, z] = R.xz(s, r);
-      const edge = (r === R.R0 && !st.noBargeR0) || (r === R.R1 && !st.noBargeR1);
-      for (let k = 0; k < R.t; k++) {
-        let c;
-        if (edge && st.barge) c = st.barge;
-        else if (k < cap) c = shingle(st, s, r, yt);
-        else c = de === 0 && st.fascia ? st.fascia : st.soffit;
-        vb.set(x, yt - k, z, c);
+  const S0f = R.S0 * K, S1f = R.S1 * K + 1, R0f = R.R0 * K, R1f = R.R1 * K + 1;
+  const tin = st.kind === 'tin';
+  const span = S1f - S0f;
+  const raw = (S) => K * R.base + Math.min(S - S0f, S1f - S) * R.p;
+  const course = (S) => (tin ? Math.floor(raw(S)) : Math.floor(raw(S) / 2));
+  const hTop = (S) => (tin ? Math.floor(raw(S)) + 1 : 2 * Math.floor(raw(S) / 2) + 1);
+  const T = K * R.t, c0 = course(S0f);
+  const dmax = Math.floor(span / 2);
+  const xz = (S, r) => (R.axis === 'z' ? [S, r] : [r, S]);
+  for (let S = S0f; S <= S1f; S++) {
+    const yt = hTop(S);
+    const de = Math.min(S - S0f, S1f - S);
+    const toward = S - S0f <= S1f - S ? S - 1 : S + 1; // the eave side
+    const butt = !tin && (toward < S0f || toward > S1f || hTop(toward) < yt);
+    const c = course(S) - c0;
+    const ridge = de >= dmax - 1;
+    for (let r = R0f; r <= R1f; r++) {
+      const [x, z] = xz(S, r);
+      const edge = (r <= R0f + 1 && !st.noBargeR0) || (r >= R1f - 1 && !st.noBargeR1);
+      for (let k = 0; k < T; k++) {
+        let cc;
+        if (edge && st.barge) cc = k === 0 ? tone(st.barge, 0.04) : st.barge;
+        else if (k < 2) cc = shingleF(st, c, r, butt && k === 0, S);
+        else cc = de <= 1 && st.fascia ? st.fascia : st.soffit;
+        vb.fset(x, yt - k, z, cc);
       }
-      if (edge && st.barge) vb.set(x, yt - R.t, z, st.barge);
-      if (de === dmax && st.ridge) vb.set(x, yt + 1, z, st.ridge);
-      if (st.kind === 'moss' && !edge && de > 0 && de < dmax) {
-        const n = vnoise(s, r, 7, st.seed) * 0.75 + vnoise(s, r, 3, st.seed + 1) * 0.25;
-        if (n > 0.7 && vhash(s, r, 4, st.seed) < 0.14) vb.set(x, yt + 1, z, n > 0.76 ? P.mossB : P.moss);
+      if (edge && st.barge) { vb.fset(x, yt - T, z, st.barge); if (r === R0f || r === R1f) vb.fset(x, yt - T - 1, z, tone(st.barge, -0.1)); }
+      if (ridge && st.ridge && !edge) vb.fset(x, yt + 1, z, ((r - R0f) % 8 === 0) ? tone(st.ridge, -0.15) : st.ridge);
+      if (st.kind === 'moss' && !edge && de > 2 && de < dmax - 2) {
+        const n = vnoise(r, S, 14, st.seed) * 0.7 + vnoise(r, S, 5, st.seed + 1) * 0.3;
+        if (n > 0.68 && vhash(S, r, 4, st.seed) < 0.22) vb.fset(x, yt + 1, z, n > 0.74 ? P.mossB : P.moss);
       }
     }
   }
   if (st.gutter) {
     for (const side of [-1, 1]) {
-      const sg = side < 0 ? R.S0 - 1 : R.S1 + 1;
-      for (let r = R.R0 + 1; r <= R.R1 - 1; r++) {
-        const [x, z] = R.xz(sg, r);
-        vb.set(x, R.base, z, P.metal);
-        vb.set(x, R.base - 1, z, P.metal);
+      // the U: bottom, outer lip, inner side against the fascia; a hanger strap every 10 voxels
+      const Se = side < 0 ? S0f : S1f, Yb = K * R.base - 1;
+      for (let r = R0f + 3; r <= R1f - 3; r++) {
+        const at = (k, y, c) => { const [x, z] = xz(Se + side * k, r); vb.fset(x, y, z, c); };
+        at(1, Yb, P.metal); at(2, Yb, P.metal); at(3, Yb, P.metalL);
+        at(1, Yb + 1, P.metal); at(3, Yb + 1, P.metalL); at(3, Yb + 2, P.metalL);
+        if ((r - R0f) % 10 === 5) { at(2, Yb + 2, P.iron); at(1, Yb + 2, P.iron); }
       }
-      // downspout near the front end of the eave
+      // end caps
+      for (const r of [R0f + 3, R1f - 3]) for (let k = 1; k <= 3; k++) { const [x, z] = xz(Se + side * k, r); vb.fset(x, Yb + 1, z, P.metal); }
       if (st.spouts !== false) {
-        const sw = side < 0 ? R.s0 - 2 : R.s1 + 2;
-        const rs = R.axis === 'z' ? R.r1 - 3 : R.r0 + 3;
-        for (let s = Math.min(sg, sw); s <= Math.max(sg, sw); s++) { const [x, z] = R.xz(s, rs); vb.set(x, R.base - 2, z, P.metal); }
-        const [x, z] = R.xz(sw + side, rs), [xs, zs] = R.xz(sw, rs);
-        const gy = Math.min(0, yardY(xs, zs) + 1);
-        for (let y = gy; y <= R.base - 2; y++) vb.set(xs, y, zs, P.metal);
-        vb.set(x, gy, z, P.metal);
-        if (CUR.ground) toGround(x, z, gy - 1, P.stoneC, 1);
+        const rs = R.axis === 'z' ? R.r1 * K - 4 : R.r0 * K + 5;
+        const Sw = side < 0 ? R.s0 * K - 4 : R.s1 * K + 4; // a couple of voxels off the wall
+        const [xa, za] = xz(Sw, rs), [xb, zb] = xz(Sw, rs + 1), [xc, zc] = xz(Sw + side, rs), [xd, zd] = xz(Sw + side, rs + 1);
+        const sq = (y, c) => { vb.fset(xa, y, za, c); vb.fset(xb, y, zb, c); vb.fset(xc, y, zc, c); vb.fset(xd, y, zd, c); };
+        // drop from the gutter, back under the soffit to the wall, then straight down
+        const Ys = Yb - 3;
+        for (let S = Math.min(Se + side * 2, Sw); S <= Math.max(Se + side * 2, Sw + side); S++) { const [x, z] = xz(S, rs); vb.fset(x, Ys, z, P.metal); const [x2, z2] = xz(S, rs + 1); vb.fset(x2, Ys, z2, P.metal); }
+        { const [x, z] = xz(Se + side * 2, rs); vb.fset(x, Yb - 1, z, P.metal); vb.fset(x, Yb - 2, z, P.metal); }
+        const gy = Math.min(0, yardY(Math.floor(xa / K), Math.floor(za / K))) * K;
+        for (let y = gy + 2; y < Ys; y++) sq(y, (y - gy) % 16 === 8 ? P.iron : P.metal);
+        // kick-out at the foot, onto a little splash block
+        const [xk, zk] = xz(Sw + side * 2, rs), [xk2, zk2] = xz(Sw + side * 3, rs), [xk3, zk3] = xz(Sw + side * 2, rs + 1), [xk4, zk4] = xz(Sw + side * 3, rs + 1);
+        sq(gy + 1, P.metal);
+        for (const [x, z] of [[xk, zk], [xk2, zk2], [xk3, zk3], [xk4, zk4]]) vb.fset(x, gy + 1, z, P.metal);
+        for (let k = 1; k <= 5; k++) for (const rr of [rs - 1, rs, rs + 1, rs + 2]) { const [x, z] = xz(Sw + side * k, rr); vb.fset(x, gy, z, P.stoneC); }
+        if (CUR.ground) for (let k = 1; k <= 5; k++) for (const rr of [rs - 1, rs + 2]) { const [x, z] = xz(Sw + side * k, rr); toGround(Math.floor(x / K), Math.floor(z / K), gy / K - 1, P.stoneB, 1); }
       }
+    }
+  }
+}
+// single-slope roof in a frame: from (n=nA, y=yA) down to (n=nB, y=yB), across u0..u1 (coarse);
+// drawn in fine voxels with shingle courses, a fascia along the low edge and rake boards
+function shedRoof(vb, F, u0, u1, nA, nB, yA, yB, st) {
+  const NA = K * nA - 1, NB = K * nB, U0 = K * u0, U1 = K * u1 + 1;
+  const tin = st.kind === 'tin';
+  const raw = (N) => K * yA + 1 + ((K * yB + 1 - (K * yA + 1)) * (N - NA)) / Math.max(1, NB - NA);
+  const hTop = (N) => (tin ? Math.round(raw(N)) : 2 * Math.floor(raw(N) / 2) + 1);
+  const cOf = (N) => Math.floor((raw(NB) - raw(N)) / (tin ? 1 : 2));
+  for (let N = NA; N <= NB; N++) {
+    const y = hTop(N);
+    const butt = !tin && N < NB && hTop(N + 1) < y;
+    for (let U = U0; U <= U1; U++) {
+      const edge = U <= U0 + 1 || U >= U1 - 1;
+      const front = N >= NB - 1;
+      const bc = st.barge ?? P.trim;
+      F.fs(U, y, N, edge || front ? bc : shingleF(st, cOf(N), U, butt, N));
+      F.fs(U, y - 1, N, edge || front ? bc : shingleF(st, cOf(N), U, false, N));
+      F.fs(U, y - 2, N, edge || front ? bc : st.soffit);
+      if (front) F.fs(U, y - 3, N, tone(bc, -0.08));
     }
   }
 }
@@ -548,19 +658,6 @@ function frontEdgePts(R) {
     for (let r = R.R0; r <= R.R1; r++) pts.push([r, R.base - R.t, R.S1]);
   }
   return pts;
-}
-// single-slope roof in a frame: from (n=nA, y=yA) down to (n=nB, y=yB), across u0..u1
-function shedRoof(vb, F, u0, u1, nA, nB, yA, yB, st) {
-  const nN = Math.max(1, nB - nA);
-  for (let n = nA; n <= nB; n++) {
-    const y = Math.round(yA + ((yB - yA) * (n - nA)) / nN);
-    for (let u = u0; u <= u1; u++) {
-      const edge = u === u0 || u === u1;
-      const front = n === nB;
-      F.set(u, y, n, edge || front ? (st.barge ?? P.trim) : shingle(st, n, u, y));
-      F.set(u, y - 1, n, edge || front ? (st.barge ?? P.trim) : st.soffit);
-    }
-  }
 }
 // dormer on a roof slope (window facing the frame's direction). nf < 0: dormer face behind the wall line.
 function dormer(ctx, F, R, uc, o = {}) {
@@ -606,34 +703,88 @@ function dormer(ctx, F, R, uc, o = {}) {
 }
 
 // ------------------------------------------------------------------ openings
+// Everything below is drawn in fine voxels (1/16 m) inside the coarse boxes the layout gives:
+// glass sits one fine voxel back from the wall face behind a sash with thin muntins, the casing
+// stands proud of the lap siding, sills have a nose and an apron, and so on.
 const glassFn = (u0, y1) => (u, y) => {
   const k = (u - u0) + (y1 - y);
   return k === 2 || k === 3 ? P.glassHi | GLASS : P.glass | GLASS;
 };
+// fine glass: a darker pane with a soft diagonal sky reflection, a little lighter up top
+function glassF(U0, Y1) {
+  return (U, Y) => {
+    const k = (U - U0) + (Y1 - Y);
+    if (k === 3 || k === 4 || k === 7) return P.glassHi | GLASS;
+    return (Y1 - Y < 3 ? 0x2e3d58 : P.glass) | GLASS;
+  };
+}
+// split a fine span [a, b] into `n` panes with 1-voxel bars: returns the bar positions
+function bars(a, b, n) {
+  const out = [];
+  for (let i = 1; i < n; i++) out.push(Math.round(a - 0.5 + ((b - a + 1) * i) / n));
+  return out;
+}
 function windowOn(ctx, F, u0, y0, o = {}) {
   const ww = o.w ?? 7, wh = o.h ?? 10;
   const u1 = u0 + ww - 1, y1 = y0 + wh - 1;
-  const fr = o.frame ?? P.trim;
+  const fr = o.frame ?? P.trim, frD = tone(fr, -0.12);
+  const U0 = u0 * K, U1 = u1 * K + 1, Y0 = y0 * K, Y1 = y1 * K + 1;
   F.clear(u0 - 1, y0 - 1, 1, u1 + 1, y1 + 2, 1);
-  F.fill(u0, y0, 0, u1, y1, 0, o.glassFn ?? glassFn(u0, y1));
-  if (o.mull !== false) {
+  // the opening: glass one voxel in, the reveal around it painted like the frame
+  const gf = o.glassFn ? (U, Y) => o.glassFn(U >> 1, Y >> 1) : glassF(U0, Y1);
+  F.ff(U0, Y0, -1, U1, Y1, -1, gf);
+  F.fc(U0, Y0, 0, U1, Y1, 0);
+  F.ff(U0 - 1, Y0 - 1, 0, U1 + 1, Y1 + 1, 0, (U, Y) => (U < U0 || U > U1 || Y < Y0 || Y > Y1 ? fr : 0));
+  // sash: a thin frame flush with the wall, muntins between the panes
+  const sash = o.sash ?? fr;
+  const plain = o.mull === false;
+  if (!plain && !o.glassFn) {
+    F.ff(U0, Y0, 0, U1, Y1, 0, (U, Y) => (U === U0 || U === U1 || Y === Y0 || Y === Y1 ? sash : 0));
+    const dh = wh >= 7 && o.mullY === undefined; // double-hung: two sashes, a meeting rail
+    const mr = dh ? Math.round((Y0 + Y1) / 2) : null;
+    if (dh) F.ff(U0, mr - 1, 0, U1, mr, 0, sash);
+    const vbars = o.mullU ? o.mullU.map((m) => m * K + 1) : bars(U0 + 1, U1 - 1, o.panes ?? (ww >= 9 ? 3 : ww >= 5 ? 2 : 1));
+    for (const m of vbars) F.ff(m, Y0, 0, m, Y1, 0, sash);
+    if (dh && wh >= 9) for (const [a, b] of [[Y0 + 1, mr - 2], [mr + 1, Y1 - 1]]) for (const m of bars(a, b, 2)) F.ff(U0, m, 0, U1, m, 0, sash);
+    if (o.mullY) for (const m of o.mullY) F.ff(U0, m * K, 0, U1, m * K, 0, sash);
+    else if (!dh && wh >= 4) for (const m of bars(Y0 + 1, Y1 - 1, wh >= 8 ? 2 : 1)) F.ff(U0, m, 0, U1, m, 0, sash);
+  } else if (!plain) {
+    // shop glass & co: the coarse mullions, now slimmer and standing a voxel proud
     const mu = o.mullU ?? (ww >= 5 ? [u0 + (ww >> 1)] : []);
     const my = o.mullY ?? (wh >= 6 ? [y0 + (wh >> 1)] : []);
-    for (const m of mu) F.fill(m, y0, 0, m, y1, 0, fr);
-    for (const m of my) F.fill(u0, m, 0, u1, m, 0, fr);
+    for (const m of mu) F.ff(m * K, Y0, 0, m * K + 1, Y1, 0, fr);
+    for (const m of my) F.ff(U0, m * K, 0, U1, m * K + 1, 0, fr);
+    F.ff(U0, Y0, 0, U1, Y1, 0, (U, Y) => (U === U0 || U === U1 || Y === Y1 ? fr : 0));
   }
+  // curtains: gathered panels behind the glass, tied back, with a valance across the top
   if (o.curtain) {
-    const cc = o.curtain;
-    F.fill(u0, y0 + 2, 0, u0, y1, 0, cc);
-    F.fill(u1, y0 + 2, 0, u1, y1, 0, cc);
-    F.fill(u0, y1, 0, u1, y1, 0, tone(cc, -0.08));
+    const cc = o.curtain, cd = tone(cc, -0.12), cl = tone(cc, 0.08);
+    const tie = Math.round(Y0 + (Y1 - Y0) * 0.42);
+    const half = Math.max(2, Math.round((U1 - U0 + 1) * 0.22));
+    for (let Y = Y0 + 1; Y <= Y1 - 1; Y++) {
+      // full width above the tie-back, pulled in to it, flaring a little below
+      const t = Y >= tie ? Math.min(1, (Y - tie) / Math.max(1, Y1 - 3 - tie)) : (tie - Y) / Math.max(1, tie - Y0);
+      const wdt = Y === tie ? 1 : Math.max(1, Math.round(1 + (half - 1) * Math.min(1, t * (Y > tie ? 1.4 : 0.8))));
+      for (let k = 0; k < wdt; k++) {
+        const fold = (k + (Y === tie ? 1 : 0)) % 2 ? cd : cc;
+        F.fs(U0 + 1 + k, Y, -1, Y === tie ? cd : fold);
+        F.fs(U1 - 1 - k, Y, -1, Y === tie ? cd : fold);
+      }
+    }
+    F.ff(U0 + 1, Y1 - 2, -1, U1 - 1, Y1 - 1, -1, (U, Y) => (Y === Y1 - 2 && (U - U0) % 3 === 1 ? cd : cl));
   }
-  // frame + sill + drip cap
-  F.fill(u0 - 1, y1 + 1, 1, u1 + 1, y1 + 1, 1, fr);
-  F.fill(u0 - 1, y0, 1, u0 - 1, y1, 1, fr);
-  F.fill(u1 + 1, y0, 1, u1 + 1, y1, 1, fr);
-  F.fill(u0 - 2, y0 - 1, 1, u1 + 2, y0 - 1, 2, fr);
-  F.fill(u0 - 2, y1 + 2, 1, u1 + 2, y1 + 2, 2, fr);
+  // casing: proud of the siding, stepped (back band at N = 2), head with a drip cap, sill with a nose
+  F.ff(U0 - 2, Y0, 1, U0 - 1, Y1 + 2, 1, fr);
+  F.ff(U1 + 1, Y0, 1, U1 + 2, Y1 + 2, 1, fr);
+  F.ff(U0 - 2, Y0, 2, U0 - 2, Y1 + 2, 2, fr);
+  F.ff(U1 + 2, Y0, 2, U1 + 2, Y1 + 2, 2, fr);
+  F.ff(U0 - 2, Y1 + 1, 1, U1 + 2, Y1 + 3, 1, fr);
+  F.ff(U0 - 2, Y1 + 3, 2, U1 + 2, Y1 + 3, 2, fr);
+  F.ff(U0 - 3, Y1 + 4, 1, U1 + 3, Y1 + 4, 3, fr); // drip cap
+  F.ff(U0 - 2, Y1 + 5, 1, U1 + 2, Y1 + 5, 1, frD); // flashing
+  F.ff(U0 - 3, Y0 - 1, 1, U1 + 3, Y0 - 1, 3, fr); // sill
+  F.ff(U0 - 2, Y0 - 2, 1, U1 + 2, Y0 - 2, 2, frD); // its nose shadow
+  F.ff(U0 - 1, Y0 - 4, 1, U1 + 1, Y0 - 3, 1, fr); // apron
   if (SPOOKY && o.jack && ww >= 5) {
     const cu = u0 + (ww >> 1);
     const rows = [['.SS.', 0], ['OOOOO', -2], ['OEOEO', -2], ['OOMOO', -2], ['.OOO.', -2]];
@@ -655,25 +806,42 @@ function windowOn(ctx, F, u0, y0, o = {}) {
   }
   let uL = u0 - 2, uR = u1 + 2, yB = y0 - 1;
   if (o.shutter) {
-    const sc = o.shutter;
-    const louv = (u, y) => ((y - y0) % 4 < 2 ? tone(sc, -0.14) : sc);
-    F.fill(u0 - 4, y0, 1, u0 - 2, y1, 1, louv);
-    F.fill(u1 + 2, y0, 1, u1 + 4, y1, 1, louv);
+    // louvred shutters: stiles and rails proud, slats in between catching the light
+    const sc = o.shutter, sd = tone(sc, -0.2), sl = tone(sc, 0.06);
+    for (const [Ua, Ub] of [[U0 - 8, U0 - 3], [U1 + 3, U1 + 8]]) {
+      const midY = Math.round((Y0 + Y1) / 2);
+      for (let Y = Y0; Y <= Y1 + 1; Y++) for (let U = Ua; U <= Ub; U++) {
+        const frame = U === Ua || U === Ub || Y <= Y0 + 1 || Y >= Y1 || Y === midY;
+        if (frame) { F.fs(U, Y, 1, sc); F.fs(U, Y, 2, sc); continue; }
+        const slat = (Y - Y0) % 2 === 0;
+        F.fs(U, Y, 1, slat ? sl : sd);
+        if (slat) F.fs(U, Y, 2, sl);
+      }
+      // the shutter dog that holds it open
+      F.fs(Ua === U0 - 8 ? Ua - 1 : Ub + 1, Y0 + 2, 1, P.iron);
+    }
     uL = u0 - 4; uR = u1 + 4;
   }
   if (o.box) {
-    const bc = o.boxCol ?? P.woodDark;
-    F.fill(u0 - 1, y0 - 4, 1, u1 + 1, y0 - 2, 3, (u, y, n) => (y === y0 - 2 && n < 3 ? P.soil : bc));
-    for (let u = u0 - 1; u <= u1 + 1; u++) {
-      const h = vhash(u, y0, F.f.length, 7);
-      F.set(u, y0 - 1, 3, P.leaf);
-      if ((u - u0) % 2 === 0 || h < 0.3) F.set(u, y0, 3, pick(P.mums, h));
-      else F.set(u, y0, 3, P.leafB);
-      if (h > 0.75) F.set(u, y0 + 1, 3, pick(P.mums, 1 - h));
+    const bc = o.boxCol ?? P.woodDark, bl = tone(bc, 0.1), bd = tone(bc, -0.15);
+    const Ba = U0 - 2, Bb = U1 + 2, Bt = Y0 - 3;
+    // the planter: planked front, a rim, two little brackets under it
+    F.ff(Ba, Bt - 5, 1, Bb, Bt, 6, (U, Y, N) => (N === 6 || U === Ba || U === Bb || Y === Bt - 5 ? ((Y - Bt) % 3 === 0 && N === 6 ? bd : bc) : 0));
+    F.ff(Ba, Bt, 1, Bb, Bt, 6, (U, Y, N) => (N === 6 || U === Ba || U === Bb || N === 1 ? bl : P.soil));
+    for (const U of [Ba + 2, Bb - 2]) { F.ff(U, Bt - 8, 1, U, Bt - 6, 1, bd); F.ff(U, Bt - 6, 2, U, Bt - 6, 3, bd); }
+    // plants: leafy mounds with mums in two or three colours, and ivy trailing over the front
+    for (let U = Ba + 1; U <= Bb - 1; U++) for (let N = 2; N <= 5; N++) {
+      const h = vhash(U, N, F.f.length + Y0, 7);
+      const top = Bt + 1 + Math.floor(h * 3) + (N >= 3 && N <= 4 ? 1 : 0);
+      for (let Y = Bt + 1; Y <= top; Y++) F.fs(U, Y, N, Y === top && h > 0.35 ? pick(P.mums, vhash(U >> 1, 3, Y0, 9)) : h > 0.7 ? P.leafB : P.leaf);
     }
-    yB = y0 - 4;
+    for (let U = Ba + 1; U <= Bb - 1; U += 3) {
+      const len = 1 + Math.floor(vhash(U, 5, Y0, 2) * 4);
+      for (let k = 0; k < len; k++) F.fs(U + (k & 1), Bt - 1 - k, 7, k === len - 1 ? P.leafB : P.leaf);
+    }
+    yB = y0 - 6;
   }
-  F.occ.push([uL, yB, uR, y1 + 2]);
+  F.occ.push([uL, yB, uR, y1 + 3]);
   if (o.lit) addLight(ctx, F.pt(u0 + (ww - 1) / 2, y0 + wh / 2, 3), [1.0, 0.72, 0.42], 4.5, 'window');
   return { u0, u1, y0, y1 };
 }
@@ -690,48 +858,108 @@ function windowRow(ctx, F, ua, ub, y0, count, o = {}, perWin = null) {
   }
   return out;
 }
+// a wall lantern: an iron arm, a glass box with corner posts, a pyramid cap and a finial
 function lanternOn(ctx, F, u, y, o = {}) {
-  F.fill(u, y, 1, u + 1, y, 2, P.iron);
-  F.fill(u, y + 1, 1, u + 1, y + 2, 2, o.col ?? P.lamp);
-  F.fill(u, y + 3, 1, u + 1, y + 3, 2, P.iron);
-  F.set(u, y + 4, 1, P.iron);
-  F.set(u + 1, y + 4, 1, P.iron);
+  const U = u * K, Y = y * K, glow = o.col ?? P.lamp;
+  // bracket: plate on the wall, arm out, the lantern hanging off it
+  F.ff(U + 1, Y + 6, 1, U + 2, Y + 9, 1, P.iron);
+  F.ff(U + 1, Y + 9, 2, U + 2, Y + 9, 3, P.iron);
+  F.ff(U, Y, 2, U + 3, Y, 5, P.iron); // base plate
+  F.ff(U, Y + 1, 2, U + 3, Y + 5, 5, (uu, yy, nn) => {
+    const corner = (uu === U || uu === U + 3) && (nn === 2 || nn === 5);
+    return corner ? P.iron : glow;
+  });
+  F.ff(U, Y + 6, 2, U + 3, Y + 6, 5, P.iron);
+  F.ff(U + 1, Y + 7, 3, U + 2, Y + 7, 4, P.iron);
+  F.fs(U + 1, Y + 8, 3, P.iron);
   addLight(ctx, F.pt(u + 0.5, y + 2, 3.5), o.light ?? [1.0, 0.72, 0.38], o.radius ?? 6, o.kind ?? 'porch');
   F.occ.push([u - 1, y, u + 2, y + 4]);
 }
+// a door in its frame. Panelled leaf (raised fields in grooves) one voxel back from the casing,
+// brass knob on a back plate, a threshold, and over a house's front door a glazed transom.
 function doorOn(ctx, F, uc, o = {}) {
   const w = o.w ?? 8, h = o.h ?? 17, y0 = o.y ?? 0;
   const u0 = uc - (w >> 1), u1 = u0 + w - 1;
-  const dc = o.color ?? 0x3a6a4a, fr = o.frame ?? P.trim;
-  F.clear(u0 - 1, y0, 1, u1 + 1, y0 + h + 1, 1);
-  F.fill(u0, y0, 0, u1, y0 + h - 1, 0, dc);
-  const leaves = o.double ? [[u0, u0 + (w >> 1) - 1], [u0 + (w >> 1), u1]] : [[u0, u1]];
-  for (const [a, bq] of leaves) {
-    const lw = bq - a + 1;
-    const cols = lw >= 7 ? [[a + 1, a + (lw >> 1) - 2], [a + (lw >> 1) + 1, bq - 1]] : [[a + 1, bq - 1]];
-    const rows = [[y0 + 2, y0 + 6], [y0 + 9, y0 + h - 3]];
-    for (const [px0, px1] of cols) for (let ri = 0; ri < rows.length; ri++) {
-      const [py0, py1] = rows[ri];
-      if (px1 < px0 || py1 < py0) continue;
-      F.clear(px0, py0, 0, px1, py1, 0);
-      const glass = o.glass && ri === 1;
-      F.fill(px0, py0, -1, px1, py1, -1, glass ? glassFn(px0, py1) : tone(dc, -0.2));
+  const dc = o.color ?? 0x3a6a4a, fr = o.frame ?? P.trim, frD = tone(fr, -0.12);
+  const transom = o.transom ?? (o.main !== false && !o.plank && !o.double && !o.glass);
+  const th = transom ? 2 : 0; // extra coarse rows above the door for the transom
+  F.clear(u0 - 1, y0, 1, u1 + 1, y0 + h + 1 + th, 1);
+  const U0 = u0 * K, U1 = u1 * K + 1, Y0 = y0 * K, Yt = (y0 + h) * K - 1;
+  // opening + reveal
+  F.ff(U0, Y0, -1, U1, Yt, -1, dc);
+  F.fc(U0, Y0, 0, U1, Yt, 0);
+  F.ff(U0 - 1, Y0, 0, U1 + 1, Yt + 1, 0, (U, Y) => (U < U0 || U > U1 || Y > Yt ? fr : 0));
+  const dd = tone(dc, -0.18), dl = tone(dc, 0.07);
+  const leaves = o.double ? [[U0, U0 + w - 1], [U0 + w, U1]] : [[U0, U1]];
+  for (const [a, b] of leaves) {
+    if (o.plank) {
+      // board door: vertical planks with dark joints, strap hinges and a thumb latch
+      for (let U = a; U <= b; U++) if ((U - a) % 3 === 2 && U < b) F.ff(U, Y0, -1, U, Yt, -1, dd);
+      for (const Y of [Y0 + 5, Yt - 5]) F.ff(a, Y, 0, a + Math.round((b - a) * 0.7), Y, 0, P.iron);
+      F.fs(b - 2, Y0 + 16, 0, P.iron); F.fs(b - 2, Y0 + 17, 0, P.iron);
+      continue;
     }
-    if (o.plank) for (let u = a; u <= bq; u++) if ((u - a) % 2 === 1) for (let y = y0; y < y0 + h; y++) if (F.get(u, y, 0) === dc) F.set(u, y, 0, tone(dc, -0.08));
+    const lw = b - a + 1;
+    const st = lw >= 12 ? 3 : 2; // stile width
+    const rails = [Y0 + 4, Math.round(Y0 + (Yt - Y0) * 0.42), Yt - 2];
+    const cols = lw >= 12 ? [[a + st, Math.floor((a + b) / 2) - 1], [Math.ceil((a + b) / 2) + 1, b - st]] : [[a + st, b - st]];
+    const rows = [[rails[0] + 1, rails[1] - 2], [rails[1] + 2, rails[2] - 1]];
+    for (const [pa, pb] of cols) for (let ri = 0; ri < 2; ri++) {
+      const [qa, qb] = rows[ri];
+      if (pb - pa < 2 || qb - qa < 2) continue;
+      if (o.glass && ri === 1) {
+        F.ff(pa, qa, -2, pb, qb, -2, glassF(pa, qb));
+        F.fc(pa, qa, -1, pb, qb, -1);
+        const mid = Math.round((qa + qb) / 2);
+        F.ff(pa, mid, -1, pb, mid, -1, dl);
+        continue;
+      }
+      // groove ring, raised field
+      F.ff(pa, qa, -2, pb, qb, -2, dd);
+      F.fc(pa, qa, -1, pb, qb, -1);
+      F.ff(pa + 1, qa + 1, -1, pb - 1, qb - 1, -1, dl);
+    }
+    // kick rail shadow
+    F.ff(a, Y0, -1, b, Y0 + 1, -1, dd);
   }
-  if (o.double) { F.set(u0 + (w >> 1) - 2, y0 + 8, 1, P.brass); F.set(u0 + (w >> 1) + 1, y0 + 8, 1, P.brass); }
-  else F.set(o.knobLeft ? u0 + 1 : u1 - 1, y0 + 8, 1, P.brass);
-  F.fill(u0 - 1, y0, 1, u0 - 1, y0 + h, 1, fr);
-  F.fill(u1 + 1, y0, 1, u1 + 1, y0 + h, 1, fr);
-  F.fill(u0 - 2, y0 + h, 1, u1 + 2, y0 + h, 1, fr);
-  F.fill(u0 - 2, y0 + h + 1, 1, u1 + 2, y0 + h + 1, 2, fr);
-  F.occ.push([u0 - 2, y0, u1 + 2, y0 + h + 1]);
+  if (o.double) F.ff(U0 + w - 1, Y0, 0, U0 + w, Yt, 0, tone(dc, -0.08));
+  // hardware
+  const knobs = o.double ? [U0 + w - 3, U0 + w + 2] : [o.knobLeft ? U0 + 2 : U1 - 2];
+  for (const kU of knobs) {
+    F.ff(kU, Y0 + 14, -1, kU, Y0 + 17, -1, o.plank ? P.iron : P.brass);
+    F.fs(kU, Y0 + 15, 0, P.brass);
+  }
+  if (o.main !== false && !o.plank && !o.double) F.ff(Math.round((U0 + U1) / 2) - 1, Y0 + 20, -1, Math.round((U0 + U1) / 2) + 1, Y0 + 20, -1, P.brass); // mail slot
+  // threshold
+  F.ff(U0 - 1, Y0, 1, U1 + 1, Y0, 2, P.stoneC);
+  // transom: a row of small panes over the door
+  let top = Yt;
+  if (th) {
+    const Ta = Yt + 2, Tb = Yt + th * K + 1;
+    F.ff(U0, Ta, -1, U1, Tb, -1, glassF(U0, Tb));
+    F.fc(U0, Ta, 0, U1, Tb, 0);
+    F.ff(U0 - 1, Ta - 1, 0, U1 + 1, Tb + 1, 0, (U, Y) => (U < U0 || U > U1 || Y < Ta || Y > Tb ? fr : 0));
+    for (const m of bars(U0, U1, 3)) F.ff(m, Ta, 0, m, Tb, 0, fr);
+    top = Tb + 1;
+  }
+  // casing: side boards, a head with a cornice
+  F.ff(U0 - 3, Y0, 1, U0 - 1, top + 1, 1, fr);
+  F.ff(U1 + 1, Y0, 1, U1 + 3, top + 1, 1, fr);
+  F.ff(U0 - 3, Y0, 2, U0 - 3, top + 1, 2, fr);
+  F.ff(U1 + 3, Y0, 2, U1 + 3, top + 1, 2, fr);
+  F.ff(U0 - 4, Y0, 1, U0 - 4, Y0 + 3, 2, frD); // plinth blocks
+  F.ff(U1 + 4, Y0, 1, U1 + 4, Y0 + 3, 2, frD);
+  F.ff(U0 - 3, top, 1, U1 + 3, top + 2, 1, fr);
+  F.ff(U0 - 4, top + 3, 1, U1 + 4, top + 3, 3, fr);
+  F.ff(U0 - 3, top + 2, 2, U1 + 3, top + 2, 2, frD);
+  const hTop = Math.ceil((top + 4) / K);
+  F.occ.push([u0 - 2, y0, u1 + 2, hTop]);
   if (o.lantern !== false) lanternOn(ctx, F, o.lanternLeft ? u0 - 5 : u1 + 4, y0 + 10, o.lanternOpts);
   if (o.main !== false) {
     const p = F.pt(uc - 0.5, y0, 3);
     ctx.door = { ...M3(p[0], y0, p[2]), face: F.f };
   }
-  return { u0, u1, uc, h, y0 };
+  return { u0, u1, uc, h, y0, top: hTop };
 }
 function signOn(ctx, F, uc, y0, wv, hv, text, o = {}) {
   const u0 = uc - (wv >> 1), u1 = u0 + wv - 1, y1 = y0 + hv - 1;
@@ -1616,13 +1844,12 @@ function stoneChimney(ctx, x0, z0, y0, y1, w = 6, d = 7) {
   ctx.smoke.push(M3(x0 + w / 2, y1 + 2.5, z0 + d / 2));
 }
 function canopyOn(ctx, F, ua, ub, y, st) {
-  const sty = { ...st, kind: st.kind };
-  for (let n = 1; n <= 5; n++) {
-    const yy = y + 3 - Math.round(n * 0.6);
-    F.fill(ua, yy, n, ub, yy, n, (u) => (u === ua || u === ub || n === 5 ? P.trim : shingle(sty, n, u, yy)));
-    F.fill(ua, yy - 1, n, ub, yy - 1, n, P.trimShade);
+  shedRoof(ctx.vb, F, ua, ub, 1, 5, y + 2, y, { ...st, barge: P.trim });
+  // curved brackets under it
+  for (const U of [ua * K + 2, ub * K - 1]) {
+    for (let k = 0; k < 6; k++) F.fs(U, K * y - 1 - k, 1 + Math.round(k * k * 0.12), P.trim);
+    F.ff(U, K * y - 1, 1, U, K * y - 1, 5, P.trim);
   }
-  for (const u of [ua + 1, ub - 1]) { F.set(u, y - 2, 1, P.trim); F.set(u, y - 1, 2, P.trim); F.set(u, y - 3, 1, P.trim); }
   F.occ.push([ua, y - 3, ub, y + 3]);
 }
 function portholeOn(ctx, F, uc, yc, r) {
