@@ -14,11 +14,6 @@ const _v = new THREE.Vector3();
 const S = Math.sin;
 const arm = (T, s, f, o, e, i = 0) => { T['aF' + s] = f; T['aO' + s] = o; T['eB' + s] = e; T['eI' + s] = i; };
 const leg = (T, s, f, o, k) => { T['lF' + s] = f; T['lO' + s] = o; T['kB' + s] = k; };
-const BAIL_WORDS = {
-  loopout: ['LOOPED OUT!', 'WHOOPS-A-DAISY!'], looped: ['LOOPED OUT!'], endo: ['OVER THE BARS!', 'ENDO!'], nose: ['FACEPLANT!', 'NOSE DIVE!'],
-  flat: ['SPLAT!', 'KER-SPLAT!'], sideways: ['SIDEWAYS!', 'CLATTER!'], fakie: ['WRONG WAY!'], slideout: ['WIPEOUT!', 'SKRRT-BONK!'],
-  kerb: ['KERBED!', 'CLONK!'], tree: ['THUNK!', 'TIMBER!', 'KNOCK KNOCK!', 'BONK!'], trick: ['BAIL!', 'TOO LATE!'], wall: ['BONK!', 'CRACK!', 'OOF!', 'RATTLE RATTLE!', 'KER-SPLAT!', 'CLATTER!'],
-};
 
 export class VoxelRider {
   constructor(game, charId = 'hank') {
@@ -114,8 +109,7 @@ export class VoxelRider {
   crash(bike, e = {}) {
     const ch = this.ch;
     if (ch.broken || this.crashed) return;
-    const words = BAIL_WORDS[e.why] || BAIL_WORDS.wall;
-    this.game.ui?.pop(words[Math.floor(Math.random() * words.length)], { shout: true, key: 'trick', expr: 'shock' });
+    ch.tempExpr?.('shock', 1.2);
     this.crashed = true;
     this.reassembled = false;
     if (e.soft) return this.flop(bike, e);

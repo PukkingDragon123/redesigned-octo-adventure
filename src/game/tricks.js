@@ -6,8 +6,6 @@
 import { input } from '../core/input.js';
 import { POSES } from './vchar.js';
 
-const COMBO_LINES = ['Nice', 'Sweet', 'Bone-afide', 'Spine-tingling', 'Skele-TASTIC'];
-
 const arm = (T, s, f, o, e, i = 0) => { T['aF' + s] = f; T['aO' + s] = o; T['eB' + s] = e; T['eI' + s] = i; };
 const leg = (T, s, f, o, k) => { T['lF' + s] = f; T['lO' + s] = o; T['kB' + s] = k; };
 
@@ -169,19 +167,16 @@ export class Tricks {
 
   bank() {
     const g = this.game;
-    if (this.combo >= 2) {
-      const tip = Math.min(25, Math.round(this.combo * 2.5));
-      g.state.money += tip;
-      g.ui.pop(`${COMBO_LINES[Math.min(COMBO_LINES.length - 1, this.combo - 2)]} x${this.combo}! Somebody tossed me *$${tip}*!`, { expr: 'laugh', key: 'combo', ms: 2200 });
-      g.sound.play('cash_coins');
-    }
+    // tricks are just for fun: no cash, no pop-ups, only a happy little grin
+    if (this.combo >= 2) g.rider?.ch?.tempExpr?.('laugh', 1.2);
     this.combo = 0;
     this.chain = [];
   }
 
-  // Hank shouts the move from his corner of the screen (a new shout replaces the last)
+    // (bike notifications were removed: Hank's face reacts instead)
   say(text, kind) {
-    this.game.ui.pop(kind === 'bail' ? text : `${text}!`.replace(/!!$/, '!'), { shout: true, key: 'trick', expr: kind === 'bail' ? 'sheepish' : 'sparkle' });
+    this.game.rider?.ch?.tempExpr?.(kind === 'bail' ? 'sheepish' : 'sparkle', 0.9);
+    void text;
   }
 
   clear() {
