@@ -6,12 +6,20 @@
 // sends cod, salmon, mackerel and lobsters flopping across the street. Things
 // put themselves back once they have been down a while and nobody is looking.
 //
-// Placement lives in src/world/deco2d.js (world.deco2d.items); the art in
-// src/art/deco2d.js. Everything is drawn by one instanced SpriteBatch from an
-// atlas painted over the first frames.
+// The same goes for the 2D furniture all over town (src/art/furniture2d.js):
+// porch rockers tip back, café chairs and deck chairs fall over, mugs and books
+// fly, leaf piles burst into leaves, beach balls roll, mums spill their dirt.
+// Flat things (welcome mats, beach towels, the goods in the shop windows) are
+// cards fixed to the ground or the glass in one static mesh.
+//
+// Placement lives in src/world/deco2d.js (world.deco2d.items / cards); the art in
+// src/art/deco2d.js and furniture2d.js, baked into atlas pages in a worker
+// (decoPaint.js). Each page is drawn by one instanced SpriteBatch.
 import * as THREE from 'three';
 import { SpriteAtlas, SpriteBatch } from '../render/sprites.js';
-import { paintDecoGen, DECO } from '../art/deco2d.js';
+import { createFlatMaterial } from '../render/voxelMaterial.js';
+import { CATALOGUE, bakeAllSync, viewName } from '../art/decoPaint.js';
+import { startDecoPaint } from '../art/decoStart.js';
 import { SpatialHash } from '../core/spatial.js';
 import { clamp } from '../core/math.js';
 
@@ -49,19 +57,66 @@ const KNOCK = {
   bit_apple: { mode: 'ball', mass: 0.15, sound: 'pumpkin_bonk', friction: 0.7 },
   bit_appleG: { mode: 'ball', mass: 0.15, sound: 'pumpkin_bonk', friction: 0.7 },
   bit_jar: { mode: 'tip', mass: 0.2, crit: 0.2, sound: 'cup' },
+  // porch & yard furniture
+  rocker: { mode: 'tip', mass: 1.1, crit: 0.35, sound: 'land', text: 'Kick the rocking chair' },
+  muskoka: { mode: 'tip', mass: 1.3, crit: 0.4, sound: 'land', text: 'Kick the Muskoka chair' },
+  sidetable: { mode: 'tip', mass: 0.6, crit: 0.25, sound: 'cup', bits: ['bit_mug', 'bit_mug', 'bit_paper'], nBits: 3, text: 'Kick the side table' },
+  mum: { mode: 'tip', mass: 0.7, crit: 0.4, sound: 'dirt', bits: ['bit_dirt', 'bit_flower', 'bit_dirt'], nBits: 4, text: 'Kick the flower pot' },
+  fern: { mode: 'tip', mass: 0.6, crit: 0.4, sound: 'dirt', bits: ['bit_dirt', 'bit_dirt'], nBits: 3, text: 'Kick the fern' },
+  bootrack: { mode: 'burst', mass: 0.8, sound: 'land', bits: ['bit_boot', 'bit_boot', 'bit_plank'], nBits: 4, text: 'Kick the boots' },
+  woodbox: { mode: 'tip', mass: 2.4, crit: 0.45, sound: 'land', text: 'Kick the wood box' },
+  barrow: { mode: 'tip', mass: 1.4, crit: 0.3, sound: 'crash', vol: 0.35, bits: ['bit_leafR', 'bit_leafO', 'bit_leafY', 'bit_leafO'], nBits: 8, text: 'Tip the wheelbarrow' },
+  gnome: { mode: 'tip', mass: 0.5, crit: 0.3, sound: 'pumpkin_bonk', text: 'Kick the gnome' },
+  birdbath: { mode: 'tip', mass: 3, crit: 0.3, sound: 'crash', vol: 0.4, text: 'Kick the bird bath' },
+  leafpile: { mode: 'burst', mass: 0.6, sound: 'dirt', bits: ['bit_leafR', 'bit_leafO', 'bit_leafY', 'bit_leafO', 'bit_leafR'], nBits: 16, text: 'Kick the leaf pile' },
+  rake: { mode: 'tip', mass: 0.4, crit: 0.15, anchored: true, sound: 'land', text: 'Kick the rake' },
+  // café terraces & Main Street
+  bistrotable: { mode: 'tip', mass: 1.0, crit: 0.25, sound: 'cup', bits: ['bit_cup', 'bit_flower'], nBits: 2, text: 'Kick the café table' },
+  bistrochair: { mode: 'tip', mass: 0.6, crit: 0.3, sound: 'land', text: 'Kick the chair' },
+  easel: { mode: 'tip', mass: 0.6, crit: 0.2, sound: 'land', text: 'Kick the menu board' },
+  newsbox: { mode: 'tip', mass: 1.4, crit: 0.3, sound: 'crash', vol: 0.4, bits: ['bit_news', 'bit_news', 'bit_paper'], nBits: 4, text: 'Kick the newspaper box' },
+  barrelplanter: { mode: 'tip', mass: 2.6, crit: 0.4, sound: 'dirt', bits: ['bit_dirt', 'bit_flower', 'bit_dirt'], nBits: 5, text: 'Kick the planter' },
+  // harbour & beach
+  deckchair: { mode: 'tip', mass: 0.5, crit: 0.3, sound: 'land', text: 'Kick the deck chair' },
+  cooler: { mode: 'tip', mass: 1.2, crit: 0.45, sound: 'crash', vol: 0.3, bits: ['bit_can', 'bit_can', 'bit_bottle'], nBits: 4, text: 'Kick the cooler' },
+  rods: { mode: 'tip', mass: 0.6, crit: 0.2, sound: 'land', bits: ['bit_lure'], nBits: 2, text: 'Kick the fishing rods' },
+  basket: { mode: 'tip', mass: 0.6, crit: 0.4, sound: 'land', bits: ['bit_apple', 'bit_appleG', 'bit_bottle'], nBits: 3, text: 'Kick the picnic basket' },
+  pail: { mode: 'tip', mass: 0.3, crit: 0.3, sound: 'cup', text: 'Kick the pail' },
+  beachball: { mode: 'ball', mass: 0.15, sound: 'pumpkin_bonk', friction: 0.5, text: 'Kick the beach ball' },
+  // the park
+  musicstand: { mode: 'tip', mass: 0.4, crit: 0.2, sound: 'cup', bits: ['bit_paper', 'bit_paper'], nBits: 2, text: 'Kick the music stand' },
   laundry: { mode: 'fixed', sound: 'paper' },
   scarecrow: { mode: 'fixed', sound: 'wobble' },
   lamp: { mode: 'fixed', sound: 'cup' },
   fishstall: { mode: 'fixed', stall: true, sound: 'crash', vol: 0.35 },
   syrupstand: { mode: 'fixed', stall: true, sound: 'cup' },
   cart: { mode: 'fixed', stall: true, sound: 'crash', vol: 0.3, bits: ['bit_paper', 'bit_paper', 'bit_news'], nBits: 3 },
+  swing: { mode: 'fixed', sound: 'wobble' },
+  hangfern: { mode: 'fixed', sound: 'paper' },
+  chimes: { mode: 'fixed', sound: 'cup', vol: 0.25 },
+  umbrellatable: { mode: 'fixed', sound: 'cup' },
+  phonebooth: { mode: 'fixed', sound: 'crash', vol: 0.25 },
+  streetsign: { mode: 'fixed', sound: 'cup' },
+  bench2d: { mode: 'fixed', sound: 'land' },
+  netpile: { mode: 'fixed', sound: 'paper' },
+  lifering: { mode: 'fixed', sound: 'wobble' },
+  kayak: { mode: 'fixed', sound: 'pumpkin_bonk' },
+  picnic2d: { mode: 'fixed', sound: 'land' },
+  flowerbed: { mode: 'fixed', sound: 'dirt' },
+  library: { mode: 'fixed', sound: 'land' },
 };
 // draw distances
-const FAR = { picket: 110, rail: 120, rail2: 120, laundry: 110, lamp: 130, fishstall: 120, syrupstand: 120, cart: 110, scarecrow: 110, hay: 120 };
+const FAR = {
+  picket: 110, rail: 120, rail2: 120, laundry: 110, lamp: 130, fishstall: 120, syrupstand: 120, cart: 110, scarecrow: 110, hay: 120,
+  umbrellatable: 110, phonebooth: 110, streetsign: 110, kayak: 100, picnic2d: 100, library: 95, swing: 90, bench2d: 95,
+  gnome: 50, pail: 50, beachball: 55, chimes: 45, sidetable: 55, bootrack: 50, mum: 70, fern: 65,
+};
 const SMALL = 55;
-const ANIM = { laundry: 1.6, scarecrow: 0.5 };
+const ANIM = { laundry: 1.6, scarecrow: 0.5, chimes: 1.3 };
 
 const _right = new THREE.Vector3(), _fwd = new THREE.Vector3(), _p = new THREE.Vector3();
+// porch pieces land on their deck's floor while they are over it (the physics may not have the deck)
+const floorAt = (fl, x, z, h) => (fl && h < fl.y && fl.inside(x, z, 0) ? fl.y : h);
 
 export class Deco2D {
   constructor(game) {
@@ -74,38 +129,85 @@ export class Deco2D {
     this.hash = new SpatialHash(8);
     for (const it of this.items) {
       it.def = KNOCK[it.kind] || { mode: 'fixed' };
+      it.vary = !!CATALOGUE[it.kind]?.vary; it.v ||= 0;
       it.home = { x: it.x, y: it.y, z: it.z, yaw: it.yaw };
       it.st = 0; it.vx = 0; it.vy = 0; it.vz = 0; it.tip = 0; it.tipV = 0; it.tdx = 0; it.tdz = 1; it.spin = 0; it.wob = 0; it.kt = 0; it.cool = 0;
       it.ph = (it.x * 1.7 + it.z * 0.9) % 7;
       if (!it.goods) this.hash.insert(it, it.x, it.z, (it.len || 0) + it.r + 0.5);
     }
-    this.atlas = new SpriteAtlas(1024);
-    this.painter = paintDecoGen(this.atlas);
+    this.cards = game.world.deco2d?.cards || [];
     this.ready = false;
-    this.paintMs = 0;
-    if (game.params?.has('frames')) this.paint(1e9);
+    this.t0 = performance.now();
+    if (game.params?.has('frames')) this.install(bakeAllSync());
+    else (game.world.deco2d?.paint || startDecoPaint()).then((pages) => { this.pages = pages; });
   }
 
-  // paint atlas frames for up to budget ms, then build the batch
-  paint(budget) {
-    const t0 = performance.now();
-    let done = false;
-    while (performance.now() - t0 < budget) if (this.painter.next().done) { done = true; break; }
-    this.paintMs += performance.now() - t0;
-    if (!done) return;
-    this.atlas.finalize();
+  // the baked pages arrive: one atlas texture and one sprite batch per page
+  install(pages) {
+    const byName = new Map();
+    this.batches = pages.map((pg, pi) => {
+      const atlas = new SpriteAtlas(pg.size);
+      atlas.pix.data.set(pg.data);
+      for (const f of pg.frames) { const fr = { ...f, page: pi }; atlas.frames.set(f.name, fr); byName.set(f.name, fr); }
+      atlas.finalize();
+      const B = new SpriteBatch(atlas, 1500, { castShadow: true, upright: 0.9 });
+      B.mesh.name = `deco2d:${pi}`;
+      this.game.scene.add(B.mesh);
+      return B;
+    });
     this.frames = {};
-    for (const [kind, K] of Object.entries(DECO)) {
+    for (const [kind, K] of Object.entries(CATALOGUE)) {
       const fk = (this.frames[kind] = {});
-      for (const view of K.views) fk[view] = Array.from({ length: K.n }, (_, i) => this.atlas.get(`${kind}:${view}:${i}`));
+      K.views.forEach((view, vi) => { fk[viewName(view, vi)] = Array.from({ length: K.n }, (_, i) => byName.get(`${kind}:${viewName(view, vi)}:${i}`)); });
+      if (K.flat) continue;
+      if (K.sym) { fk.mirror = true; fk.back ||= fk.front; fk.back3 ||= fk.front3; }
       fk.front ||= fk.front3 || fk.side; fk.back ||= fk.back3 || fk.side;
       fk.front3 ||= fk.side; fk.back3 ||= fk.side;
     }
-    this.batch = new SpriteBatch(this.atlas, 1400, { castShadow: true, upright: 0.9 });
-    this.batch.mesh.name = 'deco2d';
-    this.game.scene.add(this.batch.mesh);
+    this.buildCards(byName);
     this.ready = true;
-    console.log(`deco2d: ${this.items.length} pieces, ${this.atlas.frames.size} frames in ${this.paintMs.toFixed(0)}ms`);
+    console.log(`deco2d: ${this.items.length} pieces, ${this.cards.length} cards, ${byName.size} frames on ${pages.length} page(s), ready ${(performance.now() - this.t0).toFixed(0)}ms after start`);
+  }
+
+  // flat cards (welcome mats, towels, window displays): static quads in one mesh per page
+  buildCards(byName) {
+    const per = new Map();
+    for (const c of this.cards) {
+      const f = byName.get(`${c.kind}:v0:${c.v || 0}`);
+      if (!f) continue;
+      if (!per.has(f.page)) per.set(f.page, []);
+      per.get(f.page).push({ c, f });
+    }
+    for (const [pi, list] of per) {
+      const atlas = this.batches[pi].atlas, S = atlas.size;
+      const n = list.length;
+      const pos = new Float32Array(n * 12), nor = new Float32Array(n * 12), uv = new Float32Array(n * 8), idx = [];
+      list.forEach(({ c, f }, i) => {
+        // card axes: R (image right), U (image up), N (towards the viewer)
+        let R, U, N;
+        if (c.flat === 'ground') { const a = c.yaw; U = [Math.sin(a), 0, Math.cos(a)]; R = [-Math.cos(a), 0, Math.sin(a)]; N = [0, 1, 0]; }
+        else { N = [c.nx, 0, c.nz]; U = [0, 1, 0]; R = [c.nz, 0, -c.nx]; }
+        const k = 1 / f.ppm, P = [c.x, c.y, c.z];
+        const corner = (px, py) => [0, 1, 2].map((j) => P[j] + R[j] * (px - f.ax) * k + U[j] * (f.ay - py) * k);
+        [[0, f.h], [f.w, f.h], [f.w, 0], [0, 0]].forEach(([px, py], q) => {
+          pos.set(corner(px, py), (i * 4 + q) * 3);
+          nor.set(N, (i * 4 + q) * 3);
+          uv.set([(f.x + px) / S, (f.y + py) / S], (i * 4 + q) * 2);
+        });
+        idx.push(i * 4, i * 4 + 1, i * 4 + 2, i * 4, i * 4 + 2, i * 4 + 3);
+      });
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+      geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+      geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+      geo.setIndex(idx);
+      geo.computeBoundingSphere();
+      const mesh = new THREE.Mesh(geo, createFlatMaterial(atlas.texture));
+      mesh.receiveShadow = true;
+      mesh.name = `deco2d:cards:${pi}`;
+      mesh.matrixAutoUpdate = false;
+      this.game.scene.add(mesh);
+    }
   }
 
   // ---------------------------------------------------------------- knocking things over
@@ -252,15 +354,15 @@ export class Deco2D {
       if (old < 0) return;
       this.bits.splice(old, 1);
     }
-    const D = DECO[kind];
+    const D = CATALOGUE[kind];
     if (!D) return;
-    this.bits.push({ kind, x, y, z, vx, vy, vz, spin: Math.random() * TAU, spinV: o.spinV ?? (Math.random() - 0.5) * 12, yaw: o.yaw ?? Math.random() * TAU, parent, t: 0, rest: false, ring: !!o.ring });
+    this.bits.push({ kind, x, y, z, vx, vy, vz, spin: Math.random() * TAU, spinV: o.spinV ?? (Math.random() - 0.5) * 12, yaw: o.yaw ?? Math.random() * TAU, parent, t: 0, rest: false, ring: !!o.ring, leaf: kind.startsWith('bit_leaf') });
   }
 
   // ---------------------------------------------------------------- per frame
   update(dt) {
     if (!this.items.length) return;
-    if (!this.ready) { this.paint(5); if (!this.ready) return; }
+    if (!this.ready) { if (!this.pages) return; this.install(this.pages); this.pages = null; }
     const g = this.game;
     this.t += dt;
     const cam = g.camera;
@@ -328,9 +430,10 @@ export class Deco2D {
       }
     }
     const gr = PH.groundAt(it.x, it.z, it.y + 0.5);
+    const gh = floorAt(it.floor, it.x, it.z, gr.h);
     let ground = false;
-    if (it.y <= gr.h) {
-      it.y = gr.h;
+    if (it.y <= gh) {
+      it.y = gh;
       ground = true;
       if (it.vy < -3) this.sfx(D.mode === 'flop' ? 'squish' : D.sound, it.x, it.y, it.z, Math.min(0.5, -it.vy * 0.06), 1.1);
       it.vy = it.vy < -1.5 ? -it.vy * 0.28 : 0;
@@ -400,11 +503,19 @@ export class Deco2D {
     const PH = this.game.physics;
     b.t += dt;
     b.vy -= 15 * dt;
+    if (b.leaf) {
+      // leaves flutter: they fall slowly and drift side to side
+      b.vy = Math.max(b.vy, -1.1);
+      const sway = Math.sin(b.t * 4.2 + b.spin) * 1.6;
+      b.vx += (sway * this.rz * 0.6 - b.vx * 1.2) * dt; b.vz += (-sway * this.rx * 0.6 - b.vz * 1.2) * dt;
+      b.spinV = Math.sin(b.t * 3 + b.yaw) * 5;
+    }
     b.x += b.vx * dt; b.y += b.vy * dt; b.z += b.vz * dt;
     b.spin += b.spinV * dt;
     const gr = PH.groundAt(b.x, b.z, b.y + 0.4);
-    if (b.y <= gr.h) {
-      b.y = gr.h;
+    const gh = floorAt(b.parent?.floor, b.x, b.z, gr.h);
+    if (b.y <= gh) {
+      b.y = gh;
       if (b.vy < -2.5 && b.kind === 'lid') this.sfx('plate', b.x, b.y, b.z, 0.35);
       b.vy = b.vy < -1.2 ? -b.vy * 0.3 : 0;
       const e = Math.exp(-(b.kind === 'bit_apple' || b.kind === 'bit_appleG' || b.kind === 'bit_can' || b.kind === 'lid' ? 1.2 : 5) * dt);
@@ -435,11 +546,11 @@ export class Deco2D {
 
   // ---------------------------------------------------------------- drawing
   draw() {
-    const B = this.batch, cam = this.game.camera, cp = cam.position;
+    const BS = this.batches, cam = this.game.camera, cp = cam.position;
     cam.getWorldDirection(_fwd);
     const fx = _fwd.x, fy = _fwd.y, fz = _fwd.z;
     const rx = this.rx, rz = this.rz;
-    B.begin();
+    for (const B of BS) B.begin();
     for (const it of this.items) {
       if (it.st === 3) continue;
       const dx = it.x - cp.x, dy = it.y - cp.y, dz = it.z - cp.z;
@@ -456,10 +567,13 @@ export class Deco2D {
       const view = rel < Math.PI / 8 ? 'front' : rel < (3 * Math.PI) / 8 ? 'front3' : rel < (5 * Math.PI) / 8 ? 'side' : rel < (7 * Math.PI) / 8 ? 'back3' : 'back';
       const arr = F[view] || F.side;
       const l = Math.hypot(dx, dz) || 1;
-      const flip = view !== 'front' && view !== 'back' && Math.sin(it.yaw) * (-dz / l) + Math.cos(it.yaw) * (dx / l) < 0;
+      let flip = view !== 'front' && view !== 'back' && Math.sin(it.yaw) * (-dz / l) + Math.cos(it.yaw) * (dx / l) < 0;
+      // symmetric things show their front views, mirrored, from behind
+      if (F.mirror && (view === 'back' || view === 'back3')) flip = !flip;
       let fi = 0;
       if (arr.length > 1) {
-        if (it.def.mode === 'flop') fi = it.st === 1 && this.t - it.kt < 11 ? (Math.floor(this.t * 10 + it.ph) % 2 ? 0 : 2) : 1;
+        if (it.vary) fi = it.v % arr.length;
+        else if (it.def.mode === 'flop') fi = it.st === 1 && this.t - it.kt < 11 ? (Math.floor(this.t * 10 + it.ph) % 2 ? 0 : 2) : 1;
         else fi = Math.floor((this.t + it.ph) * (ANIM[it.kind] || 1)) % arr.length;
       }
       const f = arr[fi];
@@ -477,7 +591,7 @@ export class Deco2D {
         sy *= 1 + w; sx = 1 - w * 0.6;
         if (it.def.mode === 'fixed') roll += Math.sin(this.t * 17 + it.ph) * 0.05 * it.wob;
       }
-      B.push(f, it.x, y, it.z, { flip, roll, sx, sy });
+      BS[f.page].push(f, it.x, y, it.z, { flip, roll, sx, sy });
     }
     for (const b of this.bits) {
       const dx = b.x - cp.x, dy = b.y - cp.y, dz = b.z - cp.z;
@@ -486,8 +600,8 @@ export class Deco2D {
       if (!F) continue;
       let arr = F.side;
       if (F.front && F.front !== F.side) { const rel = Math.abs(Math.atan2(Math.sin(Math.atan2(-dx, -dz) - b.yaw), Math.cos(Math.atan2(-dx, -dz) - b.yaw))); arr = rel < 0.5 || rel > 2.6 ? F.front : rel < 1.1 || rel > 2.0 ? F.front3 : F.side; }
-      B.push(arr[0], b.x, b.y, b.z, { roll: b.spin, flip: (b.yaw % TAU) > Math.PI });
+      BS[arr[0].page].push(arr[0], b.x, b.y, b.z, { roll: b.spin, flip: (b.yaw % TAU) > Math.PI });
     }
-    B.end();
+    for (const B of BS) B.end();
   }
 }

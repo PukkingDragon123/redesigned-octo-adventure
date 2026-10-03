@@ -84,6 +84,7 @@ export class World {
     blockers.push({ x: L.POI.graveyard.x, z: L.POI.graveyard.z, w: 30, d: 30, yaw: 0, keep: 0.9, short: true });
     blockers.push({ x: L.POI.catLog.x, z: L.POI.catLog.z - 0.8, w: 8, d: 8, yaw: 0, keep: 0.5, short: true });
     blockers.push({ x: L.POI.garage.x + 6, z: L.POI.garage.z, w: 12, d: 10, yaw: 0, keep: 0.7, short: true });
+    for (const b of this.deco2d?.lawns || []) blockers.push(b); // mown patches under the 2D furniture
     this.grassMask = buildGrassMask(this.terrain, blockers);
     this.grass = new Grass(this.grassMask, { gridN: this.grassGrid ?? 150, spacing: 0.42 });
     this.scene.add(this.grass.mesh);
