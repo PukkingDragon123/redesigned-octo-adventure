@@ -153,7 +153,7 @@ const CSS = `
 .k-portrait #touch { --tc-lift: 22; }
 #touch .tc-zone { position: absolute; left: 0; bottom: 0; width: 46%; height: 72%; pointer-events: auto; touch-action: none; }
 .k-portrait #touch .tc-zone { width: 52%; height: 48%; }
-#touch .tc-stick { position: absolute; left: calc(var(--u) * 6 + var(--safe-l)); bottom: calc(var(--u) * (6 + var(--tc-lift)) + var(--safe-b)); width: calc(var(--u) * 72); height: calc(var(--u) * 72); pointer-events: none; opacity: 0.92; }
+#touch .tc-stick { position: absolute; left: calc(var(--u) * 6 + var(--safe-l)); bottom: calc(var(--u) * 6 + var(--safe-b)); width: calc(var(--u) * 72); height: calc(var(--u) * 72); pointer-events: none; opacity: 0.92; }
 #touch .tc-stick.held { opacity: 1; }
 #touch .tc-stick img { position: absolute; left: 0; top: 0; width: 100%; height: 100%; }
 #touch .tc-stick .knob { left: calc(var(--u) * 22); top: calc(var(--u) * 22); width: calc(var(--u) * 28); height: calc(var(--u) * 28); }
@@ -166,6 +166,7 @@ const CSS = `
 #touch .tc-pet { position: absolute; transform: translate(-50%, -50%); white-space: nowrap; padding: 0 calc(var(--u) * 3); height: calc(var(--u) * 14); display: flex; align-items: center; color: var(--k-cream2, #e8d8b0); opacity: 0.85; }
 #touch .tc-pet.sel { color: var(--k-gold, #ffdc52); opacity: 1; }
 #touch .tc-pet.off { display: none; }
+#touch .t-trick.down .tl { visibility: hidden; }
 `;
 
 export class TouchControls {
@@ -196,7 +197,7 @@ export class TouchControls {
       e.stopPropagation();
       e.preventDefault();
       this.stickId = e.pointerId;
-      this.zone.setPointerCapture?.(e.pointerId);
+      try { this.zone.setPointerCapture(e.pointerId); } catch { /* synthetic or already gone */ }
       const r = this.stick.getBoundingClientRect();
       // centre on the thumb (unless it landed on the plate already), kept on screen
       const rest = this.restRect || (this.restRect = { x: r.left + r.width / 2 - (this.shift?.x || 0), y: r.top + r.height / 2 - (this.shift?.y || 0), rad: r.width / 2 });
@@ -428,7 +429,7 @@ export class TouchControls {
       this.radial.style.left = `${this.trickC.x - ro.left}px`;
       this.radial.style.top = `${this.trickC.y - ro.top}px`;
       const u = scale.u, D = 30 * u;
-      for (const [d, x, y] of [['up', 0, -D], ['down', 0, D + 4 * u], ['left', -D * 1.25, 0], ['right', D * 1.25, 0]]) {
+      for (const [d, x, y] of [['up', 0, -D], ['down', 0, D], ['left', -D * 1.25, 0], ['right', D * 1.25, 0]]) {
         this.petals[d].style.left = `${x}px`;
         this.petals[d].style.top = `${y}px`;
       }
