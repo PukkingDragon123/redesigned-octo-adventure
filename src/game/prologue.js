@@ -76,14 +76,20 @@ function lumberCamp(story) {
     const pivot = new THREE.Group();
     pivot.position.set(TP.x, gy(TP.x, TP.z), TP.z);
     g.scene.add(pivot);
-    const tres = buildTree('maple', { seed: 5, lod: 0 });
-    const tgeo = meshVox(tres.vox, { size: tres.size, origin: tres.origin, greedy: true });
-    const tree = voxMesh(tgeo, sharedVoxelMaterial());
+    // the forest's own maple (same wind and leaf light), or a fresh one if the forest isn't voxel
     const TS = 0.9;
-    tree.scale.setScalar(TS);
+    let tree = g.world.voxelForest?.makeTree?.('maple', 1), tgeo = null, meta;
+    if (tree) meta = tree.userData.meta;
+    else {
+      const tres = buildTree('maple', { seed: 5, lod: 0 });
+      tgeo = meshVox(tres.vox, { size: tres.size, origin: tres.origin, greedy: true });
+      tree = voxMesh(tgeo, sharedVoxelMaterial());
+      meta = tres.meta;
+    }
+    tree.scale.multiplyScalar(TS);
     pivot.add(tree);
-    S.temp.push({ remove: () => { g.scene.remove(pivot); tgeo.dispose(); } });
-    const trunkR = (tres.meta?.trunkR ?? 0.35) * TS;
+    S.temp.push({ remove: () => { g.scene.remove(pivot); tgeo?.dispose(); } });
+    const trunkR = (meta?.trunkR ?? 0.35) * TS;
     // camp dressing
     const at = (a, b) => off(C, a, b);
     let p = at(-0.5, -4.2); S.prop(LORE.stump({ seed: 3, r: 7 }), p.x, p.z);
