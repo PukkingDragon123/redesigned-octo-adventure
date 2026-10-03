@@ -941,10 +941,11 @@ export function stainArt() {
     const a = Math.atan2(dy, dx);
     const gap = hash(Math.floor((a + Math.PI) * 4), 1, 101) < 0.14;
     const r = 11.6 + Math.sin(a * 3) * 0.4;
-    if (d > r - 2.2 && d <= r && !gap) p.set(x, y, d > r - 1 ? 0x7a4422 : 0x9a6232, d > r - 1 ? 120 : 70);
-    else if (d < r - 2.2) p.set(x, y, 0xa8703e, 16);
+    // raw writes: these pixels are see-through on purpose
+    if (d > r - 2.2 && d <= r && !gap) p.put(x, y, d > r - 1 ? 0x7a4422 : 0x9a6232, d > r - 1 ? 120 : 70);
+    else if (d < r - 2.2) p.put(x, y, 0xa8703e, 20);
   }
-  p.set(27, 9, 0x7a4422, 110); p.set(28, 10, 0x9a6232, 80); p.set(4, 25, 0x7a4422, 100);
+  p.put(27, 9, 0x7a4422, 110); p.put(28, 10, 0x9a6232, 80); p.put(4, 25, 0x7a4422, 100);
   return p;
 }
 // a strip of masking tape, 22x9
@@ -954,9 +955,9 @@ export function tapeArt() {
   for (let y = 0; y < H - 1; y++) for (let x = 0; x < W; x++) {
     const e = Math.min(x, W - 1 - x);
     if (e < (y % 3 === 1 ? 0 : 1)) continue;
-    p.set(x, y, y === 0 ? 0xfff8dc : hash(x, y, 103) < 0.12 ? 0xe2d4a0 : 0xf0e4b4, 215);
+    p.put(x, y, y === 0 ? 0xfff8dc : hash(x, y, 103) < 0.12 ? 0xe2d4a0 : 0xf0e4b4, 215);
   }
-  for (let x = 1; x < W; x++) p.set(x, H - 1, C.shadow, 50);
+  for (let x = 1; x < W; x++) p.put(x, H - 1, C.shadow, 50);
   return p;
 }
 // pencil tick boxes (12x12): empty, pencil check (packed), red-ink tick (done)

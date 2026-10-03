@@ -1,7 +1,7 @@
-// Screens: title, Hank's journal (pause), settings, controls, Nana's order board,
-// the Skill Book (Harold's garage), keepsakes, the paper map, recipes, the Moose &
-// Goose shop, pumpkin carving and the day's receipt. All built from the pixel UI
-// kit (src/ui/kit.js, styles in src/ui/menus.css).
+// Screens: title, Hank's journal (pause), settings, controls, Nana's order book and
+// customer book (spiral notebooks), the Skill Book (Harold's garage), keepsakes,
+// the paper map, recipes, the Moose & Goose shop and the day's receipt. All built
+// from the pixel UI kit (src/ui/kit.js, styles in src/ui/menus.css and notebook.css).
 import { el } from '../ui/ui.js';
 import { kPanel, kSign, kClose, kBook, kBar, kSlider, kToggle, kSlot, kKey, esc, scale, snap, snapBox, setUIScaleOffset } from '../ui/kit.js';
 import { iconURL, iconSmallURL, glyphURL } from '../art/icons.js';
@@ -99,9 +99,10 @@ export class Menus {
     const { p, body } = this.sheet("Hank's Journal", { cls: 'journal', onClose: close });
     const { book, left, right } = kBook('jbook');
     body.appendChild(book);
+    p.appendChild(el('i', 'k-strap'));
     // left page: today + favours
     const d = st.stats || {};
-    left.innerHTML = `<div class="jdate"><img class="k-g" src="${glyphURL('coin')}"><b>$${Math.floor(st.money)}</b><img class="k-g" src="${glyphURL('cocoa')}">${d.deliveries || 0} delivered${st.candy ? `<img class="k-g" src="${iconSmallURL('candy')}">${st.candy}` : ''}</div><div class="k-h k-bold">Day ${st.day} &middot; Errands</div>`;
+    left.innerHTML = `<div class="jdate"><img class="k-g" src="${glyphURL('coin')}"><b>$${Math.floor(st.money)}</b><img class="k-g" src="${glyphURL('cocoa')}">${d.deliveries || 0} delivered</div><div class="k-h k-bold">Day ${st.day} &middot; Errands</div>`;
     const Q = st.quests || {};
     const lines = [];
     const row = (done, text) => `<div class="jq${done ? ' done' : ''}"><img class="k-g" src="${glyphURL(done ? 'boxOn' : 'box')}"><span>${text}</span></div>`;
@@ -128,6 +129,7 @@ export class Menus {
       this.item('The map', () => this.map(), { icon: iconSmallURL('map') }),
       this.item("Harold's keepsakes", () => this.keepsakes(), { icon: iconSmallURL('lantern') }),
       this.item('Skill book', () => this.skillBook(), { icon: iconSmallURL('skill_wheelie') }),
+      this.item("Nana's customers", () => this.customers(), { icon: glyphURL('home') }),
       this.item("Nana's recipes", () => this.recipes(), { icon: glyphURL('mug_classic') }),
       this.item('Settings', () => this.settings(), { icon: glyphURL('gear') }),
       this.item('Controls', () => this.controls(), { icon: glyphURL('pad') }),
@@ -141,33 +143,9 @@ export class Menus {
     return m;
   }
 
-  // ---------------------------------------------------------------- pumpkin carving
+  // the pumpkin-carving page went with the Halloween decorations; an old caller just gets "not now"
   carve(onDone) {
-    const ui = this.ui;
-    const g = this.game;
-    let m;
-    const done = (f) => {
-      ui.closeOverlay(m);
-      if (f) g.sound.play('pencil_scribble');
-      onDone?.(f);
-    };
-    const { p, body } = this.sheet('Pick a face to carve', { cls: 'carve', onClose: () => done(null) });
-    const faces = ['classic', 'happy', 'scared', 'toothy', 'cat', 'skull'];
-    const grid = el('div', 'carvegrid');
-    const items = faces.map((f) => {
-      const cell = el('div', 'carvecell');
-      const s = kSlot(faceSketch(f), { cls: 'pick' });
-      s.addEventListener('click', () => done(f));
-      ui.hoverSelect(s);
-      cell.append(s, el('div', 'cap', f));
-      grid.appendChild(cell);
-      return s;
-    });
-    body.appendChild(grid);
-    const back = ui.button('Not now', () => done(null));
-    body.appendChild(el('div', 'm-foot')).appendChild(back);
-    m = ui.openOverlay(p, { onBack: () => done(null), items: [...items, back], grid: 3 });
-    return m;
+    onDone?.(null);
   }
 
   // ---------------------------------------------------------------- Nana's recipes & pantry
@@ -348,7 +326,10 @@ export class Menus {
     return m;
   }
 
-  // ---------------------------------------------------------------- order board
+  // ---------------------------------------------------------------- order board: Nana's order book
+  // An open spiral notebook on the kitchen table: today's orders down the left
+  // page (tick boxes, who, which cocoa), the one under Hank's finger written up on
+  // the right page with a photo, where they live, what they ordered and how hot.
   orderBoard(onDone) {
     const g = this.game;
     const ui = this.ui;
@@ -358,29 +339,31 @@ export class Menus {
       ui.closeOverlay(m);
       onDone?.();
     };
-    const { p, body } = this.sheet("Nana's Order Board", { kind: 'wood', cls: 'board', onClose: done });
-    const info = el('div', 'boardbar');
-    body.appendChild(info);
-    const quote = el('div', 'boardquote');
-    body.appendChild(quote);
-    const cork = el('div', 'k-panel k-cork cork');
-    body.appendChild(cork);
-    const slips = [];
-    const all = O.list.filter((o) => o.state === 'board' || o.state === 'carried');
+    const { p, body } = this.sheet("Nana's Order Book", { kind: 'wood', cls: 'nbsheet board', onClose: done });
+    const { nb, left, right } = notebook();
+    body.appendChild(nb);
+    const head = el('div', 'nb-head');
+    left.appendChild(head);
+    const rows = [];
+    const all = O.list.filter((o) => o.state === 'board' || o.state === 'carried' || o.state === 'delivered');
+    const detail = (o) => nbCard(right, {
+      id: o.customer, spot: o.spot,
+      stamp: o.state === 'delivered' ? ['DONE', 'ok'] : o.state === 'carried' ? ['PACKED', 'ok'] : o.rush ? ['RUSH', ''] : null,
+      lines: [
+        `<div class="nb-line wrap"><img class="k-g" src="${glyphURL(`mug_${mugOf(o)}`)}"><span class="v">${esc(o.label)}</span></div>`,
+        heatLine(o),
+      ],
+      quote: o.note,
+    });
     all.forEach((o, i) => {
-      const s = el('button', 'k-paper slip pick');
-      const name = CHARACTERS[o.customer]?.name || o.customer;
-      const mug = mugOf(o);
-      s.innerHTML = `<i class="tack"></i><div class="who"><span class="pola"><img src="${faceURL(o.customer)}"></span><span class="nm k-bold">${esc(SHORT_NAME[o.customer] || name.split(' ')[0])}</span></div>
-        <div class="what"><img class="k-g" src="${glyphURL(`mug_${mug}`)}"><span>${esc(o.label)}</span></div>
-        <div class="pay"><img class="k-g" src="${glyphURL('coin')}"><b>$${o.price}</b>${o.rush ? `<span class="rush"><img class="k-g" src="${glyphURL('rush')}">RUSH</span>` : '<span>+ tips</span>'}</div>
-        <span class="packed k-bold">PACKED</span>`;
-      s.addEventListener('focus-item', () => { quote.innerHTML = `<b>${esc(name)}:</b> “${esc(o.note)}”`; });
-      const sync = () => s.classList.toggle('taken', o.state === 'carried');
+      const r = el('button', 'nb-row pick', `<i class="bx"></i><img class="k-g" src="${glyphURL(`mug_${mugOf(o)}`)}"><span class="nm">${esc(SHORT_NAME[o.customer] || (CHARACTERS[o.customer]?.name || o.customer).split(' ')[0])}</span><span class="rt">${o.rush ? `<img class="k-g rush" src="${glyphURL('rush')}">` : ''}$${o.price}</span>`);
+      const sync = () => { r.classList.toggle('packed', o.state === 'carried'); r.classList.toggle('done', o.state === 'delivered'); };
       sync();
-      s.addEventListener('click', () => {
+      r.addEventListener('focus-item', () => detail(o));
+      r.addEventListener('click', () => {
+        if (o.state === 'delivered') return;
         let packed = false;
-        if (o.state === 'carried') O.unpack(o);
+        if (o.state === 'carried') { O.unpack(o); g.sound.play('pencil_scribble'); }
         else if (!O.pack(o)) {
           g.sound.play('ui_error');
           const miss = O.missing ? O.missing(o) : [];
@@ -395,29 +378,68 @@ export class Menus {
         }
         sync();
         upd();
-        // after packing, hop to the next open slip, or to "Let's ride!" once the basket is full
+        detail(o);
+        // after packing, hop to the next open line, or to "Let's ride!" once the basket is full
         if (packed && m) {
           const full = O.carried().length >= O.capacity();
-          const next = slips.findIndex((e, k) => k > i && !e.classList.contains('taken'));
-          const later = next >= 0 ? next : slips.findIndex((e) => !e.classList.contains('taken'));
-          m.sel = full || later < 0 ? slips.length : later;
+          const open = (e) => !e.classList.contains('packed') && !e.classList.contains('done');
+          const next = rows.findIndex((e, k) => k > i && open(e));
+          const later = next >= 0 ? next : rows.findIndex(open);
+          m.sel = full || later < 0 ? rows.length : later;
           ui.highlight(m);
         }
       });
-      ui.hoverSelect(s);
-      cork.appendChild(s);
-      slips.push(s);
+      ui.hoverSelect(r);
+      left.appendChild(r);
+      rows.push(r);
     });
-    if (!all.length) cork.appendChild(el('p', 'hint', 'No orders pinned up yet. Check back after breakfast!'));
+    if (!all.length) left.appendChild(el('p', 'nb-pencil-note', 'No orders yet. Check back after breakfast!'));
+    left.appendChild(el('div', 'nb-pencil-note nb-tip', 'Tick what to pack. Cocoa cools as you ride!'));
     const upd = () => {
       const n = O.carried().length, cap = O.capacity();
-      info.innerHTML = `<span>Pick the orders to pack. Cocoa cools as you ride!</span><span class="cups">${Array.from({ length: cap }, (_, k) => `<img class="k-g${k < n ? '' : ' empty'}" src="${glyphURL('mug_classic')}">`).join('')}<b>${n}/${cap}</b></span>`;
+      head.innerHTML = `<span class="t k-bold">Orders, day ${g.state.day}<small>${all.length} to deliver</small></span><span class="cups">${Array.from({ length: cap }, (_, k) => `<img class="k-g${k < n ? '' : ' empty'}" src="${glyphURL('mug_classic')}">`).join('')}</span>`;
     };
     upd();
-    const go = ui.button("Let's ride!", done, { small: 'cocoa is poured when you leave', face: 'green' });
+    doodles(left, right, g.state.day);
+    if (all[0]) detail(all[0]);
+    else nbCard(right, { id: 'grandma', where: 'The cabin by the woods', quote: 'Breakfast first, dear. Then the orders.' });
+    const go = ui.button("Let's ride!", done, { small: 'load up the cocoa', face: 'green' });
     body.appendChild(el('div', 'm-foot')).appendChild(go);
-    m = ui.openOverlay(p, { onBack: done, items: [...slips, go], grid: boardCols() });
-    autoGrid(m, slips);
+    g.sound.play('page_flip');
+    m = ui.openOverlay(p, { onBack: done, items: [...rows, go] });
+    return m;
+  }
+
+  // ---------------------------------------------------------------- Nana's customer book (from the journal)
+  customers() {
+    const g = this.game;
+    const ui = this.ui;
+    let m;
+    const close = () => ui.closeOverlay(m);
+    const { p, body } = this.sheet("Nana's Customers", { kind: 'wood', cls: 'nbsheet custbook', onClose: close });
+    const { nb, left, right } = notebook();
+    body.appendChild(nb);
+    const today = g.orders?.list || [];
+    left.appendChild(el('div', 'nb-head', `<span class="t k-bold">Regulars<small>${Object.keys(CUSTOMERS).length} on the round</small></span>`));
+    const rows = Object.entries(CUSTOMERS).map(([spot, c]) => {
+      const o = today.find((x) => x.spot === spot);
+      const id = spot === 'kids' ? 'pip' : spot === 'lou_lh' ? 'ollie' : spot;
+      const r = el('button', `nb-row pick${o?.state === 'delivered' ? ' done' : o?.state === 'carried' ? ' packed' : ''}`, `<i class="bx"></i><span class="nm">${esc(c.name)}</span><span class="rt">${o ? `<img class="k-g" src="${glyphURL(`mug_${mugOf(o)}`)}">` : ''}</span>`);
+      r.addEventListener('focus-item', () => nbCard(right, {
+        id, spot,
+        stamp: o?.state === 'delivered' ? ['DONE', 'ok'] : null,
+        lines: [
+          `<div class="nb-line wrap nb-pencil-note">${esc(NANA_NOTE[spot] || '')}</div>`,
+          o ? `<div class="nb-line wrap"><span class="lbl">Today:</span><img class="k-g" src="${glyphURL(`mug_${mugOf(o)}`)}"><span class="v">${esc(o.label)}</span></div>` : '<div class="nb-line"><span class="lbl">Today:</span><span class="v">no order</span></div>',
+        ],
+      }));
+      ui.hoverSelect(r);
+      left.appendChild(r);
+      return r;
+    });
+    doodles(left, right, 7);
+    g.sound.play('page_flip');
+    m = ui.openOverlay(p, { onBack: close, items: rows });
     return m;
   }
 
@@ -438,6 +460,7 @@ export class Menus {
     const { p, body } = this.sheet('The Skill Book', { cls: 'skillbook', onClose: close });
     const { book, left, right } = kBook('sbook');
     body.appendChild(book);
+    p.appendChild(el('i', 'k-strap'));
     const mastered = list.reduce((n, s) => n + (s.tier || 0), 0), total = list.reduce((n, s) => n + (s.maxTier || 3), 0);
     left.innerHTML = `<div class="k-h k-bold">Harold's riding notes</div><div class="sbtotal"><img class="k-g" src="${glyphURL('medalG')}"><span>${mastered} / ${total} medals</span></div>`;
     const rows = el('div', 'sblist');
@@ -627,6 +650,47 @@ function faceURL(id) {
   FACES.set(id, url);
   return url;
 }
+// ---------------------------------------------------------------- the spiral notebook
+// an open notebook: two ruled pages either side of the spiral
+function notebook() {
+  const nb = el('div', 'nb', '<div class="nb-page nb-l nb-ruled"></div><div class="nb-gutter"></div><div class="nb-page nb-r nb-ruled"></div>');
+  return { nb, left: nb.children[0], right: nb.children[2] };
+}
+// where everybody lives, in Nana's handwriting
+const WHERE = {
+  gus: 'Log cabin on the main road', marie: 'Café Érable, Main St.', birdie: 'Little red house, Main St.',
+  agnes: 'Blue house with the cats, Main St.', doug: 'The police post, Main St.', ingrid: 'The clinic, Main St.',
+  kids: 'Out on the hockey rink', lou: 'The sawmill, down the river', lou_lh: 'The hut by the lighthouse',
+};
+const NANA_NOTE = {
+  gus: 'Grumbles. Tips well. Likes it scalding.', marie: 'Runs the café. Will judge the foam.', birdie: 'Old sea captain. Shares her marshmallows with the gulls.',
+  agnes: 'Lives with a great many cats.', doug: 'Calls it "patrol fuel". Two sugars.', ingrid: 'The doctor. Still looking for Hank\'s pulse.',
+  kids: 'Marshmallows first, cocoa second.', lou: 'Hank\'s old pal from the mill. Big mug.', lou_lh: 'Keeps the light. Long ride, good tips.',
+};
+// the right-hand page: a taped-in photo (with a rubber stamp), who and where, then a few written lines
+function nbCard(page, { id, spot, where = '', stamp = null, lines = [], quote = '' }) {
+  const name = SHORT_NAME[id] || CUSTOMERS[spot]?.name || CHARACTERS[id]?.name || id;
+  page.querySelector('.nb-card')?.remove();
+  const st = stamp ? `<span class="nb-stamp ${stamp[1]}">${stamp[0]}</span>` : '';
+  const c = el('div', 'nb-card', `<div class="nb-top"><span class="nb-photo"><img src="${faceURL(id)}">${st}</span><div class="nb-who"><div class="nm k-bold">${esc(name)}</div><div class="addr">${esc(where || WHERE[spot] || '')}</div></div></div>${lines.join('')}${quote ? `<div class="nb-quote">“${esc(quote)}”</div>` : ''}`);
+  page.prepend(c);
+}
+// how hot a cup is (every cup leaves the kitchen piping hot)
+function heatLine(o) {
+  const q = o.state === 'carried' ? o.quality : 100;
+  const [g, w] = q > 85 ? ['steam3', 'piping hot'] : q > 60 ? ['steam2', 'still hot'] : q > 30 ? ['steam1', 'only warm'] : ['cold', 'gone cold!'];
+  return `<div class="nb-line"><img class="k-g" src="${glyphURL(g)}"><span class="v${q > 30 ? '' : ' nb-redink'}">${w}</span></div>`;
+}
+// pen doodles, a coffee ring and a pencil: a notebook that gets used
+const DOODLE_KINDS = ['bike', 'mug', 'leaf', 'heart', 'star', 'swirl'];
+function doodles(left, right, seed) {
+  const pick = (k) => DOODLE_KINDS[(seed * 5 + k * 2) % DOODLE_KINDS.length];
+  left.appendChild(el('i', 'nb-doodle dl')).style.backgroundImage = `var(--k-dd-${pick(0)})`;
+  right.appendChild(el('i', 'nb-doodle dr')).style.backgroundImage = `var(--k-dd-${pick(1)})`;
+  right.appendChild(el('i', 'nb-stain'));
+  left.parentElement.appendChild(el('i', 'nb-pencil'));
+}
+
 // arrow-key grids follow the real column count once the grid is laid out
 function autoGrid(m, items) {
   requestAnimationFrame(() => {
@@ -642,7 +706,6 @@ const SHORT_FOOD = { milk_bottle: 'Milk', cocoa_powder: 'Cocoa', sugar: 'Sugar',
 const SHOP_NAME = { milk_bottle: 'Milk', marshmallows: 'Marsh­mallows', dark_chocolate: 'Dark Choco­late', cinnamon: 'Cinna­mon', mint: 'Fresh Mint' };
 const fmtNum = (v) => (Math.abs(v - Math.round(v)) < 0.01 ? String(Math.round(v)) : v.toFixed(1));
 const shopCols = () => (scale.cols < 330 ? 3 : scale.cols < 420 ? 4 : 6);
-const boardCols = () => (scale.cols < 330 ? 2 : 3);
 const MUGS = ['classic', 'maple', 'mint', 'pumpkin', 'cinnamon', 'mocha'];
 function mugOf(o) {
   if (MUGS.includes(o.cocoa)) return o.cocoa;
@@ -713,34 +776,4 @@ function paintMap(terrain, N = 192) {
   ctx.fillStyle = '#2a1a14';
   ctx.fillRect(rx - 2, ry - 15, 1, 5); ctx.fillRect(rx + 2, ry - 15, 1, 5); ctx.fillRect(rx - 1, ry - 14, 1, 1); ctx.fillRect(rx, ry - 13, 1, 1); ctx.fillRect(rx + 1, ry - 12, 1, 1);
   return c;
-}
-
-// pencil sketches of jack-o'-lantern faces for the carving page (32x32)
-function faceSketch(kind) {
-  const c = document.createElement('canvas');
-  c.width = c.height = 32;
-  const g = c.getContext('2d');
-  const R = (x, y, w, h, col) => { g.fillStyle = col; g.fillRect(x, y, w, h); };
-  for (let y = 0; y < 32; y++) for (let x = 0; x < 32; x++) {
-    const dx = (x - 15.5) / 14, dy = (y - 17) / 12;
-    const d = dx * dx + dy * dy;
-    if (d < 1) R(x, y, 1, 1, d > 0.82 ? '#8a3a10' : (x % 7 === 0 ? '#d8601a' : (x + y < 22 && d < 0.5 ? '#f8a050' : '#e8781e')));
-  }
-  R(14, 2, 3, 4, '#4a6a2a'); R(15, 2, 1, 1, '#7a9a4a');
-  const ink = '#2a1408', glow = '#ffd060';
-  const tri = (x, y, s, up = true) => { for (let k = 0; k < s; k++) R(x - k, up ? y + k : y - k, 1 + k * 2, 1, glow); };
-  switch (kind) {
-    case 'happy': tri(10, 11, 4); tri(21, 11, 4); for (let x = 7; x < 25; x++) R(x, 21 + Math.round(Math.sin(((x - 7) / 18) * Math.PI) * 3), 1, 2, glow); break;
-    case 'scared': R(8, 11, 5, 5, glow); R(19, 11, 5, 5, glow); R(10, 13, 1, 1, ink); R(21, 13, 1, 1, ink); R(13, 20, 6, 6, glow); break;
-    case 'toothy': tri(10, 10, 4); tri(21, 10, 4); R(7, 20, 18, 5, glow); for (let x = 8; x < 25; x += 3) R(x, 20, 1, 2, '#e8781e'), R(x + 1, 23, 1, 2, '#e8781e'); break;
-    case 'cat': R(8, 13, 5, 3, glow); R(19, 13, 5, 3, glow); R(10, 13, 1, 3, ink); R(21, 13, 1, 3, ink); R(15, 18, 2, 2, glow); R(11, 22, 4, 1, glow); R(17, 22, 4, 1, glow); break;
-    case 'skull': R(8, 10, 6, 6, glow); R(18, 10, 6, 6, glow); R(15, 17, 2, 2, glow); R(9, 21, 14, 4, glow); for (let x = 10; x < 23; x += 2) R(x, 21, 1, 4, '#e8781e'); break;
-    default: tri(10, 10, 4); tri(21, 10, 4); tri(16, 15, 2); for (let x = 7; x < 25; x++) R(x, 21 + (x % 4 < 2 ? 0 : 1), 1, 3, glow);
-  }
-  // ink outline
-  const d = g.getImageData(0, 0, 32, 32);
-  const A = (x, y) => x >= 0 && y >= 0 && x < 32 && y < 32 && d.data[(y * 32 + x) * 4 + 3] > 0;
-  g.fillStyle = '#1e1418';
-  for (let y = 0; y < 32; y++) for (let x = 0; x < 32; x++) if (!A(x, y) && (A(x + 1, y) || A(x - 1, y) || A(x, y + 1) || A(x, y - 1))) g.fillRect(x, y, 1, 1);
-  return c.toDataURL();
 }

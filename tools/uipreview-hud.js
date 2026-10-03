@@ -1,4 +1,4 @@
-// /tools/uipreview.html?page=hud&scene=ride|dialog|shout|narr|banner|journal|board|skills|settings|keeps|map|shop|recipes|summary|controls|carve
+// /tools/uipreview.html?page=hud&scene=ride|dialog|shout|narr|banner|journal|board|skills|settings|keeps|map|shop|recipes|summary|controls|customers
 // The real UI classes on top of a small fake game (no 3D world), for fast iteration.
 import * as THREE from 'three';
 import { UI } from '../src/ui/ui.js';
@@ -24,7 +24,7 @@ export default function (root) {
     params: q, time: 0, camera: cam, mode: 'ride', onFoot: q.get('foot') === '1', currentScene: null,
     settings: { pixel: 1, quality: 'high', master: 0.8, music: 0.55, sfx: 0.85, camDist: 1, fps: false, uiSize: 0, autoQuality: true },
     state: {
-      day: 3, money: 125, candy: 4, hasCamera: true,
+      day: 3, money: 125, hasCamera: true,
       stats: { deliveries: 12, dayDeliveries: 4, dayTips: 9, dayCrashes: 2, dayAir: 2.4, dayEarned: 48 },
       keepsakes: { cane: 'given', clock: 'found', lantern: 'found', books: 'given' },
       quests: { cats: { state: 'active' }, trees: { state: 'done' }, lost_glasses: { state: 'active' } },
@@ -67,7 +67,7 @@ export default function (root) {
   if (scene === 'banner') ui.banner('DAY 3', 'Crisp and clear: perfect cocoa weather', 600000);
   const m = {
     journal: () => menus.pause(), board: () => menus.orderBoard(), skills: () => menus.skillBook(), settings: () => menus.settings(), keeps: () => menus.keepsakes(),
-    map: () => menus.map(), shop: () => menus.shop(), recipes: () => menus.recipes(), summary: () => menus.summary(), controls: () => menus.controls(), carve: () => menus.carve(),
+    map: () => menus.map(), shop: () => menus.shop(), recipes: () => menus.recipes(), summary: () => menus.summary(), controls: () => menus.controls(), customers: () => menus.customers(),
   }[scene];
   if (m) { g.mode = 'menu'; m(); }
   let last = performance.now();

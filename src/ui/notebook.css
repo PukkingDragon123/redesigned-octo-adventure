@@ -33,7 +33,8 @@
 }
 /* the cover's lower edge and a page stack peeking out */
 .nb::after { content: ''; position: absolute; left: calc(var(--u) * 2); right: calc(var(--u) * 2); bottom: var(--u); height: var(--u); background: repeating-linear-gradient(90deg, #e8dcc0 0 calc(var(--u) * 3), #c8b898 calc(var(--u) * 3) calc(var(--u) * 4)); }
-.nb-page { position: relative; min-width: 0; min-height: calc(var(--u) * 128); padding: 0 calc(var(--u) * 4) calc(var(--u) * 4) calc(var(--u) * 19); --nb-mx: calc(var(--u) * 16); }
+.nb-page { position: relative; min-width: 0; min-height: calc(var(--u) * 128); padding: 0 calc(var(--u) * 10) calc(var(--u) * 4) calc(var(--u) * 19); --nb-mx: calc(var(--u) * 16); }
+.nb-page.nb-r { padding-right: calc(var(--u) * 4); }
 .nb-page.nb-r { padding-left: calc(var(--u) * 16); --nb-mx: calc(var(--u) * 12); }
 /* the gutter: pages darken towards the binding, the coils sit on top */
 .nb-gutter { position: relative; background: linear-gradient(90deg, #d8ccb0 0 var(--u), #5a2016 var(--u) calc(100% - var(--u)), #d8ccb0 calc(100% - var(--u))); }
@@ -80,10 +81,8 @@
 .nb-row .rt { flex: none; display: flex; align-items: center; gap: var(--u); color: var(--nb-pencil); }
 .nb-row .rt .k-g.rush { margin-right: calc(var(--u) * -3); }
 .nb-row.done .nm { color: var(--nb-pencil); text-decoration: line-through; text-decoration-color: var(--nb-red); text-decoration-thickness: var(--u); }
-.nb-row.packed .nm::after { content: ' (packed)'; color: var(--nb-pencil); }
 /* the focused row gets a stroke of yellow highlighter, and Hank's finger in the margin */
 .nb-row:hover, .nb-row.sel { background: linear-gradient(180deg, transparent calc(var(--u) * 3), rgba(255, 226, 64, 0.62) calc(var(--u) * 3) calc(var(--u) * 14), transparent calc(var(--u) * 14)); }
-.nb-row.sel::before { content: ''; position: absolute; left: calc(var(--u) * -34); top: 0; width: calc(var(--u) * 16); height: calc(var(--u) * 16); background: var(--g-hand) 0 0 / 100% 100% no-repeat; animation: k-poke 0.6s steps(1) infinite; z-index: 3; }
 .nb-row.off { cursor: default; }
 
 /* the detail page: a taped-in photo, who and where, what they ordered */
@@ -100,7 +99,7 @@
 .nb-line .v { overflow: hidden; }
 .nb-line.wrap { white-space: normal; align-items: flex-start; }
 .nb-quote { color: var(--nb-blue); white-space: normal; margin-top: 0; }
-.nb-stamp { display: inline-block; margin-left: auto; padding: 0 calc(var(--u) * 2); line-height: calc(var(--u) * 12); color: var(--nb-red); box-shadow: inset 0 0 0 var(--u) var(--nb-red); font-family: 'BoldPixels', monospace; }
+.nb-stamp { position: absolute; left: calc(var(--u) * -3); bottom: calc(var(--u) * -5); padding: 0 calc(var(--u) * 2); line-height: calc(var(--u) * 12); color: var(--nb-red); background: rgba(251, 245, 228, 0.85); box-shadow: inset 0 0 0 var(--u) var(--nb-red); font-family: 'BoldPixels', monospace; z-index: 1; }
 .nb-stamp.ok { color: #2f6e2c; box-shadow: inset 0 0 0 var(--u) #2f6e2c; }
 
 /* the clutter of a well-used notebook */
@@ -146,3 +145,21 @@
 .hud-clip .obj.on { display: block; }
 .hud-clip .foot { height: calc(var(--u) * 4); }
 .k-portrait .hud-note.hud-clip { width: calc(var(--u) * 96); }
+
+/* decorations placed by menus.js doodles() */
+.nb-page { isolation: isolate; }
+.nb-doodle { z-index: -1; }
+.nb-doodle.dl { right: calc(var(--u) * 5); bottom: calc(var(--u) * 5); }
+.nb-doodle.dr { right: calc(var(--u) * 6); bottom: calc(var(--u) * 4); }
+.nb-stain { right: calc(var(--u) * 1); top: 0; z-index: -1; }
+.nb-tip { margin-top: calc(var(--u) * 0); padding-right: calc(var(--u) * 24); }
+.nb-row .k-g { flex: none; }
+/* the journal and the Skill Book are strapped shut on the right */
+.menu.journal .k-strap, .menu.skillbook .k-strap { right: calc(var(--u) * -14); top: calc(var(--u) * 14); }
+/* small screens: tighter header, no margin clutter */
+.k-compact .nb-head { height: calc(var(--u) * 16); }
+.k-compact .nb-head .t small, .k-compact .nb-tip, .k-compact .nb-doodle { display: none; }
+.k-compact .nb-page { min-height: calc(var(--u) * 96); }
+.k-compact .nb { margin: 0 calc(var(--u) * 1) calc(var(--u) * 3); }
+.k-compact .nbsheet .m-foot { margin-top: calc(var(--u) * 2); }
+.k-compact .menu.nbsheet { max-height: calc(100% - var(--u) * 24); }
