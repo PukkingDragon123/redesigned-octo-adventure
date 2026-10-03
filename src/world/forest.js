@@ -1,6 +1,7 @@
 // The autumn forest: where every tree, bush and fern stands, their trunk
 // colliders, and the extra undergrowth (stumps, fallen logs, mushrooms,
-// saplings). All of it is drawn as voxel models by voxelForest.js.
+// saplings). All of it is drawn as pixel-art sprites by forest2d.js, which
+// also answers shake(), setHidden() and makeTree() below.
 import * as THREE from 'three';
 import { RNG, Simplex } from '../core/noise.js';
 import { smoothstep } from '../core/math.js';
@@ -263,7 +264,7 @@ export class Forest {
     }
   }
 
-  // The forest's render data now lives in voxelForest.js; this keeps the chunk
+  // The forest's render data lives in forest2d.js; this keeps the chunk
   // descriptors (key + centre) and stats other systems read.
   buildMeshes() {
     this.scatterUndergrowth();
@@ -294,6 +295,25 @@ export class Forest {
     return this.group;
   }
 
-  // kept for callers; voxelForest.update() does the culling and LOD now
+  // kept for callers; forest2d.update() does the culling now
   updateVisibility() {}
+
+  // ---- drawing hooks (forest2d.js plugs itself in as this.renderer)
+  // springy wobble of one tree record with leaves falling out (power 0..1+)
+  shake(tree, power = 1) {
+    this.renderer?.shake(tree, power);
+  }
+  // hide trees for a cutscene stage, or bring them back
+  setHidden(trees, hidden = true) {
+    if (this.renderer) this.renderer.setHidden(trees, hidden);
+    else for (const t of trees) t.vkey = hidden ? null : t.vkeyBaked ?? t.vkey;
+  }
+  // a standalone tree card (pivot at the trunk base, userData.meta = { height, trunkR })
+  makeTree(species, seed = 0) {
+    return this.renderer?.makeTree(species, seed) ?? null;
+  }
+  // Hank kicked something: shake the trunk in front of him, if there is one
+  kick(pos, yaw, power) {
+    return this.renderer?.kick(pos, yaw, power) ?? false;
+  }
 }
