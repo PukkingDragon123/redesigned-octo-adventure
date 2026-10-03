@@ -5,8 +5,8 @@
 import { buildVoxelBuilding, lowDetail } from '../voxel/models/buildings.js';
 import { meshVox } from '../voxel/mesh.js';
 
-const arrays = (g) => ({ pos: g.attributes.position.array, nor: g.attributes.normal.array, col: g.attributes.color4.array, idx: g.index.array, scale: g.userData.scale ?? 1 });
-const buffers = (a) => [a.pos.buffer, a.nor.buffer, a.col.buffer, a.idx.buffer];
+const arrays = (g) => ({ pos: g.attributes.position.array, nor: g.attributes.normal.array, col: g.attributes.color4.array, det: g.attributes.detail.array, idx: g.index.array, scale: g.userData.scale ?? 1 });
+const buffers = (a) => [a.pos.buffer, a.nor.buffer, a.col.buffer, a.det.buffer, a.idx.buffer];
 
 self.onmessage = (e) => {
   const near = !!e.data.near;

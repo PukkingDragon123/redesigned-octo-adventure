@@ -13,6 +13,43 @@ for (let i = 0; i < 256; i++) {
   LIN[i] = c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
 }
 const AO = [0.48, 0.66, 0.83, 1.0];
+
+// Surface detail id per colour (see DETAIL in render/voxelMaterial.js): the shader paints a small
+// pixel-art pattern over each face. 0 none (glass, glow), 1 dither, 2 wood, 3 brick, 4 stone,
+// 5 paint, 6 foliage, 7 fabric, 8 metal. Cached per colour.
+const MAT_CACHE = new Map();
+export function detailOf(c) {
+  let id = MAT_CACHE.get(c);
+  if (id !== undefined) return id;
+  id = classify(c);
+  if (MAT_CACHE.size < 8192) MAT_CACHE.set(c, id);
+  return id;
+}
+function classify(c) {
+  if (c & FLAGS) return 0;
+  const r = ((c >> 16) & 255) / 255, g = ((c >> 8) & 255) / 255, b = (c & 255) / 255;
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+  const sat = mx > 0 ? d / mx : 0;
+  let hue = 0;
+  if (d > 0) {
+    if (mx === r) hue = ((g - b) / d + 6) % 6;
+    else if (mx === g) hue = (b - r) / d + 2;
+    else hue = (r - g) / d + 4;
+    hue *= 60;
+  }
+  if (mx < 0.2) return 8; // near-black: iron, dark metal
+  if (sat < 0.16) {
+    if (mx > 0.82) return 5; // white paint, trim
+    return mx < 0.36 ? 8 : 4; // greys: dark metal / stone
+  }
+  if (hue >= 14 && hue < 48 && sat > 0.25 && mx < 0.78) return 2; // browns: wood
+  if ((hue < 14 || hue >= 340) && sat > 0.4 && mx < 0.8) return 3; // brick reds
+  if (hue >= 48 && hue < 75 && sat > 0.3 && mx > 0.6) return 7; // straw, hay, cloth yellows
+  if (hue >= 70 && hue < 165 && mx < 0.7) return 6; // greens: leaves, moss
+  if (sat > 0.5) return 7; // saturated colour: cloth, paint
+  if (mx > 0.75) return 5; // pale colours: painted wood
+  return 1;
+}
 // face axes: a = normal axis; (u, v) = the in-plane axes the quads are laid out on. For y the
 // pair is (x, z) so faces come out of the scan already sorted row by row (flip marks the swapped
 // handedness, which reverses the winding).
@@ -104,11 +141,14 @@ export function meshVox(vox, opts = {}) {
   // ---- output buffers grow by doubling (no per-face garbage)
   let cap = 4096;
   let pos = new Float32Array(cap * 3), nor = new Float32Array(cap * 3), col = new Float32Array(cap * 4), idx = new Uint32Array(cap * 1.5);
+  // face-local detail coords: (u, v) in voxels on the face (v up on side faces) + detail id
+  let fuv = new Int16Array(cap * 4);
   let nIdx = 0, vcount = 0;
   const grow = () => {
     cap *= 2;
     const g3 = (arr, k) => { const n = new Float32Array(cap * k); n.set(arr); return n; };
     pos = g3(pos, 3); nor = g3(nor, 3); col = g3(col, 4);
+    const nf = new Int16Array(cap * 4); nf.set(fuv); fuv = nf;
     const ni = new Uint32Array(cap * 1.5); ni.set(idx); idx = ni;
   };
   const aos = [0, 0, 0, 0], cu = [0, 0, 0, 0], cv = [0, 0, 0, 0], pt = [0, 0, 0];
@@ -223,6 +263,9 @@ export function meshVox(vox, opts = {}) {
     const r = LIN[(c >> 16) & 255], g = LIN[(c >> 8) & 255], b = LIN[c & 255];
     const tint = 1 + jit;
     const em = fl & EMIT ? 1 : fl & GLASS ? 0.5 : 0;
+    const did = detailOf(c);
+    // side faces: u = the horizontal in-plane axis, v = y; top/bottom: (x, z)
+    const fu = a === 0 ? 2 : 0, fv = a === 1 ? 2 : 1;
     const base = vcount;
     for (let k = 0; k < 4; k++) {
       pt[a] = plane;
@@ -235,6 +278,7 @@ export function meshVox(vox, opts = {}) {
       aos[k] = aov;
       const lit = em ? 1 : 1 - (1 - AO[aov]) * aoK;
       col[o4] = r * lit * tint; col[o4 + 1] = g * lit * tint; col[o4 + 2] = b * lit * tint; col[o4 + 3] = em;
+      fuv[o4] = pt[fu]; fuv[o4 + 1] = pt[fv]; fuv[o4 + 2] = did; fuv[o4 + 3] = a;
       vcount++;
     }
     // flip the diagonal so AO gradients don't crease
@@ -259,6 +303,7 @@ export function meshVox(vox, opts = {}) {
     g.setAttribute('normal', new THREE.BufferAttribute(nor.slice(0, vcount * 3), 3));
     g.setAttribute('color4', new THREE.BufferAttribute(col.slice(0, vcount * 4), 4));
   }
+  g.setAttribute('detail', new THREE.BufferAttribute(fuv.slice(0, vcount * 4), 4));
   g.setIndex(vcount > 65535 ? new THREE.BufferAttribute(idx.slice(0, nIdx), 1) : new THREE.BufferAttribute(Uint16Array.from(idx.subarray(0, nIdx)), 1));
   g.computeBoundingSphere();
   g.computeBoundingBox();
