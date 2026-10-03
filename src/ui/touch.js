@@ -274,6 +274,37 @@ export class TouchControls {
     window.addEventListener('pointerup', (e) => this.pointers.has(e.pointerId) && drop(e));
     window.addEventListener('pointercancel', (e) => this.pointers.has(e.pointerId) && drop(e));
 
+    // ---- the camera: one finger dragged on the open picture orbits, two pinch to zoom
+    this.camPtrs = new Map();
+    const openScreen = (t) => t instanceof HTMLCanvasElement || t?.id === 'stage' || t?.id === 'ui' || t === document.body;
+    window.addEventListener('pointerdown', (e) => {
+      if (e.pointerType === 'mouse' || !this.root.classList.contains('on') || !openScreen(e.target)) return;
+      if (this.camPtrs.size >= 2) return;
+      this.camPtrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      this.pinch = null;
+    });
+    window.addEventListener('pointermove', (e) => {
+      const p = this.camPtrs.get(e.pointerId);
+      if (!p) return;
+      const dx = e.clientX - p.x, dy = e.clientY - p.y;
+      p.x = e.clientX;
+      p.y = e.clientY;
+      if (this.camPtrs.size === 1) {
+        // screen size independent: a thumb sweep across a third of the width is ~ a quarter turn
+        const k = 900 / Math.max(320, Math.min(window.innerWidth, window.innerHeight * 2));
+        input.mouse.dx += dx * 0.45 * k;
+        input.mouse.dy += dy * 0.3 * k;
+      } else {
+        const [a, b] = [...this.camPtrs.values()];
+        const d = Math.max(20, Math.hypot(a.x - b.x, a.y - b.y));
+        if (this.pinch) input.zoomLog -= Math.log(d / this.pinch);
+        this.pinch = d;
+      }
+    }, { passive: true });
+    const camEnd = (e) => { if (this.camPtrs.delete(e.pointerId)) this.pinch = null; };
+    window.addEventListener('pointerup', camEnd);
+    window.addEventListener('pointercancel', camEnd);
+
     const relayout = () => { this.rects = null; this.restRect = null; };
     onScale(relayout);
     window.addEventListener('resize', relayout);
@@ -496,6 +527,8 @@ export class TouchControls {
       this.rects = null;
       this.restRect = null;
       if (!show) {
+        this.camPtrs.clear();
+        this.pinch = null;
         this.pointers.clear();
         this.updateHeld();
         if (this.stickId != null) this.endStick();

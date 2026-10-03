@@ -3,6 +3,10 @@
 // leans the boom with the slope, eases in past walls quickly and back out slowly.
 import * as THREE from 'three';
 import { clamp, damp, angleDamp, lerp, wrapAngle, easeInOut } from '../core/math.js';
+import { input } from '../core/input.js';
+
+// player zoom (mouse wheel, pinch): distance factor range, log scale
+const ZOOM_MIN = Math.log(0.42), ZOOM_MAX = Math.log(2.4);
 
 const _v = new THREE.Vector3();
 const _t = new THREE.Vector3();
@@ -31,6 +35,8 @@ export class ChaseCamera {
     this.ahead = new THREE.Vector3(); // smoothed look-ahead offset along the travel direction
     this.by = null; // smoothed ride height
     this.boom = 1; // fraction of the boom left after walls pull it in
+    this.zoomT = 0; // player zoom target (log of the distance factor)
+    this.zoomS = 0; // ...smoothed
   }
 
   snap(bike) {
@@ -85,6 +91,10 @@ export class ChaseCamera {
       return;
     }
     const speed = bike.speed;
+    // player zoom: wheel / pinch, eased so it glides
+    this.zoomT = clamp(this.zoomT + input.takeZoom(), ZOOM_MIN, ZOOM_MAX);
+    this.zoomS = instant ? this.zoomT : damp(this.zoomS, this.zoomT, 8, dt);
+    const zf = Math.exp(this.zoomS);
     // user orbit (mouse drag / right stick), drifts back when idle
     if (Math.abs(lookIn.x) + Math.abs(lookIn.y) > 0.001) {
       this.orbitYaw = clamp(this.orbitYaw - lookIn.x * 2.2, -Math.PI, Math.PI);
@@ -92,7 +102,7 @@ export class ChaseCamera {
       this.orbitIdle = 0;
     } else {
       this.orbitIdle += dt;
-      if (this.orbitIdle > 1.6) {
+      if (this.orbitIdle > 3) {
         this.orbitYaw = damp(this.orbitYaw, 0, 2.2, dt);
         this.orbitPitch = damp(this.orbitPitch, 0, 2.2, dt);
       }
@@ -121,10 +131,11 @@ export class ChaseCamera {
     // slope: downhill lifts the boom to see down the hill, uphill lowers it and looks up the road
     const slope = walk ? 0 : clamp(bike.slopePitch || 0, -0.4, 0.4);
     const ds = this.distScale;
-    const dist = (6.5 + sp * 0.075 - walk * 1.6) * ds;
+    // wide by default: well back and up, so the village and the road ahead read
+    const dist = (10.5 + sp * 0.1 - walk * 2.2) * ds * zf;
     // a wheelie or stoppie lifts the boom a touch so the whole bike stays in frame
     this.lift = damp(this.lift, walk ? 0 : clamp((bike.wheelie || 0) + (bike.stoppie || 0), 0, 1) * 0.5, 4, dt);
-    const hgt = (3.0 + sp * 0.022 - walk * 0.75) * (0.55 + ds * 0.45) + this.orbitPitch * 3 + this.lift - Math.sin(slope) * dist * 0.45;
+    const hgt = (4.9 + sp * 0.03 - walk * 1.0) * (0.55 + ds * 0.45) * Math.pow(zf, 0.95) + this.orbitPitch * 3 * Math.sqrt(zf) + this.lift - Math.sin(slope) * dist * 0.45;
     // look ahead along the way Hank is actually travelling
     const la = clamp(speed * 0.16, 0, 2.8) * (walk ? 0.4 : 1);
     let dx = Math.sin(this.yaw), dz = Math.cos(this.yaw);
@@ -137,7 +148,7 @@ export class ChaseCamera {
       this.ahead.x = damp(this.ahead.x, dx * la, 2.2, dt);
       this.ahead.z = damp(this.ahead.z, dz * la, 2.2, dt);
     }
-    const target = _t.set(bike.pos.x + this.ahead.x, by + 1.0 + Math.sin(slope) * (la + 2) * 0.55, bike.pos.z + this.ahead.z);
+    const target = _t.set(bike.pos.x + this.ahead.x, by + 1.0 + Math.min(0.6, (zf - 1) * 0.4 + 0.3) + Math.sin(slope) * (la + 2) * 0.55, bike.pos.z + this.ahead.z);
     const desired = _v.set(bike.pos.x - Math.sin(yaw) * dist, by + hgt, bike.pos.z - Math.cos(yaw) * dist);
     // keep above ground
     const gh = this.ph.groundAt(desired.x, desired.z, desired.y).h;
