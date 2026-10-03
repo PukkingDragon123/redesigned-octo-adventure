@@ -942,8 +942,8 @@ export function stainArt() {
     const gap = hash(Math.floor((a + Math.PI) * 4), 1, 101) < 0.14;
     const r = 11.6 + Math.sin(a * 3) * 0.4;
     // raw writes: these pixels are see-through on purpose
-    if (d > r - 2.2 && d <= r && !gap) p.put(x, y, d > r - 1 ? 0x7a4422 : 0x9a6232, d > r - 1 ? 120 : 70);
-    else if (d < r - 2.2) p.put(x, y, 0xa8703e, 20);
+    if (d > r - 3 && d <= r && !gap) p.put(x, y, d > r - 1 ? 0x7a3e18 : d > r - 2 ? 0x9a5a28 : 0xb07a46, d > r - 1 ? 200 : d > r - 2 ? 140 : 90);
+    else if (d < r - 3) p.put(x, y, 0xb07a46, 34);
   }
   p.put(27, 9, 0x7a4422, 110); p.put(28, 10, 0x9a6232, 80); p.put(4, 25, 0x7a4422, 100);
   return p;

@@ -397,7 +397,7 @@ export class Menus {
     left.appendChild(el('div', 'nb-pencil-note nb-tip', 'Tick what to pack. Cocoa cools as you ride!'));
     const upd = () => {
       const n = O.carried().length, cap = O.capacity();
-      head.innerHTML = `<span class="t k-bold">Orders, day ${g.state.day}<small>${all.length} to deliver</small></span><span class="cups">${Array.from({ length: cap }, (_, k) => `<img class="k-g${k < n ? '' : ' empty'}" src="${glyphURL('mug_classic')}">`).join('')}</span>`;
+      head.innerHTML = `<div class="t k-bold">Orders, day ${g.state.day}</div><div class="sub"><span class="cups">${Array.from({ length: cap }, (_, k) => `<img class="k-g${k < n ? '' : ' empty'}" src="${glyphURL('mug_classic')}">`).join('')}</span><span>${n}/${cap} packed</span></div>`;
     };
     upd();
     doodles(left, right, g.state.day);
@@ -420,7 +420,7 @@ export class Menus {
     const { nb, left, right } = notebook();
     body.appendChild(nb);
     const today = g.orders?.list || [];
-    left.appendChild(el('div', 'nb-head', `<span class="t k-bold">Regulars<small>${Object.keys(CUSTOMERS).length} on the round</small></span>`));
+    left.appendChild(el('div', 'nb-head', `<div class="t k-bold">Regulars</div><div class="sub">${Object.keys(CUSTOMERS).length} on the round</div>`));
     const rows = Object.entries(CUSTOMERS).map(([spot, c]) => {
       const o = today.find((x) => x.spot === spot);
       const id = spot === 'kids' ? 'pip' : spot === 'lou_lh' ? 'ollie' : spot;
