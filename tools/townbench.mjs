@@ -1,7 +1,7 @@
-// Builds and meshes every voxel building (as the workers do) and reports per-building
-// grid size, filled voxels, triangles and time, plus the town totals.
+// Builds and meshes every voxel building as the workers do (near model + far model) and
+// reports per-building grid size, triangles and time, plus the town totals.
 //   node tools/townbench.mjs [id ...]
-import { buildVoxelBuilding } from '../src/voxel/models/buildings.js';
+import { buildVoxelBuilding, lowDetail } from '../src/voxel/models/buildings.js';
 import { meshVox } from '../src/voxel/mesh.js';
 import { BUILDINGS } from '../src/world/layout.js';
 import { Terrain } from '../src/world/terrain.js';
@@ -14,7 +14,8 @@ try {
   specFn = (b) => buildingSpecPure(b, terrain);
 } catch { /* older tree: no terrain-aware specs */ }
 
-let T = 0, tris = 0, vox = 0, cells = 0;
+const T = { build: 0, mesh: 0, low: 0, meshLo: 0 };
+let tris = 0, trisLo = 0;
 const rows = [];
 for (const b of BUILDINGS) {
   if (only.length && !only.includes(b.id)) continue;
@@ -24,11 +25,16 @@ for (const b of BUILDINGS) {
   const t1 = performance.now();
   const g = meshVox(r.vox, { size: r.size, origin: r.origin, jitter: 0 });
   const t2 = performance.now();
-  const f = g.index.count / 3;
-  const n = r.vox.count();
-  rows.push([b.id.padEnd(14), `${r.vox.w}x${r.vox.h}x${r.vox.d}`.padEnd(14), String(n).padStart(8), String(f).padStart(7), (t1 - t0).toFixed(0).padStart(6), (t2 - t1).toFixed(0).padStart(6)]);
-  T += t2 - t0; tris += f; vox += n; cells += r.vox.w * r.vox.h * r.vox.d;
+  const lr = lowDetail ? lowDetail(r) : null;
+  const t3 = performance.now();
+  const gl = lr ? meshVox(lr.vox, { size: lr.size, origin: lr.origin, jitter: 0 }) : g;
+  const t4 = performance.now();
+  const f = g.index.count / 3, fl = gl.index.count / 3;
+  rows.push([b.id.padEnd(14), `${r.vox.w}x${r.vox.h}x${r.vox.d}`.padEnd(14), String(f).padStart(7), String(fl).padStart(7), ...[t1 - t0, t2 - t1, t3 - t2, t4 - t3].map((t) => t.toFixed(0).padStart(6))]);
+  T.build += t1 - t0; T.mesh += t2 - t1; T.low += t3 - t2; T.meshLo += t4 - t3;
+  tris += f; trisLo += fl;
 }
-console.log('id             grid             voxels    tris  build   mesh (ms)');
+console.log('id             grid              tris  trisLo  build   mesh    low meshLo (ms)');
 for (const r of rows) console.log(r.join(' '));
-console.log(`TOTAL ${rows.length} buildings: ${vox} voxels, ${(cells / 1e6).toFixed(1)}M cells, ${tris} triangles, ${T.toFixed(0)} ms (single thread)`);
+const tot = T.build + T.mesh + T.low + T.meshLo;
+console.log(`TOTAL ${rows.length} buildings: ${tris} triangles near, ${trisLo} far; ${tot.toFixed(0)} ms single thread (build ${T.build.toFixed(0)}, mesh ${T.mesh.toFixed(0)}, low ${T.low.toFixed(0)}, mesh far ${T.meshLo.toFixed(0)})`);

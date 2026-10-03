@@ -105,6 +105,7 @@ class VB {
     this.FW = (Math.ceil(x1) - this.x0 + 1) * K; this.FH = (Math.ceil(y1) - this.y0 + 1) * K; this.FD = (Math.ceil(z1) - this.z0 + 1) * K;
     this.bw = (this.FW + 15) >> 4; this.bh = (this.FH + 15) >> 4; this.bd = (this.FD + 15) >> 4;
     this.bricks = new Array(this.bw * this.bh * this.bd).fill(null);
+    this.rbits = new Array(this.bricks.length).fill(null); // per brick: 16-bit x occupancy of each (y, z) row
     this.bb = null; // painted bounds (fine, local)
   }
   _grow(lx, ly, lz, ex) {
@@ -118,9 +119,10 @@ class VB {
     if (lx < 0 || ly < 0 || lz < 0 || lx >= this.FW || ly >= this.FH || lz >= this.FD) return;
     const bi = (lx >> 4) + this.bw * ((ly >> 4) + this.bh * (lz >> 4));
     let br = this.bricks[bi];
-    if (!br) { if (!c) return; br = this.bricks[bi] = new Uint32Array(4096); }
+    if (!br) { if (!c) return; br = this.bricks[bi] = new Uint32Array(4096); this.rbits[bi] = new Uint16Array(256); }
     br[(lx & 15) | ((ly & 15) << 4) | ((lz & 15) << 8)] = c >>> 0;
-    if (c) this._grow(lx, ly, lz, 0);
+    const rb = this.rbits[bi], r = (ly & 15) | ((lz & 15) << 4);
+    if (c) { rb[r] |= 1 << (lx & 15); this._grow(lx, ly, lz, 0); } else rb[r] &= ~(1 << (lx & 15));
   }
   fget(X, Y, Z) {
     const lx = Math.round(X) - this.fx0, ly = Math.round(Y) - this.fy0, lz = Math.round(Z) - this.fz0;
@@ -147,11 +149,13 @@ class VB {
     if (lx < 0 || ly < 0 || lz < 0 || lx >= this.FW || ly >= this.FH || lz >= this.FD) return;
     const bi = (lx >> 4) + this.bw * ((ly >> 4) + this.bh * (lz >> 4));
     let br = this.bricks[bi];
-    if (!br) { if (!c) return; br = this.bricks[bi] = new Uint32Array(4096); }
+    if (!br) { if (!c) return; br = this.bricks[bi] = new Uint32Array(4096); this.rbits[bi] = new Uint16Array(256); }
     const i = (lx & 15) | ((ly & 15) << 4) | ((lz & 15) << 8), v = c >>> 0;
     br[i] = v; br[i + 1] = v; br[i + 16] = v; br[i + 17] = v;
     br[i + 256] = v; br[i + 257] = v; br[i + 272] = v; br[i + 273] = v;
-    if (c) this._grow(lx, ly, lz, 1);
+    const rb = this.rbits[bi], r = (ly & 15) | ((lz & 15) << 4), m = 3 << (lx & 15);
+    if (c) { rb[r] |= m; rb[r + 1] |= m; rb[r + 16] |= m; rb[r + 17] |= m; this._grow(lx, ly, lz, 1); }
+    else { rb[r] &= ~m; rb[r + 1] &= ~m; rb[r + 16] &= ~m; rb[r + 17] &= ~m; }
   }
   // any fine voxel of the coarse cell (0 when the whole cell is empty)
   get(x, y, z) {
@@ -226,11 +230,12 @@ class VB {
   }
 }
 
+const POP2 = [0, 1, 1, 2];
 // A window onto a VB's bricks: w x h x d fine voxels starting at the VB-local voxel (x0, y0, z0).
 // Read-only Vox look-alike: get(), occRow() for the mesher, count(), and dense() when needed.
 class BrickVol {
   constructor(vb, bb) {
-    this.bricks = vb.bricks; this.bw = vb.bw; this.bh = vb.bh;
+    this.bricks = vb.bricks; this.rbits = vb.rbits; this.bw = vb.bw; this.bh = vb.bh;
     this.x0 = bb[0]; this.y0 = bb[1]; this.z0 = bb[2];
     this.w = bb[3] - bb[0] + 1; this.h = bb[4] - bb[1] + 1; this.d = bb[5] - bb[2] + 1;
   }
@@ -241,24 +246,70 @@ class BrickVol {
     return br ? br[(lx & 15) | ((ly & 15) << 4) | ((lz & 15) << 8)] : 0;
   }
   // occupancy bits of row (y, z) into words[o..], bit b of word k = voxel x = 32k + b
+  // (whole 16-voxel brick rows at a time; nothing outside the painted bounds is ever set)
   occRow(y, z, words, o) {
-    const ly = y + this.y0, lz = z + this.z0, W = this.w;
-    const rowB = this.bw * ((ly >> 4) + this.bh * (lz >> 4)), cell = ((ly & 15) << 4) | ((lz & 15) << 8);
-    for (let x = 0; x < W;) {
-      const lx = x + this.x0;
-      const br = this.bricks[(lx >> 4) + rowB];
-      const run = Math.min(16 - (lx & 15), W - x);
-      if (br) {
-        let c = cell | (lx & 15);
-        for (let k = 0; k < run; k++, c++) if (br[c] !== 0) words[o + ((x + k) >> 5)] |= 1 << ((x + k) & 31);
-      }
-      x += run;
+    const ly = y + this.y0, lz = z + this.z0;
+    const rowB = this.bw * ((ly >> 4) + this.bh * (lz >> 4)), r = (ly & 15) | ((lz & 15) << 4);
+    for (let bx = this.x0 >> 4, be = (this.x0 + this.w - 1) >> 4; bx <= be; bx++) {
+      const rb = this.rbits[bx + rowB];
+      if (!rb) continue;
+      let m = rb[r];
+      if (!m) continue;
+      let off = (bx << 4) - this.x0;
+      if (off < 0) { m >>>= -off; off = 0; }
+      const wi = off >> 5, sh = off & 31;
+      words[o + wi] |= m << sh;
+      if (sh > 16) { const hi = m >>> (32 - sh); if (hi) words[o + wi + 1] |= hi; }
     }
+  }
+  // a fast unchecked colour reader for the mesher (coordinates must lie inside the volume)
+  colorAt() {
+    const B = this.bricks, bw = this.bw, bh = this.bh, X0 = this.x0, Y0 = this.y0, Z0 = this.z0;
+    return (x, y, z) => {
+      const lx = x + X0, ly = y + Y0, lz = z + Z0;
+      const br = B[(lx >> 4) + bw * ((ly >> 4) + bh * (lz >> 4))];
+      return br === null ? 0 : br[(lx & 15) | ((ly & 15) << 4) | ((lz & 15) << 8)];
+    };
   }
   count() {
     let n = 0;
     for (let z = 0; z < this.d; z++) for (let y = 0; y < this.h; y++) for (let x = 0; x < this.w; x++) if (this.get(x, y, z)) n++;
     return n;
+  }
+  // merged 2x2x2 -> one voxel (kept when >= 4 of 8 are filled, most common colour); the VB's
+  // coarse grid is brick-aligned, so every 2x2x2 group sits inside one brick
+  half() {
+    const cx0 = this.x0 >> 1, cy0 = this.y0 >> 1, cz0 = this.z0 >> 1;
+    const out = new Vox(((this.x0 + this.w - 1) >> 1) - cx0 + 1, ((this.y0 + this.h - 1) >> 1) - cy0 + 1, ((this.z0 + this.d - 1) >> 1) - cz0 + 1);
+    const cs = new Uint32Array(8), od = out.data, OW = out.w, OH = out.h;
+    const bw = this.bw, bh = this.bh;
+    for (let bi = 0; bi < this.bricks.length; bi++) {
+      const br = this.bricks[bi];
+      if (!br) continue;
+      const bx = bi % bw, by = ((bi / bw) | 0) % bh, bz = (bi / (bw * bh)) | 0;
+      const rb = this.rbits[bi];
+      for (let k = 0; k < 512; k++) {
+        const ix = k & 7, iy = (k >> 3) & 7, iz = k >> 6;
+        // how many of the 8 are filled, from the row bits
+        const r0 = (iy << 1) | (iz << 5), sh = ix << 1;
+        const pc = POP2[(rb[r0] >> sh) & 3] + POP2[(rb[r0 + 1] >> sh) & 3] + POP2[(rb[r0 + 16] >> sh) & 3] + POP2[(rb[r0 + 17] >> sh) & 3];
+        if (pc < 4) continue;
+        const base = (ix << 1) | (iy << 5) | (iz << 9);
+        let n = 0;
+        for (let q = 0; q < 8; q++) { const c = br[base + (q & 1) + ((q & 2) << 3) + ((q & 4) << 6)]; if (c) cs[n++] = c; }
+        let best = cs[0], bc = 0;
+        if (n === 8 && cs[1] === best && cs[2] === best && cs[7] === best && cs[4] === best) bc = 8;
+        for (let a = 0; a < n && bc * 2 <= n; a++) {
+          let m = 0;
+          for (let b = a; b < n; b++) if (cs[b] === cs[a]) m++;
+          if (m > bc) { bc = m; best = cs[a]; }
+        }
+        const ox = (bx << 3) + ix - cx0, oy = (by << 3) + iy - cy0, oz = (bz << 3) + iz - cz0;
+        if (ox < 0 || oy < 0 || oz < 0 || ox >= OW || oy >= OH || oz >= out.d) continue;
+        od[ox + OW * (oy + OH * oz)] = best;
+      }
+    }
+    return { vox: out, c0: [cx0, cy0, cz0] };
   }
   dense() {
     const v = new Vox(this.w, this.h, this.d);
@@ -3075,7 +3126,13 @@ export function buildVoxelBuilding(spec = {}) {
 // muntins melt away, which is fine past a few dozen metres and roughly halves the triangles.
 export function lowDetail(r) {
   const v = r.vox, [ox, oy, oz] = r.origin;
-  const at = v.data ? (x, y, z) => (x < 0 || y < 0 || z < 0 || x >= v.w || y >= v.h || z >= v.d ? 0 : v.data[x + v.w * (y + v.h * z)]) : (x, y, z) => v.get(x, y, z);
+  if (v.half) {
+    // origin = -(VB-local fine x0 + fx0); fx0 is even, so the coarse origin is a whole number
+    const h = v.half();
+    const fx0 = -ox - v.x0, fy0 = -oy - v.y0, fz0 = -oz - v.z0;
+    return { ...r, vox: h.vox, size: r.size * 2, origin: [-(h.c0[0] + fx0 / 2), -(h.c0[1] + fy0 / 2), -(h.c0[2] + fz0 / 2)] };
+  }
+  const at = (x, y, z) => (x < 0 || y < 0 || z < 0 || x >= v.w || y >= v.h || z >= v.d ? 0 : v.data[x + v.w * (y + v.h * z)]);
   const c0 = [Math.floor(-ox / 2), Math.floor(-oy / 2), Math.floor(-oz / 2)];
   const c1 = [Math.floor((v.w - 1 - ox) / 2), Math.floor((v.h - 1 - oy) / 2), Math.floor((v.d - 1 - oz) / 2)];
   const out = new Vox(c1[0] - c0[0] + 1, c1[1] - c0[1] + 1, c1[2] - c0[2] + 1);

@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import BuildWorker from './buildWorker.js?worker&inline';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import * as L from './layout.js';
-import { buildVoxelBuilding } from '../voxel/models/buildings.js';
+import { buildVoxelBuilding, lowDetail } from '../voxel/models/buildings.js';
 import * as PR from '../voxel/models/props.js';
 import { meshVox } from '../voxel/mesh.js';
 import { voxMesh, sharedVoxelMaterial, createFlatMaterial } from '../render/voxelMaterial.js';
@@ -30,6 +30,7 @@ export class VoxelWorld {
     this.meshes = [];
     this.spots = []; // interactable things: { x, z, r, text, fn }
     this.lights = [];
+    this.lodDist = 48;
   }
 
   // cached builder result + geometry
@@ -101,16 +102,11 @@ export class VoxelWorld {
       const yaw = b.facing || 0;
       let y = at.y0;
       if (b.kind === 'lighthouse') y += 0.3;
-      let geo, r;
+      let geoHi, geoLo, r;
       const job = pre ? await pre.get(b.id) : null;
       if (job && !job.error) {
-        geo = new THREE.BufferGeometry();
-        geo.setAttribute('position', new THREE.BufferAttribute(job.pos, 3));
-        geo.setAttribute('normal', new THREE.BufferAttribute(job.nor, 3));
-        geo.setAttribute('color4', new THREE.BufferAttribute(job.col, 4));
-        geo.setIndex(new THREE.BufferAttribute(job.idx, 1));
-        geo.computeBoundingSphere();
-        geo.computeBoundingBox();
+        geoHi = geometryOf(job.hi);
+        geoLo = geometryOf(job.lo);
         r = { meta: job.meta };
       } else {
         if (job?.error) console.warn('worker building failed', b.id, job.error);
@@ -120,9 +116,14 @@ export class VoxelWorld {
           console.warn('voxel building failed', b.id, e);
           continue;
         }
-        geo = meshVox(r.vox, { size: r.size, origin: r.origin, jitter: 0 });
+        geoHi = meshVox(r.vox, { size: r.size, origin: r.origin, jitter: 0 });
+        const lr = lowDetail(r);
+        geoLo = meshVox(lr.vox, { size: lr.size, origin: lr.origin, jitter: 0 });
       }
-      const mesh = voxMesh(geo, mat);
+      // near: the 1/16 m model; past a few dozen metres the 1/8 m one (see setBuildingDetail)
+      const mesh = new THREE.LOD();
+      mesh.addLevel(voxMesh(geoHi, mat), 0);
+      mesh.addLevel(voxMesh(geoLo, mat), this.lodDist, 0.1);
       mesh.position.set(b.x, y, b.z);
       mesh.rotation.y = yaw;
       mesh.name = `building:${b.id}`;
@@ -130,6 +131,7 @@ export class VoxelWorld {
       mesh.matrixAutoUpdate = false;
       this.scene.add(mesh);
       this.meshes.push(mesh);
+      (this.lods ||= []).push(mesh);
       const M = mesh.matrix;
       const meta = r.meta || {};
       for (const s of meta.signs || []) this.sign(s, M, b);
@@ -157,6 +159,13 @@ export class VoxelWorld {
         }
       }
     }
+  }
+
+  // Building detail by graphics quality: how far out the full-resolution models are used
+  // ('low' always shows the 1/8 m ones).
+  setBuildingDetail(q = 'high') {
+    this.lodDist = q === 'low' ? 0 : q === 'medium' ? 30 : 48;
+    for (const l of this.lods || []) l.levels[1].distance = this.lodDist;
   }
 
   // hand-lettered signs: queued here, painted into a shared atlas and merged into a few meshes by
@@ -443,6 +452,17 @@ export function startBuildingJobs(terrain) {
     w.postMessage({ jobs: lists[k] });
   });
   return jobs;
+}
+
+function geometryOf(a) {
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(a.pos, 3));
+  geo.setAttribute('normal', new THREE.BufferAttribute(a.nor, 3));
+  geo.setAttribute('color4', new THREE.BufferAttribute(a.col, 4));
+  geo.setIndex(new THREE.BufferAttribute(a.idx, 1));
+  geo.computeBoundingSphere();
+  geo.computeBoundingBox();
+  return geo;
 }
 
 // Nana's old TV on the porch: Maple Cove TV with the weather and town news

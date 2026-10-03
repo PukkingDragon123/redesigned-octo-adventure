@@ -52,9 +52,14 @@ export function meshVox(vox, opts = {}) {
   } else {
     for (let z = 0; z < D; z++) for (let y = 0; y < H; y++) vox.occRow(y, z, occ, (z * H + y) * WW);
   }
-  const at = data ? (x, y, z) => data[x + W * (y + H * z)] : (x, y, z) => vox.get(x, y, z);
+  // colours come from the volume; occupancy (for AO) from the bits
+  const at = data ? (x, y, z) => data[x + W * (y + H * z)] : vox.colorAt ? vox.colorAt() : (x, y, z) => vox.get(x, y, z);
+  const bit = (x, y, z) => (occ[(z * H + y) * WW + (x >> 5)] >>> (x & 31)) & 1;
 
-  // ---- collect exposed faces per direction (voxel ids, in scan order: z, then y, then x)
+  // ---- collect exposed faces per direction (packed x | y << BX | z << BXY, in scan order: z, y, x)
+  const BX = 32 - Math.clz32(W), BY = 32 - Math.clz32(H), BXY = BX + BY;
+  if (BXY + (32 - Math.clz32(D)) > 32) throw new Error(`meshVox: volume too big ${W}x${H}x${D}`);
+  const MX = (1 << BX) - 1, MY = (1 << BY) - 1;
   // dir index = axis * 2 + (s > 0 ? 1 : 0)
   const lists = [], counts = [0, 0, 0, 0, 0, 0];
   for (let d = 0; d < 6; d++) lists.push(new Uint32Array(1024));
@@ -70,7 +75,7 @@ export function meshVox(vox, opts = {}) {
     while (bits !== 0) {
       const t = bits & -bits;
       bits ^= t;
-      push(d, x0 + 31 - Math.clz32(t));
+      push(d, x0 | (31 - Math.clz32(t)));
     }
   }
   for (let z = 0; z < D; z++) {
@@ -78,12 +83,12 @@ export function meshVox(vox, opts = {}) {
       const r = z * H + y, ob = r * WW;
       const obUp = y + 1 < H ? ob + WW : -1, obDn = y > 0 ? ob - WW : -1;
       const obFw = z + 1 < D ? ob + H * WW : -1, obBk = z > 0 ? ob - H * WW : -1;
-      const rowId = W * r;
+      const rowId = (y << BX) | (z << BXY);
       for (let k = 0; k < WW; k++) {
         const o = occ[ob + k];
         if (o === 0) continue;
         const nxt = k + 1 < WW ? occ[ob + k + 1] : zero, prv = k > 0 ? occ[ob + k - 1] : zero;
-        const x0 = rowId + (k << 5);
+        const x0 = rowId | (k << 5);
         scan(0, o & ~((o << 1) | (prv >>> 31)), x0); // -x
         scan(1, o & ~((o >>> 1) | (nxt << 31)), x0); // +x
         scan(2, o & ~(obDn >= 0 ? occ[obDn + k] : 0), x0); // -y
@@ -141,7 +146,7 @@ export function meshVox(vox, opts = {}) {
       let nm = 0;
       for (let e = q; e < qe; e++) {
         const id = L[e];
-        const x = id % W, t = (id - x) / W, y = t % H, z = (t - y) / H;
+        const x = id & MX, y = (id >>> BX) & MY, z = id >>> BXY;
         const i = u === 0 ? x : y, j = v === 2 ? z : y;
         const m = i + j * du;
         maskC[m] = at(x, y, z);
@@ -153,22 +158,22 @@ export function meshVox(vox, opts = {}) {
           const iL = i > 0, iR = i < du - 1, jD = j > 0, jU = j < dv - 1;
           let nL = 0, nR = 0, nD = 0, nU = 0, nLD = 0, nRD = 0, nLU = 0, nRU = 0;
           if (u === 0) { // u = x
-            if (iL) nL = at(fx - 1, fy, fz) !== 0 ? 1 : 0;
-            if (iR) nR = at(fx + 1, fy, fz) !== 0 ? 1 : 0;
+            if (iL) nL = bit(fx - 1, fy, fz);
+            if (iR) nR = bit(fx + 1, fy, fz);
           } else { // u = y
-            if (iL) nL = at(fx, fy - 1, fz) !== 0 ? 1 : 0;
-            if (iR) nR = at(fx, fy + 1, fz) !== 0 ? 1 : 0;
+            if (iL) nL = bit(fx, fy - 1, fz);
+            if (iR) nR = bit(fx, fy + 1, fz);
           }
           const ux = u === 0 ? 1 : 0, uy = 1 - ux, vy = v === 1 ? 1 : 0, vz = 1 - vy;
           if (jD) {
-            nD = at(fx, fy - vy, fz - vz) !== 0 ? 1 : 0;
-            if (iL) nLD = at(fx - ux, fy - uy - vy, fz - vz) !== 0 ? 1 : 0;
-            if (iR) nRD = at(fx + ux, fy + uy - vy, fz - vz) !== 0 ? 1 : 0;
+            nD = bit(fx, fy - vy, fz - vz);
+            if (iL) nLD = bit(fx - ux, fy - uy - vy, fz - vz);
+            if (iR) nRD = bit(fx + ux, fy + uy - vy, fz - vz);
           }
           if (jU) {
-            nU = at(fx, fy + vy, fz + vz) !== 0 ? 1 : 0;
-            if (iL) nLU = at(fx - ux, fy - uy + vy, fz + vz) !== 0 ? 1 : 0;
-            if (iR) nRU = at(fx + ux, fy + uy + vy, fz + vz) !== 0 ? 1 : 0;
+            nU = bit(fx, fy + vy, fz + vz);
+            if (iL) nLU = bit(fx - ux, fy - uy + vy, fz + vz);
+            if (iR) nRU = bit(fx + ux, fy + uy + vy, fz + vz);
           }
           // corners: 0 = (-u,-v), 1 = (+u,-v), 2 = (+u,+v), 3 = (-u,+v)
           const c0 = nL && nD ? 0 : 3 - (nL + nD + nLD), c1 = nR && nD ? 0 : 3 - (nR + nD + nRD);
@@ -202,9 +207,9 @@ export function meshVox(vox, opts = {}) {
   }
 
   function sliceOf(id, a) {
-    if (a === 0) return id % W;
-    if (a === 1) return ((id / W) | 0) % H;
-    return (id / (W * H)) | 0;
+    if (a === 0) return id & MX;
+    if (a === 1) return (id >>> BX) & MY;
+    return id >>> BXY;
   }
 
   function emit(a, u, v, wind, s, sl, i, j, w, h, c, ao, jit) {
