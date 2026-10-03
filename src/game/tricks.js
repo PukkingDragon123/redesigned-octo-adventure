@@ -165,7 +165,7 @@ export class Tricks {
     g.skills?.event({ type: 'combo', count: this.combo });
   }
 
-  // flying through a flaming hoop
+  // flying through a harvest hoop
   hoop(h) {
     const g = this.game;
     this.combo++;
