@@ -197,8 +197,8 @@ export const BUILDINGS = [
   S(181, 9, 8, { id: 'agnes', kind: 'house', floors: 2, color: 'blue', roof: 'dark', owner: 'agnes' }),
   S(195, 8, 7, { id: 'birdie', kind: 'house', floors: 1, color: 'red', roof: 'dark', owner: 'birdie' }),
   S(208.5, 9, 8, { id: 'house5', kind: 'house', floors: 1, color: 'white', roof: 'green', porch: true }),
-  S(230, 9, 8, { id: 'house6', kind: 'house', floors: 2, color: 'yellow', roof: 'dark' }),
-  S(243.5, 8, 7, { id: 'house7', kind: 'house', floors: 1, color: 'green', roof: 'red', porch: true }),
+  S(230, 9, 8, { id: 'house6', kind: 'shop', floors: 2, color: 'yellow', roof: 'dark', sign: 'QUINCAILLERIE HARDWARE', shop: 'hardware' }),
+  S(243.5, 9, 7, { id: 'house7', kind: 'shop', floors: 2, color: 'white', roof: 'red', sign: 'BOULANGERIE BAKERY', shop: 'bakery' }),
   // ---- the green, the chapel & the harbour
   { id: 'chapel', kind: 'chapel', x: 186, z: -2, w: 8, d: 13, floors: 1, color: 'white', roof: 'dark', facing: 0 },
   { id: 'gazebo', kind: 'gazebo', x: 186, z: 24, w: 7, d: 7, floors: 1, color: 'white', roof: 'green', facing: 0 },

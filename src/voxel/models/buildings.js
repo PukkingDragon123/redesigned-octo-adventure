@@ -2120,6 +2120,8 @@ const SHOP_CFG = {
   store: { parapet: 'stepped', fascia: 0x7a2a22, fg: '#f6e6c8', door: 0, accent: 0x2e5a40, recess: 24, moose: true, goods: 'jars' },
   poutine: { small: true, fascia: 0xc8382e, fg: '#fff4dc', accent: 0xc8382e, awning: [0xc8382e, 0xf2e8d4], hatch: true, topper: 'fries' },
   fishchips: { small: true, fascia: 0x1e4a6a, fg: '#fff4dc', accent: 0x1e4a6a, awning: [0x2a6a8a, 0xf2e8d4], hatch: true, topper: 'fish' },
+  hardware: { parapet: 'flat', fascia: 0x2e2e34, fg: '#f2c23a', door: 1, accent: 0x3a5a8a, awning: [0x3a5a8a, 0xf2e8d4], blade: 'hammer', goods: 'tools' },
+  bakery: { roof: 'gable', pitch: 0.9, fascia: 0x7a3e22, fg: '#fff0d8', door: -1, accent: 0x7a3e22, awning: [0xe8a03a, 0xf6e8d6], blade: 'bread', boxes: true, goods: 'bread' },
 };
 const SF = { kick: 3, win0: 4, win1: 15, tr0: 17, tr1: 18, fas0: 20, fas1: 24, cor: 25, top: 26 }; // storefront rows
 
@@ -2140,6 +2142,14 @@ function goodsFn(kind, u0, ww, y0, y1) {
     } else if (kind === 'parcels') {
       if (y === y0 + 1) return P.woodLight;
       if (y >= y0 + 2 && y <= y0 + 4 && k % 6 < 4) return (y === y0 + 3 || k % 6 === 1) ? 0xc8302a : 0xc49a64;
+    } else if (kind === 'tools') {
+      if (shelf(y)) return P.woodLight;
+      if (y >= y0 + 2 && y <= y0 + 4 && k % 5 === 1) return y === y0 + 4 ? P.steelD : P.woodLight; // hammers
+      if (y === y0 + 7 && k % 4 < 3) return [P.red, 0xf2c23a, P.steel][Math.floor(k / 4) % 3]; // paint cans
+    } else if (kind === 'bread') {
+      if (shelf(y)) return P.woodLight;
+      if ((y === y0 + 2 || y === y0 + 7) && k % 4 !== 3) return k % 8 < 4 ? 0xc8883e : 0xe0a858;
+      if (y === y0 + 3 && k % 4 === 1) return 0xa86a2e;
     } else if (kind === 'jars') {
       if (shelf(y)) return P.woodLight;
       if ((y === y0 + 2 || y === y0 + 3 || y === y0 + 7) && k % 2 === 0) return y === y0 + 3 ? 0xf2e8d4 : [0xc87a1e, 0xa83228, 0xd8a838][Math.floor(vhash(u, y, 5) * 3)];
@@ -2152,6 +2162,8 @@ const BLADE = {
   cup: ['.......', '..w.w..', '...w...', 'ccccc..', 'cCCCcc.', 'cCCCc.c', 'cCCCcc.', '.ccc...'],
   leaf: ['...r...', '.r.r.r.', '.rrrrr.', 'rrrrrrr', '.rrrrr.', '..rrr..', '...b...', '...b...'],
   mail: ['.......', 'eeeeeee', 'eEeeeEe', 'eeEeEee', 'eeeEeee', 'eeeeeee', '...s...', '.......'],
+  hammer: ['.......', '.EEEE..', '.EEEEE.', '...b...', '...b...', '...b...', '...b...', '.......'],
+  bread: ['.......', '..ccc..', '.cCcCc.', 'cCcCcCc', 'ccccccc', '.......', '.......', '.......'],
 };
 function bladeSign(ctx, F, u, y, icon, o = {}) {
   const pat = BLADE[icon];
@@ -2169,7 +2181,7 @@ function bladeSign(ctx, F, u, y, icon, o = {}) {
     let c = edgeV ? edge : bg;
     if (!edgeV) {
       const ch = pat[7 - j]?.[i - 1] ?? '.';
-      if (ch === 'w') c = 0xe8e4dc; else if (ch === 'c') c = 0xf2ece0; else if (ch === 'C') c = 0x6a3a22;
+      if (ch === 'w') c = 0xe8e4dc; else if (ch === 'c') c = icon === 'bread' ? 0xd89a4a : 0xf2ece0; else if (ch === 'C') c = icon === 'bread' ? 0xf2d8a8 : 0x6a3a22;
       else if (ch === 'r') c = P.red; else if (ch === 'b') c = P.woodDark; else if (ch === 'e') c = 0xf2ece0;
       else if (ch === 'E') c = 0x9a8a78; else if (ch === 's') c = P.red;
     }
