@@ -408,11 +408,7 @@ export class NpcBrain {
       }
       case 'chat': {
         const M = MEETS[act.meet];
-        const ppl = V.meetMembers(act.meet);
-        const i = Math.max(0, ppl.indexOf(this.key));
-        const ang = (i / Math.max(2, ppl.length)) * Math.PI * 2 + 0.6;
-        const spot = { x: M.x + Math.sin(ang) * M.r, z: M.z + Math.cos(ang) * M.r };
-        await walkTo(spot);
+        await walkTo(this.meetSpot(act.meet));
         a.faceTowards(M.x, M.z);
         settle(null, 'idle');
         while (stillOn()) {
@@ -433,6 +429,15 @@ export class NpcBrain {
       default:
         await w(2);
     }
+  }
+
+  // where to stand in a little circle of friends
+  meetSpot(meet) {
+    const M = MEETS[meet];
+    const ppl = this.V.meetMembers(meet);
+    const i = Math.max(0, ppl.indexOf(this.key));
+    const ang = (i / Math.max(2, ppl.length)) * Math.PI * 2 + 0.6;
+    return { x: M.x + Math.sin(ang) * M.r, z: M.z + Math.cos(ang) * M.r };
   }
 
   // Pip & Pop: hockey on the rink, skating little circles, shouting
@@ -1046,7 +1051,8 @@ export class NpcBrain {
     const act = this.V.activityFor(this);
     const a = this.a;
     let pt = null;
-    if (act.k === 'home' || act.k === 'chat' || act.k === 'errand') pt = act.k === 'chat' ? MEETS[act.meet] : this.home;
+    if (act.k === 'home' || act.k === 'errand') pt = this.home;
+    else if (act.k === 'chat') pt = this.meetSpot(act.meet);
     else if (act.k === 'at') pt = act;
     else if (act.k === 'inside' && this.door) { this.inside = true; this.setShown(false); a.pos.set(this.door.x, a.pos.y, this.door.z); return; }
     else if (act.k === 'patrol' || act.k === 'jog') pt = act.pts[Math.floor(Math.random() * act.pts.length)];
