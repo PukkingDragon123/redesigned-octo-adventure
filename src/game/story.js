@@ -245,7 +245,7 @@ export class Story {
       await S.cam(L(3.8, 1.5, 0.3), L(2.15, 0.75, -1.4), 0, 48);
       S.sfx('brrr', { volume: 0.5 });
       g.effects.frost(H.pos.x, H.pos.y + 0.6, H.pos.z, 6);
-      const walk = N.walkTo([L(-1.2, 0, -0.7), L(1.0, 0, 0.15), L(2.75, 0, -0.3)], 1.1, 'carry');
+      const walk = N.walkTo([L(-1.6, 0, -2.9), L(0.4, 0, -3.15), L(2.6, 0, -3.05), L(2.75, 0, -2.6)], 1.15, 'carry');
       await S.say('grandma', 'There we are. Now, let me get you properly warm.', { actor: N, expr: 'happy' });
       await walk;
       N.faceTowards(H.pos.x, H.pos.z);
@@ -270,12 +270,12 @@ export class Story {
       lq.userData.breathe = true;
       H.play('sit', 'happy');
       N.play('idle');
-      await S.faceShot(H, { dist: 1.75, side: 0.45, dur: 0.7, fov: 40 });
+      await S.faceShot(H, { dist: 2.5, side: -0.6, up: 0.3, dur: 0.7, fov: 42 });
       await S.say('grandma', 'Harold\'s quilt. Forty-one patches, one for every winter we had together. Sit close, dear. Get that fire into you.', { actor: N, expr: 'happy' });
       H.play('sitShiver', 'scared');
       S.sfx('jaw_chatter', { volume: 0.6 });
       await S.say('hankBuried', "Th-thank you, ma'am. My t-teeth won't stop chattering.", { actor: H, expr: 'scared' });
-      await S.cam(L(1.4, 1.5, -2.05), L(2.85, 1.3, -0.25), 0.8, 42);
+      await S.cam(L(0.6, 2.0, -1.9), L(2.75, 1.25, -2.6), 0.8, 42);
       N.play('talk');
       await S.say('grandma', "Marguerite, dear. Everyone calls me Nana. Here, these were my Harold's. His good sweater, and his lucky toque.", { actor: N, expr: 'neutral' });
       N.play('hug');
@@ -292,19 +292,19 @@ export class Story {
       g.setOutfit('hank');
       N.play('idle');
       await S.wait(0.5);
-      await S.faceShot(H, { dist: 1.7, side: 0.45, dur: 0.6, fov: 40 });
+      await S.faceShot(H, { dist: 2.5, side: -0.6, up: 0.3, dur: 0.6, fov: 42 });
       await S.say('hank', "Oh... oh, that's *cozy.*", { actor: H, expr: 'happy' });
-      await S.cam(L(1.4, 1.5, -2.05), L(2.85, 1.3, -0.25), 0.7, 42);
+      await S.cam(L(0.6, 2.0, -1.9), L(2.75, 1.25, -2.6), 0.7, 42);
       await S.say('grandma', 'Harold was a hunter. A terrible one. Fifty years and he never hit a single thing. Too soft-hearted.', { actor: N, expr: 'laugh' });
       // the famous cocoa
       N.play('offer');
-      await S.cam(L(4.0, 1.6, -2.85), L(2.4, 0.95, -0.85), 1.0, 44);
+      await S.cam(L(4.05, 1.55, -0.55), L(2.35, 1.0, -1.95), 1.0, 44);
       await S.say('grandma', 'And this... is my famous hot cocoa. Fifty years, and not one complaint.', { actor: N, expr: 'smug' });
       N.play('idle');
       // the first sip... straight through the ribs
       H.play('sitSip');
       S.sfx('slurp');
-      await S.faceShot(H, { dist: 1.6, side: 0.5, dur: 0.7, fov: 38 });
+      await S.faceShot(H, { dist: 2.3, side: -0.55, up: 0.25, dur: 0.7, fov: 40 });
       await S.wait(0.5);
       S.sfx('pour_cocoa', { volume: 0.6 });
       for (let k = 0; k < 18; k++) g.effects.ps.spawn({ x: H.pos.x + (Math.random() - 0.5) * 0.12, y: H.pos.y + 0.8, z: H.pos.z + (Math.random() - 0.5) * 0.12, vy: -0.4, life: 0.9, size: 0.06, sprite: P.drop, color: [0.45, 0.24, 0.12], gravity: 9, drag: 0.2, ground: true, rest: 0.6 });
@@ -315,10 +315,10 @@ export class Story {
       await S.say('hank', "...I can't taste a thing. But it's *warm.* I can feel it all the way down.", { actor: H, expr: 'happy' });
       await S.say('hank', '...And all the way out, apparently.', { actor: H, expr: 'sheepish' });
       N.react('laugh');
-      await S.cam(L(4.0, 1.6, -2.85), L(2.4, 0.95, -0.85), 0.8, 44);
+      await S.cam(L(4.05, 1.55, -0.55), L(2.35, 1.0, -1.95), 0.8, 44);
       await S.say('grandma', 'Now then. Tell me: can you feel the cold, dear?', { actor: N, expr: 'neutral' });
       await S.say('hank', 'Not anymore. Not... really anything, actually.', { actor: H, expr: 'neutral' });
-      await S.cam(L(1.4, 1.5, -2.05), L(2.85, 1.3, -0.25), 0.8, 40);
+      await S.cam(L(0.6, 2.0, -1.9), L(2.75, 1.25, -2.6), 0.8, 40);
       await S.say('grandma', 'Perfect. Then I have a proposition for you.', { actor: N, expr: 'smug' });
       await S.say('grandma', "My cocoa keeps half of Maple Cove going through the autumn, and my knees aren't what they used to be.", { actor: N, expr: 'neutral' });
       const c = await S.say('grandma', "How would you like a job? Delivering cocoa. Harold's old bicycle is just sitting in the garage.", { actor: N, expr: 'happy', choices: ["I'd love to!", 'Do I get paid?', 'Will people scream at me?'] });
@@ -327,7 +327,7 @@ export class Story {
       else await S.say('grandma', 'Wonderful!', { actor: N, expr: 'laugh' });
       await S.say('grandma', 'We start at sunrise. Sleep well, dear. ...Do you sleep?', { actor: N, expr: 'surprised' });
       H.react('headpop');
-      await S.faceShot(H, { dist: 1.7, side: 0.45, dur: 0.6, fov: 40 });
+      await S.faceShot(H, { dist: 2.5, side: -0.6, up: 0.3, dur: 0.6, fov: 42 });
       await S.say('hank', "Oh, I *sleep.* That's how I got into this mess.", { actor: H, expr: 'sheepish' });
       // she tucks the quilt in and turns the lamp down; he dozes off by the fire
       N.walkTo([L(2.55, 0, -0.75)], 0.8, 'walk');
@@ -364,13 +364,13 @@ export class Story {
       const b = BREAKFAST[day];
       // breakfast on the table by the front windows, steaming hot (Hank's plate and Nana's cocoa)
       const top = R.floorY + 0.8;
-      const pp = L(-2.6, 0, 1.62), mp = L(-3.45, 0, 2.05);
+      const pp = L(-2.6, 0, 1.62), mp = L(-3.55, 0, 1.95);
       const plate = b ? voxelFood(g, FOOD[FOOD_FOR[b.food] || 'pancakes'], pp.x, top, pp.z, R.wyaw(Math.PI / 2)) : voxelFood(g, FOOD.soupBowl, pp.x, top, pp.z);
       const mug = voxelFood(g, FOOD.cocoaMaple, mp.x, top, mp.z, R.wyaw(-1.2));
       this.steamers = [...plate.steam, ...mug.steam];
       S.temp.push({ remove: () => { g.scene.remove(plate.mesh); g.scene.remove(mug.mesh); this.steamers = []; } });
       g.villagers.setVisible('grandma', false);
-      const hc = L(-2.6, 0, 1.22), nc = L(-3.45, 0, 2.75);
+      const hc = L(-2.6, 0, 1.22), nc = L(-4.55, 0, 1.9);
       const H = S.actor('hank', hc.x, hc.z, R.wyaw(0), 'sit');
       const N = S.actor('grandma', nc.x, nc.z, R.wyaw(Math.PI), 'idle');
       H.faceTowards(L(-2.6, 0, 3).x, L(-2.6, 0, 3).z);
@@ -385,7 +385,7 @@ export class Story {
         g.scene.add(cat.mesh);
         S.temp.push({ remove: () => g.scene.remove(cat.mesh) });
       }
-      const wide = [L(-0.4, 2.0, -0.2), L(-3.0, 0.85, 2.0)];
+      const wide = [L(-1.1, 1.95, 3.55), L(-3.2, 0.95, 1.7)];
       await S.cam(wide[0], wide[1], 0, 46);
       await S.fade(0, 1.2);
       if (b) {

@@ -25,7 +25,7 @@ const _v = new THREE.Vector3();
       sitShiver: (c, t, T) => {
         POSES.sit(c, t, T);
         arm(T, 'L', 0.9, 0.5, 1.9, 0.6); arm(T, 'R', 0.9, 0.5, 1.9, 0.6);
-        T.lean += 0.12 + Math.sin(t * 40) * 0.015; T.headX += 0.1;
+        T.lean += 0.05 + Math.sin(t * 40) * 0.015; T.headX -= 0.06;
       },
       sitWarm: (c, t, T) => { POSES.sit(c, t, T); arm(T, 'L', 1.1, 0.15, 0.4, -0.1); arm(T, 'R', 1.1, 0.15, 0.4, -0.1); T.lean += 0.08; },
     },

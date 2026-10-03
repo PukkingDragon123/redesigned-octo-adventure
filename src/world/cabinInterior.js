@@ -77,8 +77,10 @@ export const SPOTS = {
 // camera box (room-local): clear of walls, the chimney breast and the beams
 export const CAM_BOX = { x0: -4.85, x1: 4.1, z0: -3.85, z1: 3.85, y0: 1.25, y1: 2.85 };
 
-// faces the camera can never see (outer sides of walls, top of the ceiling) are dropped
-function dropOutward(geo) {
+// faces the camera can never see are dropped: the outer sides of the walls and the top of the
+// ceiling, and anything lying flat on the floor or against a wall (rug and furniture undersides,
+// the backs of shelves and the fireplace)
+function dropHidden(geo) {
   const P3 = geo.attributes.position.array, N = geo.attributes.normal.array, I = geo.index.array;
   const keep = [];
   for (let q = 0; q < I.length; q += 6) {
@@ -86,7 +88,8 @@ function dropOutward(geo) {
     let cx = 0, cy = 0, cz = 0;
     for (let k = 0; k < 4; k++) { cx += P3[(a + k) * 3] / 4; cy += P3[(a + k) * 3 + 1] / 4; cz += P3[(a + k) * 3 + 2] / 4; }
     const nx = N[a * 3], ny = N[a * 3 + 1], nz = N[a * 3 + 2];
-    const out = (nx < 0 && cx < R.x0 - 0.05) || (nx > 0 && cx > R.x1 + 0.05) || (nz < 0 && cz < R.z0 - 0.05) || (nz > 0 && cz > R.z1 + 0.05) || (ny > 0 && cy > R.ceilAt(cz) + 0.05) || (ny < 0 && cy < -0.05);
+    const e = 0.03;
+    const out = (nx < 0 && cx < R.x0 + e) || (nx > 0 && cx > R.x1 - e) || (nz < 0 && cz < R.z0 + e) || (nz > 0 && cz > R.z1 - e) || (ny > 0 && cy > R.ceilAt(cz) + 0.05) || (ny < 0 && cy < e);
     if (!out) for (let k = 0; k < 6; k++) keep.push(I[q + k]);
   }
   geo.setIndex(keep);
@@ -149,7 +152,7 @@ export class CabinInterior {
       return g;
     };
     const shell = IM.cabinShell();
-    geos.push(dropOutward(meshVox(shell.vox, { size: shell.size, origin: shell.origin, jitter: 0 })));
+    geos.push(meshVox(shell.vox, { size: shell.size, origin: shell.origin, jitter: 0 }));
     // windows: casing, mullions, curtains (sill plants on two of them)
     let wi = 0;
     for (const w of R.windows) {
@@ -168,7 +171,7 @@ export class CabinInterior {
       else if (it.r) this.colliders.push({ type: 'circle', x: it.x, z: it.z, r: it.r });
     }
     this.meta = meta;
-    const merged = mergeGeometries(geos, false);
+    const merged = dropHidden(mergeGeometries(geos, false));
     for (const g of geos) g.dispose();
     merged.computeBoundingSphere();
     const mesh = voxMesh(merged, this.mat, { cast: false, receive: true });
