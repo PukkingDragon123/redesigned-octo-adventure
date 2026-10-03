@@ -155,7 +155,7 @@ export const PEOPLE = {
     ],
   },
   mo: {
-    house: 'store', fear: 'duck', run: 3.0, scream: 0.95, umbrella: 'mo',
+    house: 'store', fear: 'duck', run: 3.0, scream: 0.95, // stays dry under the store's porch
     scare: ['Yikes! We are CLOSED!', 'Take what you want! Not the till!', 'Moose and GOOSE! A GHOST!'],
     peek: ['Is it still shopping?', 'We have... a skeleton discount? Please leave?'],
     wary: ['Welcome to... Moose & Goose? Please don\'t touch the produce.', 'Cash only. No bones.', 'H-hello, valued customer.'],

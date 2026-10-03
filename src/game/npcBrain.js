@@ -194,6 +194,10 @@ export class NpcBrain {
   umbrellaOn() {
     return this.V.raining && !!this.cfg.umbrella;
   }
+  // out comes the umbrella (unless they're fishing, chopping or playing hockey in it)
+  rainPose(pose) {
+    return this.umbrellaOn() && !this.cfg.kid && !['fish', 'chop', 'hockey', 'lantern'].includes(pose) ? 'umbrella' : pose;
+  }
   // the umbrella in their own colour (the pose's default one is black)
   fixUmbrella() {
     const a = this.a;
@@ -219,11 +223,17 @@ export class NpcBrain {
     this.tickWaits(dt);
     for (const k in this.cool) this.cool[k] -= dt;
     const d = (this.d = X.dist(a));
-    this.closing += (((this.lastD - d) / Math.max(dt, 1e-3)) - this.closing) * Math.min(1, dt * 6);
+    const cl = Math.max(-20, Math.min(20, (this.lastD - d) / Math.max(dt, 1e-3)));
+    this.closing += (cl - this.closing) * Math.min(1, dt * 6);
     this.lastD = d;
     if (this.path) this.walkStep(dt, X);
     if (this.leash) this.followLeash(dt, X);
     else if (X.live && this.mode !== 'engaged' && this.mode !== 'script') this.perceive(dt, X);
+    // the hour moved on (or it started raining, or Hank picked up their order): drop what they're doing
+    if (this.mode === 'routine' && this.busy && this._act && (this._chk = (this._chk || 0) - dt) < 0) {
+      this._chk = 1;
+      if (this.V.blockOf(this) !== this._act.block) this.cancel();
+    }
     if (!this.busy && !this.leash) this.next(X);
     if (this.mode === 'routine' && !this.path) this.fixUmbrella();
     // heads turn as Hank goes by
@@ -326,7 +336,7 @@ export class NpcBrain {
         return;
       }
       case 'home': {
-        const pose = act.pose || V.idlePose(this);
+        const pose = this.rainPose(act.pose || V.idlePose(this));
         await walkTo(this.home);
         settle(this.home.yaw, pose);
         if (this.cfg.kid) return this.kidPlay(w, stillOn);
@@ -335,7 +345,7 @@ export class NpcBrain {
       }
       case 'at': {
         await walkTo(act);
-        const pose = this.umbrellaOn() && ['sweep', 'water', 'garden', 'paper'].includes(act.pose) ? 'umbrella' : act.pose;
+        const pose = this.rainPose(act.pose);
         settle(act.yaw, pose);
         await linger(pose, act.yaw);
         return;
