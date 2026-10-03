@@ -409,14 +409,14 @@ export class Interior {
     const g = this.g, room = this.room;
     if (this.sitting) {
       // a three-quarter shot across the rug: Hank, the quilt and the fire
-      const pos = room.wp(3.7, 1.55, -1.31 + 1.45), look = room.wp(2.4, 0.85, -1.31 - 0.25);
+      const pos = room.wp(3.3, 1.9, 1.35), look = room.wp(2.1, 0.85, -1.4);
       if (snap) { this.camPos.copy(pos); this.camLook.copy(look); }
       else {
         const k = 1 - Math.exp(-dt * 3);
         this.camPos.lerp(pos, k);
         this.camLook.lerp(look, k);
       }
-      g.chase.cut(this.camPos, this.camLook, 50);
+      g.chase.cut(this.camPos, this.camLook, 52);
       return;
     }
     const W = g.walker;
