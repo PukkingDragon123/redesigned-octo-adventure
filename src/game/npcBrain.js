@@ -1038,6 +1038,8 @@ export class NpcBrain {
   // back in range after a long time away: snap to wherever the day says they'd be
   snapToSchedule() {
     this.cancel();
+    this.a.path = null; // (a story walk home that stalled while nobody was near)
+    this.a.onArrive = null;
     this.leash = null;
     this.kids = null;
     this.mode = 'routine';

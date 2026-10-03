@@ -270,6 +270,7 @@ export class Villagers {
     const X = this.ctx;
     X.refresh(dt);
     const cam = g.camera.position;
+    const camF = g.camera.getWorldDirection(_f);
     this.litter.update(dt);
     this.pets.update(dt, X);
     if (g.state?.npc && g.state.day > (g.state.npc._day ?? g.state.day)) this.newDay();
@@ -301,13 +302,18 @@ export class Villagers {
         else if (b.mode === 'engaged' && g.mode !== 'menu') b.release();
         b.update(dt, X);
       } else this.nana(a, d, dt);
-      // far away: animate at a third of the rate
-      if (d > 55) {
+      // far away or behind the camera: animate the rig less often
+      const behind = (a.pos.x - cam.x) * camF.x + (a.pos.z - cam.z) * camF.z < -2;
+      const every = d > 90 ? 4 : d > 55 ? 3 : behind && d > 16 ? 4 : 1;
+      if (every > 1) {
         a._lodT = (a._lodT || 0) + dt;
-        if ((a._lodN = (a._lodN || 0) + 1) % 3) continue;
+        if ((a._lodN = (a._lodN || 0) + 1) % every) continue;
         a.update(Math.min(0.1, a._lodT), cam);
         a._lodT = 0;
-      } else a.update(dt, cam);
+      } else {
+        a._lodT = 0;
+        a.update(dt, cam);
+      }
     }
   }
   // Nana is always pleased to see him
@@ -435,7 +441,7 @@ export class Villagers {
   }
 }
 
-const _r = new THREE.Vector3(), _p = new THREE.Vector3();
+const _r = new THREE.Vector3(), _p = new THREE.Vector3(), _f = new THREE.Vector3();
 
 // what the villagers know about Hank this frame
 function makeCtx(g) {
