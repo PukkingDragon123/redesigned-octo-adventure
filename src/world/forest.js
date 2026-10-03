@@ -233,7 +233,8 @@ export class Forest {
           if (Math.abs(h1 - h0) > Lh * 0.9 || !ok(px, pz, 3.4, 1.8)) continue;
           const t = { species, x: px, y: (h0 + h1) / 2 - 0.08, z: pz, H: 0.8, trunk: null, bush: true, vyaw: yaw, tilt: Math.atan2(h1 - h0, Lh * 2), vscale: 1 };
           this.trees.push(t);
-          for (let k = -2; k <= 2; k++) this.colliders.insert({ type: 'circle', x: px + ux * k * 0.6, z: pz + uz * k * 0.6, r: 0.38 }, px + ux * k * 0.6, pz + uz * k * 0.6, 0.4);
+          // the logs are 2.8-3.4 m long: a chain of circles end to end
+          for (let k = -3; k <= 3; k++) this.colliders.insert({ type: 'circle', x: px + ux * k * 0.5, z: pz + uz * k * 0.5, r: 0.36 }, px + ux * k * 0.5, pz + uz * k * 0.5, 0.4);
           continue;
         }
         const r = species === 'stump' ? 0.5 : 0.3;

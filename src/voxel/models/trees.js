@@ -443,7 +443,7 @@ const SPECS = {
   ] },
   // variant 1 (the axe) is placed by hand, a couple of times in the whole forest
   stump: { h: [0.4, 0.7], kind: 'stump', variants: [{}, { axe: true }, { hollow: true }, {}, { hollow: true }] },
-  log: { h: [2.6, 3.8], kind: 'log', variants: [{}, { ferns: true }, { broken: true }, { ferns: true, broken: true }, {}] },
+  log: { h: [2.8, 3.4], kind: 'log', variants: [{}, { ferns: true }, { broken: true }, { ferns: true, broken: true }, {}] },
   sapling: { h: [1.2, 2.2], kind: 'sapling', variants: [
     { type: 'maple', leaf: 'mapleRed' }, { type: 'birch', leaf: 'birch' }, { type: 'spruce', leaf: 'spruce' }, { type: 'maple', leaf: 'sugarOrange' },
     { type: 'birch', leaf: 'birchGold' }, { type: 'spruce', leaf: 'spruceWarm' },

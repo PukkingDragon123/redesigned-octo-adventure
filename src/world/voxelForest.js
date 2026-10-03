@@ -426,6 +426,7 @@ export class VoxelForest {
     this.TINT = new Float32Array(n);
     this.YAW = new Float32Array(n);
     this.SC = new Float32Array(n);
+    this.HID = new Uint8Array(n);
     const half = this.forest.half ?? 320;
     for (let i = 0; i < n; i++) {
       const t = trees[i];
@@ -436,7 +437,7 @@ export class VoxelForest {
       t.vseed = t.vseed ?? Math.floor(h * nv) % nv;
       const M = byKey.get(`${t.species}:${t.vseed}`);
       if (!M) continue;
-      t.vkey = M.key;
+      t.vkey = t.vkeyBaked = M.key;
       const H = t.bush || !t.H ? M.meta.height * (0.85 + hash(t.z, t.x) * 0.3) : t.H;
       t.vscale = t.vscale ?? Math.max(0.6, Math.min(1.45, H / Math.max(0.3, M.meta.height)));
       t.vyaw = t.vyaw ?? hash(t.x * 1.7, t.z * 0.3) * Math.PI * 2;
@@ -605,10 +606,32 @@ export class VoxelForest {
     return this.mainCam ? cam !== this.mainCam : !cam.layers.isEnabled(1);
   }
 
+  // Hide trees (cutscene stages): either call this, or set tree.vkey = null on
+  // world.forest.trees entries and force a refill with last.set(1e9, 0, 1e9).
+  setHidden(trees, hidden = true) {
+    for (const t of trees) t.vkey = hidden ? null : t.vkeyBaked ?? t.vkey;
+    this.last.set(1e9, 0, 1e9);
+  }
+
+  syncHidden() {
+    const trees = this.forest.trees, H = this.HID;
+    for (const c of this.cells) c.hid = false;
+    this._cellOf ||= (() => {
+      const a = new Int32Array(this.n).fill(-1);
+      this.cells.forEach((c, k) => { for (const i of c.list) a[i] = k; });
+      return a;
+    })();
+    for (let i = 0; i < this.n; i++) {
+      H[i] = this.MOD[i] >= 0 && !trees[i].vkey ? 1 : 0;
+      if (H[i]) this.cells[this._cellOf[i]].hid = true;
+    }
+  }
+
   // Refill the instance lists for this camera (only when it moved or turned enough).
   update(pos, camera) {
     if (!this.pools) return;
     if (camera) this.mainCam = camera;
+    if (this.last.x === 1e9) this.syncHidden();
     const fwd = this._dir;
     if (camera) camera.getWorldDirection(fwd);
     else fwd.set(0, 0, -1);
@@ -678,7 +701,7 @@ export class VoxelForest {
     refl.length = 0;
     let ni = 0;
     const iPos = this.impPos?.array, iInfo = this.impInfo?.array;
-    const { X, Y, Z, R, MOD, LOD, MAT, TINT } = this;
+    const { X, Y, Z, R, MOD, LOD, MAT, TINT, HID } = this;
     const models = this.models;
     const tris = [0, 0, 0], inst = [0, 0, 0, 0];
     for (const c of this.cells) {
@@ -686,7 +709,7 @@ export class VoxelForest {
       const cd = Math.hypot(ddx, ddz, c.y - cy);
       const cellIn = inView(c.x, c.z, c.r);
       if (!cellIn && cd - c.r > SHADOW_R) continue;
-      if (cellIn && iPos && cd - c.r > farD && inside(c.x, c.z, c.r)) {
+      if (cellIn && iPos && !c.hid && cd - c.r > farD && inside(c.x, c.z, c.r)) {
         const src = cd + c.r < c.impMin * S ? c.impA : cd - c.r > c.impMax * S ? c.impT : null;
         if (src) {
           iPos.set(src.pos, ni * 3);
@@ -701,6 +724,7 @@ export class VoxelForest {
       const list = c.list;
       for (let q = 0; q < list.length; q++) {
         const i = list[q];
+        if (HID[i]) continue;
         const M = models[MOD[i]];
         const P = M.policy;
         const x = X[i], y = Y[i], z = Z[i], r = R[i];
