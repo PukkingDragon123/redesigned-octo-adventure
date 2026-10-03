@@ -48,7 +48,11 @@ class Input {
     this.prev = new Set();
     this.now = new Set();
     this.pad = null;
-    this.touch = { steer: 0, throttle: 0, brake: 0, stickThrottle: 0, stickBrake: 0, buttons: new Set(), run: false, trick: false };
+    // touch: the left stick (steer + lean), the right buttons, the trick radial (rad*) and auto-pedal
+    this.touch = {
+      steer: 0, throttle: 0, brake: 0, stickThrottle: 0, stickBrake: 0, buttons: new Set(), run: false, trick: false,
+      leanBack: 0, leanFwd: 0, radSteer: 0, radThrottle: 0, radBrake: 0, auto: false,
+    };
     this.tappedActions = new Set(); // on-screen button taps, latched like key taps
     this.lastDevice = 'keyboard';
     this.enabled = true;
@@ -145,25 +149,28 @@ class Input {
       if (Math.abs(ax) > 0.12) s = Math.sign(ax) * (Math.abs(ax) - 0.12) / 0.88;
     }
     if (Math.abs(this.touch.steer) > 0.05) s = this.touch.steer;
+    else if (this.touch.radSteer) s = this.touch.radSteer;
     return Math.max(-1, Math.min(1, s));
   }
   // pedal: W / Up, RT, the touch pedal (the gamepad stick leans instead)
   throttle() {
     let t = this.now.has('up') ? 1 : 0;
     if (this.pad) t = Math.max(t, this.pad.buttons[7]?.value || 0);
-    t = Math.max(t, this.touch.throttle, this.touch.stickThrottle);
+    t = Math.max(t, this.touch.throttle, this.touch.stickThrottle, this.touch.radThrottle);
+    // auto-pedal (touch): cruise until the brake is touched
+    if (this.touch.auto && t < 1 && this.brake() === 0) t = 1;
     return this.enabled ? t : 0;
   }
   brake() {
     let t = this.now.has('down') ? 1 : 0;
     if (this.pad) t = Math.max(t, this.pad.buttons[6]?.value || 0);
-    t = Math.max(t, this.touch.brake, this.touch.stickBrake);
+    t = Math.max(t, this.touch.brake, this.touch.stickBrake, this.touch.radBrake);
     return this.enabled ? t : 0;
   }
   // rider lean 0..1 each: keys, touch hold-buttons, or the left stick pulled down (back) / pushed up (forward)
   lean() {
-    let back = this.now.has('leanBack') ? 1 : 0;
-    let fwd = this.now.has('leanFwd') ? 1 : 0;
+    let back = Math.max(this.now.has('leanBack') ? 1 : 0, this.touch.leanBack);
+    let fwd = Math.max(this.now.has('leanFwd') ? 1 : 0, this.touch.leanFwd);
     if (this.pad) {
       const ay = this.pad.axes[1] || 0;
       if (ay > 0.25) back = Math.max(back, Math.min(1, (ay - 0.25) / 0.6));
