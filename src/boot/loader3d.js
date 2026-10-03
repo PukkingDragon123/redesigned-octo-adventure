@@ -1,5 +1,5 @@
 // The loading screen: a real 3D scene drawn through the game's own pipeline
-// while the world builds. Hank sprints down a spooky country road with the
+// while the world builds. Hank sprints down a country road with the
 // cocoa... and every so often his skull flies off, bounces down the road, and
 // his headless body has to skid, turn round and go fetch it.
 import * as THREE from 'three';
@@ -15,8 +15,8 @@ const RUN = 5.6; // m/s
 const TIPS = [
   'the cocoa is getting cold...',
   'reattaching femurs...',
-  'carving pumpkins...',
-  'teaching bats to fly...',
+  'stacking firewood...',
+  'feeding the Canada geese...',
   'polishing skulls...',
   'warming the marshmallows...',
   'raking the maple leaves...',
@@ -135,21 +135,21 @@ export class Loader3D {
       S.add(m);
       this.tiles.push(m);
     }
-    // roadside props: pumpkins, lanterns, graves, hay, fences and trees
+    // roadside props: pumpkins, hay, crates, mailboxes, signposts and trees
     const mk = (res, scale = 1) => {
       const g = meshVox(res.vox, { size: res.size, origin: res.origin, greedy: true });
       return { g, scale };
     };
     const safe = (fn) => { try { return fn(); } catch (e) { console.warn('loader prop', e); return null; } };
     this.kinds = [
-      safe(() => mk(PR.jackOLantern({ seed: 2 }))),
       safe(() => mk(PR.pumpkin({ seed: 4 }))),
-      safe(() => mk(PR.pumpkinStack({ seed: 3, jack: true }))),
-      safe(() => mk(PR.tombstone({ variant: 'rounded', seed: 2 }))),
-      safe(() => mk(PR.tombstone({ variant: 'cross', seed: 5 }))),
       safe(() => mk(PR.hayBale({ seed: 2 }))),
-      safe(() => mk(PR.scarecrow({ seed: 1 }))),
-      safe(() => mk(PR.ironFence({ seed: 3 }))),
+      safe(() => mk(PR.hayBale({ seed: 5 }))),
+      safe(() => mk(PR.appleCrate?.({ seed: 1 }) ?? PR.crate({}))),
+      safe(() => mk(PR.mailbox({}))),
+      safe(() => mk(PR.firewoodPile({}))),
+      safe(() => mk(PR.milkChurn({}))),
+      safe(() => mk(PR.signpost({}))),
     ].filter(Boolean);
     this.trees = ['maple', 'spruce', 'birch', 'maple2', 'pine'].map((sp, i) => safe(() => mk(buildTree(sp, { seed: i, lod: 0 })))).filter(Boolean);
     this.props = [];
