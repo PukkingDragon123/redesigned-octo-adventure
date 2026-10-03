@@ -259,8 +259,8 @@ Object.assign(REACT, {
       T.headY += away * 1.0 * (c.seed > 5 ? 1 : -1);
       if (t >= 0.6 && !c._dt2) {
         c._dt2 = true;
-        c.kick('headS', 0.55); c.kick('headUp', 0.12); c.kick('sq', 1.3);
-        c.hopV = 2.8;
+        c.kick('headS', 0.75); c.kick('headUp', 0.18); c.kick('sq', 1.45);
+        c.hopV = 3.4;
         c.tempExpr('shock', 1.4);
         c.sfx('pop', { volume: 0.5, pitch: 1.6 });
       }
@@ -295,14 +295,18 @@ Object.assign(REACT, {
   },
   // a friendly wave layered over whatever they are doing
   hi: {
-    d: 1.5, expr: 'happy',
+    // a big, whole-arm wave on tiptoes, with a happy bounce
+    d: 1.7, expr: 'excited',
+    start(c) { c.hopV = 1.6; c.kick('sq', 1.25); },
     f(c, t, T) {
-      const k = Math.sin(c01(t / 1.5) * Math.PI) > 0.2 ? 1 : 0;
-      if (k) arm(T, 'R', 0.25, 2.55, 0.35, S(t * 11) * 0.55);
-      T.headZ += 0.1;
+      const k = Math.sin(c01(t / 1.7) * Math.PI) > 0.15 ? 1 : 0;
+      if (k) arm(T, 'R', 0.15, 2.75, 0.25, S(t * 13) * 0.85);
+      arm(T, 'L', 0.2, 0.5 + Math.max(0, S(t * 6.5)) * 0.4, 0.4);
+      T.headZ += 0.16 + S(t * 6.5) * 0.08; T.tilt += S(t * 6.5) * 0.04; T.lean -= 0.08;
+      T.bodyY += Math.abs(S(t * 6.5)) * 0.04;
     },
   },
-  clap: { d: 1.4, expr: 'happy', f(c, t, T) { POSES.clap(c, t, T); } },
+  clap: { d: 1.4, expr: 'excited', start(c) { c.hopV = 2; c.kick('sq', 1.2); }, f(c, t, T) { POSES.clap(c, t, T); T.bodyY += Math.abs(S(t * 8)) * 0.04; } },
   // bend down and pick something up
   pickup: {
     d: 1.1,

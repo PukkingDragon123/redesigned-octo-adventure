@@ -7,7 +7,6 @@
 // game.skills.event(e) takes bike events (bike.js) and trick events ({ type: 'combo', count }, { type: 'trick', id })
 
 const ROMAN = ['', 'I', 'II', 'III'];
-const TIP = [0, 3, 6, 12]; // Nana's pocket money per tier
 
 // tiers: [stat, need, goal text]. note: Harold's scribble unlocked with each tier.
 export const SKILLS = [
@@ -232,9 +231,7 @@ export class Skills {
   celebrate({ sk, t }) {
     const g = this.game;
     this._cool = 2.2;
-    const tip = TIP[t] || 0;
-    g.state.money += tip;
-    g.ui?.pop(`*${sk.name} ${ROMAN[t]}!*${tip ? ` (+$${tip})` : ''} Harold wrote: ${sk.notes[t - 1]}`, { expr: 'sparkle', key: 'skill', ms: 5000 });
+    // medals only: no cash and no pop-up (the Skill Book shows the new tier)
     g.sound?.play('stamp');
     g.sound?.play('combo_ding', { pitch: 0.9 + t * 0.12 });
     const p = g.bike.pos;

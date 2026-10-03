@@ -9,7 +9,10 @@ export const FPX = 5; // texture pixels per voxel
 export const EXPRESSIONS = [
   'neutral', 'happy', 'laugh', 'sad', 'cry', 'angry', 'surprised', 'shock', 'scared', 'sheepish',
   'smug', 'love', 'determined', 'dizzy', 'wink', 'sleepy', 'worried', 'ko', 'sparkle', 'grumpy',
+  'excited', 'confused', 'pout', 'tongue', 'shy', 'awe', 'furious', 'giggle', 'yawn', 'proud',
 ];
+// skulls have fewer muscles: the newer faces borrow the nearest skull face
+const SKULL_ALIAS = { excited: 'sparkle', confused: 'worried', pout: 'grumpy', tongue: 'wink', shy: 'sheepish', awe: 'surprised', furious: 'angry', giggle: 'laugh', yawn: 'sleepy', proud: 'smug' };
 
 const INK = [30, 20, 26];
 const WHITE = [255, 248, 236];
@@ -61,7 +64,7 @@ export class FaceTex {
     if (key === this.key) return;
     this.key = key;
     this.data.fill(0);
-    if (this.skull) this.drawSkull(state.expr, blinkQ, lx, ly, anim);
+    if (this.skull) this.drawSkull(SKULL_ALIAS[state.expr] || state.expr, blinkQ, lx, ly, anim);
     else this.drawHuman(state.expr, blinkQ, talkQ, lx, ly, anim);
     this.tex.needsUpdate = true;
   }
@@ -133,13 +136,18 @@ export class FaceTex {
     const big = style === 'round';
     const tiny = style === 'tiny';
     // blush first (under everything)
-    const blushOn = S.blush || ['sheepish', 'love', 'laugh', 'happy'].includes(expr);
+    const blushOn = S.blush || ['sheepish', 'love', 'laugh', 'happy', 'shy', 'giggle', 'excited', 'pout', 'proud'].includes(expr);
+    if (expr === 'furious') {
+      // the whole brow goes dark red with rage
+      this.rect(0, 0, this.W, eL.y - F * 1.6, [190, 60, 50]);
+    }
     if (blushOn) {
-      const bc = expr === 'sheepish' || expr === 'love' ? [236, 96, 104] : BLUSH;
+      const strong = ['sheepish', 'love', 'shy', 'pout'].includes(expr);
+      const bc = strong ? [236, 96, 104] : BLUSH;
       for (const e of this.eyes) {
         const bx = e.x + (e === eL ? -F * 0.9 : F * 0.9), by = e.y + F * 1.6;
-        this.oval(bx, by, F * 1.1, F * 0.55, bc);
-        if (expr === 'sheepish') for (let k = -1; k <= 1; k++) this.line(bx + k * 3 - 1, by - 1, bx + k * 3 + 1, by + 1, [200, 70, 80]);
+        this.oval(bx, by, F * (strong ? 1.35 : 1.1), F * (strong ? 0.7 : 0.55), bc);
+        if (expr === 'sheepish' || expr === 'shy') for (let k = -1; k <= 1; k++) this.line(bx + k * 3 - 1, by - 1, bx + k * 3 + 1, by + 1, [200, 70, 80]);
       }
     }
     const eyeW = big ? F * 1.0 : tiny ? F * 0.5 : F * 0.62;
@@ -169,7 +177,7 @@ export class FaceTex {
     const brow = (e, tilt, lift = 0, thick = S.brows === 'bushy' ? 3 : 2) => {
       // tilt > 0 : inner end down (angry); tilt < 0 : inner end up (sad)
       const s = e === eL ? 1 : -1; // inner direction
-      const y = e.y - eyeH - F * 0.8 - lift;
+      const y = e.y - eyeH - F * 0.8 - lift - (talk > 1 ? 1 : 0);
       const len = F * (S.brows === 'bushy' ? 1.2 : 0.9);
       this.line(e.x - s * len, y - tilt * F * 0.35, e.x + s * len, y + tilt * F * 0.35, S.hair?.color ? hexRGB(darken(S.hair.color, 0.35)) : INK, thick);
     };
@@ -267,6 +275,56 @@ export class FaceTex {
         });
         both((e) => brow(e, -0.2, 3));
         break;
+      case 'excited':
+        both((e) => { open(e, 1.3); this.sparkle(e.x + eyeW, e.y - eyeH, 3, [255, 236, 120]); });
+        both((e) => brow(e, -0.3, 5));
+        break;
+      case 'awe':
+        both((e) => { open(e, 1.35, 1.3); this.rect(e.x - 2, e.y - 3, 2, 2, WHITE); this.px(e.x + 2, e.y + 1, WHITE); });
+        both((e) => brow(e, -0.5, 5));
+        break;
+      case 'confused':
+        open(eL, 0.8); open(eR, 1.15);
+        brow(eL, 0.7, -1, 3); brow(eR, -0.4, 5);
+        // a little question mark floating by the head
+        this.arc(eR.x + F * 2.2, F * 0.9, 2, 2, Math.PI, Math.PI * 2.4, INK, 1);
+        this.px(eR.x + F * 2.2, F * 0.9 + 4, INK);
+        break;
+      case 'pout':
+        both((e) => open(e, 0.85));
+        both((e) => brow(e, 0.7, 0, 3));
+        break;
+      case 'tongue':
+        shut(eL, 1); open(eR, 1.1);
+        brow(eL, -0.3, 2); brow(eR, -0.4, 4);
+        break;
+      case 'shy':
+        both((e) => { this.oval(e.x - 1, e.y + 2, eyeW * 0.8, eyeH * 0.7, INK); });
+        both((e) => brow(e, -0.7, 2));
+        break;
+      case 'furious':
+        both((e) => { open(e, 0.8); this.rect(e.x - 1, e.y - 1, 2, 2, RED); });
+        both((e) => brow(e, 1.6, -2, 3));
+        for (const vx of [eL.x - F * 1.4, eR.x + F * 1.4]) {
+          const vy = F * 0.9;
+          this.line(vx - 3, vy - 1, vx - 1, vy + 1, RED, 1); this.line(vx + 3, vy - 1, vx + 1, vy + 1, RED, 1);
+          this.line(vx - 3, vy + 3, vx - 1, vy + 1, RED, 1); this.line(vx + 3, vy + 3, vx + 1, vy + 1, RED, 1);
+        }
+        break;
+      case 'giggle':
+        both((e) => shut(e, 1));
+        both((e) => brow(e, -0.4, 3 + (anim % 2)));
+        break;
+      case 'yawn':
+        both((e) => shut(e, -1));
+        both((e) => brow(e, -0.6, 3));
+        this.rect(eR.x + F * 1.2, eR.y + 1, 2, 3, TEAR);
+        break;
+      case 'proud':
+        both((e) => shut(e, 1));
+        both((e) => brow(e, -0.4, 5));
+        this.sparkle(eL.x - F * 1.8, eL.y - F * 1.4, 2, [255, 236, 120]);
+        break;
       default:
         if (blink) both((e) => this.line(e.x - eyeW, e.y + 1, e.x + eyeW, e.y + 1, INK, 2));
         else both((e) => open(e, 1));
@@ -305,9 +363,27 @@ export class FaceTex {
       this.oval(x, y + h * 0.5, w * 0.55, h * 0.4, TONGUE);
       if (teeth && h > 2) this.rect(x - w * 0.6, y - h + 1, w * 1.2, 1.5, WHITE);
     };
-    if (talk > 0 && !['cry', 'shock', 'scared', 'laugh'].includes(expr)) {
+    if (talk > 0 && !['cry', 'shock', 'scared', 'laugh', 'yawn', 'giggle'].includes(expr)) {
       const h = [0, 1.6, 2.6, 3.4][talk];
-      openM(F * (0.75 + talk * 0.12), h, talk > 1);
+      if (['happy', 'love', 'sparkle', 'excited', 'proud', 'wink', 'tongue'].includes(expr)) {
+        // a big talking grin: D-shaped, wide
+        openM(F * (1.05 + talk * 0.12), h + 1.4, true);
+        this.rect(x - F * 1.5, y - h - 2, F * 3, 2, this.skinRGB);
+        this.line(x - F * (1.05 + talk * 0.12), y - h * 0.6, x + F * (1.05 + talk * 0.12), y - h * 0.6, INK);
+      } else if (['angry', 'furious', 'grumpy', 'determined', 'pout'].includes(expr)) {
+        // shouting through gritted teeth
+        const w = F * (0.9 + talk * 0.15);
+        this.rect(x - w, y - h * 0.6 - 1, w * 2, h * 1.2 + 2, INK);
+        this.rect(x - w + 1, y - h * 0.6, w * 2 - 2, h * 1.2, MOUTH);
+        this.rect(x - w + 1, y - h * 0.6, w * 2 - 2, 1.5, WHITE);
+        this.rect(x - w + 1, y + h * 0.6 - 1.5, w * 2 - 2, 1.5, WHITE);
+      } else if (['sad', 'worried', 'sheepish', 'shy', 'confused'].includes(expr)) {
+        // small, wobbly words
+        openM(F * (0.55 + talk * 0.08), h * 0.8, false);
+        this.px(x - F * 0.9, y + 1, INK); this.px(x + F * 0.9, y + 1, INK);
+      } else if (['surprised', 'awe'].includes(expr)) {
+        openM(F * (0.5 + talk * 0.1), h + 1, false);
+      } else openM(F * (0.75 + talk * 0.12), h, talk > 1);
       return;
     }
     switch (expr) {
@@ -332,6 +408,43 @@ export class FaceTex {
         break;
       case 'surprised':
         openM(F * 0.5, F * 0.6, false);
+        break;
+      case 'awe':
+        openM(F * 0.7, F * 0.9, false);
+        break;
+      case 'excited':
+        openM(F * 1.4, F * (anim % 2 ? 1.3 : 1.1));
+        break;
+      case 'giggle':
+        openM(F * 1.1, F * (anim % 2 ? 0.6 : 0.4));
+        this.rect(x - F * 1.2, y - F * 0.8, F * 2.4, F * 0.4, this.skinRGB);
+        break;
+      case 'yawn':
+        openM(F * 0.9, F * (1.4 + (anim % 2) * 0.2), false);
+        break;
+      case 'confused':
+        for (let k = 0; k < 4; k++) this.line(x - F * 0.6 + (k * F * 1.4) / 4, y + (k % 2 ? 0.8 : -0.8) + k * 0.3, x - F * 0.6 + ((k + 1) * F * 1.4) / 4, y + ((k + 1) % 2 ? 0.8 : -0.8) + (k + 1) * 0.3, INK, 1.3);
+        break;
+      case 'pout':
+        this.oval(x, y, F * 0.45, F * 0.4, INK);
+        this.oval(x, y, F * 0.3, F * 0.25, [200, 80, 90]);
+        break;
+      case 'tongue':
+        this.arc(x, y - F * 0.5, F * 0.9, F * 0.6, Math.PI * 0.1, Math.PI * 0.9, INK, 1.5);
+        this.oval(x + F * 0.3, y + F * 0.35, F * 0.4, F * 0.5, [230, 110, 110]);
+        this.line(x + F * 0.3, y + F * 0.1, x + F * 0.3, y + F * 0.6, [190, 70, 80]);
+        break;
+      case 'shy':
+        for (let k = 0; k < 3; k++) this.line(x - F * 0.5 + (k * F) / 3, y + (k % 2 ? 0.6 : -0.6), x - F * 0.5 + ((k + 1) * F) / 3, y + ((k + 1) % 2 ? 0.6 : -0.6), INK, 1.2);
+        break;
+      case 'proud':
+        this.arc(x, y - F * 0.6, F * 1.0, F * 0.7, Math.PI * 0.1, Math.PI * 0.9, INK, 2);
+        break;
+      case 'furious':
+        this.rect(x - F * 1.2, y - F * 0.6, F * 2.4, F * 1.2, INK);
+        this.rect(x - F * 1.1, y - F * 0.5, F * 2.2, F * 1.0, WHITE);
+        this.rect(x - F * 1.1, y - 0.5, F * 2.2, 1, [120, 110, 100]);
+        for (let k = -2; k <= 2; k++) this.rect(x + k * F * 0.45, y - F * 0.5, 1, F * 1.0, [200, 190, 180]);
         break;
       case 'shock':
         openM(F * 0.9, F * 1.3);
@@ -453,7 +566,7 @@ export class FaceTex {
   }
 }
 
-const ANIMATED = { cry: 8, scared: 14, love: 3, dizzy: 6, laugh: 7 };
+const ANIMATED = { cry: 8, scared: 14, love: 3, dizzy: 6, laugh: 7, excited: 6, giggle: 9, yawn: 2 };
 
 export function hexRGB(c) {
   return [(c >> 16) & 255, (c >> 8) & 255, c & 255];

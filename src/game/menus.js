@@ -5,12 +5,12 @@
 import { el } from '../ui/ui.js';
 import { kPanel, kSign, kClose, kBook, kBar, kSlider, kToggle, kSlot, kKey, esc, scale, snap, snapBox, setUIScaleOffset } from '../ui/kit.js';
 import { iconURL, iconSmallURL, glyphURL } from '../art/icons.js';
-import { drawPortrait } from '../art/portraits.js';
-import { Pix } from '../art/pixel.js';
+import { LivePortrait } from '../ui/live3d.js';
 import { CHARACTERS } from '../art/characters.js';
 import { KEEPSAKES, POI, CUSTOMERS, WORLD_HALF, BUILDINGS } from '../world/layout.js';
 import { KEEPSAKE_ICON } from './keepsakes.js';
 import { hasSave } from './state.js';
+import { tempBarHTML, cupTemp } from './orders.js';
 import { foodIconURL, FOOD_INFO } from '../art/foodsprites.js';
 import { QUESTS, SHOP, RECIPES, LOST, BIRD_NAMES } from './quests.js';
 
@@ -636,18 +636,15 @@ function snapRibbon(rb) {
   rb.style.left = `${Math.round((hw - w) / 2) * u}px`;
   rb.style.transform = 'none';
 }
-// a 32px head-and-shoulders crop of a villager's pixel portrait (crisp at 1:1, no 3D render needed)
-const FACES = new Map();
-function faceURL(id) {
-  id = id === 'kids' ? 'pip' : id === 'lou_lh' ? 'ollie' : id;
-  if (FACES.has(id)) return FACES.get(id);
-  const full = new Pix(64, 64);
-  try { drawPortrait(full, 0, 0, id, 'happy'); } catch { /* unknown face: leave the photo blank */ }
-  const p = new Pix(32, 32);
-  p.blit(full, 0, 0, false, 16, 12, 32, 32);
-  const url = p.toDataURL();
-  FACES.set(id, url);
-  return url;
+// the customer's photo is a live 3D view of the real model (one shared, re-used)
+let BOOK_FACE = null;
+function faceCanvas(id) {
+  if (!BOOK_FACE) {
+    BOOK_FACE = new LivePortrait(null, { size: 128, bust: false, yaw: 0.25, outline: false, bg: '#cfe0f0' });
+    BOOK_FACE.canvas.style.cssText = 'position:absolute;left:calc(var(--u)*2);top:calc(var(--u)*2);width:calc(var(--u)*32);height:calc(var(--u)*32);image-rendering:auto';
+  }
+  BOOK_FACE.set(id, 'happy');
+  return BOOK_FACE.canvas;
 }
 // ---------------------------------------------------------------- the spiral notebook
 // an open notebook: two ruled pages either side of the spiral
@@ -671,14 +668,18 @@ function nbCard(page, { id, spot, where = '', stamp = null, lines = [], quote = 
   const name = SHORT_NAME[id] || CUSTOMERS[spot]?.name || CHARACTERS[id]?.name || id;
   page.querySelector('.nb-card')?.remove();
   const st = stamp ? `<span class="nb-stamp ${stamp[1]}">${stamp[0]}</span>` : '';
-  const c = el('div', 'nb-card', `<div class="nb-top"><span class="nb-photo"><img src="${faceURL(id)}">${st}</span><div class="nb-who"><div class="nm k-bold">${esc(name)}</div><div class="addr">${esc(where || WHERE[spot] || '')}</div></div></div>${lines.join('')}${quote ? `<div class="nb-quote">“${esc(quote)}”</div>` : ''}`);
+  const c = el('div', 'nb-card', `<div class="nb-top"><span class="nb-photo">${st}</span><div class="nb-who"><div class="nm k-bold">${esc(name)}</div><div class="addr">${esc(where || WHERE[spot] || '')}</div></div></div>${lines.join('')}${quote ? `<div class="nb-quote">“${esc(quote)}”</div>` : ''}`);
+  const fc = faceCanvas(id);
+  if (fc) c.querySelector('.nb-photo').prepend(fc);
   page.prepend(c);
 }
 // how hot a cup is (every cup leaves the kitchen piping hot)
 function heatLine(o) {
   const q = o.state === 'carried' ? o.quality : 100;
   const [g, w] = q > 85 ? ['steam3', 'piping hot'] : q > 60 ? ['steam2', 'still hot'] : q > 30 ? ['steam1', 'only warm'] : ['cold', 'gone cold!'];
-  return `<div class="nb-line"><img class="k-g" src="${glyphURL(g)}"><span class="v${q > 30 ? '' : ' nb-redink'}">${w}</span></div>`;
+  const T = cupTemp(q);
+  return `<div class="nb-line"><img class="k-g" src="${glyphURL(g)}"><span class="v${q > 30 ? '' : ' nb-redink'}">${w}</span><span style="margin-left:auto;color:${T.color};font-weight:bold">${T.deg}\u00b0C</span></div>` +
+    `<div class="nb-line" style="gap:6px">${tempBarHTML(q, 'big')}</div>`;
 }
 // pen doodles, a coffee ring and a pencil: a notebook that gets used
 const DOODLE_KINDS = ['bike', 'mug', 'leaf', 'heart', 'star', 'swirl'];

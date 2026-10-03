@@ -12,13 +12,12 @@
 // Text markup: *bold*, ~wave~, ^shake^, _small_, and [W] for a key cap.
 //
 // Messages queue, never stack; they wait out cutscenes, dialogue and menus (shouts
-// are simply dropped then). The portrait is the real voxel model rendered to a small
-// image (snapshots.js) and shown at a whole number of device pixels per art pixel;
-// the squash and stretch changes its size in whole art pixels, so it stays pixel art.
+// are simply dropped then). The portrait is the real voxel model, live in 3D
+// (live3d.js): it blinks, talks and pulls faces while the message is up.
 // Before each message the corner is chosen so nothing covers the touch controls or
 // the HUD (Nana's list, the speedometer, the prompt).
 import { sound } from '../game/sound.js';
-import { charSnapshot, snapshotTop } from './snapshots.js';
+import { LivePortrait } from './live3d.js';
 import { frame, tail, tokenize, layoutText } from './bubbles.js';
 import { BUBBLE_JOIN } from './kitart.js';
 import { el, scale, snap } from './kit.js';
@@ -57,7 +56,7 @@ export class Popups {
     this.queue = [];
     this.cur = null;
     this.t = 0;
-    this.warm = ['hank|happy', 'hank|sparkle', 'hank|shock', 'hank|sheepish', 'grandma|happy'];
+    this.live = null;
     this.warmT = 1.5;
     addEventListener('resize', () => this.cur && (this.cur.placed = false));
   }
@@ -112,25 +111,29 @@ export class Popups {
     if (this.queue.length) { this.show(this.queue.shift()); return; }
     // nothing to say: pre-render the common faces so the first pop-up doesn't hitch
     // (one face at a time, in idle time between frames where the browser offers it)
-    if (this.warm.length && (this.warmT -= dt) <= 0) {
-      const [who, expr] = this.warm.shift().split('|');
-      this.warmT = 1e9;
-      const go = () => { this.portrait(who, expr); this.warmT = 0.5; };
+    if (this.warmT > 0 && (this.warmT -= dt) <= 0) {
+      this.warmT = -1;
+      const go = () => this.portrait('hank', 'happy') && this.live.warm();
       if (window.requestIdleCallback) requestIdleCallback(go, { timeout: 2000 });
       else go();
     }
   }
 
+  // one live 3D portrait, reused for every message (the real model, never a flat picture)
   portrait(who, expr) {
-    return charSnapshot(this.game, who, expr, ART, { bust: true, outline: true, yaw: 0.3 });
+    if (!this.live) {
+      this.live = new LivePortrait(this.game, { size: Math.min(256, Math.round(ART * scale.u * Math.min(2, devicePixelRatio || 1))) || 160, bust: true, yaw: 0.3, outline: true });
+      this.live.canvas.classList.add('pop-char');
+      this.live.canvas.style.imageRendering = 'auto';
+    }
+    this.live.set(who, expr);
+    return this.live.canvas;
   }
 
   // ---------------------------------------------------------------- one message
   show(m) {
     const wrap = el('div', 'pop');
-    const img = el('img', 'pop-char');
-    img.src = this.portrait(m.who, m.expr);
-    img.draggable = false;
+    const img = this.portrait(m.who, m.expr);
     const bub = el('div', 'pop-bub');
     const anim = el('div', 'pop-anim');
     const b = el('div', 'bubble pop-bubble');
@@ -199,7 +202,7 @@ export class Popups {
     const c = this.cur;
     const face = m.expr !== c.expr || m.who !== c.who;
     Object.assign(c, { text: m.text, expr: m.expr, key: m.key, shout: m.shout, ms: m.ms, name: m.name, voice: m.voice });
-    if (face) c.img.src = this.portrait(c.who, c.expr);
+    if (face) this.portrait(c.who, c.expr);
     this.fill(c);
     c.hold = 0;
     if (c.state === 'hold') { c.state = 'bump'; c.st = 0; }
@@ -253,6 +256,7 @@ export class Popups {
       }
     }
     // talking bob / shouting shake, in whole art pixels
+    this.live?.talk(c.state !== 'duck' && !c.typedAll);
     let jx = 0, jy = 0;
     if (c.state === 'hold' && !c.typedAll) jy = Math.floor(this.t * 9) % 2 ? -1 : 0;
     if (c.shout && c.state === 'hold' && c.hold < 0.35) jx = Math.floor(this.t * 30) % 2 ? 1 : -1;
@@ -286,7 +290,7 @@ export class Popups {
       const hx = cx - P / 2, hy = base - P * 0.98;
       let bx = right ? cx + P * 0.3 - bw : cx - P * 0.3;
       bx = Math.max(m, Math.min(W - bw - m, bx));
-      const by = base - P * (1 - snapshotTop(c.img.src)) + 3 * u - tailH - bh;
+      const by = base - P * (1 - 0.04) + 3 * u - tailH - bh;
       return { right, bx, by, list: [[hx, hy, hx + P, base], [bx, by - nameH, bx + bw, by + bh + tailH]] };
     };
     const overlap = (B) => {

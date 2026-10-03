@@ -1055,15 +1055,61 @@ export class VoxelCharacter {
   }
 
   talkGestures(T) {
-    const t = this.t, g = this.persona.gest;
+    const t = this.t, g = Math.max(1, this.persona.gest) * 1.35;
     const beat = S(t * 3.1 + this.seed) * 0.5 + S(t * 5.3) * 0.5;
-    if (this.persona.idle !== 'hips' || g > 1) {
-      arm(T, 'R', 0.45 + Math.max(0, beat) * 0.55 * g, 0.2 + Math.max(0, beat) * 0.3 * g, 1.25 + beat * 0.3, 0.1);
-      if (g > 1.2) arm(T, 'L', 0.4 + Math.max(0, -beat) * 0.5 * g, 0.2 + Math.max(0, -beat) * 0.3, 1.2 - beat * 0.3, 0.1);
+    const up = Math.max(0, beat), dn = Math.max(0, -beat);
+    const ex = this.tmpExpr?.e || this.expr || 'neutral';
+    // every mood talks with its whole body: big, readable, a little cartoonish
+    switch (ex) {
+      case 'angry': case 'furious': case 'grumpy': {
+        // fist shaking, leaning in, stomping weight
+        const shake = S(t * 22) * 0.12;
+        arm(T, 'R', 1.3 + up * 0.5 + shake, 0.35, 2.1, 0.2);
+        arm(T, 'L', 0.2, 0.55, 0.7, 0.1);
+        T.lean += 0.12 + up * 0.06; T.headX += 0.08 + S(t * 9) * 0.06;
+        T.bodyY -= Math.abs(S(t * 4.6)) * 0.02;
+        break;
+      }
+      case 'happy': case 'laugh': case 'excited': case 'sparkle': case 'love': case 'giggle': case 'proud':
+        // open arms, bouncing on the toes
+        arm(T, 'L', 0.35 + up * 0.5, 0.7 + up * 0.7 * g, 0.5 + dn * 0.4, 0.1);
+        arm(T, 'R', 0.35 + dn * 0.5, 0.7 + dn * 0.7 * g, 0.5 + up * 0.4, 0.1);
+        T.bodyY += Math.abs(S(t * 6.2)) * 0.035 * g; T.lean -= 0.06;
+        T.headZ += S(t * 3.1) * 0.1;
+        break;
+      case 'sad': case 'cry': case 'worried': case 'sheepish': case 'shy':
+        // hands wringing in front, shoulders down, head low
+        arm(T, 'L', 0.9 + S(t * 7) * 0.12, 0.15, 1.9, 0.7);
+        arm(T, 'R', 0.9 - S(t * 7) * 0.12, 0.15, 1.9, 0.7);
+        T.headX += 0.18; T.lean += 0.05; T.bodyY -= 0.02;
+        break;
+      case 'surprised': case 'shock': case 'awe': case 'scared':
+        // hands thrown up beside the face
+        arm(T, 'L', 0.6 + up * 0.3, 1.5 + up * 0.4, 1.8, 0.4);
+        arm(T, 'R', 0.6 + dn * 0.3, 1.5 + dn * 0.4, 1.8, 0.4);
+        T.lean -= 0.12; T.headX -= 0.1;
+        break;
+      case 'confused': case 'think':
+        // one hand scratching the head, the other palm up
+        arm(T, 'R', 1.1, 1.3, 2.4, 0.6 + S(t * 20) * 0.12);
+        arm(T, 'L', 0.8 + up * 0.3, 0.4, 1.4, 0.0);
+        T.headZ -= 0.18; T.headY += S(t * 1.7) * 0.1;
+        break;
+      default:
+        if (this.persona.idle !== 'hips' || g > 1) {
+          arm(T, 'R', 0.45 + up * 0.75 * g, 0.2 + up * 0.45 * g, 1.25 + beat * 0.35, 0.1);
+          arm(T, 'L', 0.4 + dn * 0.65 * g, 0.2 + dn * 0.4 * g, 1.2 - beat * 0.35, 0.1);
+        }
     }
-    T.headX += S(t * 7.2) * 0.04 * g;
-    T.headZ += S(t * 2.3) * 0.06 * g;
-    T.tilt += S(t * 2.3) * 0.02 * g;
+    // emphatic nods on the stressed beats, head tilts, a little sway
+    T.headX += S(t * 7.2) * 0.06 * g + (beat > 0.85 ? 0.12 : 0);
+    T.headZ += S(t * 2.3) * 0.09 * g;
+    T.tilt += S(t * 2.3) * 0.03 * g;
+    // now and then a face flickers across the words (eyebrows up, a grin, a frown)
+    if (!this.tmpExpr && ex === 'neutral' && S(t * 0.9 + this.seed * 3) > 0.985) {
+      const faces = ['happy', 'surprised', 'smug', 'confused', 'excited', 'worried'];
+      this.tempExpr(faces[Math.floor(Math.abs(S(this.seed * 7 + t)) * faces.length) % faces.length], 0.9);
+    }
   }
 
   applyFidget(dt, T) {

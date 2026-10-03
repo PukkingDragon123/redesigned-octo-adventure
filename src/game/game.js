@@ -573,7 +573,6 @@ export class Game {
         if (e.airTime > 0.6) {
           st.stats.bestAir = Math.max(st.stats.bestAir, e.airTime);
           st.stats.dayAir = Math.max(st.stats.dayAir || 0, e.airTime);
-          if (e.airTime > 1.2) this.ui.pop(`${e.airTime.toFixed(1)}s OF AIR!`, { shout: true, key: 'trick', expr: 'sparkle' });
           if (e.airTime > 1.0) sound.play('squish');
         }
         break;
@@ -626,7 +625,6 @@ export class Game {
       case 'sink':
         sound.play('splash');
         this.orders.slosh(25);
-        this.ui.pop("Glub glub... Good thing I don't need to breathe!", { expr: 'sheepish', key: 'sink' });
         break;
     }
   }
