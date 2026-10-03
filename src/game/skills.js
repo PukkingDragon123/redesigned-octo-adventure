@@ -104,10 +104,10 @@ export const SKILLS = [
   },
   {
     id: 'combo', name: 'Combos', icon: 'skill_combo', unit: 'x',
-    how: 'Chain tricks, spins, flips and hoops one after another before the combo timer runs out.',
+    how: 'Chain tricks, spins and flips one after another before the combo timer runs out.',
     desc: 'The crowd loves a show. The crowd is mostly geese.',
     tiers: [['combo', 2, 'x2 combo'], ['combo', 4, 'x4 combo'], ['combo', 7, 'x7 combo']],
-    notes: ['"Keep moving. Land and go again."', '"Hoops count. So do spins. So does showing off."', '"Seven! The geese were speechless. Honking, but speechless."'],
+    notes: ['"Keep moving. Land and go again."', '"Wheelies count. So do spins. So does showing off."', '"Seven! The geese were speechless. Honking, but speechless."'],
   },
   {
     id: 'tricks', name: 'Air Poses', icon: 'skill_tricks', unit: '',

@@ -1,5 +1,5 @@
 // Things Hank can poke at around town: kick pumpkins and the bowling ball, sit on
-// benches, watch Nana's TV, ride through the harvest hoops, and knock over the 2D
+// benches, watch Nana's TV, and knock over the 2D
 // street clutter (bins, fences, crates, signs, the fish stall...: see deco2d.js).
 import { input } from '../core/input.js';
 import { Deco2D } from './deco2d.js';
@@ -11,7 +11,6 @@ export class Interactables {
     this.props = game.world.physprops;
     if (this.props) this.props.game = game;
     this.spots = game.world.voxel?.spots || [];
-    this.hoops = game.world.voxel?.hoops || [];
     this.sitting = null;
     this.deco = new Deco2D(game);
     game.world.interactables = this;
@@ -111,22 +110,6 @@ export class Interactables {
     }
     // the 2D street clutter: knocked over by the bike and by Hank, tidied away while nobody looks
     this.deco.update(dt);
-    // harvest hoops: riding through one at speed is a trick shot
-    if (!g.onFoot && this.hoops.length) {
-      const b = g.bike;
-      for (const h of this.hoops) {
-        const dx = b.pos.x - h.x, dz = b.pos.z - h.z;
-        if (dx * dx + dz * dz > 25) { h.inside = false; continue; }
-        // hoop plane: local z axis is the hoop normal
-        const along = dx * Math.sin(h.yaw) + dz * Math.cos(h.yaw);
-        const side = Math.sign(along);
-        const lateral = Math.abs(dx * Math.cos(h.yaw) - dz * Math.sin(h.yaw));
-        if (h.lastSide && side !== h.lastSide && lateral < 1.4 && b.pos.y - h.y < 3.2) {
-          g.tricks?.hoop(h);
-        }
-        h.lastSide = side;
-      }
-    }
   }
 }
 

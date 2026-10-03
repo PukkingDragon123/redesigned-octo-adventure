@@ -2,7 +2,7 @@
 // to strike a pose; let go before touchdown or Hank bails. Spins (A/D), flips
 // (lean back / forward), wheelie drops, long jumps and perfect landings all score, and
 // ground moves (wheelies, manuals, stoppies, nose manuals, drifts) keep a combo alive,
-// so a run can chain hop -> 360 -> manual -> hop -> backflip -> hoop.
+// so a run can chain hop -> 360 -> manual -> hop -> backflip.
 import { input } from '../core/input.js';
 import { POSES } from './vchar.js';
 
@@ -162,20 +162,6 @@ export class Tricks {
     if (kind === 'land') g.rider.ch.tempExpr('sparkle', 1);
     g.state.stats.tricks = (g.state.stats.tricks || 0) + n;
     g.quests?.event('trick', { list, combo: this.combo });
-    g.skills?.event({ type: 'combo', count: this.combo });
-  }
-
-  // flying through a harvest hoop
-  hoop(h) {
-    const g = this.game;
-    this.combo++;
-    this.comboT = COMBO_TIME + 0.3;
-    this.score += 250 * this.combo;
-    g.sound.play('lantern_whoomp');
-    g.sound.play('crowd_cheer', { volume: 0.6 });
-    g.effects.confetti(g.bike.pos.x, g.bike.pos.y + 1.5, g.bike.pos.z, 30);
-    this.say(`HOOP SHOT!${this.combo > 1 ? `  x${this.combo}` : ''}`, 'shot');
-    g.quests?.event('hoop', h);
     g.skills?.event({ type: 'combo', count: this.combo });
   }
 

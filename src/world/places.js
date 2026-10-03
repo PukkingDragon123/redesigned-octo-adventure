@@ -1,6 +1,6 @@
 // Dressing for the remade map: Main Street's sidewalks, curbs, lamps & benches, the town green,
 // the rink, the bike park, the harbour, the farm, the sugar bush, the campground, the picnic area,
-// the beach, the lookout and the junction signposts. Everything is voxel art merged into the
+// the beach and the lookout. Everything is voxel art merged into the
 // static chunks (see VoxelWorld.addStatic); a few things are kickable physics props.
 import * as THREE from 'three';
 import * as L from './layout.js';
@@ -37,7 +37,6 @@ export function dressPlaces(vw, physprops) {
   picnicArea(vw, { S, post, box, bench, gy });
   beach(vw, { S, post, box, bench, gy, ctx });
   lookout(vw, { S, box, gy });
-  signposts(vw, { S, post, gy });
   roadside(vw, { S, post, box, gy });
   yards(vw, { S, post, box, gy });
   restStop(vw, { S, post, box, bench, gy });
@@ -389,19 +388,6 @@ function lookout(vw, { S, box, gy }) {
   const p = L.POI.lookout;
   S('inukshuk', () => PR.inukshuk({ seed: 3 }), p.x + 4.5, p.z - 2.5, 0.9);
   box(p.x + 4.5, p.z - 2.5, 0.9, 1.6, 0.5, 2);
-}
-
-// ---------------------------------------------------------------- junction signposts
-function signposts(vw, { S, post, gy }) {
-  const colors = [0xf2e6c8, 0xe8c070, 0xd8e4c8, 0xf0d0b0];
-  for (const sp of L.SIGNPOSTS) {
-    S('signpost', () => PR.signPost(), sp.x, sp.z, 0);
-    post(sp.x, sp.z, 0.14, 2.8);
-    sp.arrows.forEach((a, i) => {
-      const r = vw.model(`arrow:${a.text}`, () => PR.signArrow({ text: a.text, color: colors[i % colors.length] }));
-      vw.addStatic(r, sp.x, gy(sp.x, sp.z) + 2.45 - i * 0.42, sp.z, a.dir - Math.PI / 2);
-    });
-  }
 }
 
 // ---------------------------------------------------------------- along the roads

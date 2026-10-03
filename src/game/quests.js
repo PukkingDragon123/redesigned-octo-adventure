@@ -1,6 +1,6 @@
 // Side quests & fall-fair games: lost cats, lost things, tree planting, bird
 // photos, letters, helping the café, lawn bowling, harvest-supper invitations,
-// the harvest hoops, the grocery run for Nana. Villagers offer them when Hank stops to chat.
+// Lou's stunt bet, the grocery run for Nana. Villagers offer them when Hank stops to chat.
 import * as THREE from 'three';
 import { Vox, tone } from '../voxel/vox.js';
 import { meshVox } from '../voxel/mesh.js';
@@ -74,7 +74,7 @@ export const QUESTS = {
   cafe: { title: 'Pumpkins for the café', giver: 'marie', reward: 25 },
   bowling: { title: 'Lawn bowling', giver: 'pip', reward: 20 },
   treat: { title: 'Harvest supper invitations', giver: 'pop', reward: 15 },
-  hoops: { title: 'The harvest hoops', giver: 'lou', reward: 40 },
+  stunt: { title: "Lou's stunt bet", giver: 'lou', reward: 40 },
 };
 
 const GREET = {
@@ -247,8 +247,8 @@ export class Quests {
     if (who === 'pop' && this.game.world.atmosphere.hour > 14) add('treat', "Mom's harvest supper is tonight! Knock on six doors and invite the neighbours. I'm too shy.", async () => {
       const q = this.q('treat'); q.state = 'active'; q.n = 0; q.have = {};
     }, { expr: 'sheepish', yes: "I'll knock!" });
-    if (who === 'lou') add('hoops', 'Bet you can\'t ride through all three harvest hoops over the road! Five bucks says no!', async () => {
-      const q = this.q('hoops'); q.state = 'active'; q.have = {};
+    if (who === 'lou') add('stunt', 'Bet you can\'t chain *four tricks* in one combo on that old bike! Five bucks says no!', async () => {
+      const q = this.q('stunt'); q.state = 'active'; q.best = 0;
     }, { expr: 'smug', yes: "You're on!" });
     return out;
   }
@@ -301,8 +301,8 @@ export class Quests {
     if (who === 'pip' && bowling.state === 'active' && bowling.strike) return done('bowling', 'STRIIIIKE!!! You are the BEST SKELETON EVER!!!', 'sparkle');
     const treat = this.q('treat');
     if (who === 'pop' && treat.state === 'active' && treat.n >= 6) return done('treat', "Six doors?! Everybody's coming! Mom says you get the first slice of pie.", 'sparkle');
-    const hoops = this.q('hoops');
-    if (who === 'lou' && hoops.state === 'active' && Object.keys(hoops.have).length >= 3) return done('hoops', 'NO WAY! All three! ...Here. Five bucks. And thirty-five more for the show.', 'shock');
+    const stunt = this.q('stunt');
+    if (who === 'lou' && stunt.state === 'active' && stunt.best >= 4) return done('stunt', 'NO WAY! Four in a row! ...Here. Five bucks. And thirty-five more for the show.', 'shock');
     // groceries handed to Nana
     if (who === 'grandma' && Object.keys(g.state.bag || {}).length) {
       const bag = g.state.bag;
@@ -342,11 +342,12 @@ export class Quests {
         }
       }
     }
-    if (name === 'hoop') {
-      const q = this.q('hoops');
-      if (q.state === 'active') {
-        q.have[`${Math.round(data.x)},${Math.round(data.z)}`] = true;
-        g.ui.toast(`Harvest hoops: <b>${Object.keys(q.have).length}/3</b>`, 'star', 1600);
+    if (name === 'trick') {
+      // Lou's bet: four tricks in one combo
+      const q = this.q('stunt');
+      if (q.state === 'active' && (q.best || 0) < 4 && data?.combo >= 4) {
+        q.best = data.combo;
+        g.ui.pop('Four in a row! Lou owes me *five bucks*!', { expr: 'sparkle', key: 'stunt', ms: 2600 });
       }
     }
   }
@@ -557,7 +558,7 @@ export class Quests {
     if (S.cafe?.state === 'active') out.push(`Pumpkins to café ${S.cafe.n}/3`);
     if (S.bowling?.state === 'active') out.push(S.bowling.strike ? 'Tell Pip: STRIKE!' : 'Bowl a strike');
     if (S.treat?.state === 'active') out.push(S.treat.n >= 6 ? 'Tell Pop: everyone is coming' : `Supper invitations ${S.treat.n}/6`);
-    if (S.hoops?.state === 'active') out.push(`Harvest hoops ${Object.keys(S.hoops.have).length}/3`);
+    if (S.stunt?.state === 'active') out.push(S.stunt.best >= 4 ? 'Tell Lou: four-trick combo!' : 'Chain a 4-trick combo');
     if (Object.keys(g.state.bag || {}).length) out.push('Groceries: bring home');
     else if (S.groceries?.state === 'active') out.push('Buy groceries at Moose & Goose');
     return out.slice(0, 5);

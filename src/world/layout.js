@@ -296,22 +296,6 @@ export const PLANTED = [
   { x: 203, z: 12, species: 'oak', H: 9 },
 ];
 
-// Wooden signposts at junctions: arrows name the destinations (dir = world heading the arrow points at,
-// radians, 0 = +z / south, PI/2 = +x / east)
-const E = Math.PI / 2, W = -Math.PI / 2, Nn = Math.PI, Ss = 0;
-export const SIGNPOSTS = [
-  { x: -145, z: 75.5, arrows: [{ text: 'MAPLE COVE', dir: E - 0.35 }, { text: 'CEMETERY', dir: Nn + 0.4 }, { text: "NANA'S", dir: W + 0.2 }] },
-  { x: -88, z: 53.5, arrows: [{ text: 'BEAVER POND', dir: Nn - 0.1 }, { text: 'MAPLE COVE', dir: E - 0.3 }, { text: "NANA'S", dir: W - 0.3 }] },
-  { x: 12, z: 38.5, arrows: [{ text: 'SUGAR SHACK', dir: Nn + 0.4 }, { text: 'LOOKOUT', dir: Nn + 0.2 }, { text: 'MAPLE COVE', dir: E - 0.15 }, { text: "NANA'S", dir: W }] },
-  { x: 57.5, z: 37.6, arrows: [{ text: 'FERME FARM', dir: Ss }, { text: 'MAPLE COVE', dir: E - 0.1 }] },
-  { x: 84, z: 41.8, arrows: [{ text: 'SAWMILL', dir: Ss + 0.15 }, { text: 'MAPLE COVE', dir: E - 0.1 }, { text: 'BRIDGE', dir: W + 0.15 }] },
-  { x: 38, z: -28, arrows: [{ text: 'CABANE', dir: E + 0.1 }, { text: 'LOOKOUT', dir: Nn + 0.4 }, { text: 'BRIDGE', dir: Ss - 0.3 }] },
-  { x: 72, z: -64, arrows: [{ text: 'LOOKOUT', dir: Nn }, { text: 'BEACH', dir: E - 0.2 }, { text: 'BRIDGE', dir: W + 0.5 }] },
-  { x: 290, z: 33, arrows: [{ text: 'BEACH', dir: Nn - 0.2 }, { text: 'LIGHTHOUSE', dir: E + 0.5 }, { text: 'MAIN ST', dir: W - 0.4 }] },
-  { x: 220, z: -122, arrows: [{ text: 'BEACH', dir: E + 0.6 }, { text: 'LOOKOUT', dir: W - 0.1 }] },
-  { x: -67, z: -118, arrows: [{ text: 'CAMPING', dir: Ss + 0.3 }, { text: 'DAM', dir: E + 0.4 }, { text: 'MEADOW', dir: Nn + 0.4 }] },
-];
-
 // Harold's lost keepsakes (collectibles)
 export const KEEPSAKES = [
   { id: 'cane', x: -214, z: -54, name: "Harold's Walking Cane", note: 'He carved the handle from a moose antler. Took him eleven winters.' },
@@ -330,7 +314,6 @@ export const KEEPSAKES = [
 
 // Gameplay spots used by voxelWorld.dress() / quests
 export const BOWLING = { x: 174.5, z: 41.6 }; // lawn bowling: kick the ball north up the green's gravel path at the pins
-export const HOOPS = [[-6, 32.4], [62, 42.8], [-120, 60.2]]; // harvest hoops standing over the main road
 export const PLANT_SPOTS = [[-150, 40], [-138, 50], [-128, 62], [-60, 46], [80, 58], [100, 62]]; // Gus's saplings
 // kickable harvest pumpkins (a few by the café for Marie-Claude's pumpkin errand)
 export const LOOSE_PUMPKINS = [
