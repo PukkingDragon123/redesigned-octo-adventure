@@ -122,10 +122,17 @@ export function placeFurniture(vw, K) {
       const on = y != null ? { y, deck: inside } : {};
       const z0 = Math.max(deck.z0, front), z1 = deck.z1;
       const left = [deck.x0 + 0.55, doorX - 1.15], right = [doorX + 1.15, deck.x1 - 0.55];
-      const sides = r() < 0.5 ? [left, right] : [right, left];
-      // a rocker with a side table and cocoa on one side, a porch swing (or a pair of Muskokas) on the other
-      const [a, c2] = sides;
-      if (a[1] - a[0] > 0.9) {
+      // a rocker with a side table and cocoa on one side, a porch swing (or a pair of Muskokas) on the
+      // other; when the door is off to one side both share the long end of the porch
+      let [a, c2] = r() < 0.5 ? [left, right] : [right, left];
+      const wid = (z) => z[1] - z[0];
+      if (wid(a) > wid(c2)) [a, c2] = [c2, a];
+      if (wid(a) < 0.9 && wid(c2) > 3.3) {
+        const near = c2[0] > doorX ? c2[0] : c2[1], far = c2[0] > doorX ? c2[1] : c2[0], dir = Math.sign(far - near);
+        a = [near + dir * 0.1, near + dir * 1.2].sort((p, q) => p - q);
+        c2 = [near + dir * 1.6, far].sort((p, q) => p - q);
+      } else if (r() < 0.5 && wid(a) > 1.6) [a, c2] = [c2, a];
+      if (wid(a) > 0.9) {
         const x = a[0] + (a[1] - a[0]) * 0.5;
         const [rx, rz] = P(x, z0 + 0.7);
         if (put('rocker', rx, rz, f + (r() - 0.5) * 0.5, on)) {
