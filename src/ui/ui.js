@@ -11,7 +11,7 @@ import { buildPaperHUD, updatePaperHUD, Gauge } from './paperhud.js';
 import { installKit, kitReady, kButton, kPanel, el, snap, snapBox, scale } from './kit.js';
 import { iconURL, hasIcon } from '../art/icons.js';
 import { foodIconURL, FOOD_INFO } from '../art/foodsprites.js';
-import { portraitURL } from '../art/portraits.js';
+import { LivePortrait } from './live3d.js';
 import { CHARACTERS } from '../art/characters.js';
 import { input } from '../core/input.js';
 import { sound } from '../game/sound.js';
@@ -171,7 +171,17 @@ export class UI {
     D.box.classList.toggle('narr', narr);
     D.box.classList.toggle('k-dark', narr);
     D.portrait.classList.toggle('empty', !who);
-    if (who) D.portrait.style.backgroundImage = `url(${portraitURL(who === 'hankBuried' ? 'hankBuried' : who, opts.expr || 'neutral')})`;
+    if (who) {
+      // a live 3D head-and-shoulders of the real model, not a flat picture
+      if (!this._dlgLive) {
+        this._dlgLive = new LivePortrait(this.game, { size: 160, bust: true, yaw: 0.3, outline: false, bg: '#2a1a14' });
+        this._dlgLive.canvas.style.cssText = 'width:100%;height:100%;display:block';
+      }
+      if (this._dlgLive.canvas.parentNode !== D.portrait) D.portrait.appendChild(this._dlgLive.canvas);
+      this._dlgLive.set(who, opts.expr || 'neutral');
+      this._dlgLive.talk(true);
+      setTimeout(() => this._dlgLive?.talk(false), Math.min(4000, 400 + text.length * 30));
+    }
     D.name.textContent = name;
     D.name.style.display = name ? '' : 'none';
     D.choices.innerHTML = '';
