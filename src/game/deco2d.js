@@ -158,7 +158,8 @@ export class Deco2D {
     }
     const k = 1 / Math.sqrt(D.mass || 1);
     const first = it.st === 0;
-    if (first) { it.kt = this.t; this.knocked.add(it); g.state && (g.state.stats.knocked = (g.state.stats.knocked || 0) + 1); }
+    it.kt = this.t;
+    if (first) { this.knocked.add(it); g.state && (g.state.stats.knocked = (g.state.stats.knocked || 0) + 1); }
     it.st = 1;
     this.moving.add(it);
     const sp = Math.hypot(vx, vz) || 1;
@@ -381,7 +382,10 @@ export class Deco2D {
     const still = ground && Math.abs(it.vy) < 0.05 && it.vx * it.vx + it.vz * it.vz < 0.02;
     const rested = D.mode !== 'tip' || (Math.abs(it.tipV) < 0.05 && (it.tip === 0 || it.tip === HALF_PI));
     const flopping = D.mode === 'flop' && this.t - it.kt < 11;
-    if (still && rested && !flopping) {
+    // (something still creeping down a slope after a long while just stops)
+    const stale = ground && this.t - it.kt > 18;
+    if (stale && !(still && rested)) { it.tip = D.mode === 'tip' ? (it.tip > 0.8 ? HALF_PI : 0) : it.tip; it.tipV = 0; }
+    if ((still && rested && !flopping) || (stale && !flopping)) {
       it.vx = it.vz = it.vy = 0;
       this.moving.delete(it);
       const moved = Math.hypot(it.x - it.home.x, it.z - it.home.z) > 0.15 || Math.abs(it.y - it.home.y) > 0.1;
