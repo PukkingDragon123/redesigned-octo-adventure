@@ -70,12 +70,12 @@ export const SPOTS = {
   clock: { x: -4.5, z: 3.0, r: 0.85 },
   stove: { x: -4.15, z: -2.6, r: 0.9 },
   nanaHome: { x: -3.75, z: -2.35, yaw: -Q },
-  entry: { x: 0, z: 3.25, yaw: Math.PI },
+  entry: { x: 0, z: 2.5, yaw: Math.PI },
   porch: { x: 0, z: 5.5, yaw: 0 },
 };
 
 // camera box (room-local): clear of walls, the chimney breast and the beams
-export const CAM_BOX = { x0: -4.85, x1: 4.1, z0: -3.85, z1: 3.85, y0: 1.25, y1: 2.85 };
+export const CAM_BOX = { x0: -4.9, x1: 4.1, z0: -3.9, z1: 3.95, y0: 1.25, y1: 2.85 };
 
 // faces the camera can never see are dropped: the outer sides of the walls and the top of the
 // ceiling, and anything lying flat on the floor or against a wall (rug and furniture undersides,

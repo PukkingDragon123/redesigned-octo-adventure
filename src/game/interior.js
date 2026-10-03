@@ -434,7 +434,7 @@ export class Interior {
       if (Math.abs(diff) < 2.3) this.camYaw = angleDamp(this.camYaw, heading, 1.4 * Math.min(1, W.speed / 2.6), dt);
     }
     const B = CAM_BOX;
-    const dist = 3.4, ty = 1.0;
+    const dist = 3.1, ty = 1.0;
     // how far back the lens can go along a yaw before it leaves the room box
     const room2 = (yaw) => {
       const fx = -Math.sin(yaw), fz = -Math.cos(yaw);
