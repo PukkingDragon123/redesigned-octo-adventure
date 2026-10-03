@@ -4,7 +4,7 @@
 import * as THREE from 'three';
 import { POI } from '../world/layout.js';
 import { P } from '../render/particles.js';
-import { buildTree } from '../voxel/models/trees.js';
+import { makeTreeSprite } from '../world/forest2d.js';
 import { meshVox } from '../voxel/mesh.js';
 import { voxMesh, sharedVoxelMaterial } from '../render/voxelMaterial.js';
 import * as PR from '../voxel/models/props.js';
@@ -78,14 +78,9 @@ function lumberCamp(story) {
     g.scene.add(pivot);
     // the forest's own maple (same wind and leaf light), or a fresh one if the forest isn't voxel
     const TS = 0.9;
-    let tree = g.world.voxelForest?.makeTree?.('maple', 1), tgeo = null, meta;
-    if (tree) meta = tree.userData.meta;
-    else {
-      const tres = buildTree('maple', { seed: 5, lod: 0 });
-      tgeo = meshVox(tres.vox, { size: tres.size, origin: tres.origin, greedy: true });
-      tree = voxMesh(tgeo, sharedVoxelMaterial());
-      meta = tres.meta;
-    }
+    // the forest's own pixel-art maple card, so it matches the trees around it
+    const tree = g.world.forest?.makeTree?.('maple', 1) || makeTreeSprite('maple', 1);
+    const tgeo = null, meta = tree.userData.meta;
     tree.scale.multiplyScalar(TS);
     pivot.add(tree);
     S.temp.push({ remove: () => { g.scene.remove(pivot); tgeo?.dispose(); } });

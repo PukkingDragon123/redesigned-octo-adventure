@@ -9,7 +9,7 @@ import { Vox } from '../voxel/vox.js';
 import { meshVox } from '../voxel/mesh.js';
 import { voxMesh, sharedVoxelMaterial } from '../render/voxelMaterial.js';
 import * as PR from '../voxel/models/props.js';
-import { buildTree } from '../voxel/models/trees.js';
+import { makeTreeSprite } from '../world/forest2d.js';
 
 const RUN = 5.6; // m/s
 const TIPS = [
@@ -151,7 +151,8 @@ export class Loader3D {
       safe(() => mk(PR.milkChurn({}))),
       safe(() => mk(PR.signpost({}))),
     ].filter(Boolean);
-    this.trees = ['maple', 'spruce', 'birch', 'maple2', 'pine'].map((sp, i) => safe(() => mk(buildTree(sp, { seed: i, lod: 0 })))).filter(Boolean);
+    // the same pixel-art tree cards as the forest
+    this.trees = ['maple', 'spruce', 'birch', 'maple2', 'pine', 'oak'].map((sp, i) => safe(() => makeTreeSprite(sp, i))).filter(Boolean);
     this.props = [];
     const R = rng(77);
     for (let i = 0; i < 26; i++) this.spawnProp(-14 + i * 2.6, R);
@@ -211,9 +212,8 @@ export class Loader3D {
   spawnTree(x, R) {
     const T = this.trees[(R() * this.trees.length) | 0];
     if (!T) return;
-    const m = voxMesh(T.g, sharedVoxelMaterial());
+    const m = T.clone();
     m.position.set(x, 0, -(6 + R() * 9));
-    m.rotation.y = R() * 6.3;
     m.scale.setScalar(0.7 + R() * 0.4);
     this.scene.add(m);
     this.props.push(m);
