@@ -37,7 +37,7 @@ areas of one colour are cheap, noisy per-voxel colours are not. Use `jitter`
 - characters, small props, food, decorations: **0.05**
 - large props (benches, tables, carts, fences, scarecrows): 0.05 (≤ 64 voxels across) or 0.1
 - buildings: **0.125**
-- trees: **0.25** (LOD0) and **0.75** (LOD1)
+- trees: **0.125** up close, then 0.25 and 0.5 (one model painted once, baked per LOD; ferns, saplings and stumps 0.0625)
 
 ## Look
 

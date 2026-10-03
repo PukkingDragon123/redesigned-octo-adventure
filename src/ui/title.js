@@ -128,7 +128,7 @@ export class TitleScreen {
     mi.src = mug.toDataURL();
     this.mugEl = mi;
     this.ls = ls;
-    const ss = Math.max(1, ls - 1);
+    const ss = ls;
     const sub = el('div', `position:absolute;left:0;width:${lw}px;top:${lh - 4 * ls}px;text-align:center;font-size:${16 * ss}px;line-height:1;color:#ffe8c8;text-shadow:${ss}px ${ss}px 0 ${INK};`, 'a cozy undead cocoa-delivery tale');
     logoBox.append(li, mi, sub);
     this.logoEl = li;
