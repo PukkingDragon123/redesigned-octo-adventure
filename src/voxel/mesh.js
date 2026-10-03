@@ -1,5 +1,9 @@
 // Voxel -> BufferGeometry: exposed faces only, per-vertex ambient occlusion,
 // optional greedy merging of equal faces (big flat walls become a few quads).
+//
+// The volume is first packed into 32-voxel occupancy words along x, so finding exposed faces
+// costs a few bit operations per 32 voxels; after that all the work is per exposed face (colour,
+// AO, greedy merge), never per voxel. That keeps big high-resolution buildings cheap to mesh.
 import * as THREE from 'three';
 import { FLAGS, EMIT, GLASS, vhash } from './vox.js';
 
@@ -9,6 +13,14 @@ for (let i = 0; i < 256; i++) {
   LIN[i] = c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
 }
 const AO = [0.48, 0.66, 0.83, 1.0];
+// face axes: a = normal axis; (u, v) = the in-plane axes the quads are laid out on. For y the
+// pair is (x, z) so faces come out of the scan already sorted row by row (flip marks the swapped
+// handedness, which reverses the winding).
+const AX = [
+  { a: 0, u: 1, v: 2, flip: 1 },
+  { a: 1, u: 0, v: 2, flip: -1 },
+  { a: 2, u: 0, v: 1, flip: 1 },
+];
 
 // opts: size (m per voxel), origin [x,y,z] in voxel units (the pivot), greedy, jitter, seed, aoStrength
 export function meshVox(vox, opts = {}) {
@@ -18,105 +30,167 @@ export function meshVox(vox, opts = {}) {
   const greedy = opts.greedy ?? jitter === 0;
   const seed = opts.seed ?? 0;
   const aoK = opts.aoStrength ?? 1;
-  const dims = [vox.w, vox.h, vox.d];
+  const W = vox.w, H = vox.h, D = vox.d;
+  const dims = [W, H, D];
   const data = vox.data;
-  const W = vox.w, H = vox.h;
-  const solid = (x, y, z) => x >= 0 && y >= 0 && z >= 0 && x < W && y < H && z < vox.d && data[x + W * (y + H * z)] !== 0;
+  const st = [1, W, W * H];
 
-  // output buffers grow by doubling (no per-face garbage)
+  // ---- occupancy bits: word (z, y, k) holds x = 32k .. 32k+31
+  const WW = (W + 31) >> 5;
+  const rows = H * D;
+  const occ = new Int32Array(rows * WW + WW); // + one zero row of slack
+  for (let r = 0, id = 0; r < rows; r++) {
+    const ob = r * WW;
+    for (let k = 0; k < WW; k++) {
+      const xe = Math.min(32, W - (k << 5));
+      let word = 0;
+      for (let b = 0; b < xe; b++, id++) if (data[id] !== 0) word |= 1 << b;
+      occ[ob + k] = word;
+    }
+  }
+
+  // ---- collect exposed faces per direction (voxel ids, in scan order: z, then y, then x)
+  // dir index = axis * 2 + (s > 0 ? 1 : 0)
+  const lists = [], counts = [0, 0, 0, 0, 0, 0];
+  for (let d = 0; d < 6; d++) lists.push(new Uint32Array(1024));
+  const push = (d, id) => {
+    let L = lists[d];
+    const n = counts[d];
+    if (n >= L.length) { const nl = new Uint32Array(L.length * 2); nl.set(L); lists[d] = L = nl; }
+    L[n] = id;
+    counts[d] = n + 1;
+  };
+  const zero = 0;
+  function scan(d, bits, x0) {
+    while (bits !== 0) {
+      const t = bits & -bits;
+      bits ^= t;
+      push(d, x0 + 31 - Math.clz32(t));
+    }
+  }
+  for (let z = 0; z < D; z++) {
+    for (let y = 0; y < H; y++) {
+      const r = z * H + y, ob = r * WW;
+      const obUp = y + 1 < H ? ob + WW : -1, obDn = y > 0 ? ob - WW : -1;
+      const obFw = z + 1 < D ? ob + H * WW : -1, obBk = z > 0 ? ob - H * WW : -1;
+      const rowId = W * r;
+      for (let k = 0; k < WW; k++) {
+        const o = occ[ob + k];
+        if (o === 0) continue;
+        const nxt = k + 1 < WW ? occ[ob + k + 1] : zero, prv = k > 0 ? occ[ob + k - 1] : zero;
+        const x0 = rowId + (k << 5);
+        scan(0, o & ~((o << 1) | (prv >>> 31)), x0); // -x
+        scan(1, o & ~((o >>> 1) | (nxt << 31)), x0); // +x
+        scan(2, o & ~(obDn >= 0 ? occ[obDn + k] : 0), x0); // -y
+        scan(3, o & ~(obUp >= 0 ? occ[obUp + k] : 0), x0); // +y
+        scan(4, o & ~(obBk >= 0 ? occ[obBk + k] : 0), x0); // -z
+        scan(5, o & ~(obFw >= 0 ? occ[obFw + k] : 0), x0); // +z
+      }
+    }
+  }
+
+  // ---- output buffers grow by doubling (no per-face garbage)
   let cap = 4096;
   let pos = new Float32Array(cap * 3), nor = new Float32Array(cap * 3), col = new Float32Array(cap * 4), idx = new Uint32Array(cap * 1.5);
-  let nIdx = 0;
+  let nIdx = 0, vcount = 0;
   const grow = () => {
     cap *= 2;
     const g3 = (arr, k) => { const n = new Float32Array(cap * k); n.set(arr); return n; };
     pos = g3(pos, 3); nor = g3(nor, 3); col = g3(col, 4);
     const ni = new Uint32Array(cap * 1.5); ni.set(idx); idx = ni;
   };
-  let vcount = 0;
   const aos = [0, 0, 0, 0], cu = [0, 0, 0, 0], cv = [0, 0, 0, 0], pt = [0, 0, 0];
   const TRI_A = [0, 1, 2, 0, 2, 3], TRI_B = [1, 2, 3, 1, 3, 0];
-  const p = [0, 0, 0], q = [0, 0, 0];
 
-  // flat-index strides: the slice / mask loops below walk the volume with plain index arithmetic
-  const st = [1, W, W * H];
-  // how many solid voxels each x / y / z slice holds (empty slices are skipped outright)
-  const occ = [new Uint32Array(W), new Uint32Array(H), new Uint32Array(vox.d)];
-  for (let z = 0, id = 0; z < vox.d; z++) for (let y = 0; y < H; y++) for (let x = 0; x < W; x++, id++) if (data[id] !== 0) { occ[0][x]++; occ[1][y]++; occ[2][z]++; }
-  for (let a = 0; a < 3; a++) {
-    const u = (a + 1) % 3, v = (a + 2) % 3;
-    const du = dims[u], dv = dims[v], da = dims[a];
-    const sa = st[a], su_ = st[u], sv_ = st[v];
-    const maskC = new Uint32Array(du * dv);
-    const maskA = new Uint8Array(du * dv);
-    const maskJ = new Float32Array(du * dv);
-    for (let s = -1; s <= 1; s += 2) {
-      for (let sl = 0; sl < da; sl++) {
-        if (occ[a][sl] === 0) continue;
-        // build the face mask for this slice
-        let any = false;
-        const front = sl + s >= 0 && sl + s < da; // is there a layer in front of these faces?
-        const fo = s * sa;
-        for (let j = 0; j < dv; j++) {
-          const rowBase = sl * sa + j * sv_;
-          for (let i = 0; i < du; i++) {
-            const id = rowBase + i * su_;
-            const c = data[id];
-            const m = i + j * du;
-            maskC[m] = 0;
-            if (!c) continue;
-            if (front && data[id + fo] !== 0) continue;
-            // ambient occlusion at the four corners, sampled in the layer in front of the face
-            let ao = 0;
-            if (!front) ao = 0xff; // nothing in front: no occlusion anywhere
-            else {
-              const f = id + fo;
-              const iL = i > 0, iR = i < du - 1, jD = j > 0, jU = j < dv - 1;
-              for (let k = 0; k < 4; k++) {
-                const ok1 = k === 1 || k === 2 ? iR : iL, ok2 = k >= 2 ? jU : jD;
-                const ou = (k === 1 || k === 2 ? 1 : -1) * su_, ov = (k >= 2 ? 1 : -1) * sv_;
-                const s1 = ok1 && data[f + ou] !== 0 ? 1 : 0;
-                const s2 = ok2 && data[f + ov] !== 0 ? 1 : 0;
-                const cc = ok1 && ok2 && data[f + ou + ov] !== 0 ? 1 : 0;
-                const val = s1 && s2 ? 0 : 3 - (s1 + s2 + cc);
-                ao |= val << (k * 2);
-              }
-            }
-            maskC[m] = c;
-            maskA[m] = ao;
-            if (jitter) { p[a] = sl; p[u] = i; p[v] = j; maskJ[m] = (vhash(p[0], p[1], p[2], seed) - 0.5) * 2 * jitter; } else maskJ[m] = 0;
-            any = true;
+  let maxMask = 0;
+  for (const A of AX) maxMask = Math.max(maxMask, dims[A.u] * dims[A.v]);
+  const maskC = new Uint32Array(maxMask);
+  const maskA = new Uint8Array(maxMask);
+  const maskJ = jitter ? new Float32Array(maxMask) : null;
+  const ms = new Uint32Array(maxMask); // the current slice's mask cells, in order
+  let sorted = new Uint32Array(1024);
+
+  for (let d = 0; d < 6; d++) {
+    const n = counts[d];
+    if (!n) continue;
+    const A = AX[d >> 1], a = A.a, u = A.u, v = A.v;
+    const s = d & 1 ? 1 : -1;
+    const da = dims[a], du = dims[u];
+    const sa = st[a], su = st[u], sv = st[v];
+    const fo = s * sa;
+    let L = lists[d];
+    // stable counting sort by slice (z faces already come out in slice order)
+    if (a !== 2) {
+      const cnt = new Uint32Array(da + 1);
+      for (let q = 0; q < n; q++) cnt[sliceOf(L[q], a) + 1]++;
+      for (let q = 0; q < da; q++) cnt[q + 1] += cnt[q];
+      if (sorted.length < n) sorted = new Uint32Array(n);
+      for (let q = 0; q < n; q++) sorted[cnt[sliceOf(L[q], a)]++] = L[q];
+      L = sorted;
+    }
+    let q = 0;
+    while (q < n) {
+      const sl = sliceOf(L[q], a);
+      let qe = q;
+      while (qe < n && sliceOf(L[qe], a) === sl) qe++;
+      const front = sl + s >= 0 && sl + s < da;
+      // fill the mask for this slice
+      let nm = 0;
+      for (let e = q; e < qe; e++) {
+        const id = L[e];
+        const x = id % W, t = (id - x) / W, y = t % H, z = (t - y) / H;
+        const i = u === 0 ? x : y, j = v === 2 ? z : y;
+        const m = i + j * du;
+        maskC[m] = data[id];
+        let ao = 0xff;
+        if (front) {
+          ao = 0;
+          const f = id + fo;
+          const iL = i > 0, iR = i < du - 1, jD = j > 0, jU = j < dims[v] - 1;
+          for (let k = 0; k < 4; k++) {
+            const ok1 = k === 1 || k === 2 ? iR : iL, ok2 = k >= 2 ? jU : jD;
+            const ou = (k === 1 || k === 2 ? 1 : -1) * su, ov = (k >= 2 ? 1 : -1) * sv;
+            const s1 = ok1 && data[f + ou] !== 0 ? 1 : 0;
+            const s2 = ok2 && data[f + ov] !== 0 ? 1 : 0;
+            const cc = ok1 && ok2 && data[f + ou + ov] !== 0 ? 1 : 0;
+            const val = s1 && s2 ? 0 : 3 - (s1 + s2 + cc);
+            ao |= val << (k * 2);
           }
         }
-        if (!any) continue;
-        // greedy merge
-        for (let j = 0; j < dv; j++) {
-          for (let i = 0; i < du; ) {
-            const m = i + j * du;
-            const c = maskC[m];
-            if (!c) { i++; continue; }
-            const ao = maskA[m];
-            let w = 1, h = 1;
-            if (greedy) {
-              while (i + w < du && maskC[m + w] === c && maskA[m + w] === ao) w++;
-              outer: for (; j + h < dv; h++) {
-                for (let k = 0; k < w; k++) {
-                  const mm = i + k + (j + h) * du;
-                  if (maskC[mm] !== c || maskA[mm] !== ao) break outer;
-                }
-              }
-            }
-            emit(a, u, v, s, sl, i, j, w, h, c, ao, maskJ[m]);
-            for (let jj = 0; jj < h; jj++) for (let ii = 0; ii < w; ii++) maskC[i + ii + (j + jj) * du] = 0;
-            i += w;
-          }
-        }
+        maskA[m] = ao;
+        if (maskJ) { pt[0] = x; pt[1] = y; pt[2] = z; maskJ[m] = (vhash(pt[0], pt[1], pt[2], seed) - 0.5) * 2 * jitter; }
+        ms[nm++] = m;
       }
+      // greedy merge, walking the faces row by row
+      for (let e = 0; e < nm; e++) {
+        const m = ms[e];
+        const c = maskC[m];
+        if (!c) continue;
+        const ao = maskA[m];
+        const i = m % du, j = (m - i) / du;
+        let w = 1, h = 1;
+        if (greedy) {
+          while (i + w < du && maskC[m + w] === c && maskA[m + w] === ao) w++;
+          const dv = dims[v];
+          outer: for (; j + h < dv; h++) {
+            const row = m + h * du;
+            for (let k = 0; k < w; k++) if (maskC[row + k] !== c || maskA[row + k] !== ao) break outer;
+          }
+        }
+        emit(a, u, v, s * A.flip, s, sl, i, j, w, h, c, ao, maskJ ? maskJ[m] : 0);
+        for (let jj = 0; jj < h; jj++) { const row = m + jj * du; for (let ii = 0; ii < w; ii++) maskC[row + ii] = 0; }
+      }
+      q = qe;
     }
   }
-  void solid; void q;
 
-  function emit(a, u, v, s, sl, i, j, w, h, c, ao, jit) {
+  function sliceOf(id, a) {
+    if (a === 0) return id % W;
+    if (a === 1) return ((id / W) | 0) % H;
+    return (id / (W * H)) | 0;
+  }
+
+  function emit(a, u, v, wind, s, sl, i, j, w, h, c, ao, jit) {
     if (vcount + 4 > cap) grow();
     const plane = s > 0 ? sl + 1 : sl;
     cu[0] = i; cv[0] = j; cu[1] = i + w; cv[1] = j; cu[2] = i + w; cv[2] = j + h; cu[3] = i; cv[3] = j + h;
@@ -141,7 +215,7 @@ export function meshVox(vox, opts = {}) {
     }
     // flip the diagonal so AO gradients don't crease
     const tri = aos[0] + aos[2] < aos[1] + aos[3] ? TRI_B : TRI_A;
-    if (s < 0) for (let t = 5; t >= 0; t--) idx[nIdx++] = base + tri[t];
+    if (wind < 0) for (let t = 5; t >= 0; t--) idx[nIdx++] = base + tri[t];
     else for (let t = 0; t < 6; t++) idx[nIdx++] = base + tri[t];
   }
 
