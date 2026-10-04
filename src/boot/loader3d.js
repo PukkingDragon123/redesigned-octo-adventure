@@ -1,7 +1,12 @@
-// The loading screen: plain black, with a little pixel-art Hank (toque, scarf,
-// a mug of cocoa) running on the spot above a thin progress bar. It is one 2D
-// canvas, drawn in a few hundred fillRects a frame, so it costs nothing while
-// the world builds. (The file keeps its old name; main.js imports Loader3D.)
+// The loading screen: plain black, with the real 3D voxel Hank running on the
+// spot above a thin progress bar. The little stage (RunStage) is a tiny scene of
+// its own: one skeleton, a blob shadow and a few road dashes slipping past, lit
+// by a studio key light. It renders through the game's pipeline (so it gets the
+// same outlines and grading) while the world builds, and the title screen reuses
+// it on a dark plum background.
+import * as THREE from 'three';
+import { VoxelCharacter } from '../game/vchar.js';
+import { G } from '../render/shaderlib.js';
 
 const TIPS = [
   'the cocoa is getting cold...',
@@ -13,16 +18,139 @@ const TIPS = [
   'waking up the lumberjack...',
 ];
 
-const BONE = '#ecdfc6', BONE_D = '#b8a888', DARK = '#1a1014', TOQUE = '#d0402a', TOQUE_D = '#962a1c', POM = '#f4e8d0';
-const SCARF = '#e0782a', SCARF_D = '#a8501c', MUG = '#3a6aa8', COCOA = '#6b3a22';
-const W = 64, H = 64; // sprite canvas (art pixels)
+const DASHES = 14, DASH_GAP = 0.9;
 
+// ---------------------------------------------------------------- the running stage
+export class RunStage {
+  constructor({ bg = 0x000000, dash = 0x4a3c42, speed = 4.2 } = {}) {
+    const scene = (this.scene = new THREE.Scene());
+    scene.background = new THREE.Color(bg);
+    this.camera = new THREE.PerspectiveCamera(30, 1, 0.1, 80);
+    this.speed = speed;
+    this.t = 0;
+    // framing: fx/fy slide Hank across the screen (fractions of the half-size),
+    // size is his height as a fraction of the screen height
+    this.fx = 0;
+    this.fy = 0.1;
+    this.size = 0.3;
+    this.ang = 0.95;
+    this.fade = null; // own fade to black (null: follow the pipeline's)
+    this.hank = new VoxelCharacter(null, 'hank', { parent: scene, y: 0, shadow: false });
+    this.hank.scripted = true;
+    // a soft blob shadow that runs with him
+    this.shadow = new THREE.Mesh(new THREE.CircleGeometry(0.34, 20), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.55, depthWrite: false }));
+    this.shadow.rotation.x = -Math.PI / 2;
+    this.shadow.position.y = 0.004;
+    scene.add(this.shadow);
+    // road dashes: recycled ahead of him as he passes them
+    this.dashes = [];
+    const dg = new THREE.BoxGeometry(0.05, 0.01, 0.45);
+    const dm = new THREE.MeshBasicMaterial({ color: dash });
+    for (let i = 0; i < DASHES; i++) {
+      const m = new THREE.Mesh(dg, dm);
+      m.position.set(0.32, 0.005, (i - 5) * DASH_GAP);
+      scene.add(m);
+      this.dashes.push(m);
+    }
+    this.geos = [this.shadow.geometry, dg];
+    this.mats = [this.shadow.material, dm];
+    // studio lights (swapped into the shared uniforms only while this stage renders)
+    this.pl = Array.from({ length: 8 }, () => new THREE.Vector4(0, -999, 0, 1));
+    this.plc = Array.from({ length: 8 }, () => new THREE.Vector3(0, 0, 0));
+    this.plc[0].set(0.95, 0.5, 0.22); // a warm back glow, like a hearth behind him
+    this.plc[1].set(0.2, 0.26, 0.45); // a cool fill from the other side
+    this.update(0);
+  }
+
+  update(dt) {
+    this.t += dt;
+    const h = this.hank;
+    // he really runs forward (so his scarf streams); the camera keeps pace
+    h.pos.z += this.speed * dt;
+    h.speedOverride = this.speed;
+    h.targetYaw = 0;
+    h.update(dt, this.camera.position);
+    this.shadow.position.x = h.pos.x;
+    this.shadow.position.z = h.pos.z + 0.03;
+    const s = 1 - Math.min(0.4, h.hop * 0.8);
+    this.shadow.scale.set(s, s, 1);
+    for (const d of this.dashes) if (d.position.z < h.pos.z - 5 * DASH_GAP - 0.5) d.position.z += DASHES * DASH_GAP;
+    this.frame();
+  }
+
+  frame() {
+    const cam = this.camera, h = this.hank;
+    const W = Math.max(1, innerWidth), H = Math.max(1, innerHeight);
+    cam.aspect = W / H;
+    const tan = Math.tan(THREE.MathUtils.degToRad(cam.fov / 2));
+    const height = h.P.height;
+    const r = height / (this.size * 2 * tan);
+    const ang = this.ang + Math.sin(this.t * 0.23) * 0.12;
+    const cy = h.pos.y + height * 0.52;
+    cam.position.set(h.pos.x + Math.sin(ang) * r, cy + r * 0.12, h.pos.z + Math.cos(ang) * r);
+    cam.lookAt(h.pos.x, cy, h.pos.z);
+    // slide the lens so he sits where the layout wants him
+    cam.translateX(-this.fx * r * tan * cam.aspect);
+    cam.translateY(-this.fy * r * tan);
+    cam.updateProjectionMatrix();
+  }
+
+  // render through the game's pipeline with studio lighting, then put the world's back
+  render(pipeline) {
+    const h = this.hank, P = pipeline.post;
+    this.pl[0].set(h.pos.x - 1.1, h.pos.y + 1.5, h.pos.z - 1.3, 4.5);
+    this.pl[1].set(h.pos.x - 2.2, h.pos.y + 1.0, h.pos.z + 0.6, 4);
+    const keep = {
+      dir: G.uSunDir.value.clone(), sun: G.uSunColor.value.clone(), sky: G.uSkyAmb.value.clone(), gnd: G.uGroundAmb.value.clone(),
+      night: G.uNight.value, wet: G.uWet.value, snow: G.uSnow.value, pl: G.uPL.value, plc: G.uPLc.value,
+      fog: P.uFogDensity.value, rays: P.uRays.value, cold: P.uCold.value, sat: P.uSaturation.value, fade: P.uFade.value, refl: pipeline.reflections,
+    };
+    G.uSunDir.value.set(0.55, 0.75, 0.45).normalize();
+    G.uSunColor.value.setRGB(1.2, 0.98, 0.78);
+    G.uSkyAmb.value.setRGB(0.34, 0.37, 0.56);
+    G.uGroundAmb.value.setRGB(0.16, 0.1, 0.08);
+    G.uNight.value = 0;
+    G.uWet.value = 0;
+    G.uSnow.value = 0;
+    G.uPL.value = this.pl;
+    G.uPLc.value = this.plc;
+    P.uFogDensity.value = 0;
+    P.uRays.value = 0;
+    P.uCold.value = 0;
+    P.uSaturation.value = 1.1;
+    if (this.fade != null) P.uFade.value = this.fade;
+    pipeline.reflections = false;
+    pipeline.render(this.scene, this.camera);
+    G.uSunDir.value.copy(keep.dir);
+    G.uSunColor.value.copy(keep.sun);
+    G.uSkyAmb.value.copy(keep.sky);
+    G.uGroundAmb.value.copy(keep.gnd);
+    G.uNight.value = keep.night;
+    G.uWet.value = keep.wet;
+    G.uSnow.value = keep.snow;
+    G.uPL.value = keep.pl;
+    G.uPLc.value = keep.plc;
+    P.uFogDensity.value = keep.fog;
+    P.uRays.value = keep.rays;
+    P.uCold.value = keep.cold;
+    P.uSaturation.value = keep.sat;
+    P.uFade.value = keep.fade;
+    pipeline.reflections = keep.refl;
+  }
+
+  dispose() {
+    this.hank.dispose();
+    for (const g of this.geos) g.dispose();
+    for (const m of this.mats) m.dispose();
+  }
+}
+
+// ---------------------------------------------------------------- the loading screen
 export class Loader3D {
   constructor(pipeline) {
     this.pl = pipeline;
     this.p = 0;
     this.shown = 0;
-    this.t = 0;
     this.running = false;
     this.tipI = 0;
     this.tipT = 0;
@@ -32,27 +160,38 @@ export class Loader3D {
   start() {
     if (this.running) return;
     this.running = true;
+    // the 3D stage draws into the game canvas, so the black boot cover goes
+    // (the game's own UI stays hidden until the loader is gone)
+    const boot = document.getElementById('boot');
+    if (boot) boot.style.display = 'none';
+    this.ui = document.getElementById('ui');
+    if (this.ui) this.ui.style.visibility = 'hidden';
     const root = document.createElement('div');
     root.id = 'loader3d';
-    root.style.cssText = 'position:fixed;inset:0;z-index:150;background:#000;pointer-events:none;transition:none;';
-    const c = document.createElement('canvas');
-    c.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;image-rendering:pixelated;';
-    root.appendChild(c);
+    root.style.cssText = 'position:fixed;inset:0;z-index:150;pointer-events:none;font-family:Monogram,monospace;';
+    const bar = document.createElement('div');
+    bar.style.cssText = 'position:absolute;left:50%;top:72%;width:min(50vw,360px);height:3px;transform:translateX(-50%);background:#2a2024;';
+    const fill = document.createElement('div');
+    fill.style.cssText = 'height:100%;width:0;background:#f0a040;';
+    bar.appendChild(fill);
+    const tip = document.createElement('div');
+    tip.style.cssText = 'position:absolute;left:0;right:0;top:calc(72% + 14px);text-align:center;color:#8a7a70;font-size:clamp(16px,2.6vmin,26px);line-height:1;';
+    root.append(bar, tip);
     document.body.appendChild(root);
     this.dom = root;
-    this.canvas = c;
-    this.ctx = c.getContext('2d');
-    this.spr = document.createElement('canvas');
-    this.spr.width = W;
-    this.spr.height = H;
-    this.sctx = this.spr.getContext('2d');
-    this.resize = () => {
-      const dpr = Math.min(3, window.devicePixelRatio || 1);
-      c.width = Math.max(2, Math.round(window.innerWidth * dpr));
-      c.height = Math.max(2, Math.round(window.innerHeight * dpr));
-    };
-    this.resize();
-    window.addEventListener('resize', this.resize);
+    this.fill = fill;
+    this.tip = tip;
+    tip.textContent = TIPS[0];
+    try {
+      this.stage = new RunStage({ bg: 0x000000 });
+      this.stage.fy = 0.12;
+      this.stage.size = innerWidth < innerHeight ? 0.22 : 0.3;
+    } catch (e) {
+      // no WebGL stage? the bar alone will do
+      console.warn(e);
+      this.stage = null;
+      root.style.background = '#000';
+    }
     this.last = performance.now();
     const loop = (now) => {
       if (!this.running) return;
@@ -75,137 +214,23 @@ export class Loader3D {
     void label;
   }
 
-  // ---------------------------------------------------------------- drawing
-  // a chunky line of art pixels between two joints
-  bone(x0, y0, x1, y1, col, w = 2) {
-    const g = this.sctx;
-    g.fillStyle = col;
-    const n = Math.max(1, Math.ceil(Math.hypot(x1 - x0, y1 - y0)));
-    for (let i = 0; i <= n; i++) {
-      const k = i / n;
-      g.fillRect(Math.round(x0 + (x1 - x0) * k - w / 2), Math.round(y0 + (y1 - y0) * k - w / 2), w, w);
-    }
-  }
-
-  // two-segment limb: from (x,y), angles a1 then a2 (radians from straight down)
-  limb(x, y, a1, l1, a2, l2, col) {
-    const kx = x + Math.sin(a1) * l1, ky = y + Math.cos(a1) * l1;
-    const fx = kx + Math.sin(a2) * l2, fy = ky + Math.cos(a2) * l2;
-    this.bone(x, y, kx, ky, col);
-    this.bone(kx, ky, fx, fy, col);
-    return [fx, fy];
-  }
-
-  drawHank(t) {
-    const g = this.sctx;
-    g.clearRect(0, 0, W, H);
-    const R = (x, y, w, h, c) => { g.fillStyle = c; g.fillRect(Math.round(x), Math.round(y), w, h); };
-    const ph = t * 11; // stride phase
-    const s = Math.sin(ph), c2 = Math.cos(ph);
-    const bob = Math.abs(Math.cos(ph)) * 2.2; // up on each stride
-    const hx = 30, hy = 38 - bob; // hips
-    // ground shadow
-    R(hx - 9 + bob * 0.5, 57, 18 - bob, 1, '#2a2024');
-    // far leg and arm first (darker)
-    this.limb(hx + 1, hy, -s * 0.8, 8, -s * 0.8 + Math.max(0, -c2) * 1.3 + 0.2, 9, BONE_D);
-    this.limb(hx + 2, hy - 13, s * 0.9, 6, s * 0.9 - 1.4, 6, BONE_D);
-    // spine and ribs
-    this.bone(hx, hy, hx + 1.5, hy - 14, BONE, 2);
-    for (let i = 0; i < 4; i++) {
-      const y = hy - 12 + i * 2.6;
-      const w = 9 - i;
-      R(hx + 1.5 - w / 2, y, w, 1, i % 2 ? BONE_D : BONE);
-    }
-    R(hx - 3, hy - 1, 7, 2, BONE); // pelvis
-    // near leg (striding opposite)
-    const [fx, fy] = this.limb(hx, hy, s * 0.8, 8, s * 0.8 + Math.max(0, c2) * 1.3 + 0.2, 9, BONE);
-    R(fx - 1, fy - 1, 4, 2, BONE); // foot
-    // scarf: wrapped round the neck, the tail streaming out behind
-    const ny = hy - 15;
-    R(hx - 3, ny - 1, 9, 3, SCARF);
-    R(hx - 3, ny + 1, 9, 1, SCARF_D);
-    for (let i = 0; i < 11; i++) {
-      const wav = Math.sin(t * 16 - i * 0.7) * (i * 0.22);
-      R(hx - 4 - i, ny + i * 0.25 + wav, 2, 3, i % 3 === 2 ? SCARF_D : SCARF);
-    }
-    // skull: rocks a little with the stride
-    const sx = hx - 4 + s * 0.6, sy = ny - 12 + Math.abs(s) * 0.5;
-    R(sx, sy + 2, 12, 8, BONE);
-    R(sx + 1, sy + 1, 10, 1, BONE);
-    R(sx + 2, sy + 10, 8, 2, BONE); // jaw
-    R(sx + 2, sy + 10, 8, 1, BONE_D);
-    for (let i = 0; i < 4; i++) R(sx + 3 + i * 2, sy + 10, 1, 1, DARK); // teeth gaps
-    // eye sockets (blink now and then), facing right, the way he runs
-    const blink = (t % 3.1) < 0.12;
-    if (blink) { R(sx + 5, sy + 6, 3, 1, DARK); R(sx + 9, sy + 6, 2, 1, DARK); }
-    else {
-      R(sx + 5, sy + 5, 3, 3, DARK); R(sx + 9, sy + 5, 2, 3, DARK);
-      R(sx + 6, sy + 6, 1, 1, '#ffd060'); R(sx + 9, sy + 6, 1, 1, '#ffd060'); // a warm glint
-    }
-    R(sx + 8, sy + 8, 1, 2, DARK); // nose
-    // toque with a bouncing pompom
-    R(sx - 1, sy - 1, 14, 4, TOQUE);
-    R(sx - 1, sy + 2, 14, 1, TOQUE_D);
-    for (let i = 0; i < 7; i++) R(sx + i * 2, sy - 1, 1, 3, TOQUE_D); // ribbing
-    R(sx + 1, sy - 4, 10, 3, TOQUE);
-    R(sx + 3, sy - 6, 6, 2, TOQUE);
-    const pb = Math.sin(ph + 1) * 1.2;
-    R(sx + 1 - pb, sy - 9 + Math.abs(pb), 4, 4, POM);
-    // near arm out in front, holding the mug steady
-    const ax = hx + 2, ay = hy - 13;
-    const [mx, my] = this.limb(ax, ay, -1.1 + s * 0.15, 6, -1.9 + s * 0.1, 5, BONE);
-    R(mx, my - 4, 5, 6, MUG);
-    R(mx + 5, my - 3, 1, 3, MUG);
-    R(mx + 1, my - 4, 3, 1, COCOA);
-    // steam curls
-    for (let i = 0; i < 3; i++) {
-      const k = (t * 0.9 + i / 3) % 1;
-      R(mx + 2 + Math.sin(k * 7 + i) * 1.5, my - 6 - k * 9, 1, 1, `rgba(255,244,224,${(0.7 * (1 - k)).toFixed(2)})`);
-    }
-  }
-
   frame(dt) {
     if (!this.running) return;
-    this.t += dt;
     this.shown += (this.p - this.shown) * Math.min(1, dt * 6);
     this.tipT += dt;
-    if (this.tipT > 2.6) { this.tipT = 0; this.tipI = (this.tipI + 1) % TIPS.length; }
-    const c = this.canvas, g = this.ctx;
-    const cw = c.width, ch = c.height;
-    g.fillStyle = '#000';
-    g.fillRect(0, 0, cw, ch);
-    this.drawHank(this.t);
-    // whole-number scale keeps every art pixel square
-    const sc = Math.max(2, Math.floor(Math.min(cw, ch * 1.4) / 260));
-    g.imageSmoothingEnabled = false;
-    const x = Math.round(cw / 2 - (W * sc) / 2), y = Math.round(ch / 2 - (H * sc) * 0.62);
-    g.drawImage(this.spr, x, y, W * sc, H * sc);
-    // the road dashes slipping past under him
-    const gy = y + 58 * sc;
-    g.fillStyle = '#3a2e30';
-    const dash = 8 * sc, gap = 6 * sc, span = 56 * sc;
-    const off = ((this.t * 60 * sc) % (dash + gap));
-    for (let dx = -off; dx < span; dx += dash + gap) {
-      const a = Math.max(0, dx), b = Math.min(span, dx + dash);
-      if (b > a) g.fillRect(x + 4 * sc + a, gy, b - a, sc);
+    if (this.tipT > 2.6) {
+      this.tipT = 0;
+      this.tipI = (this.tipI + 1) % TIPS.length;
+      this.tip.textContent = TIPS[this.tipI];
     }
-    // thin progress bar
-    const bw = Math.round(Math.min(cw * 0.5, 120 * sc)), bh = Math.max(2, Math.round(sc * 0.75));
-    const bx = Math.round(cw / 2 - bw / 2), by = Math.round(gy + 10 * sc);
-    g.fillStyle = '#2a2024';
-    g.fillRect(bx, by, bw, bh);
-    g.fillStyle = '#f0a040';
-    g.fillRect(bx, by, Math.round(bw * Math.min(1, this.shown)), bh);
-    // tip line
-    const fs = Math.max(10, Math.round(sc * 5));
-    g.font = `${fs}px Monogram, monospace`;
-    g.textAlign = 'center';
-    g.textBaseline = 'top';
-    g.fillStyle = '#8a7a70';
-    g.fillText(TIPS[this.tipI], cw / 2, by + bh + sc * 4);
+    this.fill.style.width = `${(Math.min(1, this.shown) * 100).toFixed(1)}%`;
+    if (this.stage) {
+      this.stage.update(dt);
+      this.stage.render(this.pl);
+    }
   }
 
-  // fade the black away (the title fades itself in underneath)
+  // fade to black (the title fades itself in underneath)
   async finish(quick = false) {
     if (!this.running) return;
     this.p = 1;
@@ -215,6 +240,7 @@ export class Loader3D {
         const step = () => {
           const k = Math.min(1, (performance.now() - t0) / 350);
           this.dom.style.opacity = String(1 - k);
+          if (this.stage) this.stage.fade = k;
           if (k < 1) requestAnimationFrame(step);
           else r();
         };
@@ -222,7 +248,9 @@ export class Loader3D {
       });
     }
     this.running = false;
-    window.removeEventListener('resize', this.resize);
     this.dom.remove();
+    if (this.ui) this.ui.style.visibility = '';
+    this.stage?.dispose();
+    this.stage = null;
   }
 }
