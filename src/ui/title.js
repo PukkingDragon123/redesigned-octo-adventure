@@ -28,7 +28,7 @@ const SHOTS = [
     // the chapel, the forest, the lookout hill and the mountains beyond
     sched: 7.8,
     from: [338, 28, 54.5], to: [324, 25.5, 52.5], look: [214, 49], lookTo: [212, 48.5],
-    hor: 0.44, horTall: 0.48, hfov: 64,
+    hor: 0.56, horTall: 0.5, hfov: 64,
     ride: { path: [[150, 52.2], [266, 52.2]], speed: 5.2, start: 18 },
     birds: [{ at: 1.5, geese: { start: [238, -30], dir: [0, 1], alt: 41 } }],
   },
@@ -37,8 +37,8 @@ const SHOTS = [
     // Nana's road, down the middle between the carvers' tables, towards the camera
     sched: 10.5,
     from: [160, 5.6, 48.3], to: [164.5, 5.9, 48.7], look: [112, 50.4], lookTo: [112, 50.2],
-    hor: 0.46, horTall: 0.5, hfov: 70,
-    ride: { path: [[72, 47.2], [92, 49.9], [106, 51], [114, 50.6], [121, 50], [146, 50], [154, 51.6], [196, 52.2]], speed: 5.3, start: 0 },
+    hor: 0.53, horTall: 0.52, hfov: 70,
+    ride: { path: [[72, 47.2], [92, 49.9], [106, 51], [114, 50.6], [121, 50], [146, 50], [158, 50.6], [196, 51.2]], speed: 5.3, start: 0 },
     birds: [{ at: 3, geese: { start: [64, -40], dir: [0.15, 1], alt: 24 } }],
   },
   {
@@ -46,8 +46,8 @@ const SHOTS = [
     // houses, the green and the chapel steeple, the ridge and the northern ranges
     sched: 7.8,
     from: [210, 21, 167], to: [197, 23.5, 159], look: [186, 34], lookTo: [180, 30],
-    hor: 0.43, horTall: 0.47, hfov: 66,
-    ride: { path: [[138, 85.3], [258, 85.3]], speed: 5, start: 8 },
+    hor: 0.53, horTall: 0.5, hfov: 66,
+    ride: { path: [[138, 85.3], [258, 85.3]], speed: 5, start: 25 },
     birds: [{ at: 0.5, gulls: true }, { at: 4, gulls: true }],
   },
 ];

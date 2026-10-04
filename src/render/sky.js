@@ -146,6 +146,11 @@ uniform float uPix;
 uniform float uSeed;
 uniform float uSnow;
 uniform float uClipY;
+uniform vec3 uFogColor;
+uniform float uFogDensity;
+uniform float uFogScale;
+uniform float uFogHeight;
+uniform float uFogMax;
 varying vec3 vN;
 varying vec3 vWorldPos;
 void main() {
@@ -178,6 +183,15 @@ void main() {
   // mist pooled along the foot of the range, then its own distance haze
   float mist = 1.0 - smoothstep(0.0, uTop * 0.5, p.y);
   col = mix(col, uHorizon, clamp(mist * 0.6 + uHaze, 0.0, 1.0));
+  // so far off that the composite pass takes this for sky (depth ~1) and skips its fog:
+  // fog it here the same way, so the range doesn't darken past that distance
+  if (gl_FragCoord.z >= 0.99999) {
+    float dist = length(p - cameraPosition);
+    float hgt = exp(-max(p.y - 2.0, 0.0) * uFogHeight);
+    float f = min(1.0 - exp(-dist * uFogDensity * uFogScale * (0.55 + 0.45 * hgt)), uFogMax);
+    float sunAmt = pow(max(dot(d, uSunDir), 0.0), 6.0);
+    col = mix(col, mix(uFogColor, uSunGlow * 1.2 + uFogColor * 0.6, sunAmt), f);
+  }
   gl_FragColor = vec4(col, 1.0);
 }
 `;
@@ -187,11 +201,11 @@ const LAND_ARC = [1.75, Math.PI * 2 - 0.62];
 const TAPER = 0.55; // each end falls away to the sea over this much angle
 const RANGES = [
   // far: the big snowy peaks, pale with distance
-  { r: 1700, depth: 320, h0: 280, h1: 680, step: 11, wave: 430, snow: 340, tree: 0, forest: 0, pix: 9, haze: 0.16, rock: 0x9a9fd0, shade: 0x6c70a8, seed: 3 },
+  { r: 1520, depth: 300, h0: 250, h1: 610, step: 10, wave: 400, snow: 305, tree: 0, forest: 0, pix: 8, haze: 0.16, rock: 0x9a9fd0, shade: 0x6c70a8, seed: 3 },
   // middle: blue-grey slate, snow on the tallest tops, larch gold low down
-  { r: 1200, depth: 220, h0: 150, h1: 370, step: 9, wave: 260, snow: 250, tree: 120, forest: 0.6, pix: 6, haze: 0.07, rock: 0x66729e, shade: 0x464f7e, seed: 7 },
+  { r: 1090, depth: 200, h0: 140, h1: 340, step: 9, wave: 250, snow: 230, tree: 110, forest: 0.6, pix: 6, haze: 0.07, rock: 0x66729e, shade: 0x464f7e, seed: 7 },
   // near: forested foothills
-  { r: 790, depth: 140, h0: 60, h1: 190, step: 7, wave: 150, snow: 9999, tree: 150, forest: 1, pix: 4, haze: 0.02, rock: 0x4a5652, shade: 0x313b3a, seed: 11 },
+  { r: 730, depth: 130, h0: 55, h1: 180, step: 7, wave: 150, snow: 9999, tree: 140, forest: 1, pix: 4, haze: 0.02, rock: 0x4a5652, shade: 0x313b3a, seed: 11 },
 ];
 
 const smooth01 = (a, b, x) => {
@@ -199,7 +213,8 @@ const smooth01 = (a, b, x) => {
   return t * t * (3 - 2 * t);
 };
 
-export function createMountains() {
+// fog: the pipeline's composite uniforms (pipeline.post), shared so the far fragments match its fog
+export function createMountains(fog = null) {
   const group = new THREE.Group();
   group.name = 'mountains';
   const sx = new Simplex(99);
@@ -287,6 +302,11 @@ export function createMountains() {
         uSeed: { value: R.seed },
         uSnow: G.uSnow,
         uClipY: G.uClipY,
+        uFogColor: fog?.uFogColor ?? { value: new THREE.Color() },
+        uFogDensity: fog?.uFogDensity ?? { value: 0 },
+        uFogScale: fog?.uFogScale ?? { value: 1 },
+        uFogHeight: fog?.uFogHeight ?? { value: 0 },
+        uFogMax: fog?.uFogMax ?? { value: 0 },
       },
       vertexShader: MTN_VERT,
       fragmentShader: MTN_FRAG,
