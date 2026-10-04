@@ -33,9 +33,9 @@ const CELL = 4, PAD = 4, SIZE = N * CELL + PAD * 2; // the canvas: 4 x 4 art pix
 // ---------------------------------------------------------------- palettes (ABGR for the ImageData)
 const abgr = (c) => (0xff000000 | ((c & 0xff) << 16) | (c & 0xff00) | ((c >> 16) & 0xff)) >>> 0;
 const PAL = (arr) => arr.map(abgr);
-const SKIN = PAL([0x4a1a08, 0x7a2c0e, 0xa4421a, 0xc8581c, 0xe0701e, 0xf28c30, 0xfbac52]);
+const SKIN = PAL([0x4a1a08, 0x6e260c, 0x963a14, 0xb84c18, 0xd2601c, 0xe2762a, 0xee9040]);
 const SKIN_N = PAL([0x24100a, 0x3a1608, 0x58220c, 0x72300f, 0x8a3c12, 0x9c4a18, 0xac5a22]);
-const GLOW = PAL([0xfff6cc, 0xffe48a, 0xffca58, 0xffa63a, 0xf0842a, 0xd8661e]);
+const GLOW = PAL([0xfffbe0, 0xfff0a8, 0xffe070, 0xffcc48, 0xffb43a, 0xf89a30]);
 const FLESH = PAL([0xffda92, 0xf8b452, 0xdc8430, 0xb45c1c]); // the cut wall: top, side, shaded side, bottom
 const STEM = PAL([0x2a2410, 0x4e4a1c, 0x6e6a2a, 0x8a8a3a]);
 const WOOD = PAL([0x2e1a0e, 0x4a2c18, 0x553420, 0x603c24]);
@@ -346,9 +346,12 @@ class CarveGame {
       if (this.left <= 0) this.finish('time');
     }
     if (this.msgT > 0 && (this.msgT -= dt) <= 0) this.msgEl.classList.remove('on');
-    // the candle flickers
-    const f = Math.sin(now * 0.011) * 0.5 + Math.sin(now * 0.0237 + 1) * 0.35 + (Math.random() - 0.5) * 0.3;
-    if (Math.abs(f - this.flick) > 0.25) { this.flick = f; this.dirty = true; }
+    // the candle flickers (a dozen times a second is plenty)
+    if (now - (this.flickT || 0) > 85) {
+      this.flickT = now;
+      const f = Math.sin(now * 0.011) * 0.5 + Math.sin(now * 0.0237 + 1) * 0.35 + (Math.random() - 0.5) * 0.3;
+      if (Math.abs(f - this.flick) > 0.2) { this.flick = f; this.dirty = true; }
+    }
     if (this.anim) this.anim(dt);
     else if (this.dirty) this.draw();
   }
@@ -440,7 +443,7 @@ class CarveGame {
             else if (Math.abs(gx - candleX) < 0.4 + (gy - candleY + 0.6) * 0.25 && gy > candleY - 0.6 && gy <= candleY + 1) c = GLOW[0];
             else {
               const d = hyp(gx - candleX, (gy - candleY) * 1.2);
-              const gi = Math.floor(d / 2.6 + flick + BAYER[(py & 3) * 4 + (px & 3)] * 0.8);
+              const gi = Math.floor(d / 4 + flick + BAYER[(py & 3) * 4 + (px & 3)] * 0.8);
               c = GLOW[gi < 0 ? 0 : gi > 5 ? 5 : gi];
             }
           }
@@ -595,12 +598,14 @@ export class Carving {
         await S.say('gus', 'A skeleton... carving a face?', { actor: gus, expr: 'surprised' });
         gus.react('shake');
         await S.say('gus', 'Well, it IS a fair contest.', { actor: gus, expr: 'smug' });
+        gus.faceTowards(CONTEST.x, CONTEST.z);
         gus.play('announce', 'laugh');
         S.sfx('megaphone', { volume: 0.6 });
-        await S.cam(V(T.x - 3.4, y + 1.8, T.z - 3.0), V(T.x + 4, y + 1.2, T.z - 2.6), 0.6, 50);
+        await S.cam(V(gus.pos.x + 2.6, y + 1.65, gus.pos.z - 0.6), V(gus.pos.x, y + 1.45, gus.pos.z + 0.15), 0.6, 44);
         await S.say('gus', 'FOLKS! WE GOT A LATE ENTRY!', { actor: gus, expr: 'laugh' });
         this.contest.cheer(1, { force: true });
         await S.wait(1.2);
+        gus.face(0.15);
         gus.play('hostWalk', 'neutral');
         await S.cam(V(T.x - 2.8, y + 1.7, T.z - 4.2), V(T.x, y + 0.9, T.z - 0.4), 0.6, 46);
         await S.say('gus', `One pumpkin a day, ${TIME} seconds on the clock. Go on, bones. Impress me.`, { actor: gus, expr: 'neutral' });
@@ -661,11 +666,12 @@ export class Carving {
         await S.wait(0.6);
       }
       // the judges come round for a close look
-      if (gus) gus.walkTo([[T.x + 0.45, T.z - 1.2]], 1.3, 'hostWalk');
-      if (ingrid) ingrid.walkTo([[T.x - 0.55, T.z - 1.25]], 1.3, 'walk');
-      await S.wait(2.2);
-      if (gus) { gus.face(0); gus.play('inspect', 'neutral'); gus.showEmote('note', 1.6); S.sfx('hum_hmm', { volume: 0.5 }); }
-      if (ingrid) { ingrid.face(0); ingrid.play('judge', 'neutral'); S.sfx('pencil_scribble', { volume: 0.5 }); }
+      const GJ = [T.x + 0.45, T.z - 1.2], IJ = [T.x - 0.55, T.z - 1.25];
+      if (gus) gus.walkTo([GJ], 1.6, 'hostWalk');
+      if (ingrid) ingrid.walkTo([IJ], 1.5, 'walk');
+      await S.wait(2.6);
+      if (gus) { gus.path = null; this.place(gus, GJ[0], GJ[1], 0); gus.play('inspect', 'neutral'); gus.showEmote('note', 1.6); S.sfx('hum_hmm', { volume: 0.5 }); }
+      if (ingrid) { ingrid.path = null; this.place(ingrid, IJ[0], IJ[1], 0); ingrid.play('judge', 'neutral'); S.sfx('pencil_scribble', { volume: 0.5 }); }
       H.play('idle', r.collapse ? 'sheepish' : 'worried');
       // from behind Hank, the judges leaning in over the pumpkin
       await S.cam(V(T.x + 1.0, y + 1.75, T.z + 1.7), V(T.x - 0.1, y + 1.15, T.z - 1.0), 0.8, 44);
@@ -679,17 +685,18 @@ export class Carving {
         await S.faceShot(ingrid, { dist: 2.2, side: -0.8, dur: 0.5 });
         await S.say('ingrid', say.ingrid, { actor: ingrid, expr: r.collapse ? 'sad' : 'surprised' });
       }
-      // Gus turns to the street, megaphone up
-      await S.cam(V(T.x - 4.4, y + 1.7, T.z - 2.9), V(T.x + 3.5, y + 1.3, T.z - 1.6), 0.7, 50);
+      // Gus turns to the street, megaphone up (his face, from the street side)
       if (gus) {
         gus.faceTowards(CONTEST.x, CONTEST.z);
         gus.play('announce', 'happy');
+        await S.cam(V(gus.pos.x + 2.6, y + 1.65, gus.pos.z - 0.6), V(gus.pos.x, y + 1.45, gus.pos.z + 0.15), 0.6, 42);
         S.sfx('megaphone', { volume: 0.7 });
         await S.say('gus', `FOLKS! The skeleton's pumpkin takes...`, { actor: gus, expr: 'happy' });
         await S.wait(0.4);
         await S.say('gus', r.ribbon === 'part' ? (r.collapse ? 'HONOURABLE MENTION! For... ambition!' : 'HONOURABLE MENTION!') : `${R.name.toUpperCase()}!`, { actor: gus, expr: 'laugh' });
       }
-      // the street goes wild
+      // the street goes wild (looking down the street from behind Hank's table)
+      await S.cam(V(T.x - 3.6, y + 2.4, T.z - 1.6), V(T.x + 9, y + 1.0, T.z - 3.6), 0, 52);
       const cheered = this.contest.cheer(r.ribbon === 'first' || r.ribbon === 'second' ? 2 : 1, { force: true });
       if (!cheered) S.sfx('applause', { volume: 0.6 });
       if (ingrid) ingrid.react('clap');
@@ -698,8 +705,10 @@ export class Carving {
       if (r.ribbon !== 'part') g.effects.confetti(P.x, P.y + 1.2, P.z - 0.4, r.ribbon === 'first' ? 60 : 36);
       H.play(r.ribbon === 'part' ? 'shrug' : 'cheer', r.ribbon === 'part' ? 'sheepish' : 'laugh');
       if (r.ribbon !== 'part') H.react('yay');
-      await S.cam(V(T.x - 1.3, y + 1.65, T.z - 2.3), V(T.x, y + 1.35, T.z + 1.1), 0.6, 44);
-      await S.wait(0.8);
+      await S.wait(1.6);
+      // Hank, over the judges' heads
+      await S.cam(V(T.x - 0.3, y + 2.5, T.z - 2.7), V(T.x, y + 1.3, T.z + 1.1), 0.6, 44);
+      await S.wait(0.4);
       await S.say('hank', say.hank, { actor: H, expr: r.ribbon === 'part' ? 'sheepish' : 'sparkle' });
       await S.wait(0.6);
     });
@@ -757,7 +766,7 @@ export class Carving {
     const g = this.g, st = this.st, T = CONTEST.hank.stand;
     st.flags.village1 = true;
     st.flags.contestScream = true;
-    st.flags.carveIntro = true;
+    st.flags.carveIntro = !g.params?.has('intro');
     if (st.carving) st.carving.day = -1;
     g.world.atmosphere.hour = 10.5;
     for (const b of g.villagers.brains) g.villagers.force(b.char, 50, true);
@@ -766,7 +775,7 @@ export class Carving {
     g.chase.snap(g.bike);
     await g.wait(0.4);
     if (g.mode === 'cutscene') g.mode = 'ride';
-    await this.start({ intro: g.params?.has('intro') });
+    await this.start();
   }
 }
 

@@ -3,7 +3,7 @@
    per art pixel, so it stays crisp) and the tools beside it, or under it on a phone held
    upright. All sizes in whole art pixels. */
 .menu.carve-sheet { width: auto; max-width: calc(100% - var(--u) * 6); max-height: calc(100% - var(--u) * 26); }
-.carve-body { display: flex; flex-direction: column; align-items: stretch; gap: calc(var(--u) * 3); overflow: hidden; }
+.m-body.carve-body { display: flex; flex-direction: column; align-items: stretch; gap: calc(var(--u) * 3); overflow: hidden; }
 .carve-top { display: flex; align-items: center; gap: calc(var(--u) * 3); width: 0; min-width: 100%; }
 .carve-clock { flex: none; min-width: calc(var(--u) * 30); text-align: center; }
 .carve-top .k-bar { flex: 1; min-width: 0; width: auto; }
