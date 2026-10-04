@@ -61,6 +61,8 @@ export class Villagers {
     this.waveCooldown = {};
     this.ctx = makeCtx(game);
     this.pets = new Pets(this);
+    this.list = Object.values(this.actors);
+    this.crowd = []; // { a, x, z, r } everyone standing about this frame (brains steer round them)
     game.listeners?.push((e) => this.onBikeEvent(e));
   }
 
@@ -71,6 +73,7 @@ export class Villagers {
     a.homePos = a.pos.clone();
     a.play(IDLE[char] || 'idle');
     this.actors[key] = a;
+    this.list?.push(a);
     return a;
   }
 
@@ -273,6 +276,8 @@ export class Villagers {
     this.litter.update(dt);
     this.pets.update(dt, X);
     this.hint();
+    this.buildCrowd();
+    this.separate();
     if (g.state?.npc && g.state.day > (g.state.npc._day ?? g.state.day)) this.newDay();
     for (const [id, a] of Object.entries(this.actors)) {
       const b = a.brain;
@@ -316,6 +321,142 @@ export class Villagers {
       }
     }
   }
+  // ------------------------------------------------------------ bodies don't overlap
+  // who's standing where this frame: the brains steer round these (npcBrain.avoid)
+  buildCrowd() {
+    const C = this.crowd, L = this.list, X = this.ctx;
+    let n = 0;
+    for (let i = 0; i < L.length; i++) {
+      const a = L[i];
+      if (!a.visible || a.hiddenByStory) continue;
+      const e = C[n] || (C[n] = { a: null, x: 0, z: 0, r: 0 });
+      e.a = a; e.x = a.pos.x; e.z = a.pos.z; e.r = bodyR(a);
+      n++;
+    }
+    if (X.live) {
+      const e = C[n] || (C[n] = { a: null, x: 0, z: 0, r: 0 });
+      e.a = null; e.x = X.p.x; e.z = X.p.z; e.r = X.onFoot ? 0.3 : 0.6;
+      n++;
+    }
+    // Bessie parked while Hank's on foot
+    const B = this.game.bike;
+    if (this.game.onFoot && B && this.game.bikeModel?.root?.visible !== false) {
+      const e = C[n] || (C[n] = { a: null, x: 0, z: 0, r: 0 });
+      e.a = null; e.x = B.pos.x; e.z = B.pos.z; e.r = 0.6;
+      n++;
+    }
+    C.length = n;
+  }
+  // how readily a villager gets bumped aside: 0 = not at all (sitting, scripted, mid-chat)
+  shove(a) {
+    if (!a.visible || a.scripted || a.hiddenByStory || a.path || a.ride) return 0;
+    const b = a.brain;
+    if (b && (b.mode === 'engaged' || b.mode === 'script')) return 0;
+    if (!a.canShove()) return 0;
+    return b?.path ? 1 : 0.6;
+  }
+  // push a villager by (dx, dz), then back out of anything solid it was pushed into
+  push(a, dx, dz) {
+    _ro.px = a.pos.x;
+    _ro.pz = a.pos.z;
+    a.pos.x += dx;
+    a.pos.z += dz;
+    this.game.physics.resolve(a.pos, bodyR(a) * 0.85, 1.6, _ro);
+  }
+  // Villagers never stand inside each other, inside Hank or inside Bessie: overlapping
+  // bodies are pushed apart (whoever is walking gives way more; someone sitting doesn't move)
+  separate() {
+    const L = this.list, n = L.length;
+    for (let i = 0; i < n; i++) {
+      const a = L[i];
+      if (!a.visible || a.hiddenByStory) continue;
+      const ra = bodyR(a);
+      for (let j = i + 1; j < n; j++) {
+        const b = L[j];
+        if (!b.visible || b.hiddenByStory) continue;
+        const dx = b.pos.x - a.pos.x, dz = b.pos.z - a.pos.z;
+        const R = ra + bodyR(b);
+        const d2 = dx * dx + dz * dz;
+        if (d2 >= R * R || Math.abs(a.pos.y - b.pos.y) > 1.2) continue;
+        const ma = this.shove(a), mb = this.shove(b);
+        if (ma + mb <= 0) continue;
+        const d = Math.sqrt(d2);
+        const nx = d > 1e-4 ? dx / d : 1, nz = d > 1e-4 ? dz / d : 0;
+        const over = R - d;
+        if (ma > 0) this.push(a, -nx * over * (ma / (ma + mb)), -nz * over * (ma / (ma + mb)));
+        if (mb > 0) this.push(b, nx * over * (mb / (ma + mb)), nz * over * (mb / (ma + mb)));
+      }
+    }
+    const g = this.game, X = this.ctx;
+    // (a parked bike is in the way too: they walk round it, it doesn't budge)
+    if (g.onFoot && g.bikeModel?.root?.visible !== false) this.separateBike(g.bike, false);
+    if (!X.live) return;
+    if (g.onFoot) this.separateWalker(g.walker);
+    else if (g.bike.crash <= 0 && g.rider?.visible !== false) this.separateBike(g.bike, true);
+  }
+  separateWalker(W) {
+    const L = this.list, ph = this.game.physics;
+    const RH = 0.28;
+    for (let i = 0; i < L.length; i++) {
+      const a = L[i];
+      if (!a.visible || a.hiddenByStory || Math.abs(a.pos.y - W.pos.y) > 1.2) continue;
+      const dx = a.pos.x - W.pos.x, dz = a.pos.z - W.pos.z;
+      const R = RH + bodyR(a);
+      const d2 = dx * dx + dz * dz;
+      if (d2 >= R * R) continue;
+      const d = Math.sqrt(d2);
+      const nx = d > 1e-4 ? dx / d : Math.sin(W.yaw), nz = d > 1e-4 ? dz / d : Math.cos(W.yaw);
+      const over = R - d;
+      // they shuffle aside, he gets nudged back the rest of the way
+      const k = this.shove(a) > 0 ? 0.6 : 0;
+      if (k) this.push(a, nx * over * k, nz * over * k);
+      const left = R - Math.hypot(a.pos.x - W.pos.x, a.pos.z - W.pos.z);
+      if (left > 0) {
+        _ro.px = W.pos.x;
+        _ro.pz = W.pos.z;
+        W.pos.x -= nx * left;
+        W.pos.z -= nz * left;
+        (W.phys || ph).resolve(W.pos, RH, 1.5, _ro);
+      }
+      const vn = W.vel.x * nx + W.vel.z * nz;
+      if (vn > 0) { W.vel.x -= nx * vn; W.vel.z -= nz * vn; }
+    }
+  }
+  separateBike(B, moves) {
+    const L = this.list;
+    const fx = Math.sin(B.yaw), fz = Math.cos(B.yaw);
+    for (let i = 0; i < L.length; i++) {
+      const a = L[i];
+      if (!a.visible || a.hiddenByStory || Math.abs(a.pos.y - B.pos.y) > 1.4) continue;
+      // nearest of the bike's three circles (the frame, and each wheel)
+      const rel = (a.pos.x - B.pos.x) * fx + (a.pos.z - B.pos.z) * fz;
+      const k = Math.max(-0.46, Math.min(0.46, rel));
+      const cx = B.pos.x + fx * k, cz = B.pos.z + fz * k;
+      const rb = Math.abs(k) > 0.3 ? 0.28 : 0.42;
+      const dx = a.pos.x - cx, dz = a.pos.z - cz;
+      const R = rb + bodyR(a);
+      const d2 = dx * dx + dz * dz;
+      if (d2 >= R * R) continue;
+      const d = Math.sqrt(d2);
+      const nx = d > 1e-4 ? dx / d : fz, nz = d > 1e-4 ? dz / d : -fx;
+      const over = R - d;
+      // a villager in the way is bumped aside (off the bike's line, not shoved along in front
+      // of it); someone who can't move stops the bike instead
+      if (this.shove(a) > 0) {
+        const side = dx * fz - dz * fx >= 0 ? 1 : -1;
+        let px = nx + fz * side * 0.8, pz = nz - fx * side * 0.8;
+        const pl = Math.hypot(px, pz) || 1;
+        px /= pl; pz /= pl;
+        this.push(a, px * over * (moves ? 0.75 : 1.05), pz * over * (moves ? 0.75 : 1.05));
+      }
+      if (!moves) continue;
+      const left = R - Math.hypot(a.pos.x - cx, a.pos.z - cz);
+      if (left > 0) B.nudge(-nx * left, -nz * left);
+      const vn = B.vel.x * nx + B.vel.z * nz;
+      if (vn > 0) { B.vel.x -= nx * vn * 0.6; B.vel.z -= nz * vn * 0.6; }
+    }
+  }
+
   // Nana is always pleased to see him
   nana(a, d, dt) {
     const g = this.game, p = g.playerPos;
@@ -443,6 +584,9 @@ export class Villagers {
 }
 
 const _r = new THREE.Vector3(), _p = new THREE.Vector3(), _f = new THREE.Vector3();
+const _ro = { px: 0, pz: 0 };
+// a villager's body radius (in plan) for bumping into things
+const bodyR = (a) => clamp(a.P.bodyR + 0.03, 0.16, 0.34);
 
 // what the villagers know about Hank this frame
 function makeCtx(g) {

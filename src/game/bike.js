@@ -165,6 +165,14 @@ export class Bike {
     this._after.copy(this.pos);
     this._afterYaw = this.yaw;
   }
+  // shove the bike sideways from outside the physics step (a villager in the way) without
+  // breaking the render blend
+  nudge(dx, dz) {
+    this.pos.x += dx; this.pos.z += dz;
+    this.prev.pos.x += dx; this.prev.pos.z += dz;
+    this.view.pos.x += dx; this.view.pos.z += dz;
+    this._after.x += dx; this._after.z += dz;
+  }
   // a = how far (0..1) the clock is between the previous physics step and the latest one
   lerpView(a) {
     // moved by something else since the last step (a reset, a cutscene): no blending across it
@@ -576,7 +584,7 @@ export class Bike {
 
     // ---- visual attitude: a rubbery spring lean, pitch from slope / balance / air
     const leanTarget = this.grounded
-      ? clamp(Math.atan((-this.yawRate * clamp(Math.abs(fwdSpeed), 0, 14)) / GRAV) * 1.15, -0.72, 0.72) * (fwdSpeed < 0 ? -1 : 1) + (this.drifting ? -this.driftDir * 0.14 : 0) + this.dab * this.dabSide * 0.16 + this.balance * 0.35
+      ? clamp(Math.atan((-this.yawRate * clamp(Math.abs(fwdSpeed), 0, 14)) / GRAV) * 1.15, -0.72, 0.72) * (fwdSpeed < 0 ? -1 : 1) + (this.drifting ? -this.driftDir * 0.14 : 0) + this.dab * this.dabSide * 0.22 + this.balance * 0.35
       : clamp(c.steer * 0.15, -0.2, 0.2);
     this.leanVel += (95 * (leanTarget - this.lean) - 11 * this.leanVel) * dt;
     this.lean += this.leanVel * dt;

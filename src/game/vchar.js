@@ -2,6 +2,15 @@
 // animation, expressive pixel faces, cloth scarves/capes, held items, big
 // cartoon reactions, bike-riding IK and (for Hank) falling apart into bones.
 // The API mirrors the old sprite Actor so cutscenes can drive either.
+//
+// Near the camera, feet are placed procedurally (updateFeet / solveFeet): each foot
+// plants on the ground or deck under it and stays put through its stance, swings to
+// a landing spot predicted from the walking speed (stride matched to speed, so no
+// skating), the hips drop when a foot has to reach down a step or a slope, two-bone
+// IK bends hip and knee to reach, and the ankle lays the foot along the slope.
+// Standing still they shuffle a foot when they turn or get nudged. Poses that move
+// the legs themselves (sitting, kicking, dancing...) take over smoothly; far away
+// characters keep the cheap phase-swing walk.
 import * as THREE from 'three';
 import { CHARACTERS, VS, buildHead, buildJaw, buildTorso, buildLimb, buildSkirt, hipVoxels } from '../voxel/models/characters.js';
 import { meshVox } from '../voxel/mesh.js';
@@ -66,6 +75,13 @@ function heldMesh(name) {
 
 const TAU = Math.PI * 2;
 const _v = new THREE.Vector3(), _w = new THREE.Vector3(), _q = new THREE.Quaternion(), _m = new THREE.Matrix4(), _e = new THREE.Euler();
+const _q2 = new THREE.Quaternion(), _Y = new THREE.Vector3(0, 1, 0);
+const _gnd = { h: 0, nx: 0, ny: 1, nz: 0 };
+const SIDES = ['L', 'R'];
+// procedural feet: only characters this close to the camera plant their feet (the rest
+// keep the cheap phase-swing walk)
+const IK_DIST = 24;
+const frac = (x) => x - Math.floor(x);
 
 // ---------------------------------------------------------------- personalities
 const PERSONA = {
@@ -99,6 +115,8 @@ function partsFor(id) {
   const torso = buildTorso(spec);
   const limbs = {};
   for (const k of ['upperArm', 'forearm', 'thigh', 'shin']) limbs[k] = buildLimb(spec, k);
+  // the foot gets its own joint at the ankle (so it can lie flat on the ground)
+  limbs.foot = splitFoot(limbs.shin);
   P = {
     spec, skull, head, torso, limbs,
     geo: {
@@ -108,6 +126,7 @@ function partsFor(id) {
       forearm: geo(limbs.forearm, 4),
       thigh: geo(limbs.thigh, 5),
       shin: geo(limbs.shin, 6),
+      foot: geo(limbs.foot, 10),
     },
   };
   if (skull) { P.jaw = buildJaw(spec); P.geo.jaw = geo(P.jaw, 7); }
@@ -131,6 +150,23 @@ function partsFor(id) {
   P.bodyR = (Math.max(w, spec.torso.d + (spec.torso.belly || 0)) / 2) * VS;
   CACHE.set(id, P);
   return P;
+}
+
+// cut a shin limb at the ankle: the shin keeps the bone (and any boot cuff), the
+// returned foot part has its pivot at the ankle
+function splitFoot(r) {
+  const lenV = Math.round(r.len / VS);
+  const yb = r.origin[1] - lenV;
+  const v = r.vox, W = v.w, H = v.h;
+  const foot = new Vox(W, H, v.d);
+  for (let i = 0; i < v.data.length; i++) {
+    if (!v.data[i]) continue;
+    const y = Math.floor(i / W) % H;
+    if (y >= yb) continue;
+    foot.data[i] = v.data[i];
+    v.data[i] = 0;
+  }
+  return { vox: foot, origin: [r.origin[0], yb, r.origin[2]], size: VS };
 }
 
 // a chunky knitted scarf wrapped around the neck, knot on the left
@@ -535,6 +571,16 @@ export class VoxelCharacter {
     this.T = { ...REST };
     this.stiff = 240;
     this.zeta = 0.5;
+    this.blendT = 1; // eases the springs for a moment after a pose change
+    this.stepY = 0; // visual height offset (easing over a kerb Hank just stepped up)
+    this.vx = 0; // smoothed ground velocity, forward acceleration and turn rate:
+    this.vz = 0; // feet land ahead of where he's going, the body leans into
+    this.acc = 0; // starts, stops and turns, the arms trail behind
+    this.yawRate = 0;
+    this.feet = null; // procedural foot placement (updateFeet)
+    this.pelvis = 0; // how far the hips drop so a foot can reach down a step
+    this.legFree = { L: true, R: true }; // legs no pose is driving (the feet can plant them)
+    this.look = [0, 0];
     this.lastPos = this.pos.clone();
     this.parentObj = parent || game?.scene;
     this.buildRig(shadow);
@@ -648,15 +694,19 @@ export class VoxelCharacter {
       knee.position.y = -P.thighL;
       hip.add(knee);
       const shin = mk(G.shin, knee, s < 0);
-      this.legs[side] = { hip, thigh, knee, shin, s };
-      if (this.spec.kind === 'reaper') { thigh.visible = shin.visible = false; }
+      const ankle = new THREE.Group();
+      ankle.position.y = -P.shinL;
+      knee.add(ankle);
+      const foot = mk(G.foot, ankle, s < 0);
+      this.legs[side] = { hip, thigh, knee, shin, ankle, foot, s };
+      if (this.spec.kind === 'reaper') { thigh.visible = shin.visible = foot.visible = false; }
     }
     if (G.skirt) this.skirt = mk(G.skirt, this.body);
     if (G.scarf) {
       this.scarfRing = mk(G.scarf, this.spine);
       this.scarfRing.position.y = P.torsoH - (this.spec.kind === 'skeleton' ? 1 : 0.5) * VS;
     }
-    this.breakables = [this.legs.L.shin, this.legs.R.shin, this.legs.L.thigh, this.legs.R.thigh, this.torso, this.arms.L.upper, this.arms.R.upper, this.arms.L.fore, this.arms.R.fore, this.scarfRing, this.jaw, this.headPiece].filter(Boolean);
+    this.breakables = [this.legs.L.foot, this.legs.R.foot, this.legs.L.shin, this.legs.R.shin, this.legs.L.thigh, this.legs.R.thigh, this.torso, this.arms.L.upper, this.arms.R.upper, this.arms.L.fore, this.arms.R.fore, this.scarfRing, this.jaw, this.headPiece].filter(Boolean);
   }
 
   buildCloth() {
@@ -704,12 +754,15 @@ export class VoxelCharacter {
     if (anim !== this.anim) {
       this.anim = anim;
       this.animT = 0;
+      this.blendT = 0;
       this.autoHold(anim);
     }
     if (expr) this.expr = expr === 'blink' ? 'neutral' : expr;
     return this;
   }
   setExpr(e) { this.expr = e; return this; }
+  // can someone bump into this character and move it? (not while sitting, riding, lying...)
+  canShove() { return LOCO_OK.has(this.anim) && !this.ride && !this.broken && this.hop < 0.05; }
   // old sprite Actor compatibility (cutscenes poke these)
   get bb() {
     const self = this;
@@ -894,14 +947,25 @@ export class VoxelCharacter {
     if (this.talking > 0) this.talking -= dt;
     if (this.tmpExpr && (this.tmpExpr.t -= dt) <= 0) this.tmpExpr = null;
     this.followPath(dt);
-    // locomotion speed from movement
+    // locomotion speed from movement (and the velocity, acceleration and turn rate behind it)
     if (dt > 0) {
-      const mv = Math.hypot(this.pos.x - this.lastPos.x, this.pos.z - this.lastPos.z) / dt;
-      const sp = this.speedOverride ?? (mv > 20 ? 0 : mv);
+      const mx = (this.pos.x - this.lastPos.x) / dt, mz = (this.pos.z - this.lastPos.z) / dt;
+      const mv = Math.hypot(mx, mz);
+      const tele = mv > 20;
+      const sp = this.speedOverride ?? (tele ? 0 : mv);
       this.speed += (sp - this.speed) * (1 - Math.exp(-12 * dt));
+      const fs = Math.sin(this.yaw), fc = Math.cos(this.yaw);
+      const f0 = this.vx * fs + this.vz * fc;
+      const kv = 1 - Math.exp(-10 * dt);
+      this.vx += ((tele ? 0 : mx) - this.vx) * kv;
+      this.vz += ((tele ? 0 : mz) - this.vz) * kv;
+      const a = clamp((this.vx * fs + this.vz * fc - f0) / dt, -20, 20);
+      this.acc += (a - this.acc) * (1 - Math.exp(-6 * dt));
     }
     this.lastPos.copy(this.pos);
+    const yaw0 = this.yaw;
     if (!this.ride) this.yaw = angleDamp(this.yaw, this.targetYaw, 10, dt);
+    if (dt > 0) this.yawRate += (clamp(wrapAngle(this.yaw - yaw0) / dt, -12, 12) - this.yawRate) * (1 - Math.exp(-10 * dt));
     // hop
     if (this.hopV !== 0 || this.hop > 0) {
       this.hopV -= 15 * dt;
@@ -915,15 +979,17 @@ export class VoxelCharacter {
     this.snapGround();
     this.computeTargets(dt);
     this.springs(dt);
+    this.updateFeet(dt, camPos);
     this.apply();
     if (this.ride) this.solveRide(dt);
+    else if (this.feet?.on) this.solveFeet();
     // upright held things (mugs, lanterns) stay level whatever the arm does
-    for (const s of ['L', 'R']) {
+    for (const s of SIDES) {
       const h = this.held[s];
       if (!h?.userData.upright) continue;
       this.arms[s].hand.updateWorldMatrix(true, false);
       this.arms[s].hand.getWorldQuaternion(_q).invert();
-      h.quaternion.copy(_q).multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), this.yaw));
+      h.quaternion.copy(_q).multiply(_q2.setFromAxisAngle(_Y, this.yaw));
     }
     this.updateFace(dt, camPos);
     if (this.flashT > 0) {
@@ -981,18 +1047,50 @@ export class VoxelCharacter {
     fn(this, this.animT, T);
     if (this.fidget) this.applyFidget(dt, T);
     if (this.talking > 0 && (anim === 'idle' || anim === 'talk')) this.talkGestures(T);
-    if (moving) this.locomotion(dt, T, v, LOCO_ARMS.has(anim) && !this.held.R && !this.held.L);
-    else this.phase = 0;
+    // legs a pose moves itself (sitting, kicking, a dance, a tapping foot) aren't planted by the feet
+    let fL = T.lFL === REST.lFL && T.lOL === REST.lOL && T.kBL === REST.kBL;
+    let fR = T.lFR === REST.lFR && T.lOR === REST.lOR && T.kBR === REST.kBR;
+    const armsFree = LOCO_ARMS.has(anim) && !this.held.R && !this.held.L;
+    const ikW = this.feet?.on ? (this.feet.L.w + this.feet.R.w) / 2 : 0;
+    if (moving) this.locomotion(dt, T, v, armsFree, ikW);
+    else if (!ikW) this.phase = 0;
     // reactions
     if (this.reaction) {
       const r = this.reaction;
+      const l0 = T.lFL, l1 = T.kBL, r0 = T.lFR, r1 = T.kBR;
       r.t += dt;
       r.R.f?.(this, r.t, T);
+      if (T.lFL !== l0 || T.kBL !== l1) fL = false;
+      if (T.lFR !== r0 || T.kBR !== r1) fR = false;
       if (r.t >= r.R.d) this.reaction = null;
+    }
+    this.legFree.L = fL;
+    this.legFree.R = fR;
+    if (!this.ride && !this.broken) {
+      // ---- secondary motion: lean into a start, rock back on a stop, bank into turns;
+      // the eyes stay on the way ahead and loose arms trail behind
+      const accL = clamp(this.acc * 0.022, -0.14, 0.16);
+      const turn = clamp(this.yawRate * Math.min(v, 6) * 0.035, -0.2, 0.2);
+      T.lean += accL;
+      T.headX -= accL * 0.6;
+      T.tilt -= turn;
+      T.headZ += turn * 0.45;
+      if (armsFree) {
+        T.aFL -= accL * 1.4; T.aFR -= accL * 1.4;
+        T.aOL += Math.abs(turn) * 0.35; T.aOR += Math.abs(turn) * 0.35;
+      }
+      // ---- breathing: slow and easy standing about, everyone at their own pace
+      const still = 1 - clamp(v / 1.5, 0, 1);
+      const br = S(this.t * (1.6 + (this.seed % 1) * 0.6));
+      T.shUp += br * 0.008 * (0.4 + still * 0.6);
+      T.lean -= br * 0.012 * still;
+      T.headX += br * 0.01 * still;
+      T.sq += br * 0.005 * still;
     }
     // look at a target / the camera
     const lt = this.lookTarget?.isVector3 ? this.lookTarget : this.lookTarget?.pos ? _w.copy(this.lookTarget.pos).setY(this.lookTarget.pos.y + (this.lookTarget.P?.neckY ?? 1.2) + (this.lookTarget.P?.hipH ?? 0)) : null;
-    this.look = [0, 0];
+    if (!this.look || this.look.length !== 2) this.look = [0, 0];
+    this.look[0] = this.look[1] = 0;
     if (lt && !this.broken) {
       const dx = lt.x - this.pos.x, dz = lt.z - this.pos.z;
       const rel = wrapAngle(Math.atan2(dx, dz) - this.yaw - T.bodyRy);
@@ -1000,17 +1098,20 @@ export class VoxelCharacter {
       const headY = this.pos.y + P.hipH + P.neckY + P.headH * 0.5;
       const pitch = clamp(-Math.atan2(lt.y - headY, Math.hypot(dx, dz)), -0.45, 0.4);
       T.headY += yawH * 0.75; T.twist += yawH * 0.25; T.headX += pitch * 0.8;
-      this.look = [clamp(yawH * 1.2, -1, 1), clamp(pitch * 2, -1, 1)];
+      this.look[0] = clamp(yawH * 1.2, -1, 1);
+      this.look[1] = clamp(pitch * 2, -1, 1);
     }
   }
 
-  locomotion(dt, T, v, armsToo) {
+  // the phase-swing walk (far away), and the body / arm motion that goes with the planted
+  // feet up close (ikW > 0: updateFeet drives the phase and the hips do most of the bobbing)
+  locomotion(dt, T, v, armsToo, ikW = 0) {
     const P = this.P, per = this.persona;
     const legL = P.hipH;
     const style = per.walk;
     const stepLen = legL * (style === 'waddle' ? 0.55 : style === 'lumber' ? 0.7 : 0.8);
     const sps = clamp(v / stepLen, 0, style === 'waddle' ? 5.2 : 4.4);
-    this.phase += sps * Math.PI * dt;
+    if (ikW <= 0) this.phase += sps * Math.PI * dt;
     const ph = this.phase;
     const sn = S(ph), cs = C(ph);
     const wk = clamp(v / 0.5, 0, 1);
@@ -1027,7 +1128,7 @@ export class VoxelCharacter {
     if (style === 'march') { T.kBL += Math.max(0, cs) * 0.5 * wk; T.kBR += Math.max(0, -cs) * 0.5 * wk; T.lFL *= 1.2; T.lFR *= 1.2; }
     // body bob & squash
     const bounce = per.bounce * (style === 'skip' ? 1.8 : style === 'bouncy' ? 1.3 : 1);
-    const bob = (0.018 + v * 0.012) * bounce * wk;
+    const bob = (0.018 + v * 0.012) * bounce * wk * (1 - 0.65 * ikW);
     T.bodyY += (Math.abs(cs) - 0.5) * bob * 2 + run * 0.02;
     T.sq = 1 + (Math.abs(cs) - 0.5) * 0.06 * bounce * wk;
     // waddle: short legs rock side to side
@@ -1046,11 +1147,11 @@ export class VoxelCharacter {
       T.eBL = 0.25 + run * 1.2 + Math.max(0, -sn) * 0.3 * wk; T.eBR = 0.25 + run * 1.2 + Math.max(0, sn) * 0.3 * wk;
       if (style === 'shamble') { T.aFL = T.aFR = 1.4; T.eBL = T.eBR = 0.1; T.aFL += sn * 0.1; T.aFR -= sn * 0.1; }
     }
-    // footsteps
+    // footsteps (planted feet call it themselves)
     const step = Math.floor(ph / Math.PI);
     if (step !== this._step) {
       this._step = step;
-      this.onStep?.(this, v);
+      if (ikW < 0.5) this.onStep?.(this, v);
     }
   }
 
@@ -1141,11 +1242,21 @@ export class VoxelCharacter {
     const steps = Math.max(1, Math.ceil(dt / (1 / 120)));
     const h = dt / steps;
     const K = this.stiff, Cd = 2 * this.zeta * Math.sqrt(K);
+    // just after a pose change the joints ease over softer and better damped (a blend,
+    // not a twang); squash kicks keep their snap
+    let kb = 1, cb = 1;
+    if (this.blendT < 1) {
+      this.blendT = Math.min(1, this.blendT + dt / 0.35);
+      const e = this.blendT * this.blendT * (3 - 2 * this.blendT);
+      kb = 0.3 + 0.7 * e;
+      cb = Math.sqrt(kb) * (1 + 0.7 * (1 - e));
+    }
     for (let s = 0; s < steps; s++) {
       for (let i = 0; i < KEYS.length; i++) {
         const k = KEYS[i];
-        const kk = k === 'sq' || k === 'headS' ? K * 1.4 : k === 'bodyRy' ? K * 2 : K;
-        const cc = k === 'sq' || k === 'headS' ? Cd * 0.7 : Cd;
+        const sq = k === 'sq' || k === 'headS';
+        const kk = sq ? K * 1.4 : (k === 'bodyRy' ? K * 2 : K) * kb;
+        const cc = sq ? Cd * 0.7 : Cd * cb;
         V[k] += (kk * (T[k] - J[k]) - cc * V[k]) * h;
         J[k] += V[k] * h;
       }
@@ -1160,12 +1271,12 @@ export class VoxelCharacter {
       this.ride.seat.matrixWorld.decompose(r.position, r.quaternion, _w);
       this.pos.copy(r.position);
     } else {
-      r.position.set(this.pos.x, this.pos.y + this.hop + this.yOffset + this.floatY, this.pos.z);
+      r.position.set(this.pos.x, this.pos.y + this.hop + this.yOffset + this.floatY + this.stepY, this.pos.z);
       r.rotation.set(0, this.yaw, 0);
     }
     const sq = Math.max(0.4, J.sq);
     this.squashG.scale.set(1 / Math.sqrt(sq), sq, 1 / Math.sqrt(sq));
-    this.body.position.set(0, (this.ride ? 0 : P.hipH) + J.bodyY, J.bodyZ);
+    this.body.position.set(0, (this.ride ? 0 : P.hipH + this.pelvis) + J.bodyY, J.bodyZ);
     this.body.rotation.set(J.bodyRx, J.bodyRy, J.bodyRz);
     this.spine.rotation.set(J.lean, J.twist, J.tilt);
     this.neck.position.y = P.neckY + J.headUp;
@@ -1189,44 +1300,254 @@ export class VoxelCharacter {
     }
   }
 
-  // two-bone IK onto the bike's grips and pedals
+  // ------------------------------------------------------------ procedural feet
+  // Which feet are planted, and where, this frame (after the springs, before apply();
+  // solveFeet() then bends the legs to reach). Each foot stays put through its stance,
+  // swings to where the hip will be half a stance after it lands (stride matched to the
+  // speed, so nothing skates), and the hips drop if a foot has to reach down to the ground.
+  updateFeet(dt, camPos) {
+    const g = this.game, P = this.P;
+    const want = !!(dt > 0 && dt < 0.07 && camPos && g?.physics && this.root.parent === g.scene && !this.ride && !this.broken &&
+      this.visible && this.spec.kind !== 'reaper' && this.hop < 0.02 && Math.abs(this.J.bodyRx) < 0.3 &&
+      (camPos.x - this.pos.x) ** 2 + (camPos.z - this.pos.z) ** 2 < IK_DIST * IK_DIST);
+    let F = this.feet;
+    if (!F) {
+      if (!want) { this.pelvis = 0; return; }
+      const foot = (s) => ({ s, w: 0, planted: true, idle: false, t: 0, dur: 0.2, x: 0, y: 0, z: 0, sx: 0, sy: 0, sz: 0, tx: 0, tz: 0, yaw: 0, nx: 0, ny: 1, nz: 0, lift: 0 });
+      F = this.feet = { on: false, init: false, moving: false, gp: 0, wait: 0, L: foot(1), R: foot(-1), legLen: P.thighL + P.shinL };
+    }
+    // legs no pose is driving fade in; let go quickly (a jump, a kick, sitting down)
+    for (const side of SIDES) {
+      const f = F[side];
+      const tgt = want && this.legFree[side] ? 1 : 0;
+      f.w = tgt >= f.w ? Math.min(tgt, f.w + dt * 6) : Math.max(tgt, f.w - dt * 10);
+    }
+    F.on = F.L.w > 0 || F.R.w > 0;
+    if (!F.on) {
+      F.init = false;
+      F.moving = false;
+      this.legs.L.ankle.rotation.x = this.legs.R.ankle.rotation.x = 0;
+      this.pelvis *= Math.exp(-12 * dt);
+      return;
+    }
+    const sy = Math.sin(this.yaw), cy = Math.cos(this.yaw);
+    const lx = cy, lz = -sy; // the character's own left (+x)
+    const footW = P.hipX * 1.05;
+    const legLen = F.legLen;
+    // (re)starting, or just teleported: both feet planted under the hips
+    if (!F.init || Math.hypot(F.L.x - this.pos.x, F.L.z - this.pos.z) > legLen * 2.5 || Math.hypot(F.R.x - this.pos.x, F.R.z - this.pos.z) > legLen * 2.5) {
+      F.init = true;
+      F.moving = false;
+      for (const side of SIDES) {
+        const f = F[side];
+        f.x = this.pos.x + lx * f.s * footW;
+        f.z = this.pos.z + lz * f.s * footW;
+        f.y = this.footGround(f.x, f.z, f);
+        f.planted = true; f.idle = false; f.t = 0; f.lift = 0; f.yaw = this.yaw;
+      }
+    }
+    // ---- the gait: steps a second and the share of each cycle a foot is down, from the speed
+    const v = this.speed;
+    const moving = F.moving ? v > 0.1 : v > 0.22;
+    const run = clamp((v - 1.6) / 2, 0, 1);
+    const duty = 0.53 - 0.21 * run;
+    const style = this.persona.walk;
+    const cadence = clamp(2.4 + 0.85 * v, 2.4, 5.8) * Math.sqrt(0.6 / legLen) * (style === 'waddle' ? 1.2 : style === 'lumber' ? 0.9 : style === 'skip' ? 1.1 : 1);
+    const cycle = 2 / cadence;
+    if (moving && !F.moving) {
+      // setting off: the foot further forward is mid-stance (it's under him), the other
+      // one is already on its way
+      const bL = (F.L.x - this.pos.x) * sy + (F.L.z - this.pos.z) * cy;
+      const bR = (F.R.x - this.pos.x) * sy + (F.R.z - this.pos.z) * cy;
+      F.gp = (bL >= bR ? duty / 2 : duty / 2 + 0.5) + 1;
+    }
+    F.moving = moving;
+    if (moving) {
+      F.gp += dt / cycle;
+      this.phase = F.gp * TAU + Math.PI / 2; // the arms swing with the legs
+    }
+    const lift0 = (style === 'march' ? 1.6 : style === 'shamble' || style === 'slow' ? 0.6 : 1) * (0.045 + 0.028 * Math.min(v, 5));
+    F.wait -= dt;
+    for (const side of SIDES) {
+      const f = F[side];
+      const other = side === 'L' ? F.R : F.L;
+      const restX = this.pos.x + lx * f.s * footW, restZ = this.pos.z + lz * f.s * footW;
+      let tx = restX, tz = restZ;
+      if (moving) {
+        const ph = frac(F.gp + (f.s > 0 ? 0 : 0.5));
+        const sw = ph < duty ? 1 : (ph - duty) / (1 - duty);
+        // land where the hip will be half a stance after touchdown
+        const ahead = (1 - sw) * (1 - duty) * cycle + duty * cycle * 0.5;
+        tx = restX + this.vx * ahead;
+        tz = restZ + this.vz * ahead;
+        if (ph < duty) {
+          if (!f.planted) this.plantFoot(f, tx, tz, v);
+          // left far behind by a sudden spurt: hop it forward early
+          else if (Math.hypot(f.x - restX, f.z - restZ) > legLen * 1.1 && other.planted) this.liftFoot(f, true, 0.16);
+        } else {
+          if (f.planted) this.liftFoot(f, false, 0);
+          if (!f.idle) f.t = sw;
+        }
+      } else if (f.planted) {
+        // standing: a foot left behind (he turned on the spot, got nudged) steps back under
+        // him, the other one a beat later
+        const off = Math.hypot(f.x - restX, f.z - restZ);
+        const twist = Math.abs(wrapAngle(this.yaw - f.yaw));
+        if ((off > 0.06 + legLen * 0.12 || twist > 0.55) && other.planted && F.wait <= 0) {
+          this.liftFoot(f, true, 0.2);
+          F.wait = 0.14;
+        }
+      } else if (!f.idle) {
+        // stopped mid-stride: finish the step under him
+        f.idle = true;
+        f.dur = 0.2;
+      }
+      if (f.planted) continue;
+      if (f.idle) f.t = Math.min(1, f.t + dt / f.dur);
+      f.tx = tx;
+      f.tz = tz;
+      const e = f.t * f.t * (3 - 2 * f.t);
+      f.x = f.sx + (tx - f.sx) * e;
+      f.z = f.sz + (tz - f.sz) * e;
+      const gy = this.footGround(f.x, f.z, f);
+      f.lift = Math.sin(Math.PI * f.t) * (moving ? lift0 : 0.04);
+      f.y = Math.max(f.sy + (gy - f.sy) * e, gy) + f.lift;
+      if (f.idle && f.t >= 1) this.plantFoot(f, tx, tz, v);
+    }
+    // ---- hips: as low as the lower foot needs (down a step, across a slope, a long stride);
+    // a swinging foot counts more as it comes down, so the hips are ready for the heel strike
+    const base = this.pos.y + this.stepY, sqY = Math.max(0.4, this.J.sq);
+    const reach = legLen * 0.993;
+    let drop = 0;
+    for (const side of SIDES) {
+      const f = F[side];
+      if (f.w <= 0) continue;
+      const hx = this.pos.x + lx * f.s * P.hipX, hz = this.pos.z + lz * f.s * P.hipX;
+      const dh = Math.hypot(f.x - hx, f.z - hz);
+      // the highest the hips can be and still reach this foot (the body squash stretches them)
+      const top = (f.y + P.footH - base + Math.sqrt(Math.max(0, reach * reach - dh * dh))) / sqY;
+      const need = P.hipH + this.J.bodyY - top;
+      const k = f.planted ? 1 : 0.35 + 0.65 * clamp((f.t - 0.55) / 0.4, 0, 1);
+      if (need > 0) drop = Math.max(drop, need * f.w * k);
+    }
+    drop = Math.min(drop, P.hipH * 0.45);
+    this.pelvis += (-drop - this.pelvis) * (1 - Math.exp(-(-drop < this.pelvis ? 22 : 14) * dt));
+  }
+  liftFoot(f, idle, dur) {
+    f.planted = false;
+    f.idle = idle;
+    f.dur = dur || 0.2;
+    f.t = 0;
+    f.sx = f.x;
+    f.sy = f.y - f.lift;
+    f.sz = f.z;
+  }
+  plantFoot(f, x, z, v) {
+    f.planted = true;
+    f.idle = false;
+    f.x = x;
+    f.z = z;
+    f.y = this.footGround(x, z, f);
+    f.lift = 0;
+    f.t = 0;
+    f.yaw = this.yaw;
+    this.onStep?.(this, v);
+  }
+  // the ground (or deck) under a foot; something wildly off (a ledge, a boat, a stage the
+  // physics doesn't know) counts as flat ground at the character's own height
+  footGround(x, z, f) {
+    const G = this.game.physics.groundAt(x, z, this.pos.y + 0.45, 0.45, _gnd);
+    if (Math.abs(G.h - this.pos.y) > 0.6) {
+      f.nx = 0; f.ny = 1; f.nz = 0;
+      return this.pos.y;
+    }
+    f.nx = G.nx; f.ny = G.ny; f.nz = G.nz;
+    return G.h;
+  }
+  // bend the legs onto the planted feet, and lay each foot along its ground
+  solveFeet() {
+    const F = this.feet, P = this.P, J = this.J;
+    this.root.updateMatrixWorld(true);
+    const sy = Math.sin(this.yaw), cy = Math.cos(this.yaw);
+    for (const side of SIDES) {
+      const f = F[side], L = this.legs[side];
+      if (f.w <= 0) { L.ankle.rotation.x = 0; continue; }
+      // the ankle sits a foot's height above the sole, along the ground's normal
+      _v.set(f.x + f.nx * P.footH, f.y + f.ny * P.footH, f.z + f.nz * P.footH);
+      this.solveLeg(side, _v, f.w);
+      // flat on the slope; toe off as it lifts, heel first as it comes down
+      let want = Math.atan2(sy * f.nx + cy * f.nz, f.ny);
+      if (!f.planted) want += 0.3 * (1 - f.t) * (1 - f.t) - 0.14 * f.t * f.t;
+      L.ankle.rotation.x = (want - (J.bodyRx + L.hip.rotation.x + L.knee.rotation.x)) * f.w;
+    }
+  }
+
+  // ------------------------------------------------------------ two-bone IK
+  // hip + knee so the ankle reaches a world point (w blends from the pose)
+  solveLeg(side, target, w) {
+    const L = this.legs[side], P = this.P, s = L.s;
+    _w.copy(target);
+    this.body.worldToLocal(_w);
+    _w.sub(L.hip.position);
+    const l1 = P.thighL, l2 = P.shinL;
+    const len = clamp(_w.length(), (l1 + l2) * 0.25, (l1 + l2) * 0.999);
+    const base = Math.atan2(_w.z, -_w.y);
+    const outA = Math.atan2(_w.x * s, Math.hypot(_w.y, _w.z));
+    const bend = Math.PI - Math.acos(clamp((l1 * l1 + l2 * l2 - len * len) / (2 * l1 * l2), -1, 1));
+    const a1 = Math.acos(clamp((l1 * l1 + len * len - l2 * l2) / (2 * l1 * len), -1, 1));
+    L.hip.rotation.set(lerpA(L.hip.rotation.x, -(base + a1), w), 0, lerpA(L.hip.rotation.z, s * outA, w));
+    L.knee.rotation.x = lerpA(L.knee.rotation.x, bend, w);
+  }
+  // shoulder + elbow so the hand reaches a world point
+  solveArm(side, target, w) {
+    const A = this.arms[side], P = this.P, s = A.s;
+    _w.copy(target);
+    this.spine.worldToLocal(_w);
+    _w.sub(A.sh.position);
+    const l1 = P.upperL, l2 = P.foreL + 1.5 * VS;
+    const len = clamp(_w.length(), (l1 + l2) * 0.25, (l1 + l2) * 0.995);
+    const base = Math.atan2(_w.z, -_w.y);
+    const outA = Math.atan2(_w.x * s, Math.hypot(_w.y, _w.z));
+    const bend = Math.PI - Math.acos(clamp((l1 * l1 + l2 * l2 - len * len) / (2 * l1 * l2), -1, 1));
+    const a1 = Math.acos(clamp((l1 * l1 + len * len - l2 * l2) / (2 * l1 * len), -1, 1));
+    const f = base - a1 * 0.6, o = outA + a1 * 0.4;
+    A.sh.rotation.set(lerpA(A.sh.rotation.x, -f, w), A.sh.rotation.y, lerpA(A.sh.rotation.z, s * o, w));
+    A.elbow.rotation.set(lerpA(A.elbow.rotation.x, -bend, w), 0, lerpA(A.elbow.rotation.z, -s * bend * 0.35, w));
+  }
+
+  // IK onto the bike: hands on the grips, feet on the pedals; a foot can instead be put
+  // down on the ground (ride.footL / footR: a world point) to balance when stopped
   solveRide(dt) {
     const R = this.ride;
     if (!R || this.broken) return;
     const wA = (R.ikW ?? 1) * (R.armW ?? 1), wL = (R.ikW ?? 1) * (R.legW ?? 1);
+    const P = this.P;
+    for (const side of SIDES) this.legs[side].ankle.rotation.x = 0;
     if (wA <= 0 && wL <= 0) return;
     this.root.updateMatrixWorld(true);
-    const P = this.P;
-    const solve = (parent, joint, target, l1, l2, isArm, s, side) => {
-      if (!target) return;
-      const w = isArm ? wA : wL;
-      if (w <= 0) return;
-      target.updateWorldMatrix(true, false);
-      _v.setFromMatrixPosition(target.matrixWorld);
-      if (!isArm) _v.y += 2.5 * VS;
-      parent.worldToLocal(_v);
-      _v.sub(joint.position);
-      let L = _v.length();
-      L = clamp(L, (l1 + l2) * 0.25, (l1 + l2) * 0.995);
-      const base = Math.atan2(_v.z, -_v.y);
-      const outA = Math.atan2(_v.x * s, Math.hypot(_v.y, _v.z));
-      const bend = Math.PI - Math.acos(clamp((l1 * l1 + l2 * l2 - L * L) / (2 * l1 * l2), -1, 1));
-      const a1 = Math.acos(clamp((l1 * l1 + L * L - l2 * l2) / (2 * l1 * L), -1, 1));
-      if (isArm) {
-        const f = base - a1 * 0.6, o = outA + a1 * 0.4;
-        joint.rotation.set(lerpA(joint.rotation.x, -f, w), joint.rotation.y, lerpA(joint.rotation.z, s * o, w));
-        const el = this.arms[side].elbow;
-        el.rotation.set(lerpA(el.rotation.x, -bend, w), 0, lerpA(el.rotation.z, -s * bend * 0.35, w));
-      } else {
-        joint.rotation.set(lerpA(joint.rotation.x, -(base + a1), w), 0, lerpA(joint.rotation.z, s * outA, w));
-        const kn = this.legs[side].knee;
-        kn.rotation.x = lerpA(kn.rotation.x, bend, w);
+    for (const side of SIDES) {
+      const grip = R['grip' + side];
+      if (grip && wA > 0) {
+        grip.updateWorldMatrix(true, false);
+        _v.setFromMatrixPosition(grip.matrixWorld);
+        this.solveArm(side, _v, wA);
       }
-    };
-    for (const side of ['L', 'R']) {
-      const s = side === 'L' ? 1 : -1;
-      solve(this.spine, this.arms[side].sh, R['grip' + side], P.upperL, P.foreL + 1.5 * VS, true, s, side);
-      solve(this.body, this.legs[side].hip, R['pedal' + side], P.thighL, P.shinL, false, s, side);
+      if (wL <= 0) continue;
+      const L = this.legs[side];
+      const ground = R['foot' + side], pedal = R['pedal' + side];
+      if (ground) {
+        _v.copy(ground);
+        _v.y += P.footH;
+        this.solveLeg(side, _v, wL);
+        L.ankle.rotation.x = -(L.hip.rotation.x + L.knee.rotation.x) * wL;
+      } else if (pedal) {
+        pedal.updateWorldMatrix(true, false);
+        _v.setFromMatrixPosition(pedal.matrixWorld);
+        _v.y += 2.5 * VS;
+        this.solveLeg(side, _v, wL);
+        // the sole stays on the pedal (pedals stay level with the frame), toes a touch down
+        L.ankle.rotation.x = (0.12 - (L.hip.rotation.x + L.knee.rotation.x)) * wL;
+      }
     }
   }
 

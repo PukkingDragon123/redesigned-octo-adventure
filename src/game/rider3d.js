@@ -1,5 +1,7 @@
 // Hank on the bike as a real voxel character: hips on the saddle, hands on the
-// grips and feet on the pedals (IK), leaning with the bike. Every bike move has a
+// grips and feet on the pedals (IK), leaning with the bike, shifting his weight
+// forward when he digs in and back when he brakes, and putting a foot down on the
+// ground (swung over from its pedal) when Bessie stops. Every bike move has a
 // pose layered on top (wheelie lean-back, stoppie over the bars, crouch and pop,
 // tucked flips, a foot dab, a slipped pedal). Big crashes burst him into bones that
 // zip back together; small bails just flop him on his back for a moment.
@@ -8,9 +10,10 @@ import { VoxelCharacter } from './vchar.js';
 import { catVox } from './quests.js';
 import { meshVox } from '../voxel/mesh.js';
 import { voxMesh, sharedVoxelMaterial } from '../render/voxelMaterial.js';
-import { clamp } from '../core/math.js';
+import { clamp, damp } from '../core/math.js';
 
 const _v = new THREE.Vector3();
+const _p = new THREE.Vector3();
 const S = Math.sin;
 const arm = (T, s, f, o, e, i = 0) => { T['aF' + s] = f; T['aO' + s] = o; T['eB' + s] = e; T['eI' + s] = i; };
 const leg = (T, s, f, o, k) => { T['lF' + s] = f; T['lO' + s] = o; T['kB' + s] = k; };
@@ -28,6 +31,15 @@ export class VoxelRider {
     this.L = { scanT: 0, look: null, lookKind: '', lookD: 99, lookV: new THREE.Vector3(), lookA: null, waveT: 0, waveCool: 4, glanceT: 0, glanceCool: 6, glanceSide: 1,
       humT: 0, humCool: 8, blipT: 0, still: 0, yawnT: 0, yawnCool: 5, tapT: 0, nearCool: 0, flinchT: 0, flinchSide: 1, effort: 0, cruise: 0 };
     this.poseFn = (c, t, T) => this.bikePose(c, t, T);
+    // a foot put down to balance: how far it's swung from its pedal to the ground (0..1),
+    // which side, and the spot on the ground it's planted on
+    this.dabK = 0;
+    this.dabSide = 'R';
+    this.dabAt = new THREE.Vector3();
+    this.dabSet = false;
+    this.dabFoot = new THREE.Vector3();
+    this.bAcc = 0; // the bike's smoothed forward acceleration (Hank's weight shifts with it)
+    this.lastFwd = 0;
     this.make(charId);
   }
 
@@ -198,12 +210,22 @@ export class VoxelRider {
     } else if (st === 'dab') {
       const s = b.dabSide > 0 ? 'R' : 'L';
       leg(T, s, 0.25, 0.5, 0.2);
+      // slide off the saddle towards the foot that's down
       T.tilt += b.dabSide * 0.1;
       T.lean += 0.08;
+      T.bodyY -= 0.09 * this.dabK;
     } else if (st === 'slip') {
       leg(T, 'R', 0.2 + S(t * 22) * 0.9, 0.35, 0.5);
       T.headX -= 0.2;
       T.lean -= 0.1;
+    }
+    // weight shifts: forward over the bars as he digs in, back as the brakes bite; when the
+    // front pops up he hangs back a moment before settling (follow-through)
+    if (b.grounded) {
+      T.lean += clamp(this.bAcc * 0.035, -0.16, 0.12);
+      T.headX -= clamp(this.bAcc * 0.02, -0.08, 0.06);
+      if (st === 'wheelie' || st === 'manual') T.lean -= clamp(b.wheelieVel * 0.05, -0.1, 0.12);
+      if (st === 'stoppie' || st === 'nose') T.lean += clamp(b.stoppieVel * 0.05, -0.1, 0.12);
     }
     // airborne spins: look into the spin, body twists after
     if (!b.grounded) {
@@ -360,12 +382,49 @@ export class VoxelRider {
     }
   }
 
+  // Stopping: a foot swings off its pedal in a little arc and plants on the ground beside
+  // the bike (and stays planted there while Bessie shuffles, unless she gets too far from
+  // it); setting off it swings back up onto the pedal.
+  dab(dt, bike, on, R) {
+    if (on && this.dabK < 0.02) this.dabSide = bike.dabSide > 0 ? 'R' : 'L';
+    this.dabK = Math.max(0, Math.min(1, this.dabK + (on ? 5.5 : -6.5) * dt));
+    R.footL = R.footR = null;
+    if (this.dabK <= 0) { this.dabSet = false; return; }
+    const V = bike.view || bike;
+    const fx = Math.sin(V.yaw), fz = Math.cos(V.yaw);
+    const sgn = this.dabSide === 'R' ? 1 : -1; // the rider's right is the bike's -x
+    // where the foot goes: beside the saddle, a little out from the frame
+    const gx = V.pos.x - fz * 0.3 * sgn - fx * 0.12, gz = V.pos.z + fx * 0.3 * sgn - fz * 0.12;
+    if (!this.dabSet || Math.hypot(this.dabAt.x - gx, this.dabAt.z - gz) > 0.4) {
+      this.dabAt.set(gx, this.game.physics.groundAt(gx, gz, bike.pos.y + 0.5).h, gz);
+      this.dabSet = true;
+    }
+    const ped = this.pedals?.[this.dabSide === 'L' ? 0 : 1];
+    const k = this.dabK, e = k * k * (3 - 2 * k);
+    if (ped) {
+      ped.updateWorldMatrix(true, false);
+      _p.setFromMatrixPosition(ped.matrixWorld);
+      _p.y -= 0.025; // the sole on the pedal
+    } else _p.copy(this.dabAt);
+    this.dabFoot.lerpVectors(_p, this.dabAt, e);
+    this.dabFoot.y += Math.sin(k * Math.PI) * 0.09;
+    R['foot' + this.dabSide] = this.dabFoot;
+    R['pedal' + this.dabSide] = null;
+  }
+
   update(dt, bike, model, camPos) {
     const ch = this.ch;
     ch.visible = this.visible;
+    // the bike's forward acceleration, smoothed (for weight shifts)
+    if (dt > 0) {
+      const a = clamp((bike.fwdSpeed - this.lastFwd) / dt, -14, 14);
+      this.bAcc = damp(this.bAcc, bike.grounded ? a : 0, 5, dt);
+      this.lastFwd = bike.fwdSpeed;
+    }
     this.windmill = Math.max(0, this.windmill - dt);
     this.cheer = Math.max(0, this.cheer - dt);
     if (this.hop) {
+      ch.stepY = 0;
       this.updateHop(dt);
       if (this.hop && !this.hop.off) ch.yaw = ch.targetYaw = bike.yaw;
       ch.update(dt, camPos);
@@ -375,6 +434,7 @@ export class VoxelRider {
       // the game's Walker drives position; we only animate
       const W = this.game.walker;
       ch.pos.copy(W.pos);
+      ch.stepY = W.stepOffset || 0;
       ch.targetYaw = W.yaw;
       ch.speedOverride = W.speed;
       ch.groundSnap = false;
@@ -398,6 +458,7 @@ export class VoxelRider {
         return;
       }
     } else if (!this.mounted && this.wantMount) this.mount(model);
+    ch.stepY = 0;
     if (this.mounted) {
       // pose follows the bike
       let st = bike.pose;
@@ -415,11 +476,10 @@ export class VoxelRider {
         const windmill = this.windmill > 0 || this.cheer > 0;
         R.armW = tr?.poseArms || windmill ? 0 : 1;
         R.legW = tr?.poseLegs ? 0 : 1;
-        // a foot comes off its pedal to dab the ground (or when it slips off)
-        const freeL = (st === 'dab' && bike.dabSide < 0);
-        const freeR = (st === 'dab' && bike.dabSide > 0) || st === 'slip';
-        R.pedalL = freeL ? null : this.pedals?.[0];
-        R.pedalR = freeR ? null : this.pedals?.[1];
+        // a foot slips off its pedal; or comes down to the ground to balance (below)
+        R.pedalL = this.pedals?.[0];
+        R.pedalR = st === 'slip' ? null : this.pedals?.[1];
+        this.dab(dt, bike, st === 'dab', R);
         if ((this.cheer > 0 || this.L.yawnT > 0) && !tr?.poseArms) { R.armW = 1; R.gripL = null; } else R.gripL = model.gripL;
         R.gripR = this.L.waveT > 0 && !tr?.poseArms && bike.grounded ? null : model.gripR;
         if (this.L.still > 1.5 && bike.speed < 0.3 && st !== 'dab') R.pedalR = null;
