@@ -14,7 +14,7 @@
 import * as THREE from 'three';
 import { G } from '../render/shaderlib.js';
 import { RNG } from '../core/noise.js';
-import { angleDamp, damp } from '../core/math.js';
+import { angleDamp, damp, wrapAngle } from '../core/math.js';
 import { riverInfo, villageMask, seaSDF } from '../world/terrain.js';
 import { P as PX } from '../render/particles.js';
 import * as L from '../world/layout.js';
@@ -236,32 +236,33 @@ export class Critters {
   }
 
   // ---------------------------------------------------------------- spawning
+  // a spawn timer ran out: rewind it and say so
+  due(k, a, b) {
+    if (this.timers[k] > 0) return false;
+    this.timers[k] = this.rng.range(a, b);
+    return true;
+  }
   spawnAll() {
-    const T = this.timers, R = this.rng, n = this.night, h = this.hour;
+    const R = this.rng, n = this.night, h = this.hour;
     const day = n < 0.35, dusk = (h > 17 && h < 21) || (h > 5 && h < 8.5);
-    const due = (k, a, b) => {
-      if (T[k] > 0) return false;
-      T[k] = R.range(a, b);
-      return true;
-    };
     const p = this.p;
-    if (due('herd', 6, 12) && n < 0.7 && this.count((c) => DEER.has(c.kind) && !c.resident) < 5) this.spawnHerd();
-    if (due('rabbit', 4, 8) && n < 0.8 && this.countCat('rabbit') < 4) this.spawnRabbits();
-    if (due('fox', 14, 26) && (dusk || (day && R.next() < 0.4)) && this.countCat('fox') < 1) this.spawnFox();
-    if (due('squirrel', 3, 6) && n < 0.6 && this.countCat('squirrel') < 5) this.spawnSquirrel();
-    if (due('road', 20, 45) && n < 0.6 && this.countCat('roadSquirrel') < 1) this.spawnRoadSquirrel();
-    if (due('songbird', 3, 7) && day && this.groups.filter((gr) => gr.kind === 'songbird').length < 2) this.spawnSongbirds();
-    if (due('geese', 50, 100) && n < 0.6 && !this.groups.some((gr) => gr.kind === 'geese')) this.spawnGeese();
-    if (due('crows', 20, 40) && n < 0.75 && !this.groups.some((gr) => gr.kind === 'crows')) this.spawnCrows();
-    if (due('gulls', 6, 12) && n < 0.6 && seaSDF(p.x, p.z) < 90 && this.countCat('gull') < 7) this.spawnGulls();
-    if (due('ducks', 5, 10) && n < 0.6 && this.countCat('duck') < 5) this.spawnDucks();
-    if (due('frog', 3, 7) && this.countCat('frog') < 4) this.spawnFrog();
-    if (due('fish', 4, 9) && n < 0.8 && this.countCat('fish') < 1) this.spawnFish();
-    if (due('butterfly', 2, 5) && day && this.countCat('butterfly') < 7) this.spawnButterflies();
-    if (due('dragonfly', 3, 6) && day && this.countCat('dragonfly') < 3) this.spawnDragonfly();
-    if (due('bat', 3, 6) && n > 0.45 && this.countCat('bat') < 7) this.spawnBats();
-    if (due('owl', 10, 20) && n > 0.45 && this.countCat('owl') < 2) this.spawnOwl();
-    if (due('raccoon', 10, 20) && (n > 0.35 || h > 18.5) && this.countCat('raccoon') < 1) this.spawnRaccoon();
+    if (this.due('herd', 6, 12) && n < 0.7 && this.count((c) => DEER.has(c.kind) && !c.resident) < 5) this.spawnHerd();
+    if (this.due('rabbit', 4, 8) && n < 0.8 && this.countCat('rabbit') < 4) this.spawnRabbits();
+    if (this.due('fox', 14, 26) && (dusk || (day && R.next() < 0.4)) && this.countCat('fox') < 1) this.spawnFox();
+    if (this.due('squirrel', 3, 6) && n < 0.6 && this.countCat('squirrel') < 5) this.spawnSquirrel();
+    if (this.due('road', 20, 45) && n < 0.6 && this.countCat('roadSquirrel') < 1) this.spawnRoadSquirrel();
+    if (this.due('songbird', 3, 7) && day && this.groups.filter((gr) => gr.kind === 'songbird').length < 2) this.spawnSongbirds();
+    if (this.due('geese', 50, 100) && n < 0.6 && !this.groups.some((gr) => gr.kind === 'geese')) this.spawnGeese();
+    if (this.due('crows', 20, 40) && n < 0.75 && !this.groups.some((gr) => gr.kind === 'crows')) this.spawnCrows();
+    if (this.due('gulls', 6, 12) && n < 0.6 && seaSDF(p.x, p.z) < 90 && this.countCat('gull') < 7) this.spawnGulls();
+    if (this.due('ducks', 5, 10) && n < 0.6 && this.countCat('duck') < 5) this.spawnDucks();
+    if (this.due('frog', 3, 7) && this.countCat('frog') < 4) this.spawnFrog();
+    if (this.due('fish', 4, 9) && n < 0.8 && this.countCat('fish') < 1) this.spawnFish();
+    if (this.due('butterfly', 2, 5) && day && this.countCat('butterfly') < 7) this.spawnButterflies();
+    if (this.due('dragonfly', 3, 6) && day && this.countCat('dragonfly') < 3) this.spawnDragonfly();
+    if (this.due('bat', 3, 6) && n > 0.45 && this.countCat('bat') < 7) this.spawnBats();
+    if (this.due('owl', 10, 20) && n > 0.45 && this.countCat('owl') < 2) this.spawnOwl();
+    if (this.due('raccoon', 10, 20) && (n > 0.35 || h > 18.5) && this.countCat('raccoon') < 1) this.spawnRaccoon();
   }
 
   spawnHerd(s) {
@@ -293,7 +294,7 @@ export class Critters {
     const side = this.rng.sign();
     const rx = -f.z * side, rz = f.x * side;
     const x = this.p.x + f.x * 14 - rx * 4, z = this.p.z + f.z * 14 - rz * 4;
-    const c = this.add('squirrel', x, z, { anim: 'run', ai: squirrelAI, state: 'dash', cat: 'roadSquirrel', maxDraw: 70, despawn: 60 });
+    const c = this.add('squirrel', x, z, { anim: 'run', ai: squirrelAI, state: 'dash', cat: 'roadSquirrel', maxDraw: 70, despawn: 60, scale: 1.15 });
     c.yaw = Math.atan2(rx, rz);
     c.dash = 2.2;
     c.fade = 0; c.fadeIn = false;
@@ -468,8 +469,8 @@ export class Critters {
     }
     if (kind === 'rabbit') return this.add(kind, x, z, { anim: 'idle', ai: rabbitAI, cat: 'rabbit', maxDraw: 90, ...o });
     if (kind === 'fox') return this.add(kind, x, z, { anim: 'walk', ai: foxAI, state: 'trot', cat: 'fox', ...o });
-    if (kind === 'squirrel' || kind === 'chipmunk') return this.add(kind, x, z, { anim: 'idle', ai: squirrelAI, state: 'forage', cat: 'squirrel', maxDraw: 70, despawn: 90, ...o });
-    if (SONGBIRDS.includes(kind)) return this.add(kind, x, z, { anim: 'peck', ai: songbirdAI, state: 'ground', cat: 'songbird', maxDraw: 60, despawn: 90, ...o, group: o.group || { kind: 'songbird', members: [], scared: 0 } });
+    if (kind === 'squirrel' || kind === 'chipmunk') return this.add(kind, x, z, { anim: 'idle', ai: squirrelAI, state: 'forage', cat: 'squirrel', maxDraw: 70, despawn: 90, scale: 1.15, ...o });
+    if (SONGBIRDS.includes(kind)) return this.add(kind, x, z, { anim: 'peck', ai: songbirdAI, state: 'ground', cat: 'songbird', maxDraw: 60, despawn: 90, scale: 1.25, ...o, group: o.group || { kind: 'songbird', members: [], scared: 0 } });
     if (kind === 'owl') { const c = this.add(kind, x, z, { anim: 'idle', ai: owlAI, cat: 'owl', ...o }); this.perchOwl(c, this.nearestTree(x, z, 12)); return c; }
     if (kind === 'bat') { const gr = { x, z }; const c = this.add(kind, x, z, { anim: 'fly', air: true, ai: batAI, group: gr, cat: 'bat', scale: 1.4, ...o }); c.orbit = { a: 0, r: 3, w: 1.6, ph: 0, h: 3 }; c.y += 3; return c; }
     if (kind === 'monarch' || kind === 'sulphur') { const c = this.add(kind, x, z, { anim: 'fly', air: true, ai: butterflyAI, cat: 'butterfly', scale: 1.3, ...o }); c.y += 0.8; return c; }
@@ -542,7 +543,11 @@ export class Critters {
         c.pdt = 0;
         c.posed = true;
       }
-      c.sp.push(c.M, c.x, c.y + c.bob, c.z, c.yaw, c.sx, c.fade);
+      // the drawn heading follows the AI's with a quick ease, so sudden turns don't snap
+      const vdt = c.vt === undefined ? 1 : frame - c.vt > 2 ? 1 : dt;
+      c.vt = frame;
+      c.ry = vdt >= 1 ? c.yaw : c.ry + wrapAngle(c.yaw - c.ry) * (1 - Math.exp(-14 * vdt));
+      c.sp.push(c.M, c.x, c.y + c.bob, c.z, c.ry, c.sx, c.fade);
     }
     for (const sp of this.rigs.values()) sp.end();
   }

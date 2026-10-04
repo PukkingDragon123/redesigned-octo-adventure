@@ -64,6 +64,16 @@ function twitch(c, dt) {
   c.glT = (c.glT ?? Math.random() * 2) - dt;
   if (c.glT < 0) { c.glT = 0.6 + Math.random() * 2.2; c.glY = (Math.random() - 0.5) * 1.6; c.glP = (Math.random() - 0.5) * 0.4; }
 }
+// nose-up / nose-down of the ground under a small creature (near ones only), smoothed
+function slope(c, W, dt, half) {
+  let p = 0;
+  if (c.near && W.h && !c.air) {
+    const sx = Math.sin(c.yaw) * half, sz = Math.cos(c.yaw) * half;
+    p = clamp(-Math.atan2(W.h(c.x + sx, c.z + sz) - W.h(c.x - sx, c.z - sz), 2 * half), -0.5, 0.5);
+  }
+  c.A.sp = damp(c.A.sp || 0, p, 6, dt);
+  return c.A.sp;
+}
 // Hank close and the creature calm enough to stare
 const interest = (c, W, r) => 1 - sstep(r * 0.6, r, Math.hypot(W.px - c.x, W.pz - c.z));
 
@@ -109,7 +119,7 @@ function poseQuad(c, dt, W) {
   A.angry = damp(A.angry || 0, anim === 'angry' ? 1 : 0, 9, dt);
   A.happy = damp(A.happy || 0, anim === 'friend' ? 1 : 0, 5, dt);
   const arch = kind === 'cat' ? A.angry : 0, bark = kind === 'dog' ? A.angry * Math.pow(Math.max(0, Math.sin(c.t * 9.5)), 4) : 0;
-  const v = c.mspd;
+  const v = Math.max(c.mspd, Math.abs(c.myr) * m.bodyLen * 0.3); // turning on the spot shuffles the feet too
   const vn = v / L;
   A.g = damp(A.g || 0, clamp((vn - 2) / 2, 0, 1) + clamp((vn - 6.5) / 2.5, 0, 1), 3, dt);
   const g = A.g;
@@ -314,7 +324,7 @@ function poseHopper(c, dt, W) {
   const zh = -m.bodyLen * 0.25, yh = -m.bodyH * 0.2;
   let by = lift + (yh - (yh * Math.cos(up) - zh * Math.sin(up)));
   let bz = zh - (yh * Math.sin(up) + zh * Math.cos(up));
-  let bp = up;
+  let bp = up + slope(c, W, dt, m.bodyLen * 0.5) * (1 - A.climb);
   // climbing a trunk: nose up, belly on the bark (the AI faces it at the tree)
   if (A.climb > 0.001) {
     const w = A.climb;
@@ -394,7 +404,7 @@ function poseBird(c, dt, W) {
   const dab = A.dab;
   const swim = m.swim ? 1 - fly : 0;
   const bob = swim * (0.04 * Math.sin(c.t * 2.1) + 0.03 * Math.sin(c.t * 1.3 + 1));
-  let bp = lerp(standP + 0.45 * peck + 0.25 * caw, climb, fly) + dab * 1.75 * swim + bob * 0.5;
+  let bp = lerp(standP + 0.45 * peck + 0.25 * caw + (m.swim ? 0 : slope(c, W, dt, m.bodyLen * 0.5)), climb, fly) + dab * 1.75 * swim + bob * 0.5;
   // take-off: a steep, flappy climb for a moment
   bp -= 0.45 * fly * (1 - sstep(0, 0.6, c.flyT ?? 9)) * (flying ? 1 : 0);
   if (up) bp += 1.2 * fly;
