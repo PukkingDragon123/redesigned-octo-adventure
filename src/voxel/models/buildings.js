@@ -3593,7 +3593,8 @@ export function buildVoxelBuilding(spec = {}) {
   const fn = KINDS[spec.kind] || buildHouse;
   CUR = ctx;
   let doors;
-  try { fn(spec, ctx); doors = takeDoors(ctx, !!spec.cutDoors); } finally { CUR = null; }
+  // (Nana's cabin keeps its door in the wall: the room inside it, world/cabinInterior.js, has its own)
+  try { fn(spec, ctx); doors = spec.id === 'nana' ? [] : takeDoors(ctx, !!spec.cutDoors); } finally { CUR = null; }
   const { vox, origin, lo, hi } = ctx.vb.finish();
   const meta = {
     id: spec.id, kind: spec.kind,
