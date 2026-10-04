@@ -22,7 +22,6 @@ const KINDS = {
   rail: { family: 'rail', panel: (far) => FM.railPanel({ far, rails: 2 }), post: (far) => FM.railPost({ far }) },
   rail2: { family: 'rail', panel: (far) => FM.railPanel({ far, rails: 3, seed: 4 }), post: (far) => FM.railPost({ far }) },
 };
-export const FENCE_KINDS = new Set(Object.keys(KINDS));
 
 const _m = new THREE.Matrix4(), _r = new THREE.Matrix4(), _a = new THREE.Vector3(), _f = new THREE.Vector3();
 
@@ -188,7 +187,7 @@ export class Fences3D {
       this.pose(P);
       _r.makeRotationY(J.yaw).setPosition(J.x - P.cx, J.y - P.cy - 0.06, J.z - P.cz);
       _m.copy(this.tipM).multiply(_r);
-      _m.elements[12] += P.it.x; _m.elements[13] += P.it.y; _m.elements[14] += P.it.z;
+      _m.elements[12] += P.it.x; _m.elements[13] += P.it.y + Math.sin(P.it.tip) * 0.07; _m.elements[14] += P.it.z;
       const mesh = this.post[J.family][lod];
       if (mesh.count < mesh.instanceMatrix.count) push(mesh, null);
     }
@@ -205,6 +204,7 @@ export class Fences3D {
     if (it.tip > 0.001) tm.makeRotationAxis(_a.set(it.tdz, 0, -it.tdx).normalize(), it.tip);
     else tm.identity();
     _m.copy(tm).multiply(P.basis);
-    _m.elements[12] = it.x; _m.elements[13] = it.y - 0.03; _m.elements[14] = it.z;
+    // (lifted by half its thickness as it goes down, so a fallen panel lies on the grass, not in it)
+    _m.elements[12] = it.x; _m.elements[13] = it.y - 0.03 + Math.sin(it.tip) * (P.kind === 'picket' ? 0.045 : 0.08); _m.elements[14] = it.z;
   }
 }

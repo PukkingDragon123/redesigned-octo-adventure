@@ -272,6 +272,8 @@ export class Deco2D {
     if (D.mode === 'burst') {
       it.st = 3;
       this.burst(it, vx, vz, speed);
+    } else if (D.mode === 'tip' && D.anchored && it.tip > 1.2) {
+      // a fence panel or sign already lying flat just gets ridden over (it doesn't stand back up)
     } else if (D.mode === 'tip') {
       let tx = vx / sp, tz = vz / sp;
       if (D.anchored) {
