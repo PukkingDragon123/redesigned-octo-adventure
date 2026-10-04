@@ -62,7 +62,12 @@ const LOST = [
   { id: 'hat', owner: 'doug', item: 'hat', name: 'Mountie hat', x: 214, z: 87, build: () => PR.mountieHat(), say: 'The wind took my hat. Down the harbour boardwalk. Toward the boathouse. Very undignified.' },
 ];
 const BIRDS = ['robin', 'chickadee', 'crow', 'goose'];
-const BIRD_NAMES = { robin: 'American robin', chickadee: 'Black-capped chickadee', crow: 'Common crow', goose: 'Canada goose', deer: 'White-tailed deer', moose: 'Moose (!!)', beaver: 'Beaver', buck: 'Big buck' };
+const BIRD_NAMES = {
+  robin: 'American robin', chickadee: 'Black-capped chickadee', crow: 'Common crow', goose: 'Canada goose', deer: 'White-tailed deer', moose: 'Moose (!!)', beaver: 'Beaver', buck: 'Big buck',
+  fawn: 'Spotted fawn', bluejay: 'Blue jay', sparrow: 'Song sparrow', gull: 'Herring gull', mallard: 'Mallard', duckHen: 'Mallard hen', owl: 'Great horned owl', bat: 'Little brown bat',
+  fox: 'Red fox', rabbit: 'Cottontail', squirrel: 'Red squirrel', chipmunk: 'Chipmunk', raccoon: 'Raccoon (caught red-handed)', mouse: 'Meadow mouse', frog: 'Leopard frog',
+  trout: 'Brook trout', salmon: 'Leaping salmon', monarch: 'Monarch butterfly', sulphur: 'Sulphur butterfly', dragonfly: 'Dragonfly',
+};
 
 export const QUESTS = {
   groceries: { title: 'Groceries for Nana', giver: 'grandma', reward: 0 },
@@ -519,12 +524,11 @@ export class Quests {
     this.photo.el.classList.add('flash');
     // what's in frame?
     const cam = g.camera;
-    const W = g.wildlife;
-    const cands = [...W.list, ...W.flocks.flatMap((f) => f.birds), ...(W.geese?.birds || [])];
     let best = null;
-    for (const c of cands) {
-      const p = (c.pos || c.mesh?.position)?.clone();
-      if (!p) continue;
+    const p = new THREE.Vector3();
+    for (const c of g.wildlife.list) {
+      if (c.dying || c.kind === 'bin') continue;
+      p.set(c.x, c.y + c.bob + 0.2, c.z);
       const d = p.distanceTo(cam.position);
       if (d > 45) continue;
       const v = p.project(cam);
