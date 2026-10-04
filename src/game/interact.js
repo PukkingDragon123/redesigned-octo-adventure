@@ -38,7 +38,7 @@ export class Interactables {
     const dk = this.deco.nearest(p, 1.0);
     if (dk) return { text: dk.text, key: 'F', fn: () => this.kickNow(), passive: true };
     const door = this.W.doors?.nearest(p);
-    if (door) return { text: 'Knock on the door', fn: () => this.W.doors.knock(door, g), passive: true };
+    if (door) return { text: 'Knock on the door', fn: () => this.W.doors.knock(door, g) };
     return null;
   }
 
