@@ -453,7 +453,8 @@ export class Critters {
     }
   }
   binAndRaccoon(x, z, a) {
-    const bin = this.add('bin', x, z, { anim: 'idle', cat: 'raccoon', maxDraw: 80, despawn: 90, yaw: this.rng.range(0, TAU) });
+    // the lid hinges at the back, so it lifts towards the raccoon
+    const bin = this.add('bin', x, z, { anim: 'idle', cat: 'raccoon', maxDraw: 80, despawn: 90, yaw: a });
     const c = this.add('raccoon', x + Math.sin(a) * 0.5, z + Math.cos(a) * 0.5, { anim: 'rummage', ai: raccoonAI, state: 'rummage', cat: 'raccoon', maxDraw: 80, despawn: 90 });
     c.yaw = Math.atan2(x - c.x, z - c.z);
     c.bin = bin;

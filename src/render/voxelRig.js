@@ -17,7 +17,8 @@ export const MS = 12;
 
 export class RigSpecies {
   // def: { size, bones: [{ name, parent (index | -1), at: [x, y, z] voxels, part: { vox, origin } | null }] }
-  constructor(name, def, { max = 16, shadow = true, jitter = 0.03 } = {}) {
+  // (greedy-meshed by default: the models paint their own colour variation, and half the triangles matter on phones)
+  constructor(name, def, { max = 16, shadow = true, jitter = 0 } = {}) {
     this.name = name;
     this.def = def;
     const B = def.bones;
