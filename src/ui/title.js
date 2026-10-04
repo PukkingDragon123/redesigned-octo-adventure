@@ -204,8 +204,8 @@ export class TitleScreen {
     if (!r) return;
     const narrow = innerWidth < innerHeight;
     r.fx = narrow ? 0 : 0.42;
-    r.fy = narrow ? 0.08 : -0.18;
-    r.size = narrow ? 0.24 : 0.5;
+    r.fy = narrow ? 0.2 : -0.22;
+    r.size = narrow ? 0.22 : 0.48;
     r.ang = narrow ? 0.8 : 1.05;
   }
 
