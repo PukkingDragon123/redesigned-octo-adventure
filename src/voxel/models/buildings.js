@@ -971,6 +971,9 @@ function doorOn(ctx, F, uc, o = {}) {
     F.fs(kU, Y0 + 15, 0, P.brass);
   }
   if (o.main !== false && !o.plank && !o.double) F.ff(Math.round((U0 + U1) / 2) - 1, Y0 + 20, -1, Math.round((U0 + U1) / 2) + 1, Y0 + 20, -1, P.brass); // mail slot
+  // the main door swings on its hinges in the game: takeDoors() lifts the leaves out at the end
+  // (single doors hang on the side away from the knob, double doors on the outer sides)
+  if (o.main !== false) (ctx.doorways ||= []).push({ F, U0, U1, Y0, Yt, fr, back: tone(dc, -0.14), knobs, leaves: leaves.map(([a, b], i) => [a, b, o.double ? i === 1 : !!o.knobLeft]) });
   // threshold
   F.ff(U0 - 1, Y0, 1, U1 + 1, Y0, 2, P.stoneC);
   // transom: a row of small panes over the door
@@ -3500,6 +3503,83 @@ const KINDS = {
   shop: buildShop, firehall: buildFirehall, barn: buildBarn, sugarshack: buildSugarShack, gazebo: buildGazebo, lifeguard: buildLifeguard, rink: buildRink, coveredBridge: buildCoveredBridge,
 };
 
+// The main doors as models of their own (meta.doors), so the game can swing them (world/doors.js).
+// Per doorway: the leaves, each { x, y, z: the hinge (bottom, at the back face, on the hinge side),
+// yaw: the wall's outward facing, right: hinged on the right (seen from outside), w, h, t, vox },
+// and the opening { ax, az, bx, bz: its outer corners at the wall face, depth: the vestibule, y, h }.
+// The leaf voxels: x across the door from the hinge (to -x when hinged on the right), y up, z out
+// of the wall from the hinge (0 the back face). With `cut` (the near model) the leaves are taken
+// out of the wall and a little vestibule is carved behind them for them to swing into: a plank
+// floor with a rag rug, wainscot and wallpaper, a coat on a hook, a picture, a warm wall lamp.
+function takeDoors(ctx, cut) {
+  const out = [];
+  for (const d of ctx.doorways || []) {
+    const { F, U0, U1, Y0, Yt } = d;
+    const p0 = F.FP(0, 0), pu = F.FP(1, 0), pn = F.FP(0, 1);
+    const uA = [pu[0] - p0[0], pu[1] - p0[1]], nA = [pn[0] - p0[0], pn[1] - p0[1]];
+    const yaw = Math.atan2(nA[0], nA[1]);
+    // a corner of fine cell (U, N) on its su (-1 low U, +1 high U) and sn sides, in metres
+    const corner = (U, N, su, sn) => {
+      const p = F.FP(U, N);
+      return [(p[0] + 0.5 + 0.5 * (su * uA[0] + sn * nA[0])) / 16, (p[1] + 0.5 + 0.5 * (su * uA[1] + sn * nA[1])) / 16];
+    };
+    const H = Yt - Y0 + 1;
+    let maxW = 0;
+    const leaves = [];
+    for (const [a, b, right] of d.leaves) {
+      const W = b - a + 1;
+      maxW = Math.max(maxW, W);
+      const v = new Vox(W, H, 5);
+      for (let U = a; U <= b; U++) for (let Y = Y0; Y <= Yt; Y++) {
+        const i = U - a, j = Y - Y0;
+        const c1 = F.fg(U, Y, -1), c2 = F.fg(U, Y, -2);
+        // the back: the groove or glass where the face is sunk, else the door's own wood
+        v.set(i, j, 0, !c1 && c2 ? c2 : d.back);
+        if (c1) v.set(i, j, 1, c1);
+        // knobs and anything hung on the door
+        for (let N = 0; N <= 2; N++) { if (N > 0 && Y < Y0 + 2) continue; const c = F.fg(U, Y, N); if (c) v.set(i, j, N + 2, c); }
+      }
+      for (const kU of d.knobs) if (kU >= a && kU <= b) v.set(kU - a, 15, 0, P.brass); // the inside knob
+      const h = corner(right ? b : a, -2, right ? 1 : -1, -1);
+      leaves.push({ x: r3(h[0]), y: r3(Y0 / 16), z: r3(h[1]), yaw: r3(yaw), right, w: r3(W / 16), h: r3(H / 16), t: 0.125, vox: { w: v.w, h: v.h, d: v.d, data: v.data } });
+      if (cut) for (let U = a; U <= b; U++) for (let Y = Y0; Y <= Yt; Y++) for (let N = -2; N <= 2; N++) if (N <= 0 || Y >= Y0 + 2) F.fs(U, Y, N, 0);
+    }
+    const back = maxW + 4; // the vestibule runs N = -3 .. -back
+    if (cut) vestibule(F, d, U0, U1, Y0, Yt, back, d.leaves);
+    const o0 = corner(U0, 0, -1, 1), o1 = corner(U1, 0, 1, 1);
+    out.push({ leaves, opening: { ax: r3(o0[0]), az: r3(o0[1]), bx: r3(o1[0]), bz: r3(o1[1]), depth: r3((back + 1) / 16), y: r3(Y0 / 16), h: r3(H / 16) } });
+  }
+  return out;
+}
+// the little hall behind a front door, seen when it swings open
+function vestibule(F, d, U0, U1, Y0, Yt, back, leaves) {
+  const NB = -back, wood = P.woodLight, paper = [0xe6d6b4, 0xd8c49c], plaster = 0xeee4cc;
+  F.fc(U0, Y0, NB, U1, Yt, -3);
+  // floor: planks running in, a rag rug
+  F.ff(U0 - 1, Y0 - 1, NB - 1, U1 + 1, Y0 - 1, -1, (U, Y, N) => plankTone((U - U0) >> 2, 3, P.plank));
+  const ra = U0 + 2, rb = U1 - 2, rn0 = NB + 2, rn1 = -4;
+  if (rb - ra >= 3) F.ff(ra, Y0 - 1, rn0, rb, Y0 - 1, rn1, (U, Y, N) => (U === ra || U === rb || N === rn0 || N === rn1 ? 0xe8d8b0 : ((N + U) & 3) < 2 ? 0x9a3a34 : 0xb85a3a));
+  // jambs and head in the trim colour, ceiling
+  for (const U of [U0 - 1, U1 + 1]) F.ff(U, Y0, -2, U, Yt + 1, -1, d.fr);
+  F.ff(U0, Yt + 1, -2, U1, Yt + 1, -1, d.fr);
+  F.ff(U0 - 1, Yt + 1, NB - 1, U1 + 1, Yt + 1, -3, plaster);
+  // walls: wainscot with a chair rail, striped paper above
+  const wall = (U, Y, N) => (Y < Y0 + 6 ? tone(wood, (U + N) % 3 === 0 ? -0.08 : 0) : Y === Y0 + 6 ? P.woodDark : paper[((U + N) & 7) < 4 ? 0 : 1]);
+  for (const U of [U0 - 1, U1 + 1]) F.ff(U, Y0, NB, U, Yt, -3, wall);
+  F.ff(U0 - 1, Y0, NB - 1, U1 + 1, Yt, NB - 1, wall);
+  // on the back wall: a peg rail with a plaid coat, a little picture, a warm lamp
+  const mid = Math.round((U0 + U1) / 2);
+  F.ff(U0 + 1, Y0 + 23, NB, U1 - 1, Y0 + 23, NB, P.woodDark);
+  const hingeLeft = !leaves[0][2] || leaves.length > 1;
+  const cu = hingeLeft ? U1 - 6 : U0 + 2; // the coat hangs on the side the door doesn't swing to
+  F.ff(cu, Y0 + 11, NB, cu + 3, Y0 + 22, NB, (U, Y) => ((U + Y) & 1 ? 0x9a2a24 : (Y & 3) === 0 ? 0x2a1e1c : 0xb83a2e));
+  F.ff(cu + 1, Y0 + 22, NB, cu + 2, Y0 + 22, NB, P.iron);
+  const pu = hingeLeft ? U0 + 1 : U1 - 5;
+  if (Math.abs(pu - cu) > 5) F.ff(pu, Y0 + 14, NB, pu + 4, Y0 + 19, NB, (U, Y) => (U === pu || U === pu + 4 || Y === Y0 + 14 || Y === Y0 + 19 ? P.woodDark : Y < Y0 + 16 ? 0x5a8a4a : 0x8ab4d8));
+  F.ff(mid - 1, Yt - 3, NB, mid, Yt - 2, NB, P.lampHot);
+  F.ff(mid - 1, Yt - 1, NB, mid, Yt - 1, NB, P.iron);
+}
+
 export function buildVoxelBuilding(spec = {}) {
   const hw = spec.halloween !== false;
   const seed = ((spec.seed ?? 0) ^ strHash(String(spec.id ?? spec.kind ?? 'building'))) >>> 0;
@@ -3512,7 +3592,8 @@ export function buildVoxelBuilding(spec = {}) {
   if (ctx.ground) ctx.lowY = Math.floor(Math.min(...ctx.ground.h) * VPM) - 8;
   const fn = KINDS[spec.kind] || buildHouse;
   CUR = ctx;
-  try { fn(spec, ctx); } finally { CUR = null; }
+  let doors;
+  try { fn(spec, ctx); doors = takeDoors(ctx, !!spec.cutDoors); } finally { CUR = null; }
   const { vox, origin, lo, hi } = ctx.vb.finish();
   const meta = {
     id: spec.id, kind: spec.kind,
@@ -3521,7 +3602,7 @@ export function buildVoxelBuilding(spec = {}) {
     height: r3(hi[1] / VPM), depth: r3(lo[1] / VPM), ground: r3(-ctx.G / VPM),
     bounds: { x0: r3(lo[0] / VPM), y0: r3(lo[1] / VPM), z0: r3(lo[2] / VPM), x1: r3(hi[0] / VPM), y1: r3(hi[1] / VPM), z1: r3(hi[2] / VPM) },
     lights: ctx.lights, smoke: ctx.smoke, signs: ctx.signs, porch: ctx.porch, solids: ctx.solids.map((s) => ({ ...s, x0: r3(s.x0), y0: r3(s.y0), z0: r3(s.z0), x1: r3(s.x1), y1: r3(s.y1), z1: r3(s.z1) })),
-    posts: ctx.posts || [], mo: ctx.mo || null, stiltPosts: ctx.stiltPosts,
+    posts: ctx.posts || [], mo: ctx.mo || null, stiltPosts: ctx.stiltPosts, doors,
     halloween: hw,
   };
   return { vox, size: VOXEL_SIZE, origin, jitter: 0, meta };

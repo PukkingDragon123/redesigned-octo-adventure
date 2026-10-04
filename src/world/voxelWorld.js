@@ -16,6 +16,7 @@ import { dressPlaces } from './places.js';
 import { placeDeco2D } from './deco2d.js';
 import { buildingSpecPure } from './foundations.js';
 import { Fences3D } from './fences3d.js';
+import { Doors } from './doors.js';
 
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _s = new THREE.Vector3(1, 1, 1), _p = new THREE.Vector3();
 const UP = new THREE.Vector3(0, 1, 0);
@@ -32,6 +33,8 @@ export class VoxelWorld {
     this.spots = []; // interactable things: { x, z, r, text, fn }
     this.lights = [];
     this.lodDist = 48;
+    // the front doors swing only while the near models (which have them cut out) can show
+    this.doors = world.doors = new Doors(world, { active: () => this.lodDist > 0 });
   }
 
   // cached builder result + geometry
@@ -142,6 +145,8 @@ export class VoxelWorld {
       const ls = (meta.lights || []).slice().sort((a, b2) => (a.kind === 'porch' ? -1 : 0) - (b2.kind === 'porch' ? -1 : 0)).slice(0, 3);
       for (const l of ls) this.lights.push({ pos: new THREE.Vector3(l.x, l.y, l.z).applyMatrix4(M), color: l.color, radius: Math.min(9, l.radius || 6), kind: l.kind === 'beacon' ? 'beacon' : 'lamp' });
       at.voxel = { mesh, meta, M };
+      // the hinged front doors (only with worker-built models: their near meshes have the doorways cut)
+      if (job && !job.error && meta.doors?.length) this.doors.add(b.id, M, yaw, meta, at.walls);
       // voxel-only kinds bring their own walkable decks, posts and extra solids
       if (at.generic) {
         const PH = this.world.physics;
@@ -175,8 +180,10 @@ export class VoxelWorld {
     if (lod.userData.near) return;
     const far = lod.levels[lod.levels.length - 1];
     far.distance = this.lodDist;
-    lod.addLevel(lodMesh(geo, sharedVoxelMaterial()), 0);
+    const near = lodMesh(geo, sharedVoxelMaterial());
+    lod.addLevel(near, 0);
     lod.userData.near = true;
+    this.doors.attach(lod.userData.id, near);
   }
 
   // Stream the 1/16 m meshes in from workers, nearest to the player's start first. Test runs
