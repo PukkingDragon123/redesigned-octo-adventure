@@ -444,8 +444,7 @@ export class StrayCat {
         if (d > 1.9) {
           const dx = H.x - this.pos.x, dz = H.z - this.pos.z;
           this.go(H.x - (dx / d) * 1.4, H.z - (dz / d) * 1.4, Math.min(4.4, 0.8 + d * 0.45), d > 5 ? 'crouch' : 'walk');
-          this.target = VoxelCat.pose('walk');
-          this.target.t1 = 1.35;
+          this.target.t1 = 1.35; // tail up: happy to be with him
         } else {
           this.stop('sit');
           this.faceHank(H);
