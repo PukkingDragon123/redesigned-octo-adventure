@@ -225,8 +225,15 @@ export class Loader3D {
     }
     this.fill.style.width = `${(Math.min(1, this.shown) * 100).toFixed(1)}%`;
     if (this.stage) {
-      this.stage.update(dt);
-      this.stage.render(this.pl);
+      // never let the little stage break the world build that calls progress()
+      try {
+        this.stage.update(dt);
+        this.stage.render(this.pl);
+      } catch (e) {
+        console.warn(e);
+        this.stage = null;
+        this.dom.style.background = '#000';
+      }
     }
   }
 
