@@ -494,7 +494,7 @@ export class Story {
       g.bike.vel.set(0, 0, 0);
       // (coming in some other way than the road from Nana's? start him at the west end of Main Street)
       const p0 = g.playerPos;
-      const moved = g.onFoot || p0.x > C.banner.x - 4 || Math.abs(p0.z - E.z) > 7;
+      const moved = g.onFoot || p0.x > C.west - 4 || Math.abs(p0.z - E.z) > 7;
       if (moved) {
         await S.fade(1, 0.35);
         if (g.onFoot) g.hopOn();
@@ -531,7 +531,7 @@ export class Story {
         for (const a of crowd) if (Math.random() < dt * 0.3) a.react(['nod', 'bounce', 'laugh'][Math.floor(Math.random() * 3)]);
         return false;
       });
-      // the first look: the banner across the street, the tables, the crowd
+      // the first look: the bunting, the tables, the crowd
       const look = V(125, y + 1.6, E.z);
       await S.cam(V(bp.x - fwd.x * 5 - fwd.z * 1.6, y + 2.5, bp.z - fwd.z * 5 + fwd.x * 1.6), look, 0, 50);
       if (moved) await S.fade(0, 0.4);

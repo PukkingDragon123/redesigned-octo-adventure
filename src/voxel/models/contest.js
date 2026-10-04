@@ -1,20 +1,20 @@
 // Voxel props for the pumpkin carving contest on Main Street: trestle tables under
 // checked cloths (bowls of guts and seeds, carving knives, scoops, little saws and
 // markers), pumpkins half-way through (lid off, the face drawn on in marker), the
-// judges' table with its rosettes, a hand-painted banner between two posts, bunting,
-// a stand for the finished entries and heaps of fallen leaves.
+// judges' table with its rosettes, bunting, a stand for the finished entries and
+// heaps of fallen leaves. (No painted signs: the contest speaks for itself, and Gus
+// does the announcing.)
 //
 // Builders return { vox, size, origin, jitter, meta } like props.js: size is metres
-// per voxel, origin the pivot in voxel units, meta lengths in metres (meta.signs are
-// painted by voxelWorld.sign; meta.top is a table's top surface).
+// per voxel, origin the pivot in voxel units, meta lengths in metres (meta.top is a
+// table's top surface).
 import { Vox, tone } from '../vox.js';
 import * as PR from './props.js';
 
 const FINE = 0.025, STD = 0.05;
 const WOOD = 0x8a5a32, WOOD_D = 0x5e3a1e, WOOD_L = 0xab7642;
 const METAL = 0xc4cad2, METAL_D = 0x8a909a;
-const ROPE = 0xc8b088, CANVAS = 0xf2e6c8, CANVAS_D = 0xe2d2ac, RUST = 0x8a3614;
-const ORANGE = 0xe8781e, ORANGE_D = 0xb4501a, STEM_G = 0x5f8a30;
+const ROPE = 0xc8b088;
 const GUTS = [0xe8862a, 0xf0a040, 0xd8701e], SEED = 0xf6ecd0, MARKER = 0x2a1a14;
 const GINGHAM = {
   red: [0xf4ece0, 0xe89a90, 0xc8382e],
@@ -274,8 +274,8 @@ function rosette(v, cx, cy, z, col) {
   }
   for (const s of [-1, 1]) for (let k = 0; k < 6; k++) { v.set(cx + s * (1 + (k >> 2)), cy - 3 - k, z, col); if (k < 5) v.set(cx + s * (2 + (k >> 2)), cy - 3 - k, z, tone(col, -0.12)); }
 }
-// judgesTable({ len }) — a burgundy cloth with a gold fringe, three rosettes and a
-// painted JUDGES card on the front; score cards, a pencil pot and a mug on top
+// judgesTable({ len }) — a burgundy cloth with a gold fringe and three rosettes on
+// the front; score cards, a pencil pot and a mug on top
 export function judgesTable({ len = 2.8 } = {}) {
   const L = Math.round(len / FINE), D = 36, H = 31;
   const v = new Vox(L + 6, H + 8, D + 6);
@@ -293,11 +293,7 @@ export function judgesTable({ len = 2.8 } = {}) {
   v.fill(Math.round(cx) + 23, y + 4, zc - 3, Math.round(cx) + 23, y + 6, zc - 3, 0xe8b830);
   v.fill(Math.round(cx) + 24, y + 4, zc - 2, Math.round(cx) + 24, y + 7, zc - 2, 0xe8b830);
   for (let z = zc + 4; z <= zc + 7; z++) for (let x = Math.round(cx) + 30; x <= Math.round(cx) + 33; x++) v.fill(x, y, z, x, y + 3, z, 0xc8382e); // a mug of cocoa
-  const [sx, sy, sz] = metres(FINE, origin, Math.round(cx) + 18, H - 5, fz);
-  return {
-    vox: v, size: FINE, origin, jitter: 0,
-    meta: { top: r3(y * FINE), trophy: metres(FINE, origin, Math.round(cx) - 4, y, zc + 2), signs: [{ x: sx, y: sy, z: r3(sz + 0.02), w: 1.0, h: 0.26, normal: [0, 0, 1], text: 'JUDGES', bg: 0xf2e6c8, fg: 0x7a2a3a }] },
-  };
+  return { vox: v, size: FINE, origin, jitter: 0, meta: { top: r3(y * FINE), trophy: metres(FINE, origin, Math.round(cx) - 4, y, zc + 2) } };
 }
 
 // entryStand({ len }) — two plank tiers on crates where the finished jack-o'-lanterns
@@ -311,58 +307,10 @@ export function entryStand({ len = 2.8 } = {}) {
   v.fill(x0, 15, 9, x1, 15, 16, (x) => (x % 6 ? WOOD_L : WOOD));
   // a strip of bunting tacked along the front edge
   for (let x = x0; x <= x1; x++) { const k = Math.floor((x - x0) / 3); if ((x - x0) % 3 < 2) v.set(x, 8 - ((x - x0) % 3 === 1 ? 1 : 0), 0, BUNTING_COLORS[k % BUNTING_COLORS.length]); }
-  const origin = [(L + 2) / 2, 0, 9];
-  const [sx, sy, sz] = metres(STD, origin, (L + 2) / 2 - 0.5, 5, 0);
-  return {
-    vox: v, size: STD, origin, jitter: 0,
-    meta: { tiers: [{ y: 0.5, z: r3((4.5 - 9) * STD) }, { y: 0.8, z: r3((12.5 - 9) * STD) }], signs: [{ x: sx, y: sy, z: r3(sz - 0.06), w: 0.9, h: 0.22, normal: [0, 0, -1], text: 'ENTRIES', bg: 0xf2e6c8, fg: 0x8a3614 }] },
-  };
+  return { vox: v, size: STD, origin: [(L + 2) / 2, 0, 9], jitter: 0, meta: { tiers: [{ y: 0.5, z: r3((4.5 - 9) * STD) }, { y: 0.8, z: r3((12.5 - 9) * STD) }] } };
 }
 
-// ---------------------------------------------------------------- the banner, bunting & poles
-// contestBanner({ span, text }) — a canvas banner hung on ropes between two tall posts
-// span metres apart; painted pumpkins at each end, the lettering is a sign (meta.signs)
-export function contestBanner({ span = 12, text = 'PUMPKIN CARVING CONTEST' } = {}) {
-  const half = Math.round(span / 2 / STD);
-  const W = half * 2 + 7, cx = half + 3, cz = 2;
-  const v = new Vox(W, 100, 5);
-  for (const px of [cx - half, cx + half]) {
-    v.fill(px - 1, 0, cz - 1, px + 1, 96, cz + 1, (x, y) => (y % 11 === 0 ? WOOD_D : WOOD));
-    v.fill(px - 2, 97, cz - 2, px + 2, 98, cz + 2, WOOD_D);
-  }
-  const cw = 72, y0 = 66, y1 = 87;
-  for (let x = cx - cw; x <= cx + cw; x++) for (let y = y0; y <= y1; y++) {
-    const edge = x - (cx - cw) < 2 || cx + cw - x < 2 || y1 - y < 2 || y - y0 < 2;
-    v.set(x, y, cz, edge ? RUST : (x * 7 + y * 3) % 23 === 0 ? CANVAS_D : CANVAS);
-  }
-  // a scalloped hem, orange and cream
-  for (let k = 0, x = cx - cw; x <= cx + cw - 7; x += 8, k++) for (let dx = 0; dx < 8; dx++) for (let dy = 1; dy <= 3; dy++) if (Math.hypot(dx - 3.5, dy) < 4) v.set(x + dx, y0 - dy, cz, k % 2 ? ORANGE : CANVAS);
-  // painted pumpkins at both ends
-  const ym = Math.round((y0 + y1) / 2);
-  for (const s of [-1, 1]) {
-    const px = cx + s * (cw - 8);
-    for (let x = -5; x <= 5; x++) for (let y = -4; y <= 4; y++) if ((x * x) / 30 + (y * y) / 19 <= 1) v.set(px + x, ym - 1 + y, cz, Math.abs(x) === 2 || x === 0 ? ORANGE_D : ORANGE);
-    v.fill(px, ym + 4, cz, px + 1, ym + 5, cz, STEM_G);
-    v.set(px + 2, ym + 5, cz, STEM_G);
-  }
-  for (const s of [-1, 1]) {
-    v.line(cx + s * cw, y1, cz, cx + s * (half - 2), 95, cz, ROPE);
-    v.line(cx + s * cw, y0 + 1, cz, cx + s * (half - 2), 72, cz, ROPE);
-  }
-  const origin = [cx + 0.5, 0, cz + 0.5];
-  const sw = (cw * 2 - 30) * STD, sh = (y1 - y0 - 5) * STD, my = r3((ym + 0.5) * STD);
-  return {
-    vox: v, size: STD, origin, jitter: 0,
-    meta: {
-      posts: [-half * STD, half * STD],
-      signs: [
-        { x: 0, y: my, z: 0.034, w: sw, h: sh, normal: [0, 0, 1], text, bg: CANVAS, fg: RUST },
-        { x: 0, y: my, z: -0.034, w: sw, h: sh, normal: [0, 0, -1], text, bg: CANVAS, fg: RUST },
-      ],
-    },
-  };
-}
-
+// ---------------------------------------------------------------- bunting & poles
 // bunting({ len, sag, seed }) — a sagging string of little triangle flags from (0,0,0)
 // along +x; hang it from two poles of the same height
 export function bunting({ len = 12, sag = 0.45, seed = 1 } = {}) {
