@@ -477,8 +477,8 @@ export class Story {
       g.rider.visible = true;
       this.flag('bike', true);
     }).then(() => {
-      if (g.touch?.on) g.ui.pop('Right! Thumb on the wheel to steer, hold *PEDAL* to go, *HOP* to hop, *TRICK* to show off.', { expr: 'happy', ms: 7000 });
-      else g.ui.pop('Right! [W] pedals (tap in rhythm to sprint), [A][D] steer, hold [Space] and let go to hop, [Q] wheelie, [Shift] drift.', { expr: 'happy', ms: 8000 });
+      if (g.touch?.on) g.ui.pop('Right! Left thumb steers. Right thumb goes round and round the *crank* to pedal: no spinning, no going. *HOP* to hop, *TRICK* to show off.', { expr: 'happy', ms: 8000 });
+      else g.ui.pop('Right! [W] [S] [W] [S]: one foot then the other turns the pedals. [A][D] steer, hold [Space] and let go to hop, [Q] wheelie, [Shift] drift.', { expr: 'happy', ms: 9000 });
       g.ui.pop('And I just follow the little cocoa cups on the compass. Easy!', { expr: 'sparkle' });
     });
   }
