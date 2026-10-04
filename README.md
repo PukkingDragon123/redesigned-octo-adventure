@@ -108,9 +108,13 @@ its heat, more the harder the crash.
   effects.
 - **Loading and title** (`src/boot/loader3d.js`, `src/ui/title.js`): the
   loading screen is plain black with just the 3D voxel Hank running on the
-  spot over a thin progress bar. The title keeps that one simple scene (a dark
-  backdrop, Hank running, popping his skull or hopping now and then) under a
-  pixel logo painted in code. At the end of each day a bedtime scene
+  spot over a thin progress bar. The title is a live establishing shot of Maple
+  Cove on an autumn morning, drawn by the world renderer: three slow camera
+  moves (Main Street from over the sea, the pumpkin carving contest, the
+  harbour), the villagers on their routines, Hank pedalling Bessie through town
+  with a crate of cocoa and the snow-capped ranges (`createMountains` in
+  `src/render/sky.js`, land side only) beyond, under a pixel logo painted in
+  code. At the end of each day a bedtime scene
   (`src/game/bedtime.js`, `Story.bedtime`) puts him in striped pajamas and
   Nana tucks him in on the sofa.
 - **Voxels** (`src/voxel`): models are painted in code into voxel grids and

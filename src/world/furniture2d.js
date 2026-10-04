@@ -3,8 +3,8 @@
 // placement kit, so everything is fitted around buildings, colliders, roads,
 // doors, NPC spots and the street clutter already down):
 //   - porches: rocking chairs with a side table and cocoa, porch swings (you can
-//     sit on them), boot racks, wood boxes, potted mums by the steps, hanging
-//     ferns and wind chimes under the porch beam, a welcome mat at the door
+//     sit on them), boot racks, wood boxes, potted mums by the steps, wind
+//     chimes under the porch beam, a welcome mat at the door
 //   - yards: Muskoka chairs, wheelbarrows of leaves, leaf piles and rakes,
 //     gnomes, bird baths, barrel planters
 //   - Main Street: café terraces on the lots beside Café Érable, the donut shop
@@ -30,7 +30,6 @@ export const FOOT2 = {
   sidetable: { r: 0.25, h: 0.65 },
   mum: { r: 0.2, h: 0.6 },
   fern: { r: 0.28, h: 0.55 },
-  hangfern: { r: 0.25, h: 0.3, hang: true },
   chimes: { r: 0.12, h: 0.3, hang: true },
   bootrack: { r: 0.17, len: 0.42, h: 0.45 },
   woodbox: { r: 0.26, len: 0.38, h: 0.8 },
@@ -157,14 +156,10 @@ export function placeFurniture(vw, K) {
       const mv = Math.floor(r() * 4);
       for (const sd of [-1, 1]) { const [mx, mz] = P(doorX + sd * 0.95, z1 - 0.32); put('mum', mx, mz, f, { ...on, v: (mv + (sd > 0 ? 1 : 0)) % 4 }); }
       { const [fx, fz] = P(doorX + (r() < 0.5 ? -0.9 : 0.9), z0 + 0.52); if (r() < 0.6) put('fern', fx, fz, f, on); else put('bootrack', fx, fz, f, on); }
-      // hanging baskets and wind chimes under the beam at the front
-      if (y != null) {
-        const hv = Math.floor(r() * 2);
-        for (const sd of [-1, 1]) {
-          const [hx, hz] = P(sd < 0 ? deck.x0 + 0.7 : deck.x1 - 0.7, z1 - 0.3);
-          if (sd > 0 && r() < 0.45) put('chimes', hx, hz, f, { y, hang: true });
-          else put('hangfern', hx, hz, f, { y, hang: true, v: hv });
-        }
+      // wind chimes under the beam at one end of the front (no hanging planters)
+      if (y != null && r() < 0.45) {
+        const [hx, hz] = P(deck.x1 - 0.7, z1 - 0.3);
+        put('chimes', hx, hz, f, { y, hang: true });
       }
       // a box of firewood at the end of the porch for the country houses
       if (country) { const [wx, wz] = P(r() < 0.5 ? deck.x0 + 0.65 : deck.x1 - 0.65, z0 + 0.52); put('woodbox', wx, wz, f, on); }

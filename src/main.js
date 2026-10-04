@@ -80,7 +80,7 @@ async function boot() {
     if (game) game.update(dt);
     const focus = game ? game.focus() : camera.position.clone().add(new THREE.Vector3(0, 0, -30).applyQuaternion(camera.quaternion));
     world.update(dt, camera, focus);
-    // a scene can stand in for the world (the title's lone running Hank); the
+    // a scene can stand in for the world (a hook; the title draws the world itself); the
     // world is drawn once first so its shaders are compiled before the game starts
     const ov = game?.overrideScene;
     if (ov && warmed) ov.render(pipeline);

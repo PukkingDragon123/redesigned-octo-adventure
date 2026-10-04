@@ -1,7 +1,7 @@
 // 2D furniture and odds and ends for Maple Cove, in the same sculpted pixel-art
 // style as the street clutter (deco2d.js): porch and yard furniture (rocking
 // chairs, porch swings, Muskoka chairs, side tables with cocoa, potted mums and
-// ferns, hanging baskets, wind chimes, boot racks, wood boxes, wheelbarrows,
+// ferns, wind chimes, boot racks, wood boxes, wheelbarrows,
 // gnomes, bird baths, leaf piles and rakes), café terraces (bistro sets,
 // umbrellas, menu easels, newspaper boxes, barrel planters, a phone booth,
 // street-name signs), the harbour and the beach (deck chairs, coolers, fishing
@@ -183,27 +183,18 @@ function mumSculpt(v) {
   S.ell([0, 0.43, 0], [0.25, 0.19, 0.25], (n) => (n[1] < -0.45 ? 'leaf' : hash(Math.floor(n[0] * 9), Math.floor(n[1] * 9), Math.floor(n[2] * 9)) > 0.72 ? d : c));
   return S;
 }
-function fernSculpt({ hang = false, flowers = null } = {}) {
+function fernSculpt() {
   const S = sculpt();
-  const y0 = hang ? 1.72 : 0;
-  if (hang) {
-    S.ell([0, y0, 0], [0.19, 0.1, 0.19], (n) => (n[1] > 0.6 ? 'bark' : Math.floor((n[1] + 1) * 4) % 2 ? 'wicker' : 'strawD'), {});
-    for (const a of [0, 2.1, 4.2]) S.tube([[Math.cos(a) * 0.17, y0 + 0.05, Math.sin(a) * 0.17], [0, y0 + 0.62, 0]], [0.007, 0.007], 'iron', { line: false });
-    S.ell([0, y0 + 0.64, 0], [0.025, 0.025, 0.025], 'iron');
-  } else potSculpt(S, 0.12, 0.17, 0.32);
-  const top = hang ? y0 + 0.08 : 0.3;
-  const R = rnd(hang ? 9 : 4);
+  potSculpt(S, 0.12, 0.17, 0.32);
+  const top = 0.3;
+  const R = rnd(4);
   const n = 11;
   for (let k = 0; k < n; k++) {
     const a = (k / n) * TAU + R() * 0.4, s = 0.8 + R() * 0.35;
     const dx = Math.cos(a), dz = Math.sin(a);
-    const droop = hang ? -0.35 - R() * 0.25 : -0.02;
+    const droop = -0.02;
     S.tube([[0, top, 0], [dx * 0.16 * s, top + 0.2 * s, dz * 0.16 * s], [dx * 0.36 * s, top + 0.14 * s + droop * 0.4, dz * 0.36 * s], [dx * 0.46 * s, top + droop, dz * 0.46 * s]],
       [0.03, 0.05, 0.038, 0.012], k % 2 ? 'fern' : 'leaf');
-  }
-  if (flowers) for (let k = 0; k < 9; k++) {
-    const a = k * 2.4, d = 0.12 + (k % 3) * 0.08;
-    S.ell([Math.cos(a) * d, top + 0.12 - (k % 3) * 0.12 + (hang ? -0.08 : 0.1), Math.sin(a) * d], [0.05, 0.045, 0.05], k % 3 === 2 ? 'white' : flowers);
   }
   return S;
 }
@@ -825,7 +816,6 @@ export const FURN = {
   sidetable: one(() => sideTableSculpt(), 52, SIDE),
   mum: vary(4, (i) => mumSculpt(i), 52, SIDE),
   fern: one(() => fernSculpt(), 48, SIDE),
-  hangfern: vary(2, (i) => fernSculpt({ hang: true, flowers: i ? 'pink' : null }), 48, SIDE),
   bootrack: one(() => bootRackSculpt(), 48, FRONT3, { sym: true }),
   woodbox: one(() => woodBoxSculpt(), 44, FRONT3),
   chimes: { ppm: 52, pitch: 0.32, views: SIDE, n: 2, pose: (i) => chimesSculpt(i ? 1 : -1) },

@@ -890,15 +890,11 @@ function windowOn(ctx, F, u0, y0, o = {}) {
     F.ff(Ba, Bt - 5, 1, Bb, Bt, 6, (U, Y, N) => (N === 6 || U === Ba || U === Bb || Y === Bt - 5 ? ((Y - Bt) % 3 === 0 && N === 6 ? bd : bc) : 0));
     F.ff(Ba, Bt, 1, Bb, Bt, 6, (U, Y, N) => (N === 6 || U === Ba || U === Bb || N === 1 ? bl : P.soil));
     for (const U of [Ba + 2, Bb - 2]) { F.ff(U, Bt - 8, 1, U, Bt - 6, 1, bd); F.ff(U, Bt - 6, 2, U, Bt - 6, 3, bd); }
-    // plants: leafy mounds with mums in two or three colours, and ivy trailing over the front
+    // plants: leafy mounds with mums in two or three colours, kept inside the box (nothing trails down)
     for (let U = Ba + 1; U <= Bb - 1; U++) for (let N = 2; N <= 5; N++) {
       const h = vhash(U, N, F.f.length + Y0, 7);
       const top = Bt + 1 + Math.floor(h * 3) + (N >= 3 && N <= 4 ? 1 : 0);
       for (let Y = Bt + 1; Y <= top; Y++) F.fs(U, Y, N, Y === top && h > 0.35 ? pick(P.mums, vhash(U >> 1, 3, Y0, 9)) : h > 0.7 ? P.leafB : P.leaf);
-    }
-    for (let U = Ba + 1; U <= Bb - 1; U += 3) {
-      const len = 1 + Math.floor(vhash(U, 5, Y0, 2) * 4);
-      for (let k = 0; k < len; k++) F.fs(U + (k & 1), Bt - 1 - k, 7, k === len - 1 ? P.leafB : P.leaf);
     }
     yB = y0 - 6;
   }

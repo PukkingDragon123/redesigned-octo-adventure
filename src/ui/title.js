@@ -1,10 +1,80 @@
-// Title screen: just the real 3D voxel Hank running on a plain dark background
-// (a tiny stage of its own, rendered through the game pipeline instead of the
-// world), a hand-made pixel-art logo, and a leather-and-brass menu.
+// Title screen: a live establishing shot of Maple Cove on an autumn morning, drawn by
+// the real world renderer. The camera drifts through three slow shots (Main Street from
+// over the sea with the mountains beyond, the pumpkin carving contest at the west end
+// of Main Street, the harbour and the boardwalk), dipping to black between them; the
+// villagers keep their routines, Hank rides Bessie through town with a crate of cocoa,
+// geese and gulls fly over. On top: a hand-made pixel-art logo and the leather-and-
+// brass menu, over a soft darkening where they sit (no blur: the scene stays crisp).
 import * as THREE from 'three';
-import { HOME_SPAWN } from '../world/layout.js';
 import { hasSave } from '../game/state.js';
-import { RunStage } from '../boot/loader3d.js';
+import { clamp, damp, lerp, smoothstep, wrapAngle } from '../core/math.js';
+
+// The light of an early autumn morning: the low sun comes in off the sea and lights the
+// shopfronts, the forest and the snow on the mountains. The villagers keep each shot's
+// own hour (`sched`), so the contest can be on while the light stays golden.
+const LIGHT_HOUR = 8.35;
+const SHOT_LEN = 15;
+const FADE_OUT = 0.8;
+const FADE_IN = 1.1;
+const SHADOW_SIZE = 120; // a wider shadow box for the wide shots (gameplay uses 70)
+
+// Each shot: the camera dollies from -> to, facing the point look (xz) drifting to lookTo;
+// hor is where the horizon sits (fraction of the screen from the top; horTall on portrait
+// screens), hfov the horizontal field of view (degrees); sched the villagers' hour; ride
+// is Hank's path (xz points), speed and metres in at the start; birds cross on cue (s).
+const SHOTS = [
+  {
+    // Main Street from over the sea at its east end: the shops, the rink, the green and
+    // the chapel, the forest, the lookout hill and the mountains beyond
+    sched: 7.8,
+    from: [338, 28, 54.5], to: [324, 25.5, 52.5], look: [214, 49], lookTo: [212, 48.5],
+    hor: 0.56, horTall: 0.5, hfov: 64,
+    ride: { path: [[150, 52.2], [266, 52.2]], speed: 5.2, start: 18 },
+    birds: [{ at: 1.5, geese: { start: [238, -30], dir: [0, 1], alt: 41 } }],
+  },
+  {
+    // the pumpkin carving contest at the west end of Main Street: Hank rides in from
+    // Nana's road, down the middle between the carvers' tables, towards the camera
+    sched: 10.5,
+    from: [160, 5.6, 48.3], to: [164.5, 5.9, 48.7], look: [112, 50.4], lookTo: [112, 50.2],
+    hor: 0.53, horTall: 0.52, hfov: 70,
+    ride: { path: [[72, 47.2], [92, 49.9], [106, 51], [114, 50.6], [121, 50], [146, 50], [158, 50.6], [196, 51.2]], speed: 5.3, start: 0 },
+    birds: [{ at: 3, geese: { start: [64, -40], dir: [0.15, 1], alt: 26 } }],
+  },
+  {
+    // the harbour: boats at the docks, Birdie fishing off the boardwalk, the backs of the
+    // houses, the green and the chapel steeple, the ridge and the northern ranges
+    sched: 7.8,
+    from: [210, 21, 167], to: [197, 23.5, 159], look: [186, 34], lookTo: [180, 30],
+    hor: 0.53, horTall: 0.5, hfov: 66,
+    ride: { path: [[138, 85.3], [258, 85.3]], speed: 5, start: 25 },
+    birds: [{ at: 0.5, gulls: true }, { at: 4, gulls: true }],
+  },
+];
+
+// a polyline in xz, walked by distance
+function makePath(pts) {
+  const seg = [];
+  let len = 0;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const [ax, az] = pts[i], [bx, bz] = pts[i + 1];
+    const l = Math.hypot(bx - ax, bz - az);
+    seg.push({ ax, az, dx: (bx - ax) / l, dz: (bz - az) / l, l, s0: len });
+    len += l;
+  }
+  return { seg, len };
+}
+function pathAt(P, s, out) {
+  s = clamp(s, 0, P.len);
+  let q = P.seg[P.seg.length - 1];
+  for (const g of P.seg) if (s <= g.s0 + g.l) { q = g; break; }
+  const t = s - q.s0;
+  out.x = q.ax + q.dx * t;
+  out.z = q.az + q.dz * t;
+  out.dx = q.dx;
+  out.dz = q.dz;
+  return out;
+}
 
 const INK = '#1e1418';
 
@@ -104,48 +174,47 @@ const el = (tag, css = '', html = '') => {
   return e;
 };
 
+
 export class TitleScreen {
   constructor(game) {
     this.g = game;
     this.t = 0;
-    this.gagT = 4;
+    this.shot = null;
+    this.shotI = -1;
+    this.shotT = 0;
+    this._pos = new THREE.Vector3();
+    this._look = new THREE.Vector3();
+    this._p = { x: 0, z: 0, dx: 0, dz: 1 };
+    this._q = { x: 0, z: 0, dx: 0, dz: 1 };
   }
 
   async show({ onContinue, onNew, onSettings, onControls }) {
     const g = this.g;
-    // the stage goes up at once (black, fading in) so the world never flashes past
+    // the scene goes up at once (black, fading in) so nothing pops in
     this.stage();
     try { await document.fonts.load('32px BoldPixels'); await document.fonts.load('24px Monogram'); } catch { /* fonts are optional */ }
-    const s = uiScale();
-    this.s = s;
     const root = el('div', `position:fixed;inset:0;z-index:40;pointer-events:none;font-family:Monogram,monospace;color:#fff4e0;opacity:0;`);
     root.id = 'title3d';
-    // logo
-    const logo = drawLogo();
-    const mug = drawMug();
-    const ls = Math.max(1, Math.min(5, Math.floor(Math.min((innerWidth * 0.62) / logo.width, (innerHeight * 0.3) / logo.height))));
-    const lw = logo.width * ls, lh = logo.height * ls;
-    const logoBox = el('div', `position:absolute;left:50%;top:${Math.round(innerHeight * 0.05)}px;width:${lw + 30 * ls}px;margin-left:${-Math.round((lw + 30 * ls) / 2)}px;height:${lh}px;`);
-    const li = el('img', `position:absolute;left:0;top:0;width:${lw}px;height:${lh}px;image-rendering:pixelated;`);
-    li.src = logo.toDataURL();
-    const mi = el('img', `position:absolute;left:${lw - 2 * ls}px;top:${2 * ls}px;width:${28 * ls}px;height:${30 * ls}px;image-rendering:pixelated;`);
-    mi.src = mug.toDataURL();
-    this.mugEl = mi;
-    this.ls = ls;
-    const ss = ls;
-    const sub = el('div', `position:absolute;left:0;width:${lw}px;top:${lh - 4 * ls}px;text-align:center;font-size:${16 * ss}px;line-height:1;color:#ffe8c8;text-shadow:${ss}px ${ss}px 0 ${INK};`, 'a cozy undead cocoa-delivery tale');
+    // a soft darkening behind the logo and the menu so they read over any shot
+    this.shadeEl = el('div', 'position:absolute;inset:0;');
+    // logo, with a steaming mug of cocoa beside it and the subtitle under it
+    this.logo = drawLogo();
+    const logoBox = el('div', 'position:absolute;left:50%;');
+    const li = el('img', 'position:absolute;left:0;top:0;image-rendering:pixelated;');
+    li.src = this.logo.toDataURL();
+    const mi = el('img', 'position:absolute;image-rendering:pixelated;');
+    mi.src = drawMug().toDataURL();
+    const sub = el('div', 'position:absolute;left:0;text-align:center;line-height:1;color:#ffe8c8;', 'a cozy undead cocoa-delivery tale');
     logoBox.append(li, mi, sub);
-    this.logoEl = li;
-    // menu
+    Object.assign(this, { logoBox, logoEl: li, mugEl: mi, subEl: sub });
+    // menu: the shared leather & brass kit buttons
     const items = [];
     const save = hasSave();
     if (save) items.push({ label: 'Continue', small: `Day ${g.peekSave()?.day ?? 1}`, fn: () => this.close(onContinue) });
     items.push({ label: save ? 'New Game' : 'Start', small: save ? 'starts over' : '', fn: () => this.close(onNew) });
     items.push({ label: 'Settings', fn: () => onSettings?.() });
     items.push({ label: 'Controls', fn: () => onControls?.() });
-    // menu: the shared leather & brass kit buttons
-    const narrow = innerWidth < innerHeight;
-    const menu = el('div', `position:absolute;${narrow ? 'left:50%;transform:translateX(-50%);bottom:calc(var(--u) * 18)' : `left:${Math.round(innerWidth * 0.07)}px;bottom:${Math.round(innerHeight * 0.1)}px`};display:flex;flex-direction:column;gap:calc(var(--u) * 3);pointer-events:auto;min-width:calc(var(--u) * 104);`);
+    const menu = el('div', 'position:absolute;display:flex;flex-direction:column;gap:calc(var(--u) * 3);pointer-events:auto;min-width:calc(var(--u) * 104);');
     menu.className = 'title-menu-k';
     const buttons = items.map((it, i) => {
       const b = g.ui.button(it.label, it.fn, { small: it.small || '' });
@@ -154,16 +223,41 @@ export class TitleScreen {
       return b;
     });
     this.buttons = buttons;
+    this.menuEl = menu;
     const foot = el('div', `position:absolute;right:8px;bottom:6px;font-size:16px;line-height:1;text-align:right;color:#e8d0b0;text-shadow:1px 1px 0 ${INK};`,
       'Autumn in Maple Cove<br>fonts: monogram by datagoblin (CC0) &middot; BoldPixels by YukiPixels (CC BY-SA 4.0)');
-    root.append(logoBox, menu, foot);
+    root.append(this.shadeEl, logoBox, menu, foot);
     document.body.appendChild(root);
     this.root = root;
+    this.layoutDom();
+    this.onResize = () => this.layoutDom();
+    addEventListener('resize', this.onResize);
     // hook into the game's menu navigation (arrow keys / pad / confirm)
     const m = { ov: root, items: buttons, sel: 0, onBack: null, title: true };
     this.m = m;
     g.ui.menuStack.push(m);
     this.select(0);
+  }
+
+  // wide screens: the menu bottom-left; tall screens: centred under the scene
+  layoutDom() {
+    if (!this.root) return;
+    const W = innerWidth, H = innerHeight, narrow = W < H;
+    const logo = this.logo;
+    const ls = Math.max(1, Math.min(5, Math.floor(Math.min((W * 0.62) / logo.width, (H * 0.3) / logo.height))));
+    this.ls = ls;
+    const lw = logo.width * ls, lh = logo.height * ls, bw = lw + 30 * ls;
+    Object.assign(this.logoBox.style, { top: `${Math.round(H * 0.05)}px`, width: `${bw}px`, marginLeft: `${-Math.round(bw / 2)}px`, height: `${lh}px` });
+    Object.assign(this.logoEl.style, { width: `${lw}px`, height: `${lh}px` });
+    Object.assign(this.mugEl.style, { left: `${lw - 2 * ls}px`, top: `${2 * ls}px`, width: `${28 * ls}px`, height: `${30 * ls}px` });
+    Object.assign(this.subEl.style, { width: `${lw}px`, top: `${lh - 4 * ls}px`, fontSize: `${16 * ls}px`, textShadow: `${ls}px ${ls}px 0 ${INK}` });
+    const ms = this.menuEl.style;
+    if (narrow) Object.assign(ms, { left: '50%', transform: 'translateX(-50%)', bottom: 'calc(var(--u) * 18)' });
+    else Object.assign(ms, { left: `${Math.round(W * 0.07)}px`, transform: '', bottom: `${Math.round(H * 0.1)}px` });
+    const ink = (a) => `rgba(24,14,20,${a})`;
+    this.shadeEl.style.background = narrow
+      ? `linear-gradient(to top, ${ink(0.62)} 0%, ${ink(0.32)} 28%, ${ink(0)} 48%), linear-gradient(to bottom, ${ink(0.34)} 0%, ${ink(0)} 26%)`
+      : `radial-gradient(ellipse 50% 66% at 0% 100%, ${ink(0.56)} 0%, ${ink(0.26)} 55%, ${ink(0)} 100%), linear-gradient(to top, ${ink(0.38)} 0%, ${ink(0)} 30%), linear-gradient(to bottom, ${ink(0.3)} 0%, ${ink(0)} 28%)`;
   }
 
   select(i) {
@@ -173,60 +267,156 @@ export class TitleScreen {
     this.selI = i;
   }
 
-  // Hank running on his own on a dark plum background. The world keeps ticking
-  // underneath (parked at the cabin, so it is warm when the game starts) but is
-  // not drawn while the title is up.
+  // Set the world up for the title: golden morning light, a friendly village, Hank on
+  // Bessie with a crate of cocoa, and the first shot. (restore() puts it all back.)
   stage() {
     const g = this.g;
-    if (this.run) return;
-    const A = g.world.atmosphere;
-    A.hour = 17.35;
+    if (this.staged) return;
+    this.staged = true;
+    const W = g.world, A = W.atmosphere;
+    A.lightHour = LIGHT_HOUR;
     A.setWeather('breezy', true);
-    g.parkBike(HOME_SPAWN.x, HOME_SPAWN.z, HOME_SPAWN.yaw + 0.5);
+    // everyone already knows Hank (a save or a new game sets the real feelings when the title closes)
+    const st = g.state;
+    st.flags.village1 = true;
+    st.flags.contestScream = true;
+    st.npc = { _day: st.day, _base: 70 };
+    // no speech bubbles or voices over the title
+    g.villagers.bubble = () => {};
+    const sc = W.sun?.shadow?.camera;
+    if (sc) {
+      this.shadowWas = sc.right;
+      sc.left = sc.bottom = -SHADOW_SIZE;
+      sc.right = sc.top = SHADOW_SIZE;
+      sc.updateProjectionMatrix();
+    }
     g.setBikeVisible(true);
     g.rider.visible = true;
-    const b = g.bike.pos;
-    g.chase.cut(new THREE.Vector3(b.x + 4, b.y + 1.6, b.z + 4), new THREE.Vector3(b.x, b.y + 1, b.z), 50);
-    g.chase.apply(0);
-    this.run = new RunStage({ bg: 0x1c1018, dash: 0x5a4450 });
-    this.run.hank.sfx = (name) => g.sound?.play?.(name, { volume: 0.4 });
-    this.layout();
-    g.overrideScene = this.run;
+    g.orders.list = ['classic', 'maple', 'pumpkin'].map((cocoa, i) => ({ id: 9000 + i, customer: 'title', spot: 'title', cocoa, state: 'carried', loaded: true, quality: 100 }));
+    g.cargo?.sync();
     g.pipeline.post.uFade.value = 1;
-    g.tween(g.pipeline.post.uFade, 'value', 0, 1.4);
-    this.t = 0;
+    this.shotI = -1;
+    this.next(true);
   }
 
-  // wide screens: Hank right of centre, clear of the menu on the left;
-  // tall screens: smaller, between the logo and the menu
-  layout() {
-    const r = this.run;
-    if (!r) return;
-    const narrow = innerWidth < innerHeight;
-    r.fx = narrow ? 0 : 0.42;
-    r.fy = narrow ? 0.2 : -0.22;
-    r.size = narrow ? 0.22 : 0.48;
-    r.ang = narrow ? 0.8 : 1.05;
+  next(first = false) {
+    const g = this.g;
+    this.shotI = (this.shotI + 1) % SHOTS.length;
+    const S = (this.shot = SHOTS[this.shotI]);
+    this.shotT = 0;
+    this.first = first;
+    this.birdsFired = 0;
+    // the villagers jump to this shot's hour of their day (hidden by the dip to black)
+    const A = g.world.atmosphere;
+    if (first || A.hour !== S.sched) {
+      A.hour = S.sched;
+      g.villagers.syncState();
+    }
+    this.path = makePath(S.ride.path);
+    this.rideS = S.ride.start;
+    this.ride(0);
+    this.frame(0, true);
+  }
+
+  // Hank pedals Bessie along the shot's path (placed directly: no physics, no controls)
+  ride(dt) {
+    const g = this.g, b = g.bike, P = this.path;
+    if (!P) return;
+    const v = this.rideS < P.len ? this.shot.ride.speed : 0;
+    this.rideS = Math.min(P.len, this.rideS + v * dt);
+    const p = pathAt(P, this.rideS, this._p);
+    // head for a point a little ahead, so corners come out round
+    const q = pathAt(P, this.rideS + 3.5, this._q);
+    let hx = q.x - p.x, hz = q.z - p.z;
+    if (hx * hx + hz * hz < 1e-6) { hx = p.dx; hz = p.dz; }
+    const yaw = Math.atan2(hx, hz);
+    const fresh = dt <= 0;
+    const turn = fresh ? 0 : wrapAngle(yaw - b.yaw) / dt;
+    const fx = Math.sin(yaw), fz = Math.cos(yaw);
+    const ph = g.physics;
+    const y = ph.groundAt(p.x, p.z).h;
+    const hF = ph.groundAt(p.x + fx * 0.46, p.z + fz * 0.46).h, hB = ph.groundAt(p.x - fx * 0.46, p.z - fz * 0.46).h;
+    b.pos.set(p.x, y, p.z);
+    b.yaw = yaw;
+    b.vel.set(fx * v, 0, fz * v);
+    b.speed = b.fwdSpeed = v;
+    b.grounded = true;
+    b.crash = 0;
+    b.throttleIn = v > 0 ? 1 : 0;
+    b.brakeIn = 0;
+    b.yawRate = turn;
+    b.cadence = v > 0 ? 0.72 : 0; // an easy Sunday-morning pedal
+    b.crank += b.cadence * 9.5 * dt;
+    b.wheelAngle += (v / 0.34) * dt;
+    b.slopePitch = Math.atan2(hF - hB, 0.92);
+    b.pitch = fresh ? b.slopePitch : damp(b.pitch, b.slopePitch, 12, dt);
+    b.lean = fresh ? 0 : damp(b.lean, clamp(Math.atan((-turn * v) / 9.8) * 1.15, -0.45, 0.45), 6, dt);
+    b.wheelie = b.stoppie = 0;
+    // draw Bessie where she is now (the game posed her before the title moved her)
+    b.lerpView(1);
+    g.bikeModel.update(0, b, 0);
+  }
+
+  // the slow dolly, framed so the horizon sits where the shot wants it on any screen shape
+  frame(dt, snap = false) {
+    const g = this.g, S = this.shot, cam = g.camera;
+    const k = smoothstep(0, SHOT_LEN, this.shotT);
+    const pos = this._pos.set(lerp(S.from[0], S.to[0], k), lerp(S.from[1], S.to[1], k), lerp(S.from[2], S.to[2], k));
+    pos.x += Math.sin(this.t * 0.31) * 0.22;
+    pos.y += Math.sin(this.t * 0.23 + 1) * 0.12;
+    const lx = lerp(S.look[0], S.lookTo[0], k), lz = lerp(S.look[1], S.lookTo[1], k);
+    const aspect = cam.aspect || innerWidth / innerHeight;
+    const tall = aspect < 1;
+    const vfov = clamp(2 * Math.atan(Math.tan((S.hfov * Math.PI) / 360) / aspect), 0.5, tall ? 1.25 : 1.05);
+    const pitch = Math.atan((2 * (tall ? S.horTall : S.hor) - 1) * Math.tan(vfov / 2));
+    let dx = lx - pos.x, dz = lz - pos.z;
+    const d = Math.hypot(dx, dz) || 1;
+    dx /= d;
+    dz /= d;
+    const c = Math.cos(pitch) * 60;
+    const look = this._look.set(pos.x + dx * c, pos.y + Math.sin(pitch) * 60, pos.z + dz * c);
+    const C = g.chase, fov = (vfov * 180) / Math.PI;
+    if (snap || C.mode !== 'shot') C.cut(pos, look, fov);
+    else {
+      C.pos.copy(pos);
+      C.look.copy(look);
+      C.fov = fov;
+    }
+    C.apply(dt);
+  }
+
+  spawnBirds(b) {
+    const C = this.g.critters;
+    if (!C) return;
+    try {
+      if (b.geese) {
+        const [dx, dz] = b.geese.dir, l = Math.hypot(dx, dz);
+        C.spawnGeese({ start: { x: b.geese.start[0], z: b.geese.start[1] }, dir: { x: dx / l, z: dz / l }, alt: b.geese.alt });
+      }
+      if (b.gulls) C.spawnGulls();
+    } catch (e) {
+      console.warn('title birds', e);
+    }
   }
 
   update(dt) {
-    const run = this.run;
-    if (!run) return;
+    const S = this.shot;
+    if (!S) return;
+    const g = this.g;
     this.t += dt;
-    this.layout();
-    run.update(dt);
+    this.shotT += dt;
+    if (this.shotT >= SHOT_LEN) this.next();
+    const T = this.shotT;
+    // dip to black between shots (the first one fades in from the loading screen more slowly)
+    const fin = this.first ? 1.8 : FADE_IN;
+    g.pipeline.post.uFade.value = T < fin ? 1 - smoothstep(0, fin, T) : smoothstep(SHOT_LEN - FADE_OUT, SHOT_LEN, T);
+    this.ride(dt);
+    const birds = this.shot.birds || [];
+    while (this.birdsFired < birds.length && T >= birds[this.birdsFired].at) this.spawnBirds(birds[this.birdsFired++]);
+    this.frame(dt);
     if (!this.root) return;
-    if (this.t < 1.2) this.root.style.opacity = String(Math.min(1, this.t / 0.8));
+    if (this.t < 2) this.root.style.opacity = String(clamp((this.t - 0.4) / 0.9, 0, 1));
     else if (this.root.style.opacity !== '1') this.root.style.opacity = '1';
-    // little bits of business: the skull pops off, a happy hop, a twirl
-    this.gagT -= dt;
-    if (this.gagT <= 0) {
-      this.gagT = 5 + Math.random() * 4;
-      const r2 = Math.random();
-      if (r2 < 0.45) run.hank.react('headpop');
-      else if (r2 < 0.8) run.hank.react('yay');
-      else run.hank.react('spin');
-    }
     // the mug's steam bobs in pixel steps
     if (this.mugEl) this.mugEl.style.transform = `translateY(${-Math.round((Math.sin(this.t * 2.4) + 1) * 1) * this.ls}px)`;
   }
@@ -237,13 +427,30 @@ export class TitleScreen {
     g.ui.menuStack = g.ui.menuStack.filter((x) => x !== this.m);
     const r = this.root;
     this.root = null;
+    removeEventListener('resize', this.onResize);
     r.style.transition = 'opacity 0.5s';
     r.style.opacity = '0';
     setTimeout(() => r.remove(), 550);
-    // back to drawing the world
-    if (g.overrideScene === this.run) g.overrideScene = null;
-    this.run?.dispose();
-    this.run = null;
+    this.restore();
     fn?.();
+  }
+
+  // hand the world back to the game the way the title found it
+  restore() {
+    const g = this.g, W = g.world;
+    this.shot = null;
+    this.path = null;
+    W.atmosphere.lightHour = null;
+    const sc = W.sun?.shadow?.camera;
+    if (sc && this.shadowWas) {
+      sc.left = sc.bottom = -this.shadowWas;
+      sc.right = sc.top = this.shadowWas;
+      sc.updateProjectionMatrix();
+    }
+    delete g.villagers.bubble;
+    g.orders.list = [];
+    g.cargo?.sync();
+    g.parkBike();
+    g.pipeline.post.uFade.value = 0;
   }
 }

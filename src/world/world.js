@@ -95,7 +95,7 @@ export class World {
     this.scene.add(this.water);
     this.sky = createSky();
     this.scene.add(this.sky);
-    this.mountains = createMountains();
+    this.mountains = createMountains(this.pipeline.post);
     this.scene.add(this.mountains);
 
     // sun light used for shadows only (our shaders do their own lighting)
