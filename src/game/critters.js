@@ -35,7 +35,7 @@ const RIG = {
   deer: [14, 1], fawn: [8, 1], buck: [6, 1], moose: [2, 1], fox: [3, 1], raccoon: [2, 1], bin: [2, 1], rabbit: [8, 1],
   squirrel: [8, 0], chipmunk: [8, 0], mouse: [3, 0], robin: [10, 0], chickadee: [10, 0], bluejay: [10, 0], sparrow: [10, 0],
   crow: [26, 0], gull: [12, 0], goose: [14, 0], mallard: [6, 0], duckHen: [6, 0], owl: [2, 0], bat: [8, 0], frog: [4, 0],
-  trout: [2, 0], salmon: [2, 0], monarch: [8, 0], sulphur: [8, 0], dragonfly: [3, 0], beaver: [1, 0],
+  trout: [2, 0], salmon: [2, 0], monarch: [8, 0], sulphur: [8, 0], dragonfly: [3, 0], beaver: [1, 0], duchess: [1, 1], biscuit: [1, 1],
 };
 // species built a few frames apart after start-up, most common first, so the first spawn of each doesn't hitch
 const WARM = ['deer', 'fawn', 'rabbit', 'squirrel', 'chipmunk', 'robin', 'chickadee', 'sparrow', 'bluejay', 'crow', 'goose', 'gull', 'mallard', 'duckHen',
@@ -58,12 +58,22 @@ export class Critters {
     // debug: ?critters=deer:3,fawn:2 places creatures in front of the camera; ?calm makes them tame
     this.calm = !!game.params?.has('calm');
     this.debug = game.params?.get('critters');
+    // build the other species' meshes while the browser is idle (one at a time)
+    if (typeof requestIdleCallback === 'function') {
+      const next = (dl) => {
+        if (this.warm.length && (dl.timeRemaining() > 8 || dl.didTimeout)) this.rig(this.warm.shift());
+        if (this.warm.length) requestIdleCallback(next, { timeout: 4000 });
+      };
+      requestIdleCallback(next, { timeout: 4000 });
+    }
   }
 
   // the instanced puppet for a species, built on first use
   rig(kind) {
     let sp = this.rigs.get(kind);
     if (sp) return sp;
+    const i = this.warm.indexOf(kind);
+    if (i >= 0) this.warm.splice(i, 1);
     const r = SPECIES[kind]();
     const [max, shadow] = RIG[kind] || [6, 0];
     sp = new RigSpecies(kind, rigDef(r), { max, shadow: !!shadow });
@@ -200,7 +210,7 @@ export class Critters {
     const sp = g.onFoot ? Math.hypot(g.walker.vel?.x || 0, g.walker.vel?.z || 0) : g.bike.speed;
     this.speed = sp || 0;
     for (const k in this.timers) this.timers[k] -= dt;
-    if (this.warm.length && this.frame % 4 === 0) this.rig(this.warm.shift());
+    if (this.warm.length && this.frame % 8 === 0 && typeof requestIdleCallback !== 'function') this.rig(this.warm.shift());
     if (this.debug && g.mode !== 'boot') this.spawnDebug();
     if (g.mode !== 'title') this.spawnAll();
     const p = this.p;
@@ -504,6 +514,7 @@ export class Critters {
   draw(dt) {
     const cam = this.game.camera;
     const cp = cam.position;
+    cam.updateMatrixWorld();
     _pm.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
     _fr.setFromProjectionMatrix(_pm);
     for (const sp of this.rigs.values()) sp.begin();
@@ -511,7 +522,7 @@ export class Critters {
     W.px = p.x; W.py = p.y + 1.1; W.pz = p.z;
     const frame = ++this.frame;
     for (const c of this.list) {
-      if (c.dead) continue;
+      if (c.dead || c.hidden) continue;
       c.pdt += dt;
       const dx = c.x - cp.x, dy = c.y - cp.y, dz = c.z - cp.z;
       const dd = dx * dx + dy * dy + dz * dz;

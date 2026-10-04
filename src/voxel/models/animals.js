@@ -79,6 +79,7 @@ function eyes(v, y, z, n = 2, iris = INK, ring = 0) {
   for (const s of [-1, 1]) {
     if (ring) for (let j = -1; j <= n; j++) for (let k = -1; k <= n; k++) dotSide(v, s, y + j, z + k, ring);
     for (let j = 0; j < n; j++) for (let k = 0; k < n; k++) dotSide(v, s, y + j, z + k, iris);
+    if (n > 1 && iris !== INK) dotSide(v, s, y, z + n - 1, INK); // a pupil in a coloured eye
     if (n > 1) dotSide(v, s, y + n - 1, z + n - 1, GLINT);
   }
 }
@@ -174,6 +175,7 @@ function quad(o) {
   const slope = (ntop[2] - nb) / (ntop[1] - nb);
   tube(nv, [[ncx, nb, nb], ntop], [nr, nr * 0.82], (x, y, z) => {
     const fy = (y - nb) / (nl * o.neckUp), front = (z - (nb + (y - nb) * slope)) / Math.hypot(1, slope);
+    if (o.collar && fy > 0.12 && fy < 0.3) return Math.abs(x - ncx) < 0.6 && front > nr * 0.6 ? 0xf2c443 : o.collar;
     if (o.bib && front > nr * 0.1 && fy > -0.2) return o.bib;
     if (o.throat && front > nr * 0.35 && fy > 0.55) return o.throat;
     return y > ntop[1] - 1 && o.mane ? o.mane : o.neckC || o.coat;
@@ -232,7 +234,7 @@ function quadHead(o) {
   for (const dx of [-0.5, 0.5]) dotFront(v, x0 + dx, sy - hw * 0.2 - (o.droop || 0) * 0.9, o.nose || INK);
   if (nz > 0 && !o.pointy) v.set(Math.round(x0), Math.round(sy - hw * 0.36 - (o.droop || 0)), nz - 1, tone(muz, -0.25));
   // eyes, high on the sides of the skull
-  eyes(v, Math.round(sy), Math.round(sz + hw * 0.12), o.eye ?? 2, INK, o.eyeRing || 0);
+  eyes(v, Math.round(sy), Math.round(sz + hw * 0.12), o.eye ?? 2, o.iris || INK, o.eyeRing || 0);
   if (o.cheek && o.pointy) for (const s of [-1, 1]) for (let k = 0; k < 2; k++) dotSide(v, s, Math.round(sy - 1), Math.round(sz + 1 + k), o.cheek);
   // a moose's bell under the chin
   if (o.dewlap) tube(v, [[x0, sy - hw * 0.4, sz + 1], [x0, sy - hw * 0.4 - o.dewlap, sz + 1.5]], [1.2, 0.9], tone(o.coat, -0.1));
@@ -289,7 +291,7 @@ function tail(o) {
     const col = (x, y, z) => {
       const u = (len + 1 - z) / len + k; // 0 at the base of the tail, 2 at the tip
       if (o.tail === 'coon') return Math.floor(u * 3) % 2 ? o.ring : o.dark;
-      if (u > 1.55) return o.tailTip;
+      if (u > 1.55) return o.tailTip || o.coat;
       return y > c + r * 0.4 ? o.dark : o.coat;
     };
     const r0 = k ? r * 1.05 : r * 0.7, r1 = k ? r * 0.5 : r * 1.05;
@@ -328,6 +330,22 @@ export function raccoon() {
     kind: 'raccoon', size: 0.026, L: 17, H: 11, W: 11, neck: 3, neckR: 3, neckUp: 0.6, headLen: 8, headW: 8, legU: 4, legL: 5, legW: 2,
     coat: 0x8a8482, dark: 0x5e585a, belly: 0xb4aea8, mask: 0x262024, brow: 0xf0ece4, cheek: 0xf0ece4, muzzle: 0xf0ece4, nose: 0x1e1418, hoof: 0x2e2a2c,
     sock: 0x3a3436, sockHi: 0.5, ear: [4, 4], earIn: 0xf0ece4, earSplay: 0.6, tail: 'coon', tailLen: 7, tailR: 2.2, ring: 0xc4beb6, tailDroop: 0.25, ringBack: true,
+  });
+}
+
+// the village pets: Agnes's cat Duchess and Gus's dog Biscuit
+export function cat(o = {}) {
+  return quad({
+    kind: 'cat', size: 0.026, L: 15, H: 7, W: 6, neck: 3, neckR: 2, neckUp: 0.75, headLen: 6, headW: 6, legU: 4, legL: 5, legW: 2,
+    coat: 0xf0ece4, dark: 0xe0d8d0, belly: 0xfff8f0, cheek: 0xfff8f0, muzzle: 0xfff8f0, nose: 0xe87890, hoof: 0xf6e6e6, iris: 0x6ab8e8,
+    ear: [4, 3], earIn: 0xf0a8b0, earSplay: 0.35, tail: 'fox', tailLen: 8, tailR: 1.15, tailDroop: -1.1, ...o,
+  });
+}
+export function dog() {
+  return quad({
+    kind: 'dog', size: 0.028, L: 16, H: 9, W: 8, neck: 4, neckR: 2.4, neckUp: 0.7, headLen: 8, headW: 6, legU: 5, legL: 5, legW: 2,
+    coat: 0xc8904a, dark: 0xb07838, belly: 0xf2e2c4, bib: 0xf2e2c4, muzzle: 0xf2e2c4, nose: 0x1e1418, hoof: 0x8a5a2e, legLo: 0xd8a466,
+    ear: [5, 3], earC: 0xa8743a, earIn: 0xb88048, earSplay: 2.45, collar: 0xc8302a, tail: 'fox', tailLen: 6, tailR: 1.2, tailTip: 0xf2e2c4, tailDroop: -0.9,
   });
 }
 
@@ -769,7 +787,7 @@ export function bin() {
 
 // every species, by the name the game spawns it as
 export const SPECIES = {
-  deer, fawn, buck, moose, fox, raccoon, rabbit, squirrel, chipmunk, mouse,
+  deer, fawn, buck, moose, fox, raccoon, rabbit, squirrel, chipmunk, mouse, duchess: () => cat(), biscuit: dog,
   robin, chickadee, bluejay, sparrow, crow, gull, goose, mallard, duckHen, owl, bat,
   frog, trout, salmon, monarch, sulphur, dragonfly, beaver, bin,
 };

@@ -67,6 +67,7 @@ const BIRD_NAMES = {
   fawn: 'Spotted fawn', bluejay: 'Blue jay', sparrow: 'Song sparrow', gull: 'Herring gull', mallard: 'Mallard', duckHen: 'Mallard hen', owl: 'Great horned owl', bat: 'Little brown bat',
   fox: 'Red fox', rabbit: 'Cottontail', squirrel: 'Red squirrel', chipmunk: 'Chipmunk', raccoon: 'Raccoon (caught red-handed)', mouse: 'Meadow mouse', frog: 'Leopard frog',
   trout: 'Brook trout', salmon: 'Leaping salmon', monarch: 'Monarch butterfly', sulphur: 'Sulphur butterfly', dragonfly: 'Dragonfly',
+  duchess: 'very dignified cat (Duchess)', biscuit: 'very good dog (Biscuit)',
 };
 
 export const QUESTS = {
@@ -527,7 +528,7 @@ export class Quests {
     let best = null;
     const p = new THREE.Vector3();
     for (const c of g.wildlife.list) {
-      if (c.dying || c.kind === 'bin') continue;
+      if (c.dying || c.hidden || c.kind === 'bin') continue;
       p.set(c.x, c.y + c.bob + 0.2, c.z);
       const d = p.distanceTo(cam.position);
       if (d > 45) continue;

@@ -105,6 +105,10 @@ function poseQuad(c, dt, W) {
   A.crouch = damp(A.crouch || 0, anim === 'crouch' ? 1 : 0, 9, dt);
   A.pounce = damp(A.pounce || 0, anim === 'pounce' ? 1 : 0, 14, dt);
   A.rear = damp(A.rear || 0, anim === 'rummage' ? 1 : 0, 5, dt);
+  // the pets: a hissing arched cat, a barking dog, both delighted to see Hank once he's a friend
+  A.angry = damp(A.angry || 0, anim === 'angry' ? 1 : 0, 9, dt);
+  A.happy = damp(A.happy || 0, anim === 'friend' ? 1 : 0, 5, dt);
+  const arch = kind === 'cat' ? A.angry : 0, bark = kind === 'dog' ? A.angry * Math.pow(Math.max(0, Math.sin(c.t * 9.5)), 4) : 0;
   const v = c.mspd;
   const vn = v / L;
   A.g = damp(A.g || 0, clamp((vn - 2) / 2, 0, 1) + clamp((vn - 6.5) / 2.5, 0, 1), 3, dt);
@@ -164,9 +168,13 @@ function poseQuad(c, dt, W) {
   }
   // crouched butt wiggle before the leap
   bw += Math.sin(c.t * 24) * 0.09 * A.crouch * sstep(0.2, 0.6, c.crK || 0);
+  // an arched cat stands tall and stiff, trembling; a barking dog bounces its front end; a happy dog bounces
+  by += L * 0.2 * arch + Math.abs(Math.sin(c.t * 9)) * L * 0.1 * A.happy * (kind === 'dog' ? 1 : 0);
+  br += Math.sin(c.t * 40) * 0.035 * arch;
+  bp -= 0.22 * bark;
   T(P, Q.body, 0, by, bz);
   R(P, Q.body, bp, bw, br);
-  S(P, Q.body, 1 + breathe * 0.012, 1 + breathe * 0.02, stretch);
+  S(P, Q.body, 1 + breathe * 0.012 - arch * 0.06, 1 + breathe * 0.02 + arch * 0.16, stretch - arch * 0.06);
   // ---- legs: foot targets in animal space, then IK in the body frame
   const cp = Math.cos(bp), sp2 = Math.sin(bp), cr = Math.cos(br), sr = Math.sin(br);
   const stomp = c.stompK ? bump(c.stompK) : 0;
@@ -221,13 +229,13 @@ function poseQuad(c, dt, W) {
   const lkY = c.lkY || 0, lkP = c.lkP || 0;
   // idle glances when nobody is about
   A.gl = damp(A.gl || 0, (c.glY || 0) * (1 - Math.abs(lkY) * 2) * (1 - mv) * (1 - A.graze), 3, dt);
-  const neckP = nod + gz - 0.25 * A.alert - bp * 0.5 * (1 - A.rear) + 0.25 * A.crouch + 0.15 * A.pounce + (0.6 + 0.3 * Math.sin(c.t * 2.3)) * A.rear * 0.8 + 0.15 * wGal;
+  const neckP = nod + gz + 0.45 * arch - 0.3 * bark - 0.25 * A.alert - bp * 0.5 * (1 - A.rear) + 0.25 * A.crouch + 0.15 * A.pounce + (0.6 + 0.3 * Math.sin(c.t * 2.3)) * A.rear * 0.8 + 0.15 * wGal;
   R(P, Q.neck, neckP, (lkY + A.gl) * 0.4, 0);
   const tilt = A.listen * 0.4 * Math.sin(c.t * 0.9 + 1) + 0.12 * A.alert * Math.sin(c.t * 0.5);
-  R(P, Q.head, A.graze * 0.55 + chew + lkP + 0.35 * A.listen + 0.3 * A.crouch + 0.2 * A.pounce + (c.glP || 0) * (1 - mv) * 0.5, (lkY + A.gl) * 0.6, tilt);
+  R(P, Q.head, A.graze * 0.55 + chew + lkP - 0.25 * arch - 0.2 * bark + 0.35 * A.listen + 0.3 * A.crouch + 0.2 * A.pounce + (c.glP || 0) * (1 - mv) * 0.5, (lkY + A.gl) * 0.6, tilt);
   // ---- ears: splayed, perked forward when alert, pinned back at speed, flicking
   const ek = bump(c.earK);
-  const eb = 0.6 * wGal + 0.4 * A.pounce - 0.2 * A.alert - 0.3 * A.listen;
+  const eb = 0.6 * wGal + 0.4 * A.pounce - 0.2 * A.alert - 0.3 * A.listen + 1.1 * arch + (kind === 'dog' ? 0.25 * Math.sin(c.t * 9) * A.happy : 0);
   for (const [b, s] of QEARS) {
     const fl = c.earS === 0 || c.earS === s ? ek : 0;
     R(P, b, -eb - fl * 0.5 + (m.earTilt || 0), s * (0.2 + fl * 0.4), s * -(m.earSplay - 0.25 * A.alert + 0.3 * A.graze));
@@ -238,11 +246,20 @@ function poseQuad(c, dt, W) {
   A.flag = damp(A.flag || 0, flag, 6, dt);
   let tx = -m.tailDroop + A.flag * (m.tailDroop + 1.5), tyw = 0, t2 = 0;
   let t2y = 0;
-  if (kind === 'fox' || kind === 'raccoon') {
+  const pet = kind === 'cat' || kind === 'dog';
+  if (kind === 'fox' || kind === 'raccoon' || pet) {
     tx += 0.4 * wGal + 0.25 * A.alert + 0.5 * A.pounce + 0.25 * A.crouch;
     tyw = Math.sin(ph * TAU) * 0.18 * (wWalk + wTrot) + Math.sin(c.t * 1.3) * 0.12 * (1 - mv) + tk * 0.35 + Math.sin(c.t * 16) * 0.2 * A.crouch;
     t2 = -0.25 + 0.15 * Math.sin(ph * TAU - 1) * mv + 0.25 * wGal;
     t2y = tyw * 0.6;
+    if (pet) {
+      // a cat's tail is a question mark (bolt upright and bushy when cross); a dog's wags
+      tx += 0.45 * A.angry - 0.5 * wGal;
+      tyw += kind === 'dog' ? 0.8 * Math.sin(c.t * 19) * A.happy + 0.3 * Math.sin(c.t * 14) * A.angry : 0.15 * Math.sin(c.t * 0.9) * (1 - arch);
+      t2 = kind === 'cat' ? 0.6 * (1 - arch) + 0.12 * Math.sin(c.t * 1.7) : 0.15;
+      t2y = tyw * 0.4;
+      S(P, Q.tail, 1 + 0.7 * arch, 1 + 0.7 * arch, 1);
+    }
     // sitting or rearing: the brush lies along the ground and curls round the feet
     const low = Math.max(A.sit, A.rear);
     if (low > 0.001) {
