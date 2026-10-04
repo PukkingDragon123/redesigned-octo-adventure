@@ -244,7 +244,7 @@ export const leaves = {
     const tx = R.x + rnd(0.15, 0.85) * R.w;
     L.add(leaf({
       x: fromRight ? L.W + 12 : -12, y: R.y - rnd(30, 60), k: pick([0, 1, 2, 3, 4]), life: 99,
-      home: { el, fx: (tx - R.x) / Math.max(1, R.w), dy: -3, t: 0, dur: rnd(1.6, 2.4), sx: fromRight ? L.W + 12 : -12, sy: R.y - rnd(30, 60), stay, face: pick([0, 1, 5]) },
+      home: { el, fx: (tx - R.x) / Math.max(1, R.w), dy: -3, t: 0, dur: rnd(1.6, 2.4), sx: fromRight ? L.W + 12 : -12, sy: R.y - rnd(30, 60), stay, face: pick([0, 0, 5]) },
     }));
   },
   // how many are flying right now (tests)
@@ -269,8 +269,13 @@ function ambientHook(dt, L) {
 function homing(p, dt, L) {
   const h = p.home;
   h.t += dt;
-  const R = h.el.isConnected ? artRect(L, h.el) : null;
-  const gone = !R || !R.w || h.el.closest?.('.hidden, .empty, .off');
+  // where it sits (re-measured a few times a second, not every frame)
+  if ((h.rt = (h.rt || 0) - dt) <= 0 || !h.R) {
+    h.rt = 0.25;
+    h.R = h.el.isConnected ? artRect(L, h.el) : null;
+    h.gone = !h.R || !h.R.w || !!h.el.closest?.('.hidden, .empty, .off');
+  }
+  const R = h.R, gone = h.gone;
   const tx = R ? R.x + h.fx * R.w : p.x, ty = R ? R.y + h.dy : p.y;
   if (!h.sat) {
     const k = Math.min(1, h.t / h.dur), e = smooth(k);
@@ -282,7 +287,7 @@ function homing(p, dt, L) {
       h.sat = true;
       h.t = 0;
       p.face = h.face;
-      p.rot = Math.round(p.rot);
+      p.rot = pick([1, 2, 6, 7]); // lying across the edge, not stood on its stem
     }
     if (gone && h.t > 0.3) release(p);
     return;
