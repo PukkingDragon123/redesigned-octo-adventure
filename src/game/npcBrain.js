@@ -9,7 +9,10 @@
 //
 // Trust grows when Hank delivers cocoa, rings his bell from a polite distance,
 // stays calm and slow nearby, or helps them out; speeding at people knocks it back.
-// Movement is simple steering along waypoints (npcNav.js), pushed out of solids.
+// Movement steers along waypoints (npcNav.js): they pick up speed over a step or two,
+// ease in to where they're going, round corners instead of snapping to the next leg,
+// feel ahead for posts, benches and walls and curve round them, sidestep each other
+// and Hank, and are always pushed back out of solids (npcs.js keeps bodies apart).
 import * as THREE from 'three';
 import { PEOPLE, MEETS } from './npcRoutines.js';
 import { UMBRELLA_COLORS } from './npcPoses.js';
@@ -21,6 +24,9 @@ const hyp = Math.hypot;
 const rand = (a, b) => a + Math.random() * (b - a);
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
 const STAND_POSES = new Set(['idle', 'clipboard', 'knit', 'sip', 'lookout', 'paper']);
+const BODY_R = 0.22;
+const _probe = { x: 0, y: 0, z: 0 };
+const _ropt = { px: 0, pz: 0 };
 
 export class NpcBrain {
   constructor(V, actor, key) {
@@ -122,6 +128,8 @@ export class NpcBrain {
     this.faceHank = faceHank;
     this.stuckT = 0;
     this.bestD = Infinity;
+    // set off facing the way they're already looking, from a standstill (or still on the move)
+    if (!(this.mv > 0.05)) { this.mv = 0; this.hx = Math.sin(this.a.yaw); this.hz = Math.cos(this.a.yaw); }
     return new Promise((res, rej) => { this.walkRes = res; this.walkRej = rej; });
   }
   stopWalk() {
@@ -161,13 +169,36 @@ export class NpcBrain {
     // slow down near Hank unless running away
     let sp = this.speed;
     if (this.mood !== 'terrified' && sp < 2 && this.d < 2.2) sp *= 0.5;
-    const step = Math.min(d, sp * dt);
-    a.pos.x += (dx / d) * step;
-    a.pos.z += (dz / d) * step;
+    // ---- where to head: the waypoint, bent round things in the way
+    let wx = dx / d, wz = dz / d;
+    const toEnd = last ? d : d + 1;
+    if (toEnd > 1.1) {
+      const av = this.avoid(wx, wz, sp, dt);
+      wx = av.x; wz = av.z;
+    }
+    // ---- the heading turns towards it (quick, but no snapping round at a corner)
+    if (this.hx === undefined) { this.hx = wx; this.hz = wz; }
+    const turn = Math.max(7, sp * 4) * dt;
+    let ang = Math.atan2(wx * this.hz - wz * this.hx, wx * this.hx + wz * this.hz);
+    ang = Math.max(-turn, Math.min(turn, ang));
+    const c = Math.cos(ang), sn = Math.sin(ang);
+    const hx = this.hx * c + this.hz * sn, hz = -this.hx * sn + this.hz * c;
+    this.hx = hx; this.hz = hz;
+    // ---- speed: pick up over a step or two, slow for sharp turns, ease in to the last stop
+    const align = wx * hx + wz * hz;
+    let want = sp * (0.3 + 0.7 * Math.max(0, align));
+    if (last) want = Math.min(want, Math.max(0.3, Math.sqrt(2 * 2.5 * Math.max(0, d - this.stopAt))));
+    const mv = this.mv || 0;
+    this.mv = want > mv ? Math.min(want, mv + (sp > 2.2 ? 9 : 3.2) * dt) : Math.max(want, mv - 6 * dt);
+    const step = Math.min(d + 0.05, this.mv * dt);
+    _ropt.px = a.pos.x;
+    _ropt.pz = a.pos.z;
+    a.pos.x += hx * step;
+    a.pos.z += hz * step;
     // keep out of walls, benches and lamp posts
-    this.g.physics.resolve(a.pos, 0.22, 1.6);
+    this.g.physics.resolve(a.pos, BODY_R, 1.6, _ropt);
     if (this.faceHank) a.faceTowards(X.p.x, X.p.z);
-    else a.targetYaw = Math.atan2(dx, dz);
+    else a.targetYaw = Math.atan2(hx, hz);
     // stuck? skip the waypoint (or give up)
     if (d < this.bestD - 0.05) { this.bestD = d; this.stuckT = 0; }
     else if ((this.stuckT += dt) > 1.6) {
@@ -176,6 +207,63 @@ export class NpcBrain {
       if (last) { this.path = [{ x: a.pos.x, z: a.pos.z }]; }
       else P.shift();
     }
+  }
+
+  // Feel ahead for solids (a whisker probe) and look out for people in the way;
+  // returns the direction to walk (unit, scratch object).
+  avoid(wx, wz, sp, dt) {
+    const a = this.a, ph = this.g.physics;
+    const out = this._av || (this._av = { x: 0, z: 0 });
+    let dx = wx, dz = wz;
+    // a post, a bench, a wall corner just ahead: slide round it on the side it pushes us to
+    const L = 0.45 + Math.min(1.2, sp * 0.35);
+    _probe.x = a.pos.x + wx * L;
+    _probe.y = a.pos.y;
+    _probe.z = a.pos.z + wz * L;
+    const ox = _probe.x, oz = _probe.z;
+    if (ph.resolve(_probe, BODY_R + 0.04, 1.6)) {
+      let nx = _probe.x - ox, nz = _probe.z - oz;
+      const nl = hyp(nx, nz);
+      if (nl > 1e-4) {
+        nx /= nl; nz /= nl;
+        const into = dx * nx + dz * nz;
+        if (into < 0) {
+          dx -= nx * into;
+          dz -= nz * into;
+          // head-on: pick a side and stick with it for a moment
+          if (hyp(dx, dz) < 0.35) {
+            if (!(this.sideT > 0)) { this.side = Math.random() < 0.5 ? 1 : -1; }
+            dx = -nz * this.side;
+            dz = nx * this.side;
+          }
+          this.sideT = 0.8;
+        }
+      }
+    }
+    this.sideT = (this.sideT || 0) - dt;
+    // people (and Hank) in the way: step round them, keeping to the right
+    const crowd = this.V.crowd;
+    if (crowd) {
+      for (let i = 0; i < crowd.length; i++) {
+        const o = crowd[i];
+        if (o.a === a) continue;
+        const rx = o.x - a.pos.x, rz = o.z - a.pos.z;
+        const ahead = rx * wx + rz * wz;
+        if (ahead < 0 || ahead > 1.6 + sp * 0.4) continue;
+        const lat = rx * wz - rz * wx; // + = they're on our left
+        const room = o.r + BODY_R + 0.25;
+        if (Math.abs(lat) > room) continue;
+        const k = (1 - Math.abs(lat) / room) * (1 - ahead / (1.6 + sp * 0.4 + 0.01));
+        // pass on the side away from them (on our right if they're dead ahead)
+        const s = lat > -0.05 ? -1 : 1;
+        dx += wz * s * k * 1.4;
+        dz += -wx * s * k * 1.4;
+      }
+    }
+    const l = hyp(dx, dz) || 1;
+    out.x = dx / l;
+    out.z = dz / l;
+    return out;
   }
 
   // ------------------------------------------------------------ helpers
@@ -227,6 +315,7 @@ export class NpcBrain {
     this.closing += (cl - this.closing) * Math.min(1, dt * 6);
     this.lastD = d;
     if (this.path) this.walkStep(dt, X);
+    else this.mv = 0; // (one walk straight into the next keeps its pace)
     if (this.leash) this.followLeash(dt, X);
     else if (X.live && this.mode !== 'engaged' && this.mode !== 'script') this.perceive(dt, X);
     // the hour moved on (or it started raining, or Hank picked up their order): drop what they're doing
@@ -874,8 +963,11 @@ export class NpcBrain {
     const dx = tx - a.pos.x, dz = tz - a.pos.z, d = hyp(dx, dz);
     if (d > 0.05) {
       const sp = Math.min(d, Math.max(1, d * 4) * dt * 1.0 + (m.path ? m.speed * dt : 0));
+      _ropt.px = a.pos.x;
+      _ropt.pz = a.pos.z;
       a.pos.x += (dx / d) * sp;
       a.pos.z += (dz / d) * sp;
+      this.g.physics.resolve(a.pos, BODY_R * 0.8, 1.2, _ropt);
     }
     const hiding = m.mode === 'hide';
     if (hiding) {

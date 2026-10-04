@@ -709,7 +709,7 @@ export class Game {
 
   // ---------------------------------------------------------------- per frame
   update(dt) {
-    input.update();
+    input.update(dt);
     this.governQuality();
     this.time += dt;
     for (const t of this.timers) t.t -= dt;
@@ -763,6 +763,8 @@ export class Game {
       for (const e of this.bike.events) events.push(e);
       first = false;
     }
+    // draw Bessie between her last two physics steps (smooth at any frame rate)
+    this.bike.lerpView(this.acc / STEP);
     for (const e of events) for (const l of this.listeners) l(e);
     if (this.bike.sinking > 1.4) {
       const s = this.bike.lastSafe;
@@ -827,7 +829,7 @@ export class Game {
     const free = this.mode === 'ride' && !(this.ui.dialogueTick || this.ui.menuStack.length);
     const sw = this.ui.inputSwallowed();
     const wc = free ? {
-      mx: input.steer(), mz: input.moveY(), run: input.down('drift') || input.touch.run,
+      mx: input.moveX(), mz: input.moveY(), run: input.down('drift') || input.touch.run,
       jumpPressed: input.pressed('jump') && !sw, kickPressed: input.pressed('boost') && !sw,
     } : { mx: 0, mz: 0 };
     const W = this.walker;

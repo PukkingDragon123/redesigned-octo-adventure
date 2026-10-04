@@ -1,4 +1,17 @@
 // Keyboard + gamepad + touch input with edge-triggered "pressed" queries.
+// Analog values are shaped once a frame (update(dt)): keys ramp in and out instead of
+// slamming to +-1, sticks get a dead zone and a gentle response curve (radial for
+// walking, so diagonals stay true), touch steering is lightly smoothed between pointer
+// events, and the brake bites in over a moment. The pedal stays raw: its tap rhythm
+// is a riding skill.
+
+const RAMP_IN = 6.5; // keys: 0 -> full lock in ~0.15 s
+const RAMP_OUT = 9; // ...and back to centre a little quicker
+const RAMP_FLIP = 14; // left -> right straight through the middle
+const PAD_DEAD = 0.13;
+const moveTo = (v, t, d) => (v < t ? Math.min(t, v + d) : Math.max(t, v - d));
+// a key ramp: quicker back to centre, quickest when swapping sides
+const ramp = (v, t, dt) => moveTo(v, t, (t === 0 ? RAMP_OUT : v * t < 0 ? RAMP_FLIP : RAMP_IN) * dt);
 
 const BINDINGS = {
   up: ['KeyW', 'ArrowUp'],
@@ -50,10 +63,15 @@ class Input {
     this.pad = null;
     // touch: the left stick (steer + lean), the right buttons, the trick radial (rad*) and auto-pedal
     this.touch = {
-      steer: 0, throttle: 0, brake: 0, stickThrottle: 0, stickBrake: 0, buttons: new Set(), run: false, trick: false,
+      steer: 0, throttle: 0, brake: 0, stickThrottle: 0, stickBrake: 0, walkX: 0, walkY: 0, buttons: new Set(), run: false, trick: false,
       leanBack: 0, leanFwd: 0, radSteer: 0, radThrottle: 0, radBrake: 0, auto: false,
     };
     this.tappedActions = new Set(); // on-screen button taps, latched like key taps
+    // shaped analog values (see shape())
+    this.steerS = 0;
+    this.moveXS = 0;
+    this.moveYS = 0;
+    this.brakeS = 0;
     this.lastDevice = 'keyboard';
     this.enabled = true;
     this.mouse = { dx: 0, dy: 0, down: false };
@@ -92,7 +110,7 @@ class Input {
     window.addEventListener('contextmenu', (e) => e.preventDefault());
   }
 
-  update() {
+  update(dt = 1 / 60) {
     this.prev = this.now;
     this.now = new Set();
     // a fresh keydown always counts as a press, even if the key looked held last frame
@@ -130,6 +148,55 @@ class Input {
     }
     this.tappedActions.clear();
     if (!this.enabled) this.now.clear();
+    this.shape(Math.min(Math.max(dt, 0), 0.1));
+  }
+
+  // ---- once a frame: ramp the keys, curve the sticks, smooth the thumbs
+  shape(dt) {
+    const T = this.touch, on = this.enabled;
+    const kx = (this.now.has('right') ? 1 : 0) - (this.now.has('left') ? 1 : 0);
+    const ky = (this.now.has('up') ? 1 : 0) - (this.now.has('down') ? 1 : 0);
+    let ax = 0, ay = 0, mx = 0, my = 0, padX = false, padY = false, padMove = false;
+    if (this.pad) {
+      ax = this.pad.axes[0] || 0;
+      ay = this.pad.axes[1] || 0;
+      // steering: a dead zone, then a gentle curve (fine corrections near the middle, full lock at the edge)
+      if (Math.abs(ax) > PAD_DEAD) { padX = true; ax = Math.sign(ax) * Math.pow((Math.abs(ax) - PAD_DEAD) / (1 - PAD_DEAD), 1.35); } else ax = 0;
+      // walking: a round dead zone, linear beyond it (diagonals stay diagonal)
+      const ry = this.pad.axes[1] || 0, rx = this.pad.axes[0] || 0;
+      const m = Math.hypot(rx, ry);
+      if (m > 0.16) {
+        padMove = true;
+        const k = Math.min(1, (m - 0.16) / 0.8) / m;
+        mx = rx * k;
+        my = -ry * k;
+      }
+      padY = Math.abs(ry) > 0.15;
+      ay = padY ? -Math.sign(ry) * (Math.abs(ry) - 0.15) / 0.85 : 0;
+    }
+    // ---- bike steering
+    const touchSteer = Math.abs(T.steer) > 0.02 ? T.steer : T.radSteer || 0;
+    if (!on) this.steerS = moveTo(this.steerS, 0, RAMP_OUT * dt);
+    else if (touchSteer || this.touchSteerT > 0) {
+      // between pointer events the thumb's value would sit still then jump: glide it
+      this.touchSteerT = touchSteer ? 0.15 : this.touchSteerT - dt;
+      this.steerS += (touchSteer - this.steerS) * (1 - Math.exp(-28 * dt));
+    } else if (padX) this.steerS += (ax - this.steerS) * (1 - Math.exp(-30 * dt));
+    else this.steerS = ramp(this.steerS, kx, dt);
+    this.steerS = Math.max(-1, Math.min(1, this.steerS));
+    // ---- walking (keys ramp too, so a diagonal swings round instead of snapping)
+    if (!on) { this.moveXS = moveTo(this.moveXS, 0, RAMP_OUT * dt); this.moveYS = moveTo(this.moveYS, 0, RAMP_OUT * dt); }
+    else if (T.walkX || T.walkY) {
+      this.moveXS += (T.walkX - this.moveXS) * (1 - Math.exp(-28 * dt));
+      this.moveYS += (T.walkY - this.moveYS) * (1 - Math.exp(-28 * dt));
+    } else if (padMove) { this.moveXS = mx; this.moveYS = my; }
+    else if (T.stickThrottle || T.stickBrake) { this.moveXS = T.steer; this.moveYS = T.stickThrottle - T.stickBrake; }
+    else { this.moveXS = ramp(this.moveXS, kx, dt); this.moveYS = ramp(this.moveYS, padY ? ay : ky, dt); }
+    // ---- brakes bite in over a moment and let go quickly
+    let b = this.now.has('down') ? 1 : 0;
+    if (this.pad) b = Math.max(b, this.pad.buttons[6]?.value || 0);
+    b = on ? Math.max(b, T.brake, T.stickBrake, T.radBrake) : 0;
+    this.brakeS = moveTo(this.brakeS, b, (b > this.brakeS ? 8 : 22) * dt);
   }
 
   tapAction(action) {
@@ -147,18 +214,13 @@ class Input {
     return !this.now.has(action) && this.prev.has(action);
   }
 
-  // analog steering -1..1 (left negative)
+  // analog steering -1..1 (left negative), shaped in update()
   steer() {
-    let s = 0;
-    if (this.now.has('left')) s -= 1;
-    if (this.now.has('right')) s += 1;
-    if (this.pad) {
-      const ax = this.pad.axes[0] || 0;
-      if (Math.abs(ax) > 0.12) s = Math.sign(ax) * (Math.abs(ax) - 0.12) / 0.88;
-    }
-    if (Math.abs(this.touch.steer) > 0.05) s = this.touch.steer;
-    else if (this.touch.radSteer) s = this.touch.radSteer;
-    return Math.max(-1, Math.min(1, s));
+    return this.enabled ? this.steerS : 0;
+  }
+  // walking sideways -1..1 (right positive), shaped in update()
+  moveX() {
+    return this.enabled ? Math.max(-1, Math.min(1, this.moveXS)) : 0;
   }
   // pedal: W / Up, RT, the touch pedal (the gamepad stick leans instead)
   throttle() {
@@ -170,10 +232,7 @@ class Input {
     return this.enabled ? t : 0;
   }
   brake() {
-    let t = this.now.has('down') ? 1 : 0;
-    if (this.pad) t = Math.max(t, this.pad.buttons[6]?.value || 0);
-    t = Math.max(t, this.touch.brake, this.touch.stickBrake, this.touch.radBrake);
-    return this.enabled ? t : 0;
+    return this.enabled ? this.brakeS : 0;
   }
   // rider lean 0..1 each: keys, touch hold-buttons, or the left stick pulled down (back) / pushed up (forward)
   lean() {
@@ -186,15 +245,9 @@ class Input {
     }
     return this.enabled ? { back, fwd } : { back: 0, fwd: 0 };
   }
-  // walking: forward/back from keys, the gamepad stick or the touch stick (-1..1)
+  // walking: forward/back from keys, the gamepad stick or the touch stick (-1..1), shaped in update()
   moveY() {
-    let y = (this.now.has('up') ? 1 : 0) - (this.now.has('down') ? 1 : 0);
-    if (this.pad) {
-      const ay = this.pad.axes[1] || 0;
-      if (Math.abs(ay) > 0.15) y = -Math.sign(ay) * (Math.abs(ay) - 0.15) / 0.85;
-    }
-    if (this.touch.stickThrottle || this.touch.stickBrake) y = this.touch.stickThrottle - this.touch.stickBrake;
-    return this.enabled ? Math.max(-1, Math.min(1, y)) : 0;
+    return this.enabled ? Math.max(-1, Math.min(1, this.moveYS)) : 0;
   }
   // camera zoom asked for since the last call (log scale; + is further out)
   takeZoom() {

@@ -45,6 +45,11 @@ const WB_LOOP = 1.2; // past this Hank loops out onto his back
 const ST_POINT = 0.72; // rear-up balance point
 const ST_ENDO = 1.08; // past this he goes over the bars
 
+// collision: the frame is a circle round the bottom bracket; each wheel is a smaller one
+const FRAME_R = 0.42;
+const WHEEL_R = 0.28;
+const WHEEL_X = 0.46; // half wheelbase (bikeModel: 0.54 x 0.86 scale)
+
 export class Bike {
   constructor(physics) {
     this.ph = physics;
@@ -55,6 +60,17 @@ export class Bike {
     this.events = [];
     this.t = 0;
     this.posing = 0; // set by Tricks while a mid-air pose is held
+    // physics runs at a fixed step; `view` is the state blended between the last two
+    // steps (lerpView) so the model and the camera glide at any frame rate
+    this.prev = { pos: new THREE.Vector3(), yaw: 0, lean: 0, pitch: 0, crank: 0, wheelie: 0, stoppie: 0 };
+    this.view = { pos: new THREE.Vector3(), yaw: 0, lean: 0, pitch: 0, crank: 0, wheelie: 0, stoppie: 0 };
+    this._after = new THREE.Vector3();
+    this._afterYaw = 0;
+    this._probe = new THREE.Vector3();
+    this._co = { px: 0, pz: 0, minTop: 0.25 };
+    this._hitB = { nx: 0, nz: 0, depth: 0, obj: null };
+    this.contacts = Array.from({ length: 6 }, () => ({ nx: 0, nz: 0, low: false }));
+    this.contactN = 0;
     this.reset(0, 0, 0);
   }
 
@@ -136,6 +152,41 @@ export class Bike {
     this.takeoff = null;
     this.peakY = 0;
     this.roughT = 1;
+    this.savePrev();
+    this.lerpView(1);
+  }
+
+  // ---- render interpolation
+  savePrev() {
+    const P = this.prev;
+    P.pos.copy(this.pos);
+    P.yaw = this.yaw; P.lean = this.lean; P.pitch = this.pitch; P.crank = this.crank;
+    P.wheelie = this.wheelie; P.stoppie = this.stoppie;
+    this._after.copy(this.pos);
+    this._afterYaw = this.yaw;
+  }
+  // shove the bike sideways from outside the physics step (a villager in the way) without
+  // breaking the render blend
+  nudge(dx, dz) {
+    this.pos.x += dx; this.pos.z += dz;
+    this.prev.pos.x += dx; this.prev.pos.z += dz;
+    this.view.pos.x += dx; this.view.pos.z += dz;
+    this._after.x += dx; this._after.z += dz;
+  }
+  // a = how far (0..1) the clock is between the previous physics step and the latest one
+  lerpView(a) {
+    // moved by something else since the last step (a reset, a cutscene): no blending across it
+    if (this._after.distanceToSquared(this.pos) > 1e-10 || this._afterYaw !== this.yaw) this.savePrev();
+    const P = this.prev, V = this.view;
+    a = clamp(a, 0, 1);
+    V.pos.lerpVectors(P.pos, this.pos, a);
+    V.yaw = P.yaw + wrapAngle(this.yaw - P.yaw) * a;
+    V.lean = lerp(P.lean, this.lean, a);
+    V.pitch = lerp(P.pitch, this.pitch, a);
+    V.crank = lerp(P.crank, this.crank, a);
+    V.wheelie = lerp(P.wheelie, this.wheelie, a);
+    V.stoppie = lerp(P.stoppie, this.stoppie, a);
+    return V;
   }
 
   forward(out = new THREE.Vector3()) {
@@ -153,6 +204,13 @@ export class Bike {
 
   // c: { throttle, brake, steer, jump (held), drift, leanBack, leanFwd (0..1), trick, assist }
   update(dt, c) {
+    this.savePrev();
+    this.step(dt, c);
+    this._after.copy(this.pos);
+    this._afterYaw = this.yaw;
+  }
+
+  step(dt, c) {
     this.events.length = 0;
     this.t += dt;
     const s = this.stats;
@@ -408,12 +466,13 @@ export class Bike {
 
     // ---- integrate
     const prevY = this.pos.y;
+    const px = this.pos.x, pz = this.pos.z;
     this.pos.x += this.vel.x * dt;
     this.pos.y += this.vel.y * dt;
     this.pos.z += this.vel.z * dt;
 
     // ---- solid collisions
-    const hit = this.ph.resolve(this.pos, 0.42);
+    const hit = this.collide(px, pz, prevY);
     if (hit) {
       const vn = this.vel.x * hit.nx + this.vel.z * hit.nz;
       const low = hit.obj.y1 != null && hit.obj.y1 - prevY < 0.5 && hit.obj.kind !== 'boundary';
@@ -456,6 +515,13 @@ export class Bike {
             this.emit('bonk', { impact, kind: hit.obj.kind, tree: hit.obj.tree });
           }
         }
+      }
+      // pinned in a corner: don't keep driving into the other wall either (kerbs and logs still hop)
+      for (let i = 0; i < this.contactN; i++) {
+        const C = this.contacts[i];
+        if (C.low) continue;
+        const vn = this.vel.x * C.nx + this.vel.z * C.nz;
+        if (vn < 0) { this.vel.x -= C.nx * vn; this.vel.z -= C.nz * vn; }
       }
     }
 
@@ -518,7 +584,7 @@ export class Bike {
 
     // ---- visual attitude: a rubbery spring lean, pitch from slope / balance / air
     const leanTarget = this.grounded
-      ? clamp(Math.atan((-this.yawRate * clamp(Math.abs(fwdSpeed), 0, 14)) / GRAV) * 1.15, -0.72, 0.72) * (fwdSpeed < 0 ? -1 : 1) + (this.drifting ? -this.driftDir * 0.14 : 0) + this.dab * this.dabSide * 0.16 + this.balance * 0.35
+      ? clamp(Math.atan((-this.yawRate * clamp(Math.abs(fwdSpeed), 0, 14)) / GRAV) * 1.15, -0.72, 0.72) * (fwdSpeed < 0 ? -1 : 1) + (this.drifting ? -this.driftDir * 0.14 : 0) + this.dab * this.dabSide * 0.22 + this.balance * 0.35
       : clamp(c.steer * 0.15, -0.2, 0.2);
     this.leanVel += (95 * (leanTarget - this.lean) - 11 * this.leanVel) * dt;
     this.lean += this.leanVel * dt;
@@ -526,6 +592,44 @@ export class Bike {
     else this.pitch = this.airPitch;
 
     this.pose = this.pickPose(thr, c, fwdSpeed);
+  }
+
+  // Solid collisions: the frame (a circle round the bottom bracket) meets everything, and
+  // each wheel meets anything taller than a kerb, so the front tyre can't poke through a
+  // wall or a fence and the back can't swing through a lamp post. (px, pz): where the bike
+  // was before this step, so nothing thin is skipped. Returns the hardest contact or null;
+  // every contact's normal is kept in this.contacts for sliding.
+  collide(px, pz, prevY = this.pos.y) {
+    const ph = this.ph, o = this._co, P = this._probe, B = this._hitB;
+    const fx = Math.sin(this.yaw), fz = Math.cos(this.yaw);
+    let best = null;
+    this.contactN = 0;
+    for (let i = 0; i < 3; i++) {
+      const k = i === 0 ? WHEEL_X : i === 1 ? -WHEEL_X : 0;
+      P.set(this.pos.x + fx * k, this.pos.y, this.pos.z + fz * k);
+      o.px = px + fx * k;
+      o.pz = pz + fz * k;
+      o.minTop = k ? 0.55 : 0.25;
+      const h = ph.resolve(P, k ? WHEEL_R : FRAME_R, 1.6, o);
+      if (!h) continue;
+      this.pos.x = P.x - fx * k;
+      this.pos.z = P.z - fz * k;
+      const n = ph.contacts && ph.contactCount ? ph.contactCount : 0;
+      if (n) for (let j = 0; j < n; j++) this.addContact(ph.contacts[j], prevY);
+      else this.addContact(h, prevY);
+      if (!best || h.depth > B.depth) {
+        B.nx = h.nx; B.nz = h.nz; B.depth = h.depth; B.obj = h.obj;
+        best = B;
+      }
+    }
+    return best;
+  }
+  addContact(h, prevY) {
+    if (this.contactN >= this.contacts.length) return;
+    const C = this.contacts[this.contactN++];
+    C.nx = h.nx;
+    C.nz = h.nz;
+    C.low = h.obj?.y1 != null && h.obj.y1 - prevY < 0.5 && h.obj.kind !== 'boundary';
   }
 
   // Rhythm pedalling: tapping the pedal in a steady beat (2-4 taps a second) is a sprint;
@@ -879,9 +983,16 @@ export class Bike {
       this.vel.x -= (this.vel.x / sp) * dec;
       this.vel.z -= (this.vel.z / sp) * dec;
     }
+    const px = this.pos.x, pz = this.pos.z;
     this.pos.x += this.vel.x * dt;
     this.pos.z += this.vel.z * dt;
-    this.ph.resolve(this.pos, 0.42);
+    if (this.collide(px, pz)) {
+      for (let i = 0; i < this.contactN; i++) {
+        const C = this.contacts[i];
+        const vn = this.vel.x * C.nx + this.vel.z * C.nz;
+        if (vn < 0) { this.vel.x -= C.nx * vn * 1.3; this.vel.z -= C.nz * vn * 1.3; }
+      }
+    }
     const g = this.ph.groundAt(this.pos.x, this.pos.z, this.pos.y + 0.5);
     this.pos.y = g.h;
     this.speed = sp;

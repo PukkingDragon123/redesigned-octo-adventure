@@ -6,6 +6,8 @@
 import { Bike } from '../src/game/bike.js';
 import { Skills, SKILLS, MAX_TIERS } from '../src/game/skills.js';
 import { newState } from '../src/game/state.js';
+import { PhysicsWorld } from '../src/world/collide.js';
+import { Walker } from '../src/game/walker.js';
 
 // mock world: height fn, surface fn, optional ramp (kind 'ramp') and solids
 function world({ h = () => 0, surface = () => 'road', ramp = null, solids = [] } = {}) {
@@ -30,11 +32,11 @@ function world({ h = () => 0, surface = () => 'road', ramp = null, solids = [] }
       }
       return { h: hh, nx, ny, nz, surface: plat ? 'wood' : surface(x, z), platform: plat, water: false };
     },
-    resolve(pos, r) {
+    resolve(pos, r, hgt = 1.6, opt = null) {
       let hit = null;
       for (const o of solids) {
         const dx = pos.x - o.x, dz = pos.z - o.z, d = Math.hypot(dx, dz);
-        if (pos.y + 1.6 < o.y0 || pos.y + 0.25 > o.y1) continue;
+        if (pos.y + hgt < o.y0 || pos.y + (opt?.minTop ?? 0.25) > o.y1) continue;
         if (d < r + o.r) {
           const depth = r + o.r - d;
           const nx = dx / (d || 1), nz = dz / (d || 1);
@@ -266,6 +268,73 @@ const verbose = process.argv.includes('-v');
   game.state = { ...newState(), upgrades: { rack: true, motor: true } };
   delete game.state.skills;
   check('skills: an old save with upgrades and no skills loads clean', S.total() === 0 && S.list().length === 15);
+}
+// --- 14. no phasing: the real collision world (flat terrain) with a thin fence, a wall, a door
+{
+  const flatT = { heightAt: () => 0, normalAt: (x, z, o) => { o.x = 0; o.y = 1; o.z = 0; return o; }, surfaceAt: () => 'road' };
+  const mk = () => new PhysicsWorld(flatT, null);
+  // Hank runs at a fence on hiccupy frames (10 fps) and can't get through it
+  {
+    const ph = mk();
+    ph.addBox({ x: 0, z: 4, yaw: 0.2, w: 60, l: 0.16, y0: -0.5, y1: 1.2, kind: 'fence' });
+    const W = new Walker({ physics: ph });
+    W.place(0, 0, 0, 0);
+    // fence-local z (its own across axis): must stay on the near side, 0.08 + 0.28 off its middle
+    let worst = -9;
+    for (let i = 0; i < 40; i++) { W.update(0.1, { mx: 0, mz: 1, run: true }, 0); worst = Math.max(worst, W.pos.x * Math.sin(0.2) + (W.pos.z - 4) * Math.cos(0.2)); }
+    check('walker at run speed on 10 fps frames stops at a thin fence', worst < -0.3, `across=${worst.toFixed(3)} at ${W.pos.x.toFixed(2)},${W.pos.z.toFixed(2)}`);
+    // ...and slides along it when walking at it on a slant
+    W.place(0, 0, 3, 0);
+    for (let i = 0; i < 60; i++) W.update(1 / 60, { mx: 0.6, mz: 0.8, run: false }, 0);
+    check('walker slides along a wall instead of sticking', W.pos.x < -0.4 || W.pos.x > 0.4, `x=${W.pos.x.toFixed(2)} z=${W.pos.z.toFixed(2)}`);
+  }
+  // a corner: no jitter, he settles into it and stays out of both walls
+  {
+    const ph = mk();
+    // (camera looking down +z: stick right is world -x)
+    ph.addBox({ x: -2, z: 0, w: 0.3, l: 6 });
+    ph.addBox({ x: 0, z: 2, w: 6, l: 0.3 });
+    const W = new Walker({ physics: ph });
+    W.place(0, 0, 0, 0);
+    let jit = 0, last = null;
+    for (let i = 0; i < 120; i++) {
+      W.update(1 / 60, { mx: 0.7, mz: 0.7, run: true }, 0);
+      if (i > 90) { if (last) jit = Math.max(jit, Math.hypot(W.pos.x - last.x, W.pos.z - last.z)); last = W.pos.clone(); }
+    }
+    check('walker wedged in a corner sits still (no jitter)', jit < 0.002 && W.pos.x > -2 + 0.15 + 0.27 && W.pos.z < 2 - 0.15 - 0.27, `jitter=${jit.toFixed(4)} pos=${W.pos.x.toFixed(3)},${W.pos.z.toFixed(3)}`);
+  }
+  // Bessie flat out at a thin wall, even on long steps, stops on the near side; the front tyre doesn't poke through
+  {
+    for (const dt of [1 / 120, 1 / 30]) {
+      const ph = mk();
+      ph.addBox({ x: 0, z: 12, w: 10, l: 0.12, y0: -1, y1: 3, kind: 'fence' });
+      const r = run(ph, () => C({ throttle: 1 }), { T: 3, dt, setup: (b) => b.vel.set(0, 0, 14) });
+      const nose = r.b.pos.z + 0.46 + 0.28;
+      check(`bike at 14 m/s can't tunnel a 12 cm wall (step ${Math.round(1 / dt)} Hz)`, r.b.pos.z < 12 && nose < 12.0 + 0.02, `z=${r.b.pos.z.toFixed(2)} nose=${nose.toFixed(2)} crash=${ev(r, 'crash').length}`);
+    }
+  }
+  // a door added at runtime blocks; swinging it open (updateBox) and taking it away (removeBox) let him through
+  {
+    const ph = mk();
+    ph.addBox({ x: -1.5, z: 3, w: 2, l: 0.3 });
+    ph.addBox({ x: 1.5, z: 3, w: 2, l: 0.3 });
+    const door = ph.addBox({ x: 0, z: 3, w: 1, l: 0.08, kind: 'door' });
+    const W = new Walker({ physics: ph });
+    W.place(0, 0, 0, 0);
+    for (let i = 0; i < 90; i++) W.update(1 / 60, { mx: 0, mz: 1 }, 0);
+    const shut = W.pos.z;
+    // swing it open on its hinge at x = -0.5
+    ph.updateBox(door, { x: -0.5 + Math.sin(Math.PI / 2) * 0.0, z: 3 + 0.5, yaw: Math.PI / 2 });
+    for (let i = 0; i < 120; i++) W.update(1 / 60, { mx: 0, mz: 1 }, 0);
+    const open = W.pos.z;
+    W.place(0, 0, 0, 0);
+    ph.updateBox(door, { x: 0, z: 3, yaw: 0 });
+    for (let i = 0; i < 90; i++) W.update(1 / 60, { mx: 0, mz: 1 }, 0);
+    const shutAgain = W.pos.z;
+    ph.removeBox(door);
+    for (let i = 0; i < 120; i++) W.update(1 / 60, { mx: 0, mz: 1 }, 0);
+    check('runtime door: shut blocks, updateBox opens, removeBox clears', shut < 3 && open > 3.5 && shutAgain < 3 && W.pos.z > 3.5, `shut=${shut.toFixed(2)} open=${open.toFixed(2)} again=${shutAgain.toFixed(2)} removed=${W.pos.z.toFixed(2)}`);
+  }
 }
 const fails = results.filter((r) => !r.ok);
 console.log(`\n${results.length - fails.length}/${results.length} passed`);
