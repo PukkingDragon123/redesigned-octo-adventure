@@ -420,6 +420,7 @@ export class TouchControls {
     T.leanBack = T.leanFwd = 0;
     T.run = false;
     T.brake = 0;
+    T.radSteer = T.radUp = T.radDown = 0;
     if (this.pointers?.size) this.pointers.clear();
     this.camPtrs?.clear();
     this.pinch = null;

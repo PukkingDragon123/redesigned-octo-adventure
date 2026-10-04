@@ -479,7 +479,7 @@ export class VoxelRider {
     switch (e.type) {
       case 'sketchyLand': this.windmill = 0.7; ch.tempExpr('shock', 0.8); break;
       case 'perfectLand': this.cheer = e.streak > 1 ? 0.7 : 0.45; ch.tempExpr('sparkle', 1); break;
-      case 'pedalSlip': ch.tempExpr('shock', 0.6); this.game.sound?.play('bone_rattle', { volume: 0.4 }); break;
+      case 'pedalSlip': ch.tempExpr('shock', 0.6); break;
       case 'winded': this.say('winded'); break;
       case 'exhausted': ch.kick('sq', 0.82); this.say('exhausted'); break;
       case 'recovered': {
