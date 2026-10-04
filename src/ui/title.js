@@ -39,7 +39,7 @@ const SHOTS = [
     from: [160, 5.6, 48.3], to: [164.5, 5.9, 48.7], look: [112, 50.4], lookTo: [112, 50.2],
     hor: 0.53, horTall: 0.52, hfov: 70,
     ride: { path: [[72, 47.2], [92, 49.9], [106, 51], [114, 50.6], [121, 50], [146, 50], [158, 50.6], [196, 51.2]], speed: 5.3, start: 0 },
-    birds: [{ at: 3, geese: { start: [64, -40], dir: [0.15, 1], alt: 24 } }],
+    birds: [{ at: 3, geese: { start: [64, -40], dir: [0.15, 1], alt: 26 } }],
   },
   {
     // the harbour: boats at the docks, Birdie fishing off the boardwalk, the backs of the
