@@ -33,9 +33,9 @@ const SONGBIRDS = ['robin', 'chickadee', 'bluejay', 'sparrow'];
 // instance capacity per species, and who casts a shadow (small and flying things don't)
 const RIG = {
   deer: [14, 1], fawn: [8, 1], buck: [6, 1], moose: [2, 1], fox: [3, 1], raccoon: [2, 1], bin: [2, 1], rabbit: [8, 1],
-  squirrel: [8, 0], chipmunk: [8, 0], mouse: [3, 0], robin: [10, 0], chickadee: [10, 0], bluejay: [10, 0], sparrow: [10, 0],
-  crow: [26, 0], gull: [12, 0], goose: [14, 0], mallard: [6, 0], duckHen: [6, 0], owl: [2, 0], bat: [8, 0], frog: [4, 0],
-  trout: [2, 0], salmon: [2, 0], monarch: [8, 0], sulphur: [8, 0], dragonfly: [3, 0], beaver: [1, 0], duchess: [1, 1], biscuit: [1, 1],
+  squirrel: [8, 0], chipmunk: [8, 0], mouse: [3, 0], robin: [12, 0], chickadee: [12, 0], bluejay: [12, 0], sparrow: [12, 0],
+  crow: [26, 0], gull: [12, 0], goose: [14, 0], mallard: [8, 0], duckHen: [8, 0], owl: [2, 0], bat: [12, 0], frog: [5, 0],
+  trout: [2, 0], salmon: [2, 0], monarch: [10, 0], sulphur: [10, 0], dragonfly: [3, 0], beaver: [1, 0], duchess: [1, 1], biscuit: [1, 1],
 };
 // species built a few frames apart after start-up, most common first, so the first spawn of each doesn't hitch
 const WARM = ['deer', 'fawn', 'rabbit', 'squirrel', 'chipmunk', 'robin', 'chickadee', 'sparrow', 'bluejay', 'crow', 'goose', 'gull', 'mallard', 'duckHen',

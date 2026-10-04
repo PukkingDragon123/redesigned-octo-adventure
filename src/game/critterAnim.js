@@ -186,7 +186,7 @@ function poseQuad(c, dt, W) {
   R(P, Q.body, bp, bw, br);
   S(P, Q.body, 1 + breathe * 0.012 - arch * 0.06, 1 + breathe * 0.02 + arch * 0.16, stretch - arch * 0.06);
   // ---- legs: foot targets in animal space, then IK in the body frame
-  const cp = Math.cos(bp), sp2 = Math.sin(bp), cr = Math.cos(br), sr = Math.sin(br);
+  const cp = Math.cos(bp), sp2 = Math.sin(bp), cr = Math.cos(br);
   const stomp = c.stompK ? bump(c.stompK) : 0;
   for (let i = 0; i < 4; i++) {
     const isF = i < 2, hip = isF ? hipF : hipH;
@@ -443,7 +443,8 @@ function poseBird(c, dt, W) {
   for (const [b, b2, s] of WINGS) {
     // folded: span back along the flank (or down the side of an upright owl), arm tucked
     const fx = up ? 0 : PI / 2, fy = up ? 0 : -PI / 2, fz = up ? -PI / 2 : 0;
-    const open = fly;
+    // songbirds tuck their wings between bursts of flapping
+    const open = fly * lerp(0.3, 1, A.burst);
     R(P, b, lerp(fy, 0, open), s * lerp(fx, sweep, open), s * lerp(fz + flick, wz, open));
     T(P, b, s * m.bodyH * 0.06 * (1 - open), 0, 0);
     const tuck = lerp(0.4, 1, open);
@@ -457,7 +458,7 @@ function poseBird(c, dt, W) {
   S(P, B.tail, 1 + 0.45 * Math.max(A.glide, Math.abs(bank) * 0.6) * fly, 1, 1);
   // ---- legs: tucked back in flight, springy on hops, paddling when tipped up
   R(P, B.legs, 1.25 * fly + (m.swim ? 0.7 * Math.sin(c.t * 9) * dab : 0), 0, 0);
-  S(P, B.legs, 1, 1 - 0.3 * bump(hopK < 0.25 ? hopK * 2 : hopK > 0.75 ? (hopK - 0.5) * 2 : 0.5) * A.hop, 1);
+  S(P, B.legs, 1, 1 - 0.3 * (bump(hopK / 0.2) + bump((hopK - 0.8) / 0.2)) * A.hop, 1);
 }
 
 // ---------------------------------------------------------------- frog
