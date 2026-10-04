@@ -1,7 +1,9 @@
 // One-shot SFX, part 4: Hank's prologue. Axe bites, a creaking, crashing tree,
-// shovels of dirt, a coffin settling, the cemetery bell and a mighty snore.
+// shovels of dirt, a coffin settling, the cemetery bell and a mighty snore. Plus the
+// pumpkin carving contest: a hip-hip-hooray crowd, kids' yays, Gus's tin megaphone,
+// a judge's "hmm", knife cuts into a pumpkin and the countdown's clock tick.
 // Every entry is fn(c) with c = { k, ctx, out, wet, t, p, end } (see synth.js).
-import { T, N, rand } from './synth.js';
+import { T, N, vox, rand, pick } from './synth.js';
 import { setWet, creak } from './sfx.js';
 
 const upto = (c, end) => { if (end > c.end) c.end = end; };
@@ -102,5 +104,72 @@ export const SFX4 = {
     for (let i = 0; i < 4; i++) N(c, { t: 0.08 + i * 0.045, dur: 0.03, bp: rand(2200, 3600), q: 4, v: 0.08 }); // the latch and the window panes rattling
     setWet(c, 0.25);
     upto(c, 0.9);
+  },
+
+  // ------------------------------------------------ the pumpkin carving contest
+  // the whole crowd: "hoo-RAAAY!", claps and a whistle or two
+  crowd_hooray(c) {
+    N(c, { dur: 1.8, a: 0.2, h: 0.7, bp: 1000, q: 0.7, v: 0.14, am: [rand(5, 7), 0.3] }); // crowd breath
+    for (let i = 0; i < 8; i++) {
+      const f = pick([140, 165, 190, 220, 250, 290, 330, 380]) * rand(0.95, 1.05), t = rand(0, 0.12), d = rand(1.0, 1.35);
+      vox(c, {
+        t, dur: d, fc: [f * 0.92, f * 0.9, f * 0.95, f * 1.3, f * 1.48, f * 1.5, f * 1.42, f * 1.2], vib: rand(5, 7), vd: 22, a: 0.05, h: d * 0.5, v: 0.065,
+        F: [[[360, 340, 420, 720, 780, 760, 700], 4, 1.3], [[820, 800, 1200, 1900, 2100, 2100, 1900], 6, 0.75], [2700, 7, 0.25]], br: 0.05, lp: 3600,
+      });
+    }
+    T(c, { t: 0.45, dur: 0.55, f: 1900, f2: 2900, g: 0.25, v: 0.035, a: 0.03, h: 0.15 }); // whistle
+    T(c, { t: 1.0, dur: 0.4, f: 2900, f2: 2100, v: 0.03, a: 0.02 });
+    for (let i = 0; i < 26; i++) {
+      const t = 0.3 + Math.random() * 1.5;
+      N(c, { t, dur: 0.045, bp: rand(900, 1600), q: 1.3, v: rand(0.05, 0.11), a: 0.001 });
+    }
+    setWet(c, 0.3);
+    upto(c, 2.1);
+  },
+  // two or three kids: "YAAAAY!"
+  kids_yay(c) {
+    for (let i = 0; i < 3; i++) {
+      const f = rand(380, 470), t = rand(0, 0.08), d = rand(0.7, 0.95);
+      vox(c, {
+        t, dur: d, fc: [f * 0.95, f * 1.25, f * 1.32, f * 1.28, f * 1.1], vib: 6.5, vd: 30, a: 0.03, h: d * 0.5, v: 0.08,
+        F: [[[750, 900, 950, 900, 800], 5, 1.2], [[1900, 2300, 2500, 2400, 2200], 7, 0.7], [3300, 8, 0.25]], br: 0.04, lp: 4500,
+      });
+    }
+    setWet(c, 0.2);
+    upto(c, 1.1);
+  },
+  // Gus's tin megaphone: a squeal of feedback, then a buzzy "HEY-HO!" through the horn
+  megaphone(c) {
+    T(c, { dur: 0.22, f: 2350, f2: 2650, v: 0.05, a: 0.04, bp: 2500, q: 6 });
+    for (const [t, f, d] of [[0.2, 150, 0.22], [0.46, 125, 0.34]]) {
+      vox(c, {
+        t, dur: d, fc: [f, f * 1.15, f * 1.1, f * 0.95], a: 0.02, h: d * 0.6, v: 0.16, sh: 3,
+        F: [[[700, 900, 850], 3, 1.0], [[1400, 1700, 1600], 5, 1.2], [2600, 6, 0.6]], br: 0.08, lp: 3400,
+      });
+      N(c, { t, dur: d, bp: 1500, q: 5, v: 0.04, a: 0.01 }); // the tin rattling
+    }
+    setWet(c, 0.22);
+    upto(c, 1.0);
+  },
+  // a judge leaning in: "Hmmmm..." (a low, nasal hum that rises a little)
+  hum_hmm(c) {
+    const f = rand(105, 125);
+    vox(c, { dur: 0.9, fc: [f, f * 1.02, f * 1.08, f * 1.12, f * 1.04], vib: 5, vd: 18, a: 0.08, h: 0.5, v: 0.12, F: [[260, 3, 1.3], [[900, 950, 1000], 6, 0.3]], lp: 900 });
+    setWet(c, 0.15);
+    upto(c, 1.1);
+  },
+  // a knife biting through pumpkin rind (short, wet and crunchy)
+  carve_cut(c) {
+    N(c, { dur: 0.05, bp: rand(2200, 3200), q: 1.6, v: 0.32, a: 0.002 });
+    N(c, { t: 0.01, dur: 0.07, buf: 'brown', lp: 700, v: 0.3, a: 0.003 });
+    T(c, { dur: 0.04, type: 'triangle', f: rand(420, 520), f2: 300, v: 0.06 });
+    setWet(c, 0.05);
+    upto(c, 0.15);
+  },
+  // the countdown: a dry little pocket-watch tick
+  clock_tick(c) {
+    N(c, { dur: 0.018, bp: 3600, q: 3, v: 0.3, a: 0.0008 });
+    T(c, { dur: 0.03, f: 1900, f2: 1500, v: 0.05 });
+    upto(c, 0.06);
   },
 };

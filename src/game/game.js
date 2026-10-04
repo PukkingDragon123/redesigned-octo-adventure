@@ -126,7 +126,7 @@ export class Game {
     else this.showTitle();
   }
 
-  // test entry: jump straight into one story beat (?scene=cabinNight|morning|garageReveal|villagePanic|contestScream|catRescue|strayCat|ending)
+  // test entry: jump straight into one story beat (?scene=cabinNight|morning|garageReveal|villagePanic|contestScream|carve|catRescue|strayCat|ending)
   async debugScene(name) {
     this.debugRide();
     if (name === 'villagePanic') {
@@ -541,6 +541,7 @@ export class Game {
     }
     if (!action && this.catEventActive) action = this.story.stray?.action(p, slow) || null;
     if (!action) action = this.quests.action(this);
+    if (!action) action = this.contest.action(p, slow); // "Carve a pumpkin" at Hank's contest table
     // stop for a chat with whoever is nearby
     if (!action && slow) {
       let best = null, bd = 3.2;

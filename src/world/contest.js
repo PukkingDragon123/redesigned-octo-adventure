@@ -49,6 +49,9 @@ export const CONTEST = {
     ingrid: { x: 139.2, z: NK - 0.05, yaw: 0, role: 'judge' },
     doug: { x: 141.7, z: NK - 0.1, yaw: 0.15, role: 'watch' },
     josee: { x: 133.2, z: NK - 0.2, yaw: -1.45, role: 'cheer' },
+    // Gus hosts: announcements from the middle of the street (facing the road in), then
+    // a stroll along the tables for a close look at every entry (src/game/contest.js)
+    gus: { x: 128.4, z: M.z - 1.4, yaw: -PI / 2, role: 'host' },
   },
   // the judge's round: in front of each north table, looking at the work
   round: [{ x: 130.2, z: NK - 0.1, yaw: 0.25 }, { x: 125, z: NK - 0.1, yaw: 0.25 }],

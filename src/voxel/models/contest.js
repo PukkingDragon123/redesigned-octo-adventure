@@ -8,7 +8,7 @@
 // Builders return { vox, size, origin, jitter, meta } like props.js: size is metres
 // per voxel, origin the pivot in voxel units, meta lengths in metres (meta.top is a
 // table's top surface).
-import { Vox, tone } from '../vox.js';
+import { Vox, tone, EMIT } from '../vox.js';
 import * as PR from './props.js';
 
 const FINE = 0.025, STD = 0.05;
@@ -395,4 +395,152 @@ export function carvingScoop() {
   v.set(1, 2, 1, 0);
   v.set(1, 1, 1, GUTS[0]);
   return { vox: v, size: 0.018, origin: [1.5, 10, 1.5] };
+}
+
+// tinMegaphone() — Gus's dented tin bullhorn with a red band, held by its handle. An
+// upright prop: the bell points along +z (the way he faces), the mouthpiece sits just
+// behind the grip and the cone just above it.
+export function tinMegaphone() {
+  const L = 17, R0 = 1.3, R1 = 5.6;
+  const v = new Vox(15, 15, L + 1);
+  const cx = 7, cy = 8, TIN = 0xc8ccd2, TIN_D = 0x9aa0a8, TIN_L = 0xe8ecf0, BAND = 0xc8382e;
+  for (let z = 0; z <= L; z++) {
+    const r = R0 + (z / L) * (R1 - R0);
+    for (let y = 0; y < v.h; y++) for (let x = 0; x < v.w; x++) {
+      const d = Math.hypot(x - cx, y - cy);
+      if (d > r + 0.35) continue;
+      const shell = d > r - 1.0;
+      if (!shell && z < L - 1 && z > 0) continue;
+      let c = y > cy + 1 ? TIN_L : y < cy - 2 ? TIN_D : TIN;
+      if (Math.abs(z - L * 0.58) < 1) c = BAND;
+      if (z >= L - 1) c = shell ? TIN_L : 0x3a3a40; // the lip, and the dark inside of the bell
+      if (z === 0) c = 0x2a2a30; // the mouthpiece
+      if (((x * 5 + y * 3 + z * 7) % 23) === 0 && c === TIN) c = TIN_D; // dents
+      v.set(x, y, z, c);
+    }
+  }
+  // the handle hangs under the cone, a little in front of the mouthpiece
+  v.fill(cx, 1, 5, cx, cy - 2, 6, 0x5a3a22);
+  v.fill(cx, 1, 4, cx, 1, 7, 0x3a2418);
+  return { vox: v, size: 0.02, origin: [cx + 0.5, 1, 5.5] };
+}
+
+// pennant({ color }) — a little cheering flag on a stick (a stick-like prop: the grip at
+// the origin, the flag at the far end down the hand's -y, so it flies high on a raised arm)
+export function pennant({ color = BUNTING_COLORS[0] } = {}) {
+  const v = new Vox(9, 15, 2);
+  v.fill(0, 0, 0, 0, 14, 0, WOOD_L);
+  for (let y = 0; y < 7; y++) {
+    const w = Math.round((1 - Math.abs(y - 3) / 3.5) * 8);
+    if (w > 0) v.fill(1, y, 0, w, y, 0, y === 3 ? tone(color, 0.15) : color);
+  }
+  return { vox: v, size: 0.025, origin: [0.5, 14, 0.5] };
+}
+
+// carvedPumpkin({ mask, lit }) — Hank's entry: a hollow pumpkin with the face he carved in
+// the mini-game cut right through it (src/game/carveScore.js: mask is n x n, row 0 at
+// the top, 1 = cut; one grid cell is one voxel on the front, +z). Inside, a candle's
+// glow; the cut walls show the lit flesh. With no mask it is a plain, uncut pumpkin.
+export function carvedPumpkin({ mask = null, n = 32, cx = 16, cy = 17, rx = 15.5, ry = 13.5, rz = 13.5, lit = true, seed = 7 } = {}) {
+  const P0 = 2, top = Math.ceil(cy + ry) - 1; // grid col c -> x = c + P0; row r -> y = top - r
+  const W = n + P0 * 2, D = Math.ceil(rz * 2) + 4, H = top + 8;
+  const v = new Vox(W, H, D);
+  const X0 = cx + P0, Y0 = top + 1 - cy, Z0 = D / 2; // the centre, in voxel-edge units
+  const ribs = 10, ph = seed * 0.37;
+  const BASE = 0xe8781e, BASE2 = 0xdc6c1a, GROOVE = 0xb4501a, LIGHT = 0xf6993a, DEEP = 0x8a3a12;
+  const shape = (x, y, z) => {
+    const dx = (x + 0.5 - X0) / rx, dy = (y + 0.5 - Y0) / ry, dz = (z + 0.5 - Z0) / rz;
+    const th = Math.atan2(dz, dx);
+    const rib = Math.abs(Math.cos((th * ribs) / 2 + ph));
+    const s = 1 - 0.05 * (1 - Math.sqrt(rib));
+    return { q: (dx * dx + dz * dz) / (s * s) + dy * dy, rib, dy, k: Math.floor(((th + Math.PI) / (2 * Math.PI)) * ribs) };
+  };
+  for (let z = 0; z < D; z++) for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const S = shape(x, y, z);
+    if (S.q > 1) continue;
+    let c = S.rib < 0.22 ? GROOVE : S.k % 2 ? BASE : BASE2;
+    if (S.dy > 0.55 && S.rib >= 0.22) c = LIGHT;
+    if (S.dy < -0.55) c = S.rib < 0.22 ? DEEP : tone(c, -0.12);
+    v.set(x, y, z, c);
+  }
+  if (mask) {
+    // hollow it out; the inner layer is flesh, glowing where the candle lights it
+    const inCav = (x, y, z) => {
+      const a = (x + 0.5 - X0) / (rx - 3), b = (y + 0.5 - Y0) / (ry - 3), c = (z + 0.5 - Z0) / (rz - 3);
+      return a * a + b * b + c * c <= 1;
+    };
+    const glow = lit ? 0xffb43c | EMIT : 0x7a4a1e, glow2 = lit ? 0xffd070 | EMIT : 0x8a5a28;
+    const flesh = lit ? 0xf8b048 | EMIT : 0xf2c070;
+    for (let z = 0; z < D; z++) for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (inCav(x, y, z)) v.set(x, y, z, 0);
+    const NB = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]];
+    const recol = [];
+    for (let z = 0; z < D; z++) for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      if (!v.get(x, y, z)) continue;
+      if (NB.some(([a, b, c]) => !v.get(x + a, y + b, z + c) && !inCav(x + a, y + b, z + c))) continue; // the skin
+      const g = NB.some(([a, b, c]) => inCav(x + a, y + b, z + c));
+      recol.push([x, y, z, g ? (y + 0.5 > Y0 + ry * 0.2 ? glow2 : glow) : flesh]);
+    }
+    for (const [x, y, z, c] of recol) v.set(x, y, z, c);
+    // the candle on the floor of the hollow
+    const fy = Math.ceil(Y0 - ry + 2.2), fx = Math.floor(X0), fz = Math.floor(Z0);
+    v.fill(fx - 1, fy, fz - 1, fx, fy + 3, fz, 0xf6ecd0);
+    if (lit) { v.set(fx, fy + 4, fz, 0xfff4c0 | EMIT); v.set(fx, fy + 5, fz, 0xffd060 | EMIT); }
+    // cut the face straight in from the front, through the wall into the hollow
+    const cut = new Set();
+    for (let r = 0; r < n; r++) for (let col = 0; col < n; col++) {
+      if (!mask[r * n + col]) continue;
+      const x = col + P0, y = top - r;
+      if (y < 0 || y >= H) continue;
+      let z = D - 1;
+      while (z >= 0 && !v.get(x, y, z)) z--;
+      let k = 0, open = false;
+      while (z >= 0 && k < 14) {
+        if (!v.get(x, y, z) || inCav(x, y, z)) { open = true; break; }
+        v.set(x, y, z, 0);
+        z--; k++;
+      }
+      if (!open && z >= 0) v.set(x, y, z, glow);
+      cut.add(x + ',' + y);
+    }
+    // a scorched rim round each cut on the skin
+    for (const kk of cut) {
+      const [x, y] = kk.split(',').map(Number);
+      for (const [ddx, ddy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        if (cut.has(x + ddx + ',' + (y + ddy))) continue;
+        let z = D - 1;
+        while (z >= 0 && !v.get(x + ddx, y + ddy, z)) z--;
+        if (z < 0) continue;
+        const c = v.get(x + ddx, y + ddy, z);
+        if (!(c & EMIT)) v.set(x + ddx, y + ddy, z, tone(c, -0.22));
+      }
+    }
+  }
+  // the stem, leaning a little
+  const sx = Math.floor(X0) - 1, sz = Math.floor(Z0) - 1;
+  let sy = H - 1;
+  while (sy > 0 && !v.get(sx, sy, sz)) sy--;
+  for (let k = 0; k < 6; k++) {
+    const o = k > 3 ? 1 : 0;
+    v.fill(sx + o, sy + k, sz, sx + 1 + o, sy + k, sz + 1, k > 4 ? 0x5f8a30 : k % 2 ? 0x6a5a2a : 0x7a6a34);
+  }
+  return { vox: v, size: 0.018, origin: [X0, Math.max(0, Math.floor(Y0 - ry)), Z0], jitter: 0, meta: { radius: r3(rx * 0.018) } };
+}
+
+// prizeRosette({ color }) — a prize ribbon lying on the table: a pleated rosette round a
+// gold button, two tails trailing towards +z
+export function prizeRosette({ color = 0xc8382e } = {}) {
+  const v = new Vox(11, 2, 15);
+  const cx = 5, cz = 5;
+  for (let z = 0; z < 11; z++) for (let x = 0; x < 11; x++) {
+    const d = Math.hypot(x - cx, z - cz);
+    if (d > 5.2) continue;
+    const pleat = Math.floor(((Math.atan2(z - cz, x - cx) + Math.PI) / (2 * Math.PI)) * 12) % 2;
+    v.set(x, 0, z, d < 1.8 ? 0xe8c050 : pleat ? color : tone(color, -0.16));
+    if (d < 1.4) v.set(x, 1, z, 0xf2d070);
+  }
+  for (const s of [-1, 1]) for (let k = 0; k < 6; k++) {
+    v.set(cx + s * (1 + (k >> 1)), 0, cz + 5 + k, k === 5 ? tone(color, -0.25) : color);
+    v.set(cx + s * (2 + (k >> 1)), 0, cz + 5 + k, tone(color, -0.1));
+  }
+  return { vox: v, size: FINE, origin: [cx + 0.5, 0, cz + 0.5], jitter: 0 };
 }

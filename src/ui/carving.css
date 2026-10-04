@@ -1,0 +1,81 @@
+/* The pumpkin carving mini-game (src/game/carving.js): a kit sheet with the clock on
+   top, the pumpkin on a wooden board (a canvas shown at a whole number of device pixels
+   per art pixel, so it stays crisp) and the tools beside it, or under it on a phone held
+   upright. All sizes in whole art pixels. */
+.menu.carve-sheet { width: auto; max-width: calc(100% - var(--u) * 6); max-height: calc(100% - var(--u) * 26); }
+.carve-body { display: flex; flex-direction: column; align-items: stretch; gap: calc(var(--u) * 3); overflow: hidden; }
+.carve-top { display: flex; align-items: center; gap: calc(var(--u) * 3); width: 0; min-width: 100%; }
+.carve-clock { flex: none; min-width: calc(var(--u) * 30); text-align: center; }
+.carve-top .k-bar { flex: 1; min-width: 0; width: auto; }
+.carve-sheet.hurry .carve-clock { color: #ff7a5a; animation: carve-blink 1s steps(2) infinite; }
+@keyframes carve-blink { 50% { color: #fff4c0; } }
+
+.carve-main { display: flex; align-items: flex-start; justify-content: center; gap: calc(var(--u) * 4); }
+.k-portrait .carve-main { flex-direction: column; align-items: center; }
+
+/* the board: a dark plank frame round the canvas */
+.carve-board {
+  position: relative;
+  flex: none;
+  padding: calc(var(--u) * 3);
+  background: #2a160c;
+  box-shadow: inset 0 0 0 var(--u) #120a06, 0 0 0 var(--u) #8a5a32, 0 var(--u) 0 var(--u) #5a3a20;
+}
+.carve-cv {
+  display: block;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  cursor: crosshair;
+}
+.carve-board.lit { background: #0e0806; }
+.carve-board.shake { animation: carve-shake 0.42s steps(6); }
+@keyframes carve-shake {
+  0% { transform: translate(0, 0); }
+  20% { transform: translate(calc(var(--u) * -2), 0); }
+  40% { transform: translate(calc(var(--u) * 2), calc(var(--u) * 1)); }
+  60% { transform: translate(calc(var(--u) * -1), 0); }
+  80% { transform: translate(calc(var(--u) * 1), calc(var(--u) * -1)); }
+  100% { transform: translate(0, 0); }
+}
+/* little notes over the board ("Plop! A bit fell in.") */
+.carve-msg {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(var(--u) * 6);
+  text-align: center;
+  color: #fff4c0;
+  pointer-events: none;
+  opacity: 0;
+  white-space: normal;
+}
+.carve-msg.on { opacity: 1; animation: carve-pop 0.3s steps(3); }
+@keyframes carve-pop { 0% { transform: translateY(calc(var(--u) * 4)); } 100% { transform: translateY(0); } }
+
+.carve-tools { display: flex; flex-direction: column; gap: calc(var(--u) * 2); flex: none; }
+.k-portrait .carve-tools { flex-direction: row; flex-wrap: wrap; justify-content: center; max-width: calc(var(--u) * 220); }
+.carve-tools .k-btn { min-width: calc(var(--u) * 64); }
+.carve-tools .k-btn.on { border-image-source: var(--k-btn-green); color: #fffbea; }
+.carve-hint { width: 0; min-width: 100%; text-align: center; color: var(--k-cream2); white-space: normal; }
+.k-compact:not(.k-portrait) .carve-hint { display: none; }
+
+/* the prize, pinned on the screen for a moment after the judging */
+.carve-award {
+  position: absolute;
+  left: 50%;
+  top: calc(var(--u) * 26 + var(--safe-t, 0px));
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(var(--u) * 2);
+  pointer-events: none;
+  z-index: 5;
+  animation: carve-award 0.45s steps(5);
+}
+.carve-score { padding: 0 calc(var(--u) * 6); }
+@keyframes carve-award { 0% { transform: translate(-50%, calc(var(--u) * -30)); } 100% { transform: translate(-50%, 0); } }
