@@ -252,13 +252,15 @@ function quadHead(o) {
     for (const sd of [-1, 1]) {
       const bx = x0 + sd * 2, by = sy + hw * 0.35;
       v.line(bx, by, sz - 0.5, bx + sd * 4, by + 1.5, sz - 0.5, 0xc8b490, 0.8);
-      // the palm: a dished, tined paddle
-      for (let i = 0; i < 8; i++) for (let j = 0; j < 6; j++) {
-        const px = bx + sd * (4 + i), py = by + 1.5 + j * 0.8 + i * 0.35, pz = sz - 2 + j * 0.9;
-        v.set(px, py, pz, (i + j) % 4 ? 0xd8c8a0 : 0xc8b490);
-        v.set(px, py + 1, pz, 0xd8c8a0);
+      // the palm: a broad, dished paddle reaching out to the side, tines along its rim
+      for (let i = 0; i < 9; i++) for (let j = 0; j < 7; j++) {
+        if ((i > 6 || i < 1) && (j === 0 || j === 6)) continue; // rounded corners
+        const px = bx + sd * (4 + i), py = by + 1.5 + i * 0.45 + (j - 3) * (j - 3) * 0.12, pz = sz - 3.5 + j;
+        v.set(px, py, pz, (i * 3 + j) % 5 ? 0xd8c8a0 : 0xc8b490);
+        v.set(px, py + 1, pz, 0xe0d2ae);
       }
-      for (let k = 0; k < 5; k++) v.set(bx + sd * (6 + k * 1.5), by + 7 + k * 0.6, sz + 3.5, 0xe8dcbc);
+      for (let j = 0; j < 7; j += 2) v.line(bx + sd * 12.5, by + 5.6 + (j - 3) * (j - 3) * 0.12, sz - 3.5 + j, bx + sd * 13.5, by + 8 + (j - 3) * (j - 3) * 0.12, sz - 3.5 + j, 0xe8dcbc);
+      v.line(bx + sd * 4.5, by + 3, sz + 2.5, bx + sd * 4.5, by + 5, sz + 3.5, 0xe8dcbc); // a brow tine
     }
   }
   const origin = [x0 + 0.5, sy - hw * 0.35, sz - hw * 0.25];

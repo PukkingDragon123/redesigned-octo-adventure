@@ -48,6 +48,7 @@ export class Critters {
     this.list = [];
     this.groups = [];
     this.rigs = new Map();
+    this.rigList = [];
     this.pool = new Map();
     this.warm = WARM.slice();
     this.frame = 0;
@@ -80,6 +81,7 @@ export class Critters {
     sp.arch = r.arch;
     sp.meta = r.meta;
     this.rigs.set(kind, sp);
+    this.rigList.push(sp);
     this.game.scene.add(sp.mesh);
     return sp;
   }
@@ -252,7 +254,7 @@ export class Critters {
     if (this.due('squirrel', 3, 6) && n < 0.6 && this.countCat('squirrel') < 5) this.spawnSquirrel();
     if (this.due('road', 20, 45) && n < 0.6 && this.countCat('roadSquirrel') < 1) this.spawnRoadSquirrel();
     if (this.due('songbird', 3, 7) && day && this.groups.filter((gr) => gr.kind === 'songbird').length < 2) this.spawnSongbirds();
-    if (this.due('geese', 50, 100) && n < 0.6 && !this.groups.some((gr) => gr.kind === 'geese')) this.spawnGeese();
+    if (this.due('geese', 40, 80) && n < 0.6 && !this.groups.some((gr) => gr.kind === 'geese')) this.spawnGeese();
     if (this.due('crows', 20, 40) && n < 0.75 && !this.groups.some((gr) => gr.kind === 'crows')) this.spawnCrows();
     if (this.due('gulls', 6, 12) && n < 0.6 && seaSDF(p.x, p.z) < 90 && this.countCat('gull') < 7) this.spawnGulls();
     if (this.due('ducks', 5, 10) && n < 0.6 && this.countCat('duck') < 5) this.spawnDucks();
@@ -313,7 +315,7 @@ export class Critters {
     const dir = o.dir || { x: -Math.sin(a), z: -Math.cos(a) };
     const side = this.rng.range(-30, 30);
     const start = o.start || { x: p.x + Math.sin(a) * 170 + dir.z * side, z: p.z + Math.cos(a) * 170 - dir.x * side };
-    const gr = { kind: 'geese', members: [], dir, x: start.x, z: start.z, alt: o.alt ?? Math.max(this.height(p.x, p.z), 2) + this.rng.range(30, 42), t: 0, honk: 1 };
+    const gr = { kind: 'geese', members: [], dir, x: start.x, z: start.z, alt: o.alt ?? Math.max(this.height(p.x, p.z), 2) + this.rng.range(26, 38), t: 0, honk: 1 };
     const n = this.rng.int(7, 13);
     for (let i = 0; i < n; i++) {
       const row = Math.ceil(i / 2), sd = i % 2 ? 1 : -1;
@@ -518,7 +520,8 @@ export class Critters {
     cam.updateMatrixWorld();
     _pm.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
     _fr.setFromProjectionMatrix(_pm);
-    for (const sp of this.rigs.values()) sp.begin();
+    const rigs = this.rigList;
+    for (let i = 0; i < rigs.length; i++) rigs[i].begin();
     const W = this.W, p = this.p;
     W.px = p.x; W.py = p.y + 1.1; W.pz = p.z;
     const frame = ++this.frame;
@@ -528,9 +531,9 @@ export class Critters {
       const dx = c.x - cp.x, dy = c.y - cp.y, dz = c.z - cp.z;
       const dd = dx * dx + dy * dy + dz * dz;
       if (dd > c.maxDraw * c.maxDraw) continue;
-      const r = c.sp.meta.radius * c.sx;
-      _sph.center.set(c.x, c.y + c.bob + r * 0.5, c.z);
-      _sph.radius = r + 0.4;
+      const m = c.sp.meta;
+      _sph.center.set(c.x, c.y + c.bob + (m.standH || 0) * c.sx, c.z);
+      _sph.radius = m.radius * c.sx + 0.4;
       if (!_fr.intersectsSphere(_sph)) continue;
       // pose: every frame up close, every 2nd frame in the middle distance, every 4th far away
       const rate = dd < 900 ? 1 : dd < 4900 ? 2 : 4;
@@ -549,7 +552,7 @@ export class Critters {
       c.ry = vdt >= 1 ? c.yaw : c.ry + wrapAngle(c.yaw - c.ry) * (1 - Math.exp(-14 * vdt));
       c.sp.push(c.M, c.x, c.y + c.bob, c.z, c.ry, c.sx, c.fade);
     }
-    for (const sp of this.rigs.values()) sp.end();
+    for (let i = 0; i < rigs.length; i++) rigs[i].end();
   }
 }
 
