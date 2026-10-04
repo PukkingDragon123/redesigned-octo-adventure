@@ -640,8 +640,9 @@ function snapRibbon(rb) {
 let BOOK_FACE = null;
 function faceCanvas(id) {
   if (!BOOK_FACE) {
-    BOOK_FACE = new LivePortrait(null, { size: 128, bust: false, yaw: 0.25, outline: false, bg: '#cfe0f0' });
-    BOOK_FACE.canvas.style.cssText = 'position:absolute;left:calc(var(--u)*2);top:calc(var(--u)*2);width:calc(var(--u)*32);height:calc(var(--u)*32);image-rendering:auto';
+    // one render pixel per art pixel, shown at the kit's whole-number scale (crisp, never smoothed)
+    BOOK_FACE = new LivePortrait(null, { art: 32, bust: false, yaw: 0.25, outline: false, bg: '#cfe0f0' });
+    BOOK_FACE.canvas.style.cssText = 'position:absolute;left:calc(var(--u)*2);top:calc(var(--u)*2);width:calc(var(--u)*32);height:calc(var(--u)*32);image-rendering:pixelated';
   }
   BOOK_FACE.set(id, 'happy');
   return BOOK_FACE.canvas;
@@ -679,7 +680,7 @@ function heatLine(o) {
   const w = q > 85 ? 'piping hot' : q > 60 ? 'still hot' : q > 30 ? 'only warm' : 'gone cold!';
   const T = cupTemp(q);
   return `<div class="nb-line"><span class="v${q > 30 ? '' : ' nb-redink'}">${w}</span><span style="margin-left:auto;color:${T.color};font-weight:bold">${T.deg}\u00b0C</span></div>` +
-    `<div class="nb-line" style="gap:6px">${tempBarHTML(q, 'big')}</div>`;
+    `<div class="nb-line" style="gap:calc(var(--u) * 3)">${tempBarHTML(q, 'big')}</div>`;
 }
 // pen doodles, a coffee ring and a pencil: a notebook that gets used
 const DOODLE_KINDS = ['bike', 'mug', 'leaf', 'heart', 'star', 'swirl'];

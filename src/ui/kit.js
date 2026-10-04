@@ -45,9 +45,13 @@ export function applyScale() {
   const r = document.documentElement.style;
   r.setProperty('--u', `${s.u}px`);
   r.setProperty('--S', `${s.S}`);
+  // the 48px food sprites sit in 24-art-pixel spots: show them at the biggest WHOLE
+  // multiple of their own pixels that fits (24u is only a whole multiple when S is even)
+  r.setProperty('--food', `${(s.S >= 2 ? Math.floor(s.S / 2) * 48 : 24) / s.dpr}px`);
   document.documentElement.classList.toggle('k-compact', s.compact);
   document.documentElement.classList.toggle('k-portrait', window.innerHeight > window.innerWidth * 1.15);
   if (changed) for (const f of scale.listeners) f(scale);
+  queueSnap();
 }
 export function onScale(f) {
   scale.listeners.add(f);
@@ -64,10 +68,76 @@ export const snap = (v) => Math.round(v * scale.dpr) / scale.dpr;
 // nudge an element so its box starts on a whole device pixel (uses the independent `translate` property)
 export function snapBox(e) {
   if (!e?.isConnected) return;
-  e.style.translate = '';
-  const r = e.getBoundingClientRect();
-  const fx = snap(r.left) - r.left, fy = snap(r.top) - r.top;
-  if (Math.abs(fx) > 0.01 || Math.abs(fy) > 0.01) e.style.translate = `${fx}px ${fy}px`;
+  keepSnapped(e);
+}
+
+// ---------------------------------------------------------------- whole-device-pixel placement
+// Anything centred by layout (flex/grid/margin centring, 50% offsets) lands on a
+// half pixel whenever the free space is odd, which happens all the time when an art
+// pixel is an odd number of device pixels (S = 3 on a 1080p monitor, S = 5 on many
+// phones). Text there is drawn between pixels (soft, smeared glyphs) and anything
+// animated is composited and resampled (blurry pointers and pop-ins). Registered
+// elements are nudged with the independent `translate` property so their box starts
+// on a whole device pixel - again whenever they or their parent change size, the
+// window resizes or the UI scale changes. Every centred piece of the kit registers
+// itself (SNAP_SEL); anything else can add the class .k-snap or call keepSnapped().
+const SNAP_SEL = '.overlay > *, .m-title, .k-btn, .k-btn > .k-lbl, .k-btn > small, .k-sign > span, .k-ribbon > span, .k-tab > span, .hud-compass, .hud-prompt, .t-talk, .title-menu, .logo, .k-snap';
+const snapped = new Set();
+let snapRO = null, snapMO = null, snapRaf = 0;
+function queueSnap() {
+  if (!snapRaf && snapped.size) snapRaf = requestAnimationFrame(snapAll);
+}
+function snapAll() {
+  snapRaf = 0;
+  const list = [];
+  for (const e of snapped) if (e.isConnected) list.push(e); else snapped.delete(e);
+  if (!list.length) return;
+  // one style write, one layout read, one write: ancestors are corrected first and
+  // their shift carried down to the elements inside them
+  for (const e of list) e.style.translate = '';
+  list.sort((a, b) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1));
+  const rects = list.map((e) => e.getBoundingClientRect());
+  const shift = new Map();
+  list.forEach((e, i) => {
+    let ax = 0, ay = 0;
+    for (let p = e.parentElement; p; p = p.parentElement) {
+      const s = shift.get(p);
+      if (s) { [ax, ay] = s; break; }
+    }
+    const r = rects[i];
+    if (!r.width && !r.height) return;
+    const x = r.left + ax, y = r.top + ay;
+    let fx = snap(x) - x, fy = snap(y) - y;
+    if (Math.abs(fx) < 0.01) fx = 0;
+    if (Math.abs(fy) < 0.01) fy = 0;
+    shift.set(e, [ax + fx, ay + fy]);
+    if (fx || fy) e.style.translate = `${fx}px ${fy}px`;
+  });
+}
+export function keepSnapped(e) {
+  if (!e) return e;
+  if (!snapRO) snapRO = new ResizeObserver(queueSnap);
+  if (!snapped.has(e)) {
+    snapped.add(e);
+    snapRO.observe(e);
+    if (e.parentElement) snapRO.observe(e.parentElement);
+  }
+  queueSnap();
+  return e;
+}
+// watch the page for kit pieces that need it (menus, signs, buttons, the HUD)
+function watchSnaps() {
+  if (snapMO || typeof MutationObserver === 'undefined') return;
+  const add = (n) => {
+    if (n.nodeType !== 1) return;
+    if (n.matches(SNAP_SEL)) keepSnapped(n);
+    if (n.firstElementChild) for (const e of n.querySelectorAll(SNAP_SEL)) keepSnapped(e);
+  };
+  snapMO = new MutationObserver((recs) => {
+    for (const r of recs) for (const n of r.addedNodes) add(n);
+  });
+  snapMO.observe(document.body, { childList: true, subtree: true });
+  add(document.body);
 }
 
 // ---------------------------------------------------------------- art -> CSS variables
@@ -162,6 +232,7 @@ export function installKit({ offset } = {}) {
   applyScale();
   if (installed) return;
   installed = true;
+  watchSnaps();
   const r = document.documentElement.style;
   for (const name of FIRST) put(name);
   for (const g of KIT_GLYPHS) r.setProperty(`--g-${g}`, `url(${glyphURL(g)})`);
@@ -234,7 +305,7 @@ export function kCount(n, cls = '') {
 export function kTabs(names, onPick, active = 0) {
   const w = el('div', 'k-tabs');
   const tabs = names.map((n, i) => {
-    const t = el('button', `k-tab${i === active ? ' on' : ''}`, n);
+    const t = el('button', `k-tab${i === active ? ' on' : ''}`, `<span>${n}</span>`);
     t.addEventListener('click', () => set(i));
     w.appendChild(t);
     return t;
@@ -247,6 +318,11 @@ export function kTabs(names, onPick, active = 0) {
   w.tabs = tabs;
   return w;
 }
+// a length in % snapped down to whole art pixels (CSS round(); a plain % where unsupported)
+export function setRounded(e, prop, pct) {
+  e.style[prop] = pct;
+  e.style[prop] = `round(down, ${pct}, var(--u))`;
+}
 // progress bar: kind = heat | grow | gold | blue ; set(v 0..1)
 export function kBar(v = 0, kind = 'gold', cls = '') {
   const b = el('div', `k-bar k-${kind}${cls ? ` ${cls}` : ''}`, '<i></i>');
@@ -255,8 +331,8 @@ export function kBar(v = 0, kind = 'gold', cls = '') {
     const k = Math.max(0, Math.min(1, x));
     if (b._v === k) return;
     b._v = k;
-    // whole art pixels only
-    fill.style.width = `calc(${Math.round(k * 1000) / 10}% )`;
+    // whole art pixels only (round() where the browser has it)
+    setRounded(fill, 'width', `${Math.round(k * 1000) / 10}%`);
   };
   b.set(v);
   return b;
@@ -282,8 +358,8 @@ export function kSlider(value, min, max, step, onChange) {
   let v = value;
   const draw = () => {
     const k = (v - min) / (max - min);
-    fill.style.width = `${k * 100}%`;
-    knob.style.left = `${k * 100}%`;
+    setRounded(fill, 'width', `${k * 100}%`);
+    setRounded(knob, 'left', `${k * 100}%`);
   };
   const set = (x, fire = true) => {
     x = Math.round((Math.max(min, Math.min(max, x)) - min) / step) * step + min;

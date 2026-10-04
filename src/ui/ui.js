@@ -174,8 +174,8 @@ export class UI {
     if (who) {
       // a live 3D head-and-shoulders of the real model, not a flat picture
       if (!this._dlgLive) {
-        this._dlgLive = new LivePortrait(this.game, { size: 160, bust: true, yaw: 0.3, outline: false, bg: '#2a1a14' });
-        this._dlgLive.canvas.style.cssText = 'width:100%;height:100%;display:block';
+        this._dlgLive = new LivePortrait(this.game, { art: 48, bust: true, yaw: 0.3, outline: false, bg: '#2a1a14' });
+        this._dlgLive.canvas.style.cssText = 'width:100%;height:100%;display:block;image-rendering:pixelated';
       }
       if (this._dlgLive.canvas.parentNode !== D.portrait) D.portrait.appendChild(this._dlgLive.canvas);
       this._dlgLive.set(who, opts.expr || 'neutral');

@@ -42,6 +42,7 @@
   font-kerning: none;
   font-variant-ligatures: none;
   -webkit-font-smoothing: none;
+  font-smooth: never;
 }
 .k-bold, .k-btn, .k-ribbon, .k-count, .k-tab, .k-h {
   font-family: 'BoldPixels', 'Monogram', monospace;
@@ -155,10 +156,11 @@
   content: '';
   position: absolute;
   left: calc(var(--u) * -19);
-  top: 50%;
+  /* centred on whole art pixels (a plain 50% lands between pixels on odd heights) */
+  top: calc(50% - var(--u) * 8);
+  top: round(down, calc(50% - var(--u) * 8), var(--u));
   width: calc(var(--u) * 16);
   height: calc(var(--u) * 16);
-  margin-top: calc(var(--u) * -8);
   background: var(--g-hand) 0 0 / 100% 100% no-repeat;
   image-rendering: pixelated;
   animation: k-poke 0.6s steps(1) infinite;
@@ -376,7 +378,7 @@
 
 /* a leather strap with a brass buckle down the edge of a book */
 .k-strap { position: absolute; top: calc(var(--u) * 6); bottom: calc(var(--u) * 6); width: calc(var(--u) * 14); background: var(--k-strap) 0 0 / calc(var(--u) * 14) calc(var(--u) * 16) repeat-y; pointer-events: none; z-index: 2; }
-.k-strap::after { content: ''; position: absolute; left: calc(var(--u) * -4); top: calc(50% - var(--u) * 9); width: calc(var(--u) * 22); height: calc(var(--u) * 18); background: var(--k-buckle) 0 0 / 100% 100% no-repeat; }
+.k-strap::after { content: ''; position: absolute; left: calc(var(--u) * -4); top: calc(50% - var(--u) * 9); top: round(down, calc(50% - var(--u) * 9), var(--u)); width: calc(var(--u) * 22); height: calc(var(--u) * 18); background: var(--k-buckle) 0 0 / 100% 100% no-repeat; }
 
 /* ---------------------------------------------------------------- key caps (16px, slice 5 5 7 5) */
 .k-key {
@@ -422,7 +424,9 @@
 /* little inline glyphs (16px) */
 .k-g { display: inline-block; width: calc(var(--u) * 16); height: calc(var(--u) * 16); vertical-align: top; image-rendering: pixelated; flex: none; }
 img.k-g { background: none; }
-.k-food { display: inline-block; flex: none; width: calc(var(--u) * 24); height: calc(var(--u) * 24); margin: calc(var(--u) * -4) 0; vertical-align: middle; image-rendering: pixelated; }
+/* 48px food sprites in a 24-art-pixel spot: drawn at a whole multiple of their own
+   pixels (var(--food), set by kit.js) and centred by whole device pixels */
+.k-food { display: inline-block; flex: none; width: var(--food, calc(var(--u) * 24)); height: var(--food, calc(var(--u) * 24)); margin: calc((var(--u) * 24 - var(--food, calc(var(--u) * 24))) / 2 - var(--u) * 4) calc((var(--u) * 24 - var(--food, calc(var(--u) * 24))) / 2); vertical-align: middle; image-rendering: pixelated; }
 .k-row { display: flex; align-items: center; gap: calc(var(--u) * 4); }
 .k-stack { display: flex; flex-direction: column; gap: calc(var(--u) * 3); }
 .k-grid { display: grid; gap: calc(var(--u) * 2); }

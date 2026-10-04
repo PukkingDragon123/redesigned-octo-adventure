@@ -39,7 +39,7 @@
 .hud-money.jingle .m { animation: k-jingle 0.45s steps(1) 0.05s; }
 @keyframes k-jingle { 0% { transform: translateY(calc(var(--u) * -3)); } 25% { transform: translateY(calc(var(--u) * -1)); } 50% { transform: translateY(calc(var(--u) * -2)); } 75%, 100% { transform: none; } }
 
-.hud-compass { position: absolute; top: calc(var(--u) * 2 + var(--safe-t)); left: calc(50% - var(--u) * 32); width: calc(var(--u) * 64); display: flex; flex-direction: column; align-items: center; }
+.hud-compass { position: absolute; top: calc(var(--u) * 2 + var(--safe-t)); left: calc(50% - var(--u) * 32); left: calc(round(down, 50%, var(--u)) - var(--u) * 32); width: calc(var(--u) * 64); display: flex; flex-direction: column; align-items: center; }
 .hud-compass-dial { width: calc(var(--u) * 44); height: calc(var(--u) * 44); }
 .hud-dist { box-sizing: border-box; width: calc(var(--u) * 64); height: calc(var(--u) * 24); margin-top: calc(var(--u) * -5); display: flex; align-items: center; gap: calc(var(--u) * 2); padding: 0 0 0 calc(var(--u) * 3); white-space: nowrap; }
 .hud-dist.off { visibility: hidden; }
@@ -154,8 +154,8 @@
 .tbtn.off { display: none; }
 #touch.foot .m-ride, #touch:not(.foot) .m-foot { display: none; }
 .tbtn.tsq { --sz: 28; top: calc(var(--u) * 10 + var(--safe-t)); }
-.t-map { left: calc(50% - var(--u) * 64); }
-.t-pause { left: calc(50% + var(--u) * 36); }
+.t-map { left: calc(50% - var(--u) * 64); left: calc(round(down, 50%, var(--u)) - var(--u) * 64); }
+.t-pause { left: calc(50% + var(--u) * 36); left: calc(round(down, 50%, var(--u)) + var(--u) * 36); }
 .t-talk { position: absolute; left: 0; right: 0; margin: 0 auto; width: max-content; bottom: calc(var(--u) * 10 + var(--safe-b)); display: none; align-items: center; gap: calc(var(--u) * 3); height: calc(var(--u) * 24); padding: 0 calc(var(--u) * 4) 0 calc(var(--u) * 1); pointer-events: auto; touch-action: none; white-space: nowrap; }
 .t-talk.lit { display: flex; animation: k-hop 0.8s steps(1) infinite; }
 .t-talk.down { border-image-source: var(--k-plate-leather); }
