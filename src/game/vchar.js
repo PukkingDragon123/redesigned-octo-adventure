@@ -617,7 +617,8 @@ export class VoxelCharacter {
     if (HELD[this.anim]) this.autoHold(this.anim);
     this.parentObj?.add(this.root);
     for (const cl of this.cloths) this.parentObj?.add(cl.group);
-    this.setSeeThrough(true);
+    // (portraits and the loading screen draw characters outside the world: always solid)
+    this.setSeeThrough(!!game?.physics);
     if (game?.physics && this.parentObj) LIVE.add(this);
     this.snapGround();
     this.apply();
@@ -644,7 +645,7 @@ export class VoxelCharacter {
     parent?.add(this.root);
     for (const cl of this.cloths) parent?.add(cl.group);
     this._see = undefined;
-    this.setSeeThrough(true);
+    this.setSeeThrough(!!this.game?.physics);
     if (this.game?.physics && parent) LIVE.add(this);
     this.apply();
   }

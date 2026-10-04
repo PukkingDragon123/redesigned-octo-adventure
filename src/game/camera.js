@@ -294,11 +294,17 @@ export class ChaseCamera {
         have = true;
       }
     }
-    // who shares the shot stays solid (in a cutscene); in play anyone may melt (never Hank)
+    // who shares the shot stays solid (in a cutscene); in play anyone in the way may melt
+    // (never Hank), unless they're talking to him
     const scene = this.mode !== 'chase' && !!this.scene && have;
-    for (const ch of LIVE) ch.setSeeThrough(!(scene && ch === who) && !(scene && Math.hypot(ch.pos.x - f.x, ch.pos.z - f.z) < 1.5));
-    // a cut, a jump or a new subject: close the ring and let it open again
-    if (have && (who !== S.who || S.last.distanceToSquared(cam) > 4 || S.focus.distanceToSquared(f) > 9)) S.k = 0;
+    for (const ch of LIVE) {
+      const near = Math.hypot(ch.pos.x - f.x, ch.pos.z - f.z);
+      ch.setSeeThrough(!(scene && (ch === who || near < 1.5)) && !(ch.talking > 0 && near < 3));
+    }
+    // a cut or a jump: close the ring and let it open again (the walls melt away anew); a new
+    // speaker in the same shot just slides it across
+    const cut = have && (S.last.distanceToSquared(cam) > 4 || S.focus.distanceToSquared(f) > 9);
+    if (cut) S.k = 0;
     S.who = who;
     S.last.copy(cam);
     S.k = have ? Math.min(1, S.k + dt / 0.3) : Math.max(0, S.k - dt / 0.2);
@@ -308,7 +314,8 @@ export class ChaseCamera {
     if (indoors) bubble = 0.3;
     let wide = 0.3;
     if (have) {
-      S.focus.copy(f);
+      if (cut || !scene) S.focus.copy(f);
+      else S.focus.lerp(f, 1 - Math.exp(-10 * dt));
       S.floor = floor;
       S.rad = rad;
       S.gap = gap;
@@ -323,18 +330,23 @@ export class ChaseCamera {
     G.uSeeCamR.value = S.wide;
   }
   // the character a cutscene shot is looking at: nearest the middle of the frame (someone
-  // talking counts a little nearer), not too far off it
+  // talking counts a little nearer), not too far off it, and not someone a building hides
+  // (a shot of a house with people inside isn't about them: no hole in its wall)
   pickSubject() {
-    const cam = this.pos;
+    const cam = this.pos, ph = this.ph;
     const d = _d.subVectors(this.look, cam).normalize();
+    const indoors = ph.segmentHit(cam.x, cam.y, cam.z, cam.x, cam.y, cam.z, 0.05) < 1;
     let best = null, bs = 0.3;
     for (const ch of LIVE) {
       if (!ch.visible || !ch.root.parent) continue;
       const x = ch.pos.x - cam.x, y = ch.pos.y + ch.P.hipH + 0.3 - cam.y, z = ch.pos.z - cam.z;
       const along = x * d.x + y * d.y + z * d.z;
       if (along < 0.6 || along > 28) continue;
-      const sc = (Math.sqrt(Math.max(0, x * x + y * y + z * z - along * along)) / along) * (ch.talking > 0 ? 0.6 : 1);
-      if (sc < bs) { bs = sc; best = ch; }
+      // (whoever has it keeps it unless someone is clearly nearer: no flicking between two)
+      const sc = (Math.sqrt(Math.max(0, x * x + y * y + z * z - along * along)) / along) * (ch.talking > 0 ? 0.6 : 1) * (ch === this.see.who ? 0.75 : 1);
+      if (sc >= bs || (!indoors && ph.segmentHit(cam.x + x, cam.y + y, cam.z + z, cam.x, cam.y, cam.z, 0) < 1)) continue;
+      bs = sc;
+      best = ch;
     }
     return best;
   }
