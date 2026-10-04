@@ -371,7 +371,7 @@ function updateNote(ui) {
         { transform: 'translateX(0)', filter: 'none' }, { transform: 'translateX(calc(var(--u) * -2))', filter: 'hue-rotate(160deg) brightness(1.3)' },
         { transform: 'translateX(calc(var(--u) * 2))', filter: 'hue-rotate(160deg) brightness(1.3)' }, { transform: 'translateX(calc(var(--u) * -1))', filter: 'hue-rotate(100deg)' },
         { transform: 'translateX(0)', filter: 'none' },
-      ], { duration: 700, easing: 'steps(8)' });
+      ], { duration: 700, easing: 'steps(4, jump-end)' }); // lands on the keyframes: whole pixels only
     }
     if (hEl.dataset.p !== String(px)) {
       hEl.dataset.p = px;

@@ -169,7 +169,7 @@ const CSS = `
 #touch.foot .tc-stick .plate { display: none; }
 #touch .tc-radial { position: absolute; pointer-events: none; display: none; }
 #touch .tc-radial.on { display: block; }
-#touch .tc-pet { position: absolute; transform: translate(-50%, -50%); white-space: nowrap; padding: 0 calc(var(--u) * 3); height: calc(var(--u) * 14); display: flex; align-items: center; color: var(--k-cream2, #e8d8b0); opacity: 0.85; }
+#touch .tc-pet { position: absolute; white-space: nowrap; padding: 0 calc(var(--u) * 3); height: calc(var(--u) * 14); display: flex; align-items: center; color: var(--k-cream2, #e8d8b0); opacity: 0.85; }
 #touch .tc-pet.sel { color: var(--k-gold, #ffdc52); opacity: 1; }
 #touch .tc-pet.off { display: none; }
 #touch .t-trick.down .tl { visibility: hidden; }
@@ -495,12 +495,16 @@ export class TouchControls {
       const r = this.buttons.trick.el.getBoundingClientRect();
       this.trickC = { x: r.left + r.width / 2, y: r.top + r.width / 2 };
       const ro = this.root.getBoundingClientRect();
-      this.radial.style.left = `${this.trickC.x - ro.left}px`;
-      this.radial.style.top = `${this.trickC.y - ro.top}px`;
+      // whole device pixels throughout (a half-pixel offset blurs the pixel art)
+      const dpr = devicePixelRatio || 1, snap = (v) => Math.round(v * dpr) / dpr;
+      this.radial.style.left = `${snap(this.trickC.x - ro.left)}px`;
+      this.radial.style.top = `${snap(this.trickC.y - ro.top)}px`;
       const u = scale.u, D = 30 * u;
       for (const [d, x, y] of [['up', 0, -D], ['down', 0, D], ['left', -D * 1.25, 0], ['right', D * 1.25, 0]]) {
-        this.petals[d].style.left = `${x}px`;
-        this.petals[d].style.top = `${y}px`;
+        const P = this.petals[d];
+        // centred on its spot by its own size (not a -50% transform)
+        P.style.left = `${snap(x - P.offsetWidth / 2)}px`;
+        P.style.top = `${snap(y - P.offsetHeight / 2)}px`;
       }
       this.petals.mid.style.display = 'none';
     } else {

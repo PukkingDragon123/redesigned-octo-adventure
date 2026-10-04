@@ -252,7 +252,9 @@ export class TitleScreen {
     Object.assign(this.mugEl.style, { left: `${lw - 2 * ls}px`, top: `${2 * ls}px`, width: `${28 * ls}px`, height: `${30 * ls}px` });
     Object.assign(this.subEl.style, { width: `${lw}px`, top: `${lh - 4 * ls}px`, fontSize: `${16 * ls}px`, textShadow: `${ls}px ${ls}px 0 ${INK}` });
     const ms = this.menuEl.style;
-    if (narrow) Object.assign(ms, { left: '50%', transform: 'translateX(-50%)', bottom: 'calc(var(--u) * 18)' });
+    // centred by its measured width on whole device pixels (a -50% transform blurs the pixel art)
+    const dpr = devicePixelRatio || 1;
+    if (narrow) Object.assign(ms, { left: `${Math.round(((W - this.menuEl.offsetWidth) / 2) * dpr) / dpr}px`, transform: '', bottom: 'calc(var(--u) * 18)' });
     else Object.assign(ms, { left: `${Math.round(W * 0.07)}px`, transform: '', bottom: `${Math.round(H * 0.1)}px` });
     const ink = (a) => `rgba(24,14,20,${a})`;
     this.shadeEl.style.background = narrow

@@ -32,7 +32,7 @@
   cursor: crosshair;
 }
 .carve-board.lit { background: #0e0806; }
-.carve-board.shake { animation: carve-shake 0.42s steps(6); }
+.carve-board.shake { animation: carve-shake 0.42s step-end; } /* holds each whole-pixel offset */
 @keyframes carve-shake {
   0% { transform: translate(0, 0); }
   20% { transform: translate(calc(var(--u) * -2), 0); }
@@ -53,7 +53,7 @@
   opacity: 0;
   white-space: normal;
 }
-.carve-msg.on { opacity: 1; animation: carve-pop 0.3s steps(3); }
+.carve-msg.on { opacity: 1; animation: carve-pop 0.3s steps(4); }
 @keyframes carve-pop { 0% { transform: translateY(calc(var(--u) * 4)); } 100% { transform: translateY(0); } }
 
 .carve-tools { display: flex; flex-direction: column; gap: calc(var(--u) * 2); flex: none; }
@@ -66,9 +66,11 @@
 /* the prize, pinned on the screen for a moment after the judging */
 .carve-award {
   position: absolute;
-  left: 50%;
+  left: 0;
+  right: 0;
+  width: fit-content;
+  margin: 0 auto;
   top: calc(var(--u) * 26 + var(--safe-t, 0px));
-  transform: translateX(-50%);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -78,4 +80,4 @@
   animation: carve-award 0.45s steps(5);
 }
 .carve-score { padding: 0 calc(var(--u) * 6); }
-@keyframes carve-award { 0% { transform: translate(-50%, calc(var(--u) * -30)); } 100% { transform: translate(-50%, 0); } }
+@keyframes carve-award { 0% { transform: translateY(calc(var(--u) * -30)); } 100% { transform: translateY(0); } }
