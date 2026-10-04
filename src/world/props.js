@@ -551,35 +551,6 @@ function lookout(ctx, B) {
   fencePosts(ctx, B, pts, { color: 0x6a4a2a, height: 0.9, spacing: 2.2, rails: 2 });
 }
 
-// the mossy hollow log by the road home, where Poutine hides from the rain
-function hollowLog(ctx, B) {
-  const { terrain } = ctx;
-  const c = L.POI.catLog;
-  const lx = c.x, lz = c.z - 1.95;
-  const y = terrain.heightAt(lx, lz);
-  const M = buildingMatrix(lx, y, lz, 0.12);
-  const R = 0.46;
-  B.tube([0, R - 0.06, -1.55], [0, R - 0.08, 1.5], R, R * 0.96, { tile: 'logs', tileMeters: 2.5 }, 9, M);
-  // the dark hollow and its pale cut rim, facing the road
-  B.tube([0, R - 0.08, 1.5], [0, R - 0.08, 1.53], R * 0.97, R * 0.97, { color: 0xc8a878 }, 9, M);
-  B.tube([0, R - 0.08, 1.51], [0, R - 0.08, 1.56], R * 0.72, R * 0.72, { color: 0x140c0a }, 9, M);
-  B.tube([0, R - 0.06, -1.58], [0, R - 0.06, -1.55], R * 0.97, R * 0.97, { tile: 'logEnd', keepUV: true }, 9, M);
-  // moss, a broken branch and a few mushrooms
-  const rng = new RNG(31);
-  for (let k = 0; k < 9; k++) {
-    const z = rng.range(-1.3, 1.2), a = rng.range(-0.7, 0.7);
-    B.box([Math.sin(a) * R * 0.9, R - 0.06 + Math.cos(a) * R * 0.92, z], [rng.range(0.22, 0.4), 0.07, rng.range(0.25, 0.5)], { color: rng.pick([0x4a7a32, 0x5a8a3a, 0x3e6a2c]) }, [0, 0, -a], M);
-  }
-  B.tube([0.25, R + 0.2, -0.6], [0.7, R + 0.75, -0.9], 0.06, 0.03, { color: 0x5a4030 }, 4, M);
-  for (const [x, z, s] of [[0.48, 0.9, 1], [0.5, 0.6, 0.7], [-0.5, -0.4, 0.85], [0.55, -1.0, 0.6]]) {
-    const yy = terrain.heightAt(lx + x, lz + z) - y;
-    B.tube([x, yy, z], [x, yy + 0.12 * s, z], 0.025 * s, 0.025 * s, { color: 0xf0e6d0 }, 5, M);
-    B.geom(new THREE.SphereGeometry(0.08 * s, 7, 4, 0, Math.PI * 2, 0, Math.PI / 2), [x, yy + 0.11 * s, z], null, [1, 0.7, 1], { color: 0xc8361f }, M);
-  }
-  const w = toWorld(M, 0, 0, 0);
-  ctx.physics.addBox({ x: w.x, z: w.z, yaw: 0.12, w: R * 2, l: 3.2, y0: y - 0.5, y1: y + R * 2, kind: 'log' });
-}
-
 function wilds(ctx, B) {
   const { terrain } = ctx;
   // Harold's tree stand
@@ -605,7 +576,6 @@ function wilds(ctx, B) {
     B.tube([x - Math.cos(a) * 1.2, yy, z - Math.sin(a) * 1.2], [x + Math.cos(a) * 1.2, yy + rng.range(-0.2, 0.3), z + Math.sin(a) * 1.2], 0.06, 0.04, { color: rng.pick([0x5a4030, 0x6a4a34, 0x4a3426, 0x8a6a4a]) }, 4);
   }
   ctx.beaverDam = new THREE.Vector3(pd.x, 0, pd.z + 9);
-  hollowLog(ctx, B);
   // trapper hut clutter: antlers over the door, canoe, crates
   const t = L.POI.trapper;
   const ty = terrain.heightAt(t.x + 3, t.z + 2);

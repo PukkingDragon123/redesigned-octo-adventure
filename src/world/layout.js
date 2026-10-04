@@ -29,7 +29,7 @@ export const POI = {
   pond: { x: -38, z: -150 },
   meadow1: { x: -95, z: -55, r: 28 },
   meadow2: { x: 140, z: -58, r: 24 },
-  catLog: { x: -87.5, z: 42.6 }, // where Poutine waits, in front of a hollow log just off the road
+  catLog: { x: -87.5, z: 42.6 }, // the stretch of the road home where the little stray (Poutine) wanders
   // countryside places
   farm: { x: 56, z: 84, r: 36, name: 'Ferme Gagnon' },
   pumpkinPatch: { x: 34, z: 98, r: 14 },

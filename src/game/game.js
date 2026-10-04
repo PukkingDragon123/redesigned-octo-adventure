@@ -124,7 +124,7 @@ export class Game {
     else this.showTitle();
   }
 
-  // test entry: jump straight into one story beat (?scene=cabinNight|morning|garageReveal|villagePanic|catRescue|ending)
+  // test entry: jump straight into one story beat (?scene=cabinNight|morning|garageReveal|villagePanic|catRescue|strayCat|ending)
   async debugScene(name) {
     this.debugRide();
     if (name === 'villagePanic') {
@@ -132,6 +132,16 @@ export class Game {
       this.villagers.scaredOfHank = true;
     }
     if (name === 'catRescue') this.state.cat = false;
+    if (name === 'strayCat') {
+      // the little stray wandering the road home, Hank riding up from the bridge side
+      this.state.cat = false;
+      this.state.flags.catRescued = false;
+      this.rider.enableCat(false);
+      this.story.startCatEvent(true);
+      this.bike.reset(-64, 39.4, -Math.PI / 2 + 0.35);
+      this.chase.snap(this.bike);
+      return;
+    }
     if (name === 'loadCargo') {
       for (const o of this.orders.carried()) o.loaded = false;
       this.orders.syncCups();
@@ -517,7 +527,7 @@ export class Game {
         if (action) break;
       }
     }
-    if (!action && this.catEventActive && near(L.POI.catLog.x, L.POI.catLog.z, 7) && slow) action = { text: 'Investigate the meowing', fn: () => this.story.catRescue() };
+    if (!action && this.catEventActive) action = this.story.stray?.action(p, slow) || null;
     if (!action) action = this.quests.action(this);
     // stop for a chat with whoever is nearby
     if (!action && slow) {
@@ -551,7 +561,8 @@ export class Game {
       m.push({ id: `o${o.id}`, x: c.x, z: c.z, icon: 'cocoa' });
     }
     if (!this.orders.carried().length) m.push({ id: 'home', x: L.POI.cabin.x + 8, z: L.POI.cabin.z, icon: 'home' });
-    if (this.catEventActive) m.push({ id: 'cat', x: L.POI.catLog.x, z: L.POI.catLog.z, icon: 'cat' });
+    const cat = this.catEventActive && this.story.stray;
+    if (cat) m.push({ id: 'cat', x: cat.pos.x, z: cat.pos.z, icon: 'cat' });
     for (const q of this.quests?.markers() || []) m.push(q);
     const k = this.keepsakes.nearest(this.playerPos);
     if (k && k.d < 80) m.push({ id: 'ks', x: k.it.x, z: k.it.z, icon: 'star' });
@@ -562,7 +573,7 @@ export class Game {
     if (this.interior?.hint) return this.interior.hint;
     const carried = this.orders.carried().length;
     const board = this.orders.board().length;
-    if (this.catEventActive) return 'Something is meowing by the road home...';
+    if (this.catEventActive) return this.story.stray?.friendly ? 'The little cat likes me! Scoop her up' : 'A little stray cat is wandering the road home...';
     if (carried) return '';
     if (board) return "More orders on Nana's board";
     return this.world.atmosphere.hour > 17 ? 'All done! Home to bed' : 'All done! Explore or chat';

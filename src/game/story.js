@@ -9,6 +9,8 @@ import { CHARACTERS } from '../art/characters.js';
 import { P } from '../render/particles.js';
 import { charForSpot } from './npcs.js';
 import { voxelPoutine } from './quests.js';
+import { StrayCat } from './strayCat.js';
+import { nearestRoad } from '../world/terrain.js';
 import * as FOOD from '../voxel/models/food.js';
 import { meshVox, fragmentVox } from '../voxel/mesh.js';
 import { Vox } from '../voxel/vox.js';
@@ -590,53 +592,99 @@ export class Story {
   }
 
   // ---------------------------------------------------------------- 5. Poutine
+  // A little stray wanders the verges of the road home (strayCat.js). This starts that.
+  startCatEvent(rain = false) {
+    const g = this.g;
+    g.catEventActive = true;
+    this.spawnStray();
+    if (rain) {
+      g.world.atmosphere.setWeather('rain');
+      g.ui.pop('Is that drizzle? ...And is that a little *cat* trotting along the road home?', { expr: 'worried', ms: 4500 });
+    } else g.ui.pop('That little stray cat is still wandering by the road home...', { expr: 'worried', ms: 4000 });
+  }
+  spawnStray(at) {
+    this.stray?.remove();
+    this.stray = new StrayCat(this.g, at || POI.catLog);
+    return this.stray;
+  }
+  despawnStray() {
+    this.stray?.remove();
+    this.stray = null;
+  }
+
+  // Hank crouches by the stray: a hiss (unless she already likes him), a marshmallow, a name
   catRescue() {
     const g = this.g;
+    let cat = this.stray;
+    if (!cat) {
+      // (test entry: a stray right in front of Hank)
+      const p = g.playerPos, f = g.bike.forward(new THREE.Vector3());
+      cat = this.spawnStray({ x: p.x + f.x * 2.4, z: p.z + f.z * 2.4 });
+    }
+    const friendly = cat.friendly;
     return this.scene(async (S) => {
-      const c = POI.catLog;
-      const cy = g.physics.groundAt(c.x, c.z).h;
+      cat.script(true);
+      S.temp.push({ remove: () => { if (!this.flag('catRescued')) cat.script(false); } });
+      const c = cat.pos.clone();
+      const p = g.playerPos;
       g.bike.vel.set(0, 0, 0);
       g.rider.visible = false;
-      const H = S.actor('hank', c.x + 1.1, c.z + 2.2, 0, 'idle');
+      // Hank kneels a step away from her, on his side; the lens looks across from the open road side
+      const u = V(p.x - c.x, 0, p.z - c.z);
+      if (u.lengthSq() < 0.04) u.set(1, 0, 0);
+      u.normalize();
+      let n = V(u.z, 0, -u.x);
+      const side = (k) => nearestRoad(c.x + n.x * 3 * k, c.z + n.z * 3 * k)?.d ?? 0;
+      if (side(-1) < side(1)) n.multiplyScalar(-1);
+      const hx = c.x + u.x * 1.35, hz = c.z + u.z * 1.35;
+      const H = S.actor('hank', hx, hz, 0, 'idle');
       H.faceTowards(c.x, c.z);
       H.yaw = H.targetYaw;
-      const cat = voxelPoutine(g);
-      cat.setFrame('cat:scared');
-      cat.mesh.position.set(c.x + 0.4, cy, c.z);
-      g.scene.add(cat.mesh);
-      S.temp.push({ remove: () => g.scene.remove(cat.mesh) });
-      await S.cam(V(c.x + 3.0, cy + 1.8, c.z + 4.6), V(c.x - 0.3, cy + 0.35, c.z - 0.9), 0, 42);
-      S.sfx('meow_sad');
-      await S.wait(0.8);
-      await S.say('hank', 'Hey there, little buddy. You lost too?', { actor: H, expr: 'neutral' });
-      S.sfx('meow', { pitch: 0.8 });
-      S.emote('anger', V(c.x + 0.4, cy + 0.8, c.z), 1.6);
-      cat.flash = 0.45;
-      g.tween(cat.uniforms.uFlash, 'value', 0, 0.35);
-      cat.mesh.position.y += 0.15;
-      g.tween(cat.mesh.position, 'y', cy, 0.25);
-      await S.say('cat', 'HSSSSSSS!', { expr: 'scared' });
-      await S.say('hank', 'Yeah... I get that a lot.', { actor: H, expr: 'sheepish' });
-      H.play('offer', 'happy');
-      await S.say('hank', "I've got one marshmallow. Nana packed an extra. Just in case I... figured out eating.", { actor: H, expr: 'happy' });
-      cat.setFrame('cat:sit:side:0');
-      S.emote('question', V(c.x + 0.4, cy + 0.8, c.z), 1.4);
-      await S.wait(1.4);
-      S.sfx('purr');
-      S.emote('heart', V(c.x + 0.2, cy + 0.8, c.z), 2);
-      // the cat trots over
-      for (let k = 0; k < 16; k++) {
-        cat.setFrame(`cat:walk:side:${k % 4}`, true);
-        cat.mesh.position.lerp(V(H.pos.x + 0.35, cy, H.pos.z), 0.08);
-        await S.wait(0.07);
+      cat.yaw = cat.yawTo = Math.atan2(hx - c.x, hz - c.z);
+      const cy = c.y;
+      const mx = (c.x + hx) / 2, mz = (c.z + hz) / 2;
+      await S.cam(V(mx + n.x * 3.4 - u.x * 0.8, cy + 1.7, mz + n.z * 3.4 - u.z * 0.8), V(mx, cy + 0.45, mz), 0, 42);
+      if (friendly) {
+        cat.pose('sit', 'blink');
+        S.sfx('purr');
+        await S.wait(0.6);
+        await S.say('hank', "Well, hello again, little shadow. You've been following me, huh?", { actor: H, expr: 'happy' });
+        S.sfx('meow', { pitch: 1.2 });
+        cat.pose('sit', 'meow');
+        await S.say('cat', 'Mrrp!', { expr: 'happy' });
+        await S.say('hank', 'Lost too? Yeah. I know the feeling.', { actor: H, expr: 'neutral' });
+      } else {
+        cat.pose('sit');
+        S.sfx('meow_sad');
+        await S.wait(0.8);
+        await S.say('hank', 'Hey there, little buddy. You lost too?', { actor: H, expr: 'neutral' });
+        cat.pose('arch', 'meow');
+        cat.hopT = 0.4;
+        S.sfx('cat_hiss');
+        S.emote('anger', V(c.x, cy + 0.75, c.z), 1.6);
+        await S.say('cat', 'HSSSSSSS!', { expr: 'scared' });
+        await S.say('hank', 'Yeah... I get that a lot.', { actor: H, expr: 'sheepish' });
+        H.play('offer', 'happy');
+        await S.say('hank', "I've got one marshmallow. Nana packed an extra. Just in case I... figured out eating.", { actor: H, expr: 'happy' });
+        cat.pose('sit');
+        S.emote('question', V(c.x, cy + 0.75, c.z), 1.4);
+        await S.wait(1.4);
+        S.sfx('purr');
+        S.emote('heart', V(c.x, cy + 0.75, c.z), 2);
+        // she trots over to sniff it, then sits at his feet
+        if (!S.skip) await Promise.race([cat.walkTo(hx - u.x * 0.45, hz - u.z * 0.45, 0.7, 'crouch'), g.wait(2.5)]);
+        cat.pose('sit', 'blink');
+        cat.yawTo = Math.atan2(hx - cat.pos.x, hz - cat.pos.z);
       }
-      cat.setFrame('cat:sit:front:2');
-      H.faceTowards(c.x + 3.6, c.z + 5.4);
-      await S.cam(V(c.x + 4.7, cy + 2.3, c.z + 7.0), V(c.x + 0.7, cy + 0.6, c.z + 1.4), 0.5, 40);
+      H.play('idle', 'happy');
+      await S.cam(V(mx + n.x * 2.2 + u.x * 0.4, cy + 1.1, mz + n.z * 2.2 + u.z * 0.4), V(mx - u.x * 0.2, cy + 0.5, mz - u.z * 0.2), 0.5, 40);
       await S.say('hank', "You don't mind that I'm a little bit dead?", { actor: H, expr: 'surprised' });
+      cat.pose('sit', 'meow');
+      S.sfx('meow', { pitch: 1.3 });
       await S.say('cat', 'Mrrp.', { expr: 'happy' });
       await S.say('hank', "Then I'll call you... *Poutine.*", { actor: H, expr: 'happy' });
       S.sfx('meow', { pitch: 1.2 });
+      cat.pose('sit', 'meow');
       await S.say('cat', 'Mrrrrrp!', { expr: 'love' });
       g.effects.hearts(H.pos.x, H.pos.y + 1.4, H.pos.z, 8);
       this.st.cat = true;
@@ -644,6 +692,7 @@ export class Story {
       g.rider.visible = true;
       this.flag('catRescued', true);
       g.catEventActive = false;
+      this.despawnStray();
       g.world.atmosphere.setWeather('overcast');
       g.save();
     }).then(() => g.ui.pop("*Poutine* is riding in my basket now. Purr-fect!", { expr: 'love' }));
@@ -1030,19 +1079,18 @@ export class Story {
       }
     }
     for (const f of this.followers || []) f.onTick?.();
+    // the stray on the road home (gone again once she's rescued or the day is over)
+    if (this.stray) {
+      if (!g.catEventActive && !this.stray.scripted) this.despawnStray();
+      else this.stray.update(dt);
+    }
     if (g.mode !== 'ride') return;
     const st = this.st;
     const p = g.playerPos;
     // first visit to Maple Cove
     if (!st.flags.village1 && Math.hypot(p.x - 130, p.z - 62) < 22) this.villagePanic();
-    // Poutine's rescue after the first day's deliveries
-    if (st.day === 1 && st.flags.village1 && !st.flags.catRescued && g.orders.pending().length === 0) {
-      if (!g.catEventActive) {
-        g.catEventActive = true;
-        g.world.atmosphere.setWeather('rain');
-        g.ui.pop('Is that drizzle? ...And is something *meowing* near the road home?', { expr: 'worried', ms: 4500 });
-      }
-    }
+    // Poutine wanders the road home once the first day's deliveries are done (and every day after, until she's found)
+    if (st.flags.village1 && !st.flags.catRescued && !g.catEventActive && (st.day > 1 || g.orders.pending().length === 0)) this.startCatEvent(st.day === 1);
     // Nana calls Hank home at night
     const hr = g.world.atmosphere.hour;
     if (hr > 20.5 && !this.nanaCalled) {
