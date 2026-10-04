@@ -21,6 +21,15 @@ export const CHARACTERS = {
     bag: { color: 0x8a5432, strap: 0x5a3420 },
     eyes: 'skull', voice: 'hank',
   },
+  // bedtime: Harold's old striped flannel pajamas, a nightcap with a pompom and fuzzy slippers (no scarf)
+  hankPajamas: {
+    name: 'Hank', kind: 'skeleton', skin: SKIN.bone,
+    head: { w: 12, h: 11, d: 11 }, torso: { w: 10, h: 11, d: 6 }, arm: { len: 12, t: 2 }, leg: { len: 12, t: 2 },
+    hat: { type: 'nightcap', color: 0x3e5e9e, band: 0xf2e6cc, pom: 0xfff4e0 },
+    pj: { color: 0x3e5e9e, stripe: 0xf2e6cc, button: 0xfff8e8, piping: 0xb8322a },
+    shoes: 0x8a5432, slippers: 0xf2e6cc,
+    eyes: 'skull', voice: 'hank',
+  },
   hankBuried: {
     name: 'Hank', kind: 'skeleton', skin: 0xe2d6b8, dirty: true,
     head: { w: 12, h: 11, d: 11 }, torso: { w: 10, h: 11, d: 6 }, arm: { len: 12, t: 2 }, leg: { len: 12, t: 2 },
@@ -365,6 +374,26 @@ function hat(spec, v, x0, y0, z0, x1, y1, z1) {
       v.ellipsoid(cx + 1, y1 + 6.5 + lift, cz - 2, 2.2, 2.2, 2.2, (x, y, z) => ((x + y + z) % 2 ? H.pom : tone(H.pom, -0.08)));
       break;
     }
+    case 'nightcap': {
+      // a long striped flannel cone that flops over to the back, with a pompom on the end
+      const lift = spec.kind === 'skeleton' ? 1 : 0;
+      const band = (x, y, z) => (x % 2 ? H.band : tone(H.band, -0.08));
+      v.fill(x0 - 1, y1 - 2 + lift, z0 - 1, x1 + 1, y1 - 1 + lift, z1 + 1, band);
+      const N = 14;
+      let px = cx, py = y1 + lift, pz = cz;
+      for (let k = 0; k <= N; k++) {
+        const t = k / N;
+        // up and over: rises, then curls back and droops behind the head
+        const ang = t * 2.3;
+        px = cx + t * 1.5;
+        py = y1 + lift + Math.sin(ang) * 6.5;
+        pz = cz - (1 - Math.cos(ang)) * 3.4;
+        const r = (w / 2 + 0.7) * (1 - t * 0.86);
+        v.ellipsoid(px, py, pz, r, Math.max(1.2, r * 0.7), r, (x, y, z) => (y < y1 - 1 + lift && k < 3 ? 0 : (Math.round(y + z * 0.5) % 4 < 2 ? c : H.band)));
+      }
+      v.ellipsoid(px, py - 1.4, pz - 0.6, 1.9, 1.9, 1.9, (x, y, z) => ((x + y + z) % 2 ? H.pom : tone(H.pom, -0.08)));
+      break;
+    }
     case 'trapper': {
       v.ellipsoid(cx, y1 + 1, cz, w / 2 + 1, 3.6, (z1 - z0) / 2 + 1.5, (x, y, z) => (y >= y1 - 1 ? ((x + z) % 3 ? c : dark(c, 0.1)) : 0));
       v.fill(x0 - 1, y1 - 2, z1 - 1, x1 + 1, y1 - 1, z1 + 1, H.fur); // fur brim
@@ -552,6 +581,7 @@ function skeletonTorso(spec) {
   v.fill(Math.round(cx + 6), h - 2, zc - 1, Math.round(cx + 7), h, zc + 2, B);
   // neck vertebrae
   v.fill(Math.round(cx), h, zc, Math.round(cx) + 1, h + 1, zc + 1, bone);
+  if (spec.pj) pajamaTop(spec, v, cx, zc, h);
   if (spec.bag) {
     for (let y = 1; y < h; y++) {
       const x = Math.round(cx - 5 + ((y - 1) / (h - 1)) * 11);
@@ -562,6 +592,27 @@ function skeletonTorso(spec) {
     v.fill(Math.round(cx - 6), 0, zc - 2, Math.round(cx - 3), 4, zc + 4, (x, y, z) => (y === 4 ? dark(spec.bag.color, 0.15) : z === zc + 4 && y === 2 && x === Math.round(cx - 5) ? 0xf2c443 : spec.bag.color));
   }
   return { vox: v, origin: [cx + 0.5, 0, zc + 1], size: VS, frontZ: zc + 3 };
+}
+
+// a loose flannel pajama shirt buttoned over the ribcage (vertical stripes, red piping)
+function pajamaTop(spec, v, cx, zc, h) {
+  const J = spec.pj;
+  const xa = Math.round(cx - 5.5), xb = Math.round(cx + 6.5), za = zc - 2, zb = zc + 4;
+  v.fill(xa, 0, za, xb, h - 1, zb, (x, y, z) => {
+    const ex = x === xa || x === xb, ez = z === za || z === zb;
+    if (ex && ez) return 0; // soft corners
+    if (y === 0) return dark(J.color, 0.12); // hem
+    if (y === h - 1 && (ex || ez)) return J.piping; // collar seam
+    const across = ez ? x : z; // stripes run down every face
+    return across % 3 === 0 ? J.stripe : (y + across) % 5 === 0 ? dark(J.color, 0.06) : J.color;
+  });
+  // a little open collar, the vertebrae peeking out, and a placket of buttons
+  v.fill(Math.round(cx) - 1, h - 2, zb, Math.round(cx) + 2, h - 1, zb, spec.skin);
+  v.fill(Math.round(cx) - 2, h - 1, zb, Math.round(cx) - 2, h - 1, zb, J.piping);
+  v.fill(Math.round(cx) + 3, h - 1, zb, Math.round(cx) + 3, h - 1, zb, J.piping);
+  for (const y of [2, 5, 8]) v.set(Math.round(cx), y, zb + 1, J.button);
+  // breast pocket with red piping
+  v.fill(Math.round(cx) + 2, 6, zb + 1, Math.round(cx) + 4, 6, zb + 1, J.piping);
 }
 
 // leg height in voxels, from the ground to the hip joint (thigh + shin + foot)
@@ -627,7 +678,16 @@ export function buildLimb(spec, part) {
     sleeve = spec.legs?.color ?? spec.skirt?.color ?? 0x3a3a46;
   }
   const sCol = (y) => (typeof sleeve === 'function' ? sleeve(y) : sleeve);
-  if (skel && !(spec.kind === 'reaper' && isArm)) {
+  if (spec.pj) {
+    // baggy flannel sleeves and trouser legs, striped lengthwise, cuffed at the end
+    const J = spec.pj;
+    v.fill(x0 - 1, top - len + 1, z0 - 1, x1 + 1, top, z1 + 1, (x, y, z) => {
+      const ex = x === x0 - 1 || x === x1 + 1, ez = z === z0 - 1 || z === z1 + 1;
+      if (ex && ez && !upper && y === top - len + 1) return 0;
+      if (!upper && y === top - len + 1) return J.stripe; // cuff
+      return (x + z) % 3 === 0 ? J.stripe : J.color;
+    });
+  } else if (skel && !(spec.kind === 'reaper' && isArm)) {
     // slim bone: a 2x2 shaft with a rounded knob only at the top joint
     const B = (x, y, z) => {
       let c = (y + x) % 3 === 0 ? tone(bone, -0.05) : bone;
@@ -669,7 +729,11 @@ export function buildLimb(spec, part) {
     const fz1 = z1 + (skel ? 2 : 3);
     v.fill(x0 - (t < 3 ? 1 : 0), fy0, z0 - 1, x1 + (t < 3 ? 1 : 0), yb - 1, fz1, (x, y, z) => (y === fy0 ? dark(sh, 0.25) : z === fz1 && y === yb - 1 ? lite(sh, 0.1) : sh));
     if (spec.boots && !skel) v.fill(x0, yb, z0, x1, yb + 2, z1, sh);
-    if (skel) {
+    if (spec.slippers) {
+      // fuzzy slipper: a fleece cuff round the ankle and a fluffy toe
+      v.fill(x0 - 1, yb - 1, z0 - 1, x1 + 1, yb - 1, z1 + 1, (x, y, z) => ((x + z) % 2 ? spec.slippers : tone(spec.slippers, -0.08)));
+      v.set(Math.round((x0 + x1) / 2), yb - 1, fz1, spec.slippers);
+    } else if (skel) {
       // heel + separate toe bones
       v.clear(x0 - 1, yb - 1, z0 - 1, x1 + 1, yb - 1, z1 + 2);
       v.fill(x0, yb - 1, z0, x1, yb - 1, z1, bone);
