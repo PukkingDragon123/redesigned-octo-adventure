@@ -82,7 +82,8 @@ export function snapBox(e) {
 // window resizes or the UI scale changes. Every centred piece of the kit registers
 // itself (SNAP_SEL); anything else can add the class .k-snap or call keepSnapped().
 const SNAP_SEL = '.overlay > *, .m-title, .k-btn, .k-btn > .k-lbl, .k-btn > small, .k-sign > span, .k-ribbon > span, .k-tab > span, .hud-compass, .hud-prompt, .t-talk, .title-menu, .logo, .k-snap';
-const snapped = new Set();
+const snapped = new Map(); // element -> the parent observed with it
+const watchedParents = new Map(); // parent -> how many registered children
 let snapRO = null, snapMO = null, snapRaf = 0;
 function queueSnap() {
   if (!snapRaf && snapped.size) snapRaf = requestAnimationFrame(snapAll);
@@ -90,7 +91,15 @@ function queueSnap() {
 function snapAll() {
   snapRaf = 0;
   const list = [];
-  for (const e of snapped) if (e.isConnected) list.push(e); else snapped.delete(e);
+  for (const [e, p] of snapped) {
+    if (e.isConnected) { list.push(e); continue; }
+    // gone (a closed menu): stop watching it
+    snapped.delete(e);
+    snapRO.unobserve(e);
+    const n = (watchedParents.get(p) || 1) - 1;
+    if (n > 0) watchedParents.set(p, n);
+    else if (p) { watchedParents.delete(p); if (!snapped.has(p)) snapRO.unobserve(p); }
+  }
   if (!list.length) return;
   // one style write, one layout read, one write: ancestors are corrected first and
   // their shift carried down to the elements inside them
@@ -118,9 +127,13 @@ export function keepSnapped(e) {
   if (!e) return e;
   if (!snapRO) snapRO = new ResizeObserver(queueSnap);
   if (!snapped.has(e)) {
-    snapped.add(e);
+    const p = e.parentElement;
+    snapped.set(e, p);
     snapRO.observe(e);
-    if (e.parentElement) snapRO.observe(e.parentElement);
+    if (p) {
+      watchedParents.set(p, (watchedParents.get(p) || 0) + 1);
+      snapRO.observe(p);
+    }
   }
   queueSnap();
   return e;

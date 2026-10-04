@@ -10,7 +10,7 @@
 import * as THREE from 'three';
 import { VoxelCharacter } from '../game/vchar.js';
 import { G } from '../render/shaderlib.js';
-import { leafCover, leafReveal } from '../ui/leaves.js';
+import { leafCover, leafReveal, warmLeaves } from '../ui/leaves.js';
 
 const DASHES = 14, DASH_GAP = 0.9;
 
@@ -255,6 +255,8 @@ export class Loader3D {
     };
     this.place();
     addEventListener('resize', this.place);
+    // the leaves that carry this screen away are painted while the village builds
+    setTimeout(warmLeaves, 400);
     try {
       this.stage = new RunStage({ bg: 0x000000 });
       this.stage.fy = 0.12;

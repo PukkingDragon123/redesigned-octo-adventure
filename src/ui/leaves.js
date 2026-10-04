@@ -30,6 +30,11 @@ export function setLeafMotion(on) {
   if (reduced) for (const L of [back, front]) L.parts.length = 0;
 }
 export const leafMotion = () => !reduced;
+// paint the leaf sprites ahead of time (the loading screen does, so its exit doesn't hitch)
+export function warmLeaves() {
+  leafAtlas('m');
+  leafAtlas('b');
+}
 
 const rnd = (a, b) => a + Math.random() * (b - a);
 const pick = (a) => a[(Math.random() * a.length) | 0];
