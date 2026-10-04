@@ -119,8 +119,9 @@ its heat, more the harder the crash.
   voxel props (`src/voxel/models/lore.js`), front-on face shots and timed
   effects.
 - **Loading and title** (`src/boot/loader3d.js`, `src/ui/title.js`): the
-  loading screen is plain black with just the 3D voxel Hank running on the
-  spot over a thin progress bar. The title is a live establishing shot of Maple
+  loading screen is plain black with no text: the 3D voxel Hank runs on the
+  spot over a pixel-art skull in a red toque that fills bone-white as the game
+  loads, its eyes lighting up at the end. The title is a live establishing shot of Maple
   Cove on an autumn morning, drawn by the world renderer: three slow camera
   moves (Main Street from over the sea, the pumpkin carving contest, the
   harbour), the villagers on their routines, Hank pedalling Bessie through town
@@ -129,6 +130,14 @@ its heat, more the harder the crash.
   code. At the end of each day a bedtime scene
   (`src/game/bedtime.js`, `Story.bedtime`) puts him in striped pajamas and
   Nana tucks him in on the sofa.
+- **Leaves and transitions** (`src/ui/leaves.js`, `src/ui/leafart.js`): pixel
+  maple, oak, birch and aspen leaves (pre-drawn turn and tumble frames, never
+  smoothly rotated) shake off menus, burst from big buttons and deliveries and
+  drift over the title; short fades are leaf wipes (a gust covers the screen,
+  then blows away), long ones stay soft (`leafTransition`, `screenFade`).
+- **See-through** (`SEE_GLSL` in `src/render/shaderlib.js`, `updateSee` in
+  `src/game/camera.js`): whatever stands between the camera and Hank (or a
+  cutscene's subject) dissolves in a pixel dither with a glowing ember edge.
 - **Voxels** (`src/voxel`): models are painted in code into voxel grids and
   meshed with face culling, baked ambient occlusion and greedy merging.
   Buildings, props, food, animals, characters and the cabin interior each have a model
