@@ -65,7 +65,7 @@ export function setUIScaleOffset(k) {
 
 // round a CSS length to whole device pixels
 export const snap = (v) => Math.round(v * scale.dpr) / scale.dpr;
-// nudge an element so its box starts on a whole device pixel (uses the independent `translate` property)
+// keep an element's box (or, for a positioned one, the boxes inside it) on whole device pixels
 export function snapBox(e) {
   if (!e?.isConnected) return;
   keepSnapped(e);
@@ -75,13 +75,16 @@ export function snapBox(e) {
 // Anything centred by layout (flex/grid/margin centring, 50% offsets) lands on a
 // half pixel whenever the free space is odd, which happens all the time when an art
 // pixel is an odd number of device pixels (S = 3 on a 1080p monitor, S = 5 on many
-// phones). Text there is drawn between pixels (soft, smeared glyphs) and anything
-// animated is composited and resampled (blurry pointers and pop-ins). Registered
-// elements are nudged with the independent `translate` property so their box starts
-// on a whole device pixel - again whenever they or their parent change size, the
-// window resizes or the UI scale changes. Every centred piece of the kit registers
+// phones). Text there is drawn between pixels (soft, smeared glyphs).
+// Registered elements are nudged with a relative left/top offset - a LAYOUT offset,
+// never a transform: the browser snaps painted boxes to device pixels, but a
+// fractional translate is applied after that snapping and smears every 9-slice
+// frame (seams between the pieces, soft edges). The nudge is redone whenever they or
+// their parent change size, the window resizes or the UI scale changes. Absolutely
+// positioned elements keep their place (their boxes are snapped when painted); the
+// text inside them is what gets nudged. Every centred piece of the kit registers
 // itself (SNAP_SEL); anything else can add the class .k-snap or call keepSnapped().
-const SNAP_SEL = '.overlay > *, .m-title, .k-btn, .k-btn > .k-lbl, .k-btn > small, .k-sign > span, .k-ribbon > span, .k-tab > span, .hud-compass, .hud-prompt, .t-talk, .title-menu, .logo, .k-snap';
+const SNAP_SEL = '.overlay > *, .k-btn, .k-btn > .k-lbl, .k-btn > small, .k-sign > span, .k-ribbon > span, .k-tab > span, .hud-prompt > *, .t-talk > *, .title-menu, .logo, .k-snap';
 const snapped = new Map(); // element -> the parent observed with it
 const watchedParents = new Map(); // parent -> how many registered children
 let snapRO = null, snapMO = null, snapRaf = 0;
@@ -103,8 +106,9 @@ function snapAll() {
   if (!list.length) return;
   // one style write, one layout read, one write: ancestors are corrected first and
   // their shift carried down to the elements inside them
-  for (const e of list) e.style.translate = '';
+  for (const e of list) if (e._snap) { e.style.left = e.style.top = ''; e._snap = 0; }
   list.sort((a, b) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1));
+  const pos = list.map((e) => getComputedStyle(e).position);
   const rects = list.map((e) => e.getBoundingClientRect());
   const shift = new Map();
   list.forEach((e, i) => {
@@ -114,17 +118,28 @@ function snapAll() {
       if (s) { [ax, ay] = s; break; }
     }
     const r = rects[i];
-    if (!r.width && !r.height) return;
+    if ((!r.width && !r.height) || (pos[i] !== 'static' && pos[i] !== 'relative')) return;
     const x = r.left + ax, y = r.top + ay;
     let fx = snap(x) - x, fy = snap(y) - y;
     if (Math.abs(fx) < 0.01) fx = 0;
     if (Math.abs(fy) < 0.01) fy = 0;
     shift.set(e, [ax + fx, ay + fy]);
-    if (fx || fy) e.style.translate = `${fx}px ${fy}px`;
+    if (fx || fy) {
+      if (pos[i] === 'static') e.style.position = 'relative';
+      e.style.left = `${fx}px`;
+      e.style.top = `${fy}px`;
+      e._snap = 1;
+    }
   });
 }
 export function keepSnapped(e) {
   if (!e) return e;
+  // a positioned box keeps its place; snap what is inside it
+  const cs = e.isConnected ? getComputedStyle(e).position : '';
+  if (cs === 'absolute' || cs === 'fixed') {
+    for (const c of e.children) keepSnapped(c);
+    return e;
+  }
   if (!snapRO) snapRO = new ResizeObserver(queueSnap);
   if (!snapped.has(e)) {
     const p = e.parentElement;

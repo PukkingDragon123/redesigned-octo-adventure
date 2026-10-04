@@ -43,8 +43,8 @@ export class Menus {
     }
     const body = el('div', 'm-body');
     p.appendChild(body);
-    // centre the ribbon on whole pixels once the sheet is laid out
-    requestAnimationFrame(() => { snapBox(p); snapRibbon(rb); });
+    // the sign is centred by layout (no transforms on pixel art); kit.js keeps its text on whole pixels
+    requestAnimationFrame(() => snapBox(p));
     return { p, body };
   }
   // a selectable row (index entries, list rows): glyph + label (+ right side)
@@ -627,15 +627,6 @@ export class Menus {
 }
 
 // ---------------------------------------------------------------- helpers
-function snapRibbon(rb) {
-  if (!rb?.isConnected) return;
-  const host = rb.parentElement;
-  const u = scale.u;
-  const w = Math.round(rb.offsetWidth / u);
-  const hw = Math.round(host.clientWidth / u);
-  rb.style.left = `${Math.round((hw - w) / 2) * u}px`;
-  rb.style.transform = 'none';
-}
 // the customer's photo is a live 3D view of the real model (one shared, re-used)
 let BOOK_FACE = null;
 function faceCanvas(id) {

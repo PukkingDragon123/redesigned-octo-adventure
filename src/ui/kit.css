@@ -166,7 +166,12 @@
   animation: k-poke 0.6s steps(1) infinite;
   pointer-events: none;
 }
-@keyframes k-poke { 50% { transform: translateX(var(--u)); } }
+/* Motion on pixel art moves LAYOUT offsets (margins, relative top/left) in whole art
+   pixels with steps(): a transform animation is composited and resampled by the GPU
+   (soft edges, seams between 9-slice pieces) wherever it is off the device grid.
+   k-hop/k-poke are for absolutely positioned pieces anchored by top/left, k-hopb for
+   ones anchored by bottom, k-hopr for relatively positioned (in-flow) ones. */
+@keyframes k-poke { 50% { margin-left: var(--u); } }
 
 /* ---------------------------------------------------------------- slots (46px / small 30px) */
 .k-slot {
@@ -184,7 +189,9 @@
 .k-slot.locked > img { filter: brightness(0) opacity(0.45); }
 .k-slot:hover, .k-slot.sel { background-image: var(--k-slot-sel); }
 .k-slot.sel > img { animation: k-hop 0.8s steps(1) infinite; }
-@keyframes k-hop { 50% { transform: translateY(calc(var(--u) * -1)); } }
+@keyframes k-hop { 50% { margin-top: calc(var(--u) * -1); } }
+@keyframes k-hopb { 50% { margin-bottom: var(--u); } }
+@keyframes k-hopr { 50% { top: calc(var(--u) * -1); } }
 .k-slot.small { width: calc(var(--u) * 30); height: calc(var(--u) * 30); background-image: var(--k-slot-s); }
 .k-slot.small.sel, .k-slot.small:hover { background-image: var(--k-slot-s-sel); }
 .k-slot.small > img { left: calc(var(--u) * 7); top: calc(var(--u) * 7); width: calc(var(--u) * 16); height: calc(var(--u) * 16); }
@@ -312,7 +319,7 @@
   outline: none;
 }
 .k-close:hover, .k-close.sel { background-image: var(--k-close-hot); }
-.k-close:active, .k-close.down { transform: translateY(var(--u)); }
+.k-close:active, .k-close.down { margin-top: var(--u); margin-bottom: calc(var(--u) * -1); }
 
 /* ---------------------------------------------------------------- tooltip (16px slice 5) + tail */
 .k-tip {
