@@ -93,10 +93,12 @@ now; tap it.
   voxel props (`src/voxel/models/lore.js`), front-on face shots and timed
   effects.
 - **Loading and title** (`src/boot/loader3d.js`, `src/ui/title.js`): the
-  loading screen is plain black: a little pixel-art Hank runs on the spot with
-  his mug of cocoa above a thin progress bar (one cheap 2D canvas).
-  The title is a live dusk shot of him on Bessie outside Nana's cabin, with a
-  pixel logo painted in code.
+  loading screen is plain black with just the 3D voxel Hank running on the
+  spot over a thin progress bar. The title keeps that one simple scene (a dark
+  backdrop, Hank running, popping his skull or hopping now and then) under a
+  pixel logo painted in code. At the end of each day a bedtime scene
+  (`src/game/bedtime.js`, `Story.bedtime`) puts him in striped pajamas and
+  Nana tucks him in on the sofa.
 - **Voxels** (`src/voxel`): models are painted in code into voxel grids and
   meshed with face culling, baked ambient occlusion and greedy merging.
   Buildings, props, food, animals, characters and the cabin interior each have a model
