@@ -348,7 +348,7 @@ export class Loader3D {
     if (!quick) {
       const t0 = performance.now();
       await new Promise((r) => {
-        const wait = () => ((this.shown >= 1 && this.glowT > 0.45) || performance.now() - t0 > 1500 ? r() : requestAnimationFrame(wait));
+        const wait = () => ((this.shown >= 1 && this.glowT > 0.35) || performance.now() - t0 > 1500 ? r() : requestAnimationFrame(wait));
         wait();
       });
       await leafCover({ layer: 'front', dur: 0.6, dir: 1 });

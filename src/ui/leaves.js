@@ -231,7 +231,16 @@ export const leaves = {
       if (!usable()) return;
       L.hooks.add(ambientHook);
       L.wake();
-    } else if (!AMB.size) L.hooks.delete(ambientHook);
+    } else if (!AMB.size) {
+      L.hooks.delete(ambientHook);
+      // the menu closed: whatever was drifting blows away
+      for (const p of L.parts) if (p.amb) {
+        p.amb = false;
+        p.wind = (p.vx < 0 ? -1 : 1) * rnd(120, 200);
+        p.drag = 1.5;
+        p.life = p.t + 4;
+      }
+    }
   },
   // a leaf blows in and gets caught on an element's top edge for a while (the HUD clipboard)
   catchOn(el, { stay = rnd(7, 13) } = {}) {
