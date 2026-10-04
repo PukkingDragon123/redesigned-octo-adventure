@@ -200,7 +200,7 @@ float seeThrough(vec3 wp) {
     float perp = sqrt(max(dc2 - along * along, 0.0));
     // the ring opens (and grows) with uSee.w; full in its middle, dithered towards its edge
     float rad = mix(uSeeCamR, uSeeP.x, along / L) * (0.35 + 0.65 * uSee.w);
-    float c = (1.0 - smoothstep(rad * 0.6, rad, perp))
+    float c = (1.0 - smoothstep(rad * 0.68, rad, perp))
       * (1.0 - smoothstep(L - uSeeP.y - 0.7, L - uSeeP.y, along))
       * smoothstep(uSeeP.w, uSeeP.w + 0.3, wp.y);
     m = max(m, c * uSee.w);
