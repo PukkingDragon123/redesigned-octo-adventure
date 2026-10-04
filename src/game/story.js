@@ -471,7 +471,7 @@ export class Story {
       await S.say('grandma', "Ta-da! Harold's old roadster. He called her *Bessie.*", { actor: N, expr: 'happy' });
       await S.say('hank', "She's... beautiful.", { actor: H, expr: 'happy' });
       await S.say('grandma', 'She\'s held together with hope and duct tape. Harold always said: "just pedal, and don\'t think about it."', { actor: N, expr: 'laugh' });
-      await S.say('grandma', "Maple Cove is down the road to the east, past the covered bridge. Gus lives at the edge of the village. Mind his temper.", { actor: N, expr: 'neutral' });
+      await S.say('grandma', "Maple Cove is down the road to the east, past the covered bridge. Gus is hosting the pumpkin carving contest on Main Street. Mind his temper.", { actor: N, expr: 'neutral' });
       await S.say('hank', 'Got it. East. Bridge. Temper.', { actor: H, expr: 'determined' });
       g.villagers.setVisible('grandma', true);
       g.rider.visible = true;
