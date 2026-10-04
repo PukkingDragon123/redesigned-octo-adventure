@@ -5,6 +5,12 @@
 // pose layered on top (wheelie lean-back, stoppie over the bars, crouch and pop,
 // tucked flips, a foot dab, a slipped pedal). Big crashes burst him into bones that
 // zip back together; small bails just flop him on his back for a moment.
+//
+// Pedalling hard winds him (bike.stamina / bike.tired): he pants, jaw flapping and ribcage
+// heaving, his head droops and his shoulders slump, sweat flicks off his skull and little
+// puffs of breath hang in the cold air. Spent, his bones start working loose (the jaw drops
+// open, a forearm wanders off its elbow) and clack back. Given a rest he sits up, gets his
+// breath back and sighs.
 import * as THREE from 'three';
 import { VoxelCharacter } from './vchar.js';
 import { catVox } from './quests.js';
@@ -29,7 +35,11 @@ export class VoxelRider {
     this.st = 'pedal';
     // Hank's little life on the bike (see life())
     this.L = { scanT: 0, look: null, lookKind: '', lookD: 99, lookV: new THREE.Vector3(), lookA: null, waveT: 0, waveCool: 4, glanceT: 0, glanceCool: 6, glanceSide: 1,
-      humT: 0, humCool: 8, blipT: 0, still: 0, yawnT: 0, yawnCool: 5, tapT: 0, nearCool: 0, flinchT: 0, flinchSide: 1, effort: 0, cruise: 0 };
+      humT: 0, humCool: 8, blipT: 0, still: 0, yawnT: 0, yawnCool: 5, tapT: 0, nearCool: 0, flinchT: 0, flinchSide: 1, effort: 0, cruise: 0,
+      // winded (see tiredLife)
+      breath: 0, breathOut: false, sweatT: 0, looseCool: 4, jawT: 0, boneT: 0, boneSide: 'L', sighT: 0, wipeT: 0 };
+    this.bone = null; // { mesh, pos, rot } a bone that has wandered off (put back by fixBones)
+    this.popT = -1e9; // the last winded pop-up
     this.poseFn = (c, t, T) => this.bikePose(c, t, T);
     // a foot put down to balance: how far it's swung from its pedal to the ground (0..1),
     // which side, and the spot on the ground it's planted on
@@ -91,6 +101,7 @@ export class VoxelRider {
   // hop between the saddle and the ground with a little arc
   hopOff(target) {
     const ch = this.ch;
+    this.fixBones();
     ch.root.updateMatrixWorld(true);
     const from = ch.root.position.clone();
     this.dismount();
@@ -124,6 +135,7 @@ export class VoxelRider {
   crash(bike, e = {}) {
     const ch = this.ch;
     if (ch.broken || this.crashed) return;
+    this.fixBones();
     ch.tempExpr?.('shock', 1.2);
     this.crashed = true;
     this.reassembled = false;
@@ -318,8 +330,104 @@ export class VoxelRider {
     L.still = bike.speed < 0.3 && bike.grounded ? L.still + dt : 0;
     if (L.still > 7 && !L.yawnCool && !L.yawnT) { L.yawnT = 2.2; L.yawnCool = 14 + Math.random() * 10; ch.tempExpr('yawn', 2.2); g.sound?.play('jaw_chatter', { volume: 0.25, pitch: 0.7 }); }
     // ---- uphill: effort
-    const up = bike.grounded ? clamp(bike.slopePitch * 4, 0, 1) * clamp(bike.speed / 2, 0, 1) * (bike.cadence > 0.1 ? 1 : 0.3) : 0;
+    const up = bike.grounded ? clamp(bike.slopePitch * 4, 0, 1) * clamp(bike.speed / 2, 0, 1) * (bike.pushing ? 1 : 0.3) : 0;
     L.effort += (up - L.effort) * Math.min(1, dt * 3);
+    this.tiredLife(dt, bike);
+  }
+
+  // ---------------------------------------------------------------- winded
+  // breathing, sweat, breath puffs and loose bones (the pose layers are in tiredPose)
+  tiredLife(dt, bike) {
+    const L = this.L, ch = this.ch, g = this.game, fx = g.effects;
+    const k = clamp(bike.tired || 0, 0, 1);
+    for (const key of ['sweatT', 'looseCool', 'jawT', 'boneT', 'sighT', 'wipeT']) L[key] = Math.max(0, L[key] - dt);
+    // breathing: slow and easy, faster and harder the more winded he is
+    L.breath += dt * Math.PI * 2 * (0.3 + 1.7 * k);
+    const out = Math.sin(L.breath) < 0;
+    if (out && !L.breathOut && k > 0.22 && ch.headPiece) {
+      // a huff of breath in the cold air, left hanging behind him
+      ch.headPiece.getWorldPosition(_v);
+      const f = Math.sin(bike.yaw), z = Math.cos(bike.yaw);
+      fx?.dustKick?.(_v.x + f * 0.16, _v.y - 0.02, _v.z + z * 0.16, { color: [0.94, 0.96, 1], scale: 0.16 + 0.16 * k, vx: f * 1.1 + bike.vel.x * 0.85, vz: z * 1.1 + bike.vel.z * 0.85 });
+      if (k > 0.5) g.sound?.play('huff', { volume: 0.1 + 0.18 * k, pitch: 0.9 + Math.random() * 0.25 });
+    }
+    L.breathOut = out;
+    // sweat flicking off the skull
+    if (k > 0.45 && !L.sweatT && ch.headPiece) {
+      L.sweatT = 1.3 - k * 0.8 + Math.random() * 0.4;
+      ch.headPiece.getWorldPosition(_v);
+      fx?.sweat?.(_v.x, _v.y + 0.18, _v.z, k > 0.85 ? 2 : 1);
+    }
+    // spent: the jaw drops loose, or a forearm wanders off its elbow; then they clack back
+    if (bike.exhausted && !L.looseCool && !L.jawT && !L.boneT) {
+      L.looseCool = 3.5 + Math.random() * 3;
+      if (Math.random() < 0.5) L.jawT = 1.0;
+      else {
+        L.boneT = 1.1;
+        L.boneSide = Math.random() < 0.5 ? 'L' : 'R';
+      }
+      g.sound?.play('bone_rattle', { volume: 0.35, pitch: 1.2 });
+    }
+    const arm = ch.arms?.[L.boneSide];
+    if (L.boneT > 0 && arm?.fore) {
+      const m = arm.fore;
+      if (!this.bone) this.bone = { mesh: m, x: m.position.x, y: m.position.y, z: m.position.z, rz: m.rotation.z };
+      const B = this.bone;
+      const e = Math.sin(clamp(1 - L.boneT / 1.1, 0, 1) * Math.PI);
+      m.position.set(B.x + arm.s * 0.045 * e, B.y - 0.03 * e, B.z);
+      m.rotation.z = B.rz + Math.sin(this.ch.t * 23) * 0.25 * e;
+      if (L.boneT <= dt * 1.5) this.fixBones(true);
+    } else if (this.bone) this.fixBones();
+    if (L.jawT > 0 && L.jawT <= dt * 1.5) {
+      ch.kick('sq', 0.9);
+      g.sound?.play('jaw_chatter', { volume: 0.3, pitch: 1.3 });
+    }
+  }
+  // put a wandered bone back where it belongs (with a clack)
+  fixBones(clack = false) {
+    const B = this.bone;
+    if (!B) return;
+    B.mesh.position.set(B.x, B.y, B.z);
+    B.mesh.rotation.z = B.rz;
+    this.bone = null;
+    this.L.boneT = 0;
+    if (clack) {
+      this.ch.kick('sq', 0.9);
+      this.game.sound?.play('bone_rattle', { volume: 0.45, pitch: 1.5 });
+    }
+  }
+
+  // the winded pose, layered in lifePose
+  tiredPose(t, T, b) {
+    const L = this.L;
+    const k = clamp(b.tired || 0, 0, 1);
+    const br = Math.sin(L.breath);
+    if (k > 0.02) {
+      const resting = !b.pushing;
+      // head droops, shoulders slump, hunched over the bars... (sitting up when he gets a rest)
+      T.headX += (resting ? 0.12 : 0.32) * k;
+      T.shUp -= 0.03 * k;
+      T.lean += (resting ? -0.1 : 0.14) * k;
+      // ...ribcage heaving, jaw flapping with every pant
+      T.sq += br * 0.045 * k;
+      T.shUp += br * 0.018 * k;
+      T.jaw = Math.max(T.jaw || 0, (0.06 + 0.3 * k) * Math.max(0, -br));
+      T.tilt += Math.sin(t * 3.3) * 0.05 * k;
+      if (b.exhausted) { T.headZ += Math.sin(t * 2.1) * 0.12; T.headX += Math.abs(Math.sin(t * 1.7)) * 0.08; }
+    }
+    // spent: the jaw hangs right open and wobbles before it snaps back
+    if (L.jawT > 0) T.jaw = 0.75 + Math.sin(t * 19) * 0.12;
+    // the relieved sigh: sits right up, shoulders drop
+    if (L.sighT > 0) {
+      const e = Math.sin(clamp(1 - L.sighT / 1.4, 0, 1) * Math.PI);
+      T.lean -= 0.2 * e; T.headX -= 0.25 * e; T.shUp += 0.03 * e; T.sq += 0.05 * e;
+    }
+    // ...and a wipe of the brow
+    if (L.wipeT > 0) {
+      const e = Math.sin(clamp(1 - L.wipeT / 1.1, 0, 1) * Math.PI);
+      arm(T, 'R', 1.5 + 0.9 * e, 0.25 + Math.sin(t * 9) * 0.25 * e, 2.3, 0.4);
+      T.headX += 0.12 * e;
+    }
   }
 
   // the life pose layers, applied inside bikePose
@@ -338,6 +446,7 @@ export class VoxelRider {
       T.tilt += S(b.crank) * 0.08 * e;
       if (e > 0.5 && !c.tmpExpr) c.tempExpr('determined', 0.3);
     }
+    this.tiredPose(t, T, b);
     if (L.waveT > 0) {
       const k = env(L.waveT, 1.5);
       arm(T, 'R', 0.25, 2.2 + k * 0.4, 0.35, S(t * 12) * 0.6);
@@ -370,7 +479,20 @@ export class VoxelRider {
     switch (e.type) {
       case 'sketchyLand': this.windmill = 0.7; ch.tempExpr('shock', 0.8); break;
       case 'perfectLand': this.cheer = e.streak > 1 ? 0.7 : 0.45; ch.tempExpr('sparkle', 1); break;
-      case 'pedalSlip': ch.tempExpr('shock', 0.6); break;
+      case 'pedalSlip': ch.tempExpr('shock', 0.6); this.game.sound?.play('bone_rattle', { volume: 0.4 }); break;
+      case 'winded': this.say('winded'); break;
+      case 'exhausted': ch.kick('sq', 0.82); this.say('exhausted'); break;
+      case 'recovered': {
+        // he gets his breath back: sits up, a big sigh, a wipe of the brow
+        this.L.sighT = 1.4;
+        if (this.game.bike.speed < 7) this.L.wipeT = 1.1;
+        this.game.sound?.play('sigh', { volume: 0.5 });
+        ch.headPiece?.getWorldPosition(_v);
+        const b = this.game.bike;
+        if (ch.headPiece) this.game.effects?.dustKick?.(_v.x + Math.sin(b.yaw) * 0.16, _v.y, _v.z + Math.cos(b.yaw) * 0.16, { color: [0.94, 0.96, 1], scale: 0.4, vx: b.vel.x * 0.85, vz: b.vel.z * 0.85 });
+        this.say('recovered');
+        break;
+      }
       case 'wheelieStart': ch.tempExpr('determined', 0.6); break;
       case 'stoppieStart': ch.tempExpr('surprised', 0.6); break;
       case 'jump': ch.kick('sq', e.perfect ? 1.3 : 1.18); if (e.perfect) ch.tempExpr('sparkle', 0.6); break;
@@ -379,6 +501,31 @@ export class VoxelRider {
       case 'frontSlam': case 'rearSlam': ch.kick('sq', 0.8); break;
       case 'dab': ch.tempExpr('sheepish', 0.7); break;
     }
+  }
+
+  // Hank says something about being winded: the first time it happens, then only now and then
+  say(kind) {
+    const g = this.game, st = g.state;
+    const flags = st && (st.flags ||= {});
+    const now = g.time || 0;
+    const first = flags && !flags['puffed_' + kind];
+    if (!first && (now - this.popT < 150 || Math.random() < 0.6)) return;
+    if (kind === 'winded' && (flags?.puffed_exhausted || !first)) return; // (only ever once, as a warning)
+    const lines = {
+      winded: ['Huff... huff... I should coast for a bit before my bones give out.'],
+      exhausted: [
+        'My femurs are on fire... and I don\'t even have muscles.',
+        'Need... a breather. Skeletons aren\'t built for sprints.',
+        'Huff... huff... Nana makes this look easy and she\'s ninety-one.',
+        'If my jaw falls off again I\'m walking.',
+      ],
+      recovered: ['Ahh. Good as new. Well, good as old.', 'Bones back in business.'],
+    }[kind];
+    if (!lines) return;
+    const i = first ? 0 : 1 + Math.floor(Math.random() * Math.max(1, lines.length - 1));
+    if (flags) flags['puffed_' + kind] = true;
+    this.popT = now;
+    g.ui?.pop?.(lines[Math.min(i, lines.length - 1)], { expr: kind === 'recovered' ? 'happy' : kind === 'exhausted' ? 'dizzy' : 'worried', key: 'winded' });
   }
 
   // Stopping: a foot swings off its pedal in a little arc and plants on the ground beside
@@ -480,7 +627,7 @@ export class VoxelRider {
         R.pedalR = st === 'slip' ? null : this.pedals?.[1];
         this.dab(dt, bike, st === 'dab', R);
         if ((this.cheer > 0 || this.L.yawnT > 0) && !tr?.poseArms) { R.armW = 1; R.gripL = null; } else R.gripL = model.gripL;
-        R.gripR = this.L.waveT > 0 && !tr?.poseArms && bike.grounded ? null : model.gripR;
+        R.gripR = (this.L.waveT > 0 || this.L.wipeT > 0) && !tr?.poseArms && bike.grounded ? null : model.gripR;
         if (this.L.still > 1.5 && bike.speed < 0.3 && st !== 'dab') R.pedalR = null;
       }
       // faces follow the action
@@ -490,7 +637,10 @@ export class VoxelRider {
       else if (st === 'wheelie' || st === 'stoppie' || st === 'crouch') ch.setExpr('determined');
       else if (st === 'manual' || st === 'nose') ch.setExpr('proud');
       else if (bike.wobble > 0.3) ch.setExpr('worried');
-      else if (Lf.effort > 0.4) ch.setExpr('determined');
+      else if (Lf.sighT > 0) ch.setExpr('sleepy');
+      else if (bike.exhausted) ch.setExpr('dizzy');
+      else if (bike.tired > 0.5) ch.setExpr('worried');
+      else if (Lf.effort > 0.4 || (bike.tired > 0.2 && bike.pushing)) ch.setExpr('determined');
       else if (bike.speed > 13) ch.setExpr('excited');
       else if (bike.speed > 9) ch.setExpr('happy');
       else if (Lf.humT > 0) ch.setExpr('happy');

@@ -12,14 +12,14 @@ const ROMAN = ['', 'I', 'II', 'III'];
 export const SKILLS = [
   {
     id: 'wheelie', name: 'Wheelie', icon: 'skill_wheelie', unit: 's',
-    how: 'Pedal and hold Q to lift the front wheel. Let go before it tips back too far, tap Q again when it drops. Squeeze the brake to save a loop-out.',
+    how: 'Keep pedalling and hold Q to lift the front wheel. Let go before it tips back too far, tap Q again when it drops. Squeeze the brake to save a loop-out.',
     desc: 'Harold once rode a wheelie from the mill to the chapel. Nana insists it was downhill.',
     tiers: [['wheelie', 2, 'Hold a wheelie for 2 seconds'], ['wheelie', 5, 'Hold a wheelie for 5 seconds'], ['wheelie', 12, 'Hold a wheelie for 12 seconds']],
     notes: ['"Small taps, not big yanks. The balance point is lower than you think."', '"Keep pedalling soft and steady. The pedals hold the front up."', '"Twelve seconds! Past the bakery! Marguerite, did you SEE?"'],
   },
   {
     id: 'manual', name: 'Manual', icon: 'skill_manual', unit: 's',
-    how: 'Get some speed, stop pedalling, then lean back with Q. No pedal power: it is all balance, and it bleeds speed.',
+    how: 'Get some speed, stop turning the crank, then lean back with Q. No pedal power: it is all balance, and it bleeds speed.',
     desc: 'A wheelie without pedalling. Harold called it "the coast of honour".',
     tiers: [['manual', 1.5, 'Manual for 1.5 seconds'], ['manual', 4, 'Manual for 4 seconds'], ['manual', 8, 'Manual for 8 seconds']],
     notes: ['"Hips back, arms straight. Speed is your friend."', '"Feather the lean, let the bike roll under you."', '"Rolled the whole covered bridge on one wheel. The trolls clapped."'],
@@ -32,10 +32,10 @@ export const SKILLS = [
     notes: ['"Crouch... wait for it... POP."', '"One-and-POP. Count it out loud. The neighbours will understand."', '"Cleared Agnes\'s hedge. She has not forgiven me."'],
   },
   {
-    id: 'cadence', name: 'Pedal Rhythm', icon: 'skill_cadence', unit: 's',
-    how: 'Instead of holding W, tap it in a steady beat (about three taps a second). In rhythm, Hank sprints faster. Mash too fast and his foot slips off.',
+    id: 'cadence', name: 'Smooth Spinning', icon: 'skill_cadence', unit: 's',
+    how: 'Turn the crank in smooth, brisk circles: alternate W and S in a steady beat, or keep a thumb (or the right stick) going round. No stalls, no flailing. Spin too hard for too long and Hank runs out of puff.',
     desc: 'Bessie has three gears and one speed: whatever your legs can keep up.',
-    tiers: [['cadence', 4, 'Keep the rhythm for 4 seconds'], ['cadence', 10, 'Keep the rhythm for 10 seconds'], ['cadence', 25, 'Keep the rhythm for 25 seconds']],
+    tiers: [['cadence', 4, 'Spin smoothly for 4 seconds'], ['cadence', 10, 'Spin smoothly for 10 seconds'], ['cadence', 25, 'Spin smoothly for 25 seconds']],
     notes: ['"Hum a waltz. One, two, three, one, two, three."', '"Downhill, let her roll. Uphill, dance on the pedals."', '"Beat the mail van to the lighthouse. Don\'t tell the postman."'],
   },
   {
@@ -99,7 +99,7 @@ export const SKILLS = [
     how: 'Hit a ramp fast, pop at the lip, keep the bike level and stick the landing.',
     desc: 'Measured lip to landing. Nana keeps a tape measure for exactly this.',
     tiers: [['longjump', 7, 'Jump 7 metres'], ['longjump', 13, 'Jump 13 metres'], ['longjump', 20, 'Jump 20 metres']],
-    notes: ['"Speed is distance. Pedal in rhythm into the ramp."', '"Pop right at the lip, not before."', '"Twenty metres. I could see Nova Scotia."'],
+    notes: ['"Speed is distance. Spin hard into the ramp."', '"Pop right at the lip, not before."', '"Twenty metres. I could see Nova Scotia."'],
   },
   {
     id: 'combo', name: 'Combos', icon: 'skill_combo', unit: 'x',
@@ -195,7 +195,7 @@ export class Skills {
       if (b.wheelieT > 0) this.record(b.wheeliePedalT < b.wheelieT * 0.15 ? 'manual' : 'wheelie', b.wheelieT);
       if (b.stoppieT > 0) this.record(b.stoppieBrakeT < b.stoppieT * 0.2 ? 'nose' : 'stoppie', b.stoppieT);
       if (b.drifting) this.record('drift', b.driftTime);
-      this.rhythmT = b.rhythm > 0.75 && b.grounded ? this.rhythmT + dt : 0;
+      this.rhythmT = b.steady > 0.75 && b.grounded ? this.rhythmT + dt : 0;
       if (this.rhythmT > 0) this.record('cadence', this.rhythmT);
     } else this.rhythmT = 0;
     // one fanfare at a time, and never in the middle of a cutscene or a menu

@@ -484,22 +484,25 @@ export class Game {
 
   // ---------------------------------------------------------------- controls & interactions
   controls() {
-    const zero = { throttle: 0, brake: 0, steer: 0, jump: false, jumpPressed: false, drift: false, leanBack: 0, leanFwd: 0, trick: false, assist: false };
-    if (this.mode !== 'ride' || this.ui.dialogueTick || this.ui.menuStack.length || this.onFoot) return zero;
+    const zero = { turn: 0, brake: 0, steer: 0, jump: false, jumpPressed: false, drift: false, leanBack: 0, leanFwd: 0, trick: false, up: false, down: false, assist: false };
+    // the crank only takes strokes on the bike (input resets it otherwise: nothing banks up)
+    input.riding = !(this.mode !== 'ride' || this.ui.dialogueTick || this.ui.menuStack.length || this.onFoot);
+    if (!input.riding) return zero;
     // riding assists on touch screens: steadier balance, forgiving landings, no slide-outs
     const assist = this.assist ?? (!!this.touch?.on || input.lastDevice === 'touch');
     if (this.auto) {
+      // ?auto=spin,steer,jumpEvery,drift: a test pilot spinning the crank at spin x 11 rad/s
       const [thr = 1, steer = 0, jumpEvery = 0, drift = 0] = this.auto;
       const t = this.time;
       return {
-        ...zero, throttle: thr, steer: steer * Math.sin(t * 0.7), assist,
+        ...zero, turn: thr * 11 * (this.frameDt || 1 / 60), steer: steer * Math.sin(t * 0.7), assist,
         jump: jumpEvery > 0 && t % jumpEvery < 0.3, drift: drift > 0 && Math.sin(t * 0.7) > 0.5,
       };
     }
     const swallowed = this.ui.inputSwallowed();
     const lean = input.lean();
     return {
-      throttle: input.throttle(),
+      turn: input.crankTurn(),
       brake: input.brake(),
       steer: input.steer(),
       jump: input.down('jump') && !swallowed,
@@ -508,6 +511,9 @@ export class Game {
       leanBack: lean.back,
       leanFwd: lean.fwd,
       trick: input.down('drift') || !!input.touch.trick,
+      // (air poses: which way the trick is pointed)
+      up: input.down('up') || input.touch.radUp > 0.5,
+      down: input.down('down') || input.touch.radDown > 0.5,
       assist,
     };
   }
@@ -638,7 +644,8 @@ export class Game {
         // trees shake (and drop leaves) when Hank rides into them; phones buzz
         if (e.tree) this.world.forest?.shake?.(e.tree, clamp(e.impact / 6, 0.6, 1.5));
         this.touch?.buzz?.(e.soft ? [30, 40, 50] : [60, 40, 120]);
-        this.orders.slosh(e.soft ? 8 : 15);
+        // the cups fly out of the crate (cargo.js) and lose a chunk of their heat
+        this.orders.crashCool(e.impact, e.soft);
         st.stats.crashes++;
         st.stats.dayCrashes = (st.stats.dayCrashes || 0) + 1;
         this.freeze(e.soft ? 0.07 : 0.12);
@@ -747,6 +754,7 @@ export class Game {
     if (this.mode === 'menu' && !(this.ui.dialogueTick || this.ui.menuStack.length)) this.mode = this.prevMode && this.prevMode !== 'menu' ? this.prevMode : 'ride';
     if (this.mode !== 'ride') this.ui.prompt(null);
 
+    this.frameDt = dt;
     const c = this.controls();
     this.ctl = c;
     if (this.onFoot) this.updateWalker(dt);
@@ -757,10 +765,14 @@ export class Game {
     this.acc = Math.min(this.acc + sdt, 0.1);
     let first = true;
     const events = [];
+    // the crank turns wound this frame go to the first physics step that runs (kept over a
+    // frame with no step, so none get lost)
+    this.turnBank = input.riding ? Math.max(-12, Math.min(12, (this.turnBank || 0) + c.turn)) : 0;
     while (this.acc >= STEP) {
       this.acc -= STEP;
-      if (this.mode !== 'title') this.bike.update(STEP, first ? c : { ...c, jumpPressed: false });
+      if (this.mode !== 'title') this.bike.update(STEP, first ? { ...c, turn: this.turnBank } : { ...c, turn: 0, jumpPressed: false });
       for (const e of this.bike.events) events.push(e);
+      if (first) this.turnBank = 0;
       first = false;
     }
     // draw Bessie between her last two physics steps (smooth at any frame rate)
@@ -828,9 +840,10 @@ export class Game {
   updateWalker(dt) {
     const free = this.mode === 'ride' && !(this.ui.dialogueTick || this.ui.menuStack.length);
     const sw = this.ui.inputSwallowed();
+    // (a kick only happens next to something kickable: pumpkins, bins, trees...)
     const wc = free ? {
-      mx: input.moveX(), mz: input.moveY(), run: input.down('drift') || input.touch.run,
-      jumpPressed: input.pressed('jump') && !sw, kickPressed: input.pressed('boost') && !sw,
+      mx: input.moveX(), mz: input.moveY(), run: input.run(), jump: input.down('jump') && !sw,
+      jumpPressed: input.pressed('jump') && !sw, kickPressed: input.pressed('boost') && !sw && !!this.world.interactables?.canKick(this),
     } : { mx: 0, mz: 0 };
     const W = this.walker;
     const ev = W.update(dt, wc, this.chase.yaw + this.chase.orbitYaw);
@@ -838,7 +851,7 @@ export class Game {
     for (const e of ev) {
       if (e.type === 'jump') { sound.play('jump_foot'); ch.kick('sq', 1.25); }
       if (e.type === 'land') { sound.play('land_foot', { volume: Math.min(1, e.impact / 8) }); ch.kick('sq', 0.75); }
-      if (e.type === 'kick') { ch.play('kick'); ch.animT = 0; if (!this.interior?.active) { this.world.interactables?.kick(W.pos, W.yaw, this); this.wait(0.2).then(() => this.world.forest?.kick?.(W.pos, W.yaw)); } }
+      if (e.type === 'kick') { ch.play('kick'); ch.animT = 0; if (!this.interior?.active) this.world.interactables?.kick(W.pos, W.yaw); }
     }
   }
 

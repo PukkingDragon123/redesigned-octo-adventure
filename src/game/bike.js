@@ -1,8 +1,11 @@
 // Harold's old 3-speed roadster. Arcade-y and a bit janky on purpose, but every
-// move comes from input timing and balance: momentum and pedal rhythm, rubbery
-// lean, tyres that let go when you corner too hard on loose ground, wheelies and
-// manuals, stoppies and nose manuals, crouch-and-pop bunny hops, spins and flips,
-// landings that have to match the slope, foot dabs, curb bumps and comic bails.
+// move comes from input timing and balance: momentum and a crank Hank has to keep
+// turning himself (it drives through the gears only while the pedals outrun the back
+// wheel, and he gets winded), rubbery lean, tyres that let go when you corner too hard
+// on loose ground, wheelies and manuals, stoppies and nose manuals, crouch-and-pop
+// bunny hops, spins and flips, landings that have to match the slope, foot dabs, curb
+// bumps and comic bails. Nothing moves her but the rider: stopped on a gentle slope
+// she stays put.
 import * as THREE from 'three';
 import { clamp, damp, lerp, wrapAngle, Spring } from '../core/math.js';
 
@@ -11,8 +14,8 @@ const TAU = Math.PI * 2;
 
 // Bessie's fixed specs. There are no upgrades: progression is riding skill (skills.js).
 export const STATS = {
-  topSpeed: 10.2, // m/s gearing limit in top gear; holding the pedal cruises ~8 m/s on a road, rhythm sprints ~9
-  power: 3.6, // pedal acceleration from a standstill
+  topSpeed: 10.2, // m/s, about flat out: a comfortable spin cruises ~8 m/s on a road, a frantic one ~9.5
+  power: 3.6, // pedal acceleration from a standstill (bottom gear)
   pedalPower: 8, // sustained effort (accel x speed): hills slow you right down
   gears: 3,
   grip: 1,
@@ -44,6 +47,14 @@ const WB_POINT = 0.7; // front-up balance point (~40 degrees)
 const WB_LOOP = 1.2; // past this Hank loops out onto his back
 const ST_POINT = 0.72; // rear-up balance point
 const ST_ENDO = 1.08; // past this he goes over the bars
+
+// the drivetrain: metres of road per radian of crank in each gear, how hard each gear pulls
+// (bottom gear gets her going, top gear needs the pedals spun fast), and how far the pedals
+// have to outrun the wheel before the drive bites fully (m/s)
+const GEAR_K = [0.4, 0.6, 0.8];
+const GEAR_PULL = [1, 0.84, 0.7];
+const SLACK = 1.1;
+const COMFY = 11; // rad/s: an easy, steady spin (~1.75 turns a second)
 
 // collision: the frame is a circle round the bottom bracket; each wheel is a smaller one
 const FRAME_R = 0.42;
@@ -107,16 +118,25 @@ export class Bike {
     this.popT = 9;
     this.wheelAngle = 0;
     this.crank = 0;
+    this.crankGoal = 0; // where the rider has wound the crank to (it chases this, nothing else)
+    this.crankRate = 0; // rad/s
+    this.spinRate = 0; // the crank rate, smoothed a touch (legs and chain have some give)
+    this.cadAvg = 0;
+    this.steady = 0; // 0..1: a steady, brisk spin (Harold's "Smooth Spinning" note)
+    this.pushing = false; // spinning forwards hard enough to push
+    this.backPedal = 0; // 0..1 coaster brake
+    this.engage = 0; // 0..1 how hard the drive is biting (0: freewheeling)
+    this.drive = 0; // m/s^2 from the pedals this step
     this.strokes = 0;
     this.gear = 1;
-    this.cadence = 0;
+    this.wantT = 0;
+    this.cadence = 0; // 0..1ish, for the sound
     this.shiftTimer = 0;
-    this.rhythm = 0; // 0..1, builds when the pedal is tapped in a steady rhythm
-    this.lastTap = -9;
-    this.tapIv = 0;
-    this.tapDrive = 0;
-    this.thrHeld = false;
-    this.mash = 0;
+    this.stamina = this.stamina ?? 1; // Hank's wind (kept across resets)
+    this.tired = this.tired ?? 0; // 0..1, smoothed, for the rider and the crank widget
+    this.exhausted = this.exhausted ?? false;
+    this.winded = false;
+    this.slipAcc = 0;
     this.slipT = 0;
     this.drifting = false;
     this.driftTime = 0;
@@ -142,7 +162,7 @@ export class Bike {
     this.fwdSpeed = 0;
     this.lastSafe = { x, z, yaw };
     this.safeTimer = 0;
-    this.throttleIn = 0;
+    this.throttleIn = 0; // (the drive's bite, 0..1: kept for the freewheel tick)
     this.brakeIn = 0;
     this.steerIn = 0;
     this.pose = 'ride';
@@ -193,16 +213,20 @@ export class Bike {
     return out.set(Math.sin(this.yaw), 0, Math.cos(this.yaw));
   }
 
+  // metres of road per radian of crank in a gear, and the speed an easy spin gives in it
+  gearK(g = this.gear) {
+    return GEAR_K[clamp(g, 1, GEAR_K.length) - 1];
+  }
   gearTop(g = this.gear) {
-    const s = this.stats;
-    return s.topSpeed * (0.45 + 0.55 * (g / s.gears));
+    return this.gearK(g) * COMFY;
   }
 
   emit(type, data = {}) {
     this.events.push({ type, ...data });
   }
 
-  // c: { throttle, brake, steer, jump (held), drift, leanBack, leanFwd (0..1), trick, assist }
+  // c: { turn (crank radians wound since the last frame: hand it to the first step only) and/or
+  //      pedal (rad/s), brake, steer, jump (held), drift, leanBack, leanFwd (0..1), trick, assist }
   update(dt, c) {
     this.savePrev();
     this.step(dt, c);
@@ -214,11 +238,14 @@ export class Bike {
     this.events.length = 0;
     this.t += dt;
     const s = this.stats;
-    this.throttleIn = c.throttle;
-    this.brakeIn = c.brake;
     this.steerIn = c.steer;
     this.squash.update(dt);
     this.popT += dt;
+    // the crank turns with the rider's input even with Bessie on her side (comic, and it keeps
+    // the on-screen crank and the pedals in step)
+    this.pedalInput(dt, c);
+    const brake = Math.max(c.brake || 0, this.backPedal);
+    this.brakeIn = brake;
     if (this.crash > 0) return this.updateCrash(dt);
     if (this.sinking > 0) {
       this.sinking += dt;
@@ -237,60 +264,69 @@ export class Bike {
     let speed = Math.hypot(this.vel.x, this.vel.z);
     let fwdSpeed = this.vel.x * fx + this.vel.z * fz;
 
-    this.pedalInput(dt, c);
-    const thr = this.slipT > 0 ? 0 : Math.max(c.throttle, this.tapDrive > 0 ? 1 : 0);
+    const thr = this.pushing ? 1 : 0;
     if (this.boostTime > 0) this.boostTime -= dt;
+    this.drive = 0;
+    this.engage = 0;
 
     if (this.grounded) {
       const n = this.normal.set(g0.nx, g0.ny, g0.nz);
       this.slopePitch = Math.atan2(-(fx * n.x + fz * n.z), n.y);
-      // gravity along the slope: coast downhill, grind uphill
+      // gravity along the slope: coast downhill, grind uphill. Stopped and not pedalling, the
+      // tyres (and Hank's foot, once it's down) hold her still on a gentle slope: no creeping off
       const k = GRAV * n.y;
-      this.vel.x += n.x * k * dt;
-      this.vel.z += n.z * k * dt;
+      const pull = Math.hypot(n.x, n.z) * k;
+      const held = speed < 0.35 && !this.pushing && this.boostTime <= 0 && pull < (this.dab > 0.5 ? 4.5 : 0.65);
+      if (!held) {
+        this.vel.x += n.x * k * dt;
+        this.vel.z += n.z * k * dt;
+      }
 
-      // ---- pedalling (power-limited, a surge on every downstroke, rhythm sprints)
-      const sprint = this.rhythm;
-      const top = this.gearTop(s.gears) * surf.top * (1 + 0.13 * sprint);
-      if (thr > 0 && fwdSpeed > -0.6 && this.stoppie < 0.05) {
+      // ---- pedalling: the drive bites while the pedals (through the gear) outrun the back
+      // wheel, harder the further ahead they are; slower than the wheel and she freewheels.
+      // Power-limited, with a surge on every downstroke.
+      if (this.pushing && fwdSpeed > -0.6 && this.stoppie < 0.05) {
         const v = Math.max(0, fwdSpeed);
-        const effort = Math.min(s.power, (s.pedalPower * (1 + 0.32 * sprint)) / Math.max(v, 0.5));
-        const curve = clamp(1 - Math.pow(v / top, 4), 0, 1);
-        const hes = this.shiftTimer > 0 ? 0.35 : 1;
-        const surge = 0.55 + 0.9 * Math.pow(Math.abs(Math.sin(this.crank)), 2);
-        const a = effort * thr * curve * hes * surge * (this.wheelie > 0.1 ? 0.8 : 1);
-        this.vel.x += fx * a * dt;
-        this.vel.z += fz * a * dt;
+        this.engage = clamp((this.roadCadence(surf) * this.gearK() - v) / SLACK, 0, 1);
+        if (this.engage > 0) {
+          const effort = Math.min(s.power * GEAR_PULL[this.gear - 1], (s.pedalPower * this.powerK()) / Math.max(v, 0.5));
+          const hes = this.shiftTimer > 0 ? 0.35 : 1;
+          const surge = 0.55 + 0.9 * Math.pow(Math.sin(this.crank), 2);
+          const a = effort * this.engage * hes * surge * (this.wheelie > 0.1 ? 0.8 : 1);
+          this.drive = a;
+          this.vel.x += fx * a * dt;
+          this.vel.z += fz * a * dt;
+        }
       }
       // ---- speed burst (perfect landings, drift release)
-      if (this.boostTime > 0 && fwdSpeed < top * 1.25) {
+      if (this.boostTime > 0 && fwdSpeed < s.topSpeed * surf.top * 1.25) {
         this.vel.x += fx * 4.5 * dt;
         this.vel.z += fz * 4.5 * dt;
       }
-      // ---- brakes & reverse (old rim brakes: they bite, slowly)
-      if (c.brake > 0) {
+      // ---- brakes & reverse (old rim brakes and a coaster hub: they bite, slowly)
+      if (brake > 0) {
         if (fwdSpeed > 0.5) {
-          const dec = Math.min(speed, (this.stoppie > 0.1 ? 5.4 : this.wheelie > 0.1 ? 3 : 6.6) * (1 - surf.loose * 0.25) * c.brake * dt);
+          const dec = Math.min(speed, (this.stoppie > 0.1 ? 5.4 : this.wheelie > 0.1 ? 3 : 6.6) * (1 - surf.loose * 0.25) * brake * dt);
           if (speed > 1e-4) {
             this.vel.x -= (this.vel.x / speed) * dec;
             this.vel.z -= (this.vel.z / speed) * dec;
           }
           // a hard grab on loose ground locks the back wheel
-          if (c.brake > 0.7 && speed > 4.5 && surf.loose > 0.3 && !this.skidding && this.stoppie < 0.1) {
+          if (brake > 0.7 && speed > 4.5 && surf.loose > 0.3 && !this.skidding && this.stoppie < 0.1) {
             this.skidding = true;
             this.emit('skid', { speed });
           }
-        } else if (fwdSpeed > -1.8 && (this.stopT += dt) > 0.35) {
-          // stopped and still holding the brake: walk it backwards
+        } else if (c.brake > 0 && fwdSpeed > -1.8 && (this.stopT += dt) > 0.35) {
+          // stopped and still holding the brake lever: walk it backwards
           this.vel.x -= fx * 2.4 * c.brake * dt;
           this.vel.z -= fz * 2.4 * c.brake * dt;
         }
       }
-      if (c.brake <= 0 || fwdSpeed > 0.5) this.stopT = 0;
-      // rolling resistance + air drag
+      if (!(c.brake > 0) || fwdSpeed > 0.5) this.stopT = 0;
+      // rolling resistance + air drag (a little less while the pedals are pushing)
       speed = Math.hypot(this.vel.x, this.vel.z);
-      const manualDrag = this.wheelie > 0.1 && thr <= 0 ? 1.4 : this.stoppie > 0.1 && c.brake <= 0 ? 1.6 : 1;
-      const drag = surf.roll * manualDrag * (thr > 0 ? 0.7 : 1) + 0.0075 * speed * speed;
+      const manualDrag = this.wheelie > 0.1 && thr <= 0 ? 1.4 : this.stoppie > 0.1 && brake <= 0 ? 1.6 : 1;
+      const drag = surf.roll * manualDrag * (this.engage > 0.05 ? 0.7 : 1) + 0.0075 * speed * speed;
       if (speed > 1e-4) {
         const dec = Math.min(speed, drag * dt);
         this.vel.x -= (this.vel.x / speed) * dec;
@@ -313,7 +349,9 @@ export class Bike {
       this.wobblePhase += dt * (5 + sp * 0.5);
       const rough = surf.loose * 0.045 + 0.01;
       const slow = sp < 1.8 && sp > 0.15 && this.dab < 0.5 ? (1.8 - sp) * 0.09 : 0;
-      const chaos = slow + rough * clamp(sp / 8, 0, 1.4) + this.wobble;
+      // a winded Hank weaves about a bit
+      const weary = this.tired * (this.exhausted ? 0.075 : 0.04) * clamp(sp / 3, 0, 1);
+      const chaos = slow + rough * clamp(sp / 8, 0, 1.4) + this.wobble + weary;
       const w = (Math.sin(this.wobblePhase * 1.7) + Math.sin(this.wobblePhase * 2.9) * 0.5) * chaos;
       this.shimmy = w;
       this.wobble = Math.max(0, this.wobble - dt * 0.6);
@@ -369,7 +407,7 @@ export class Bike {
         }
       } else {
         this.slideT = Math.max(0, this.slideT - dt * 2);
-        if (this.skidding && over < 0.9 && !(c.brake > 0.7 && surf.loose > 0.3 && sp > 2)) this.skidding = false;
+        if (this.skidding && over < 0.9 && !(brake > 0.7 && surf.loose > 0.3 && sp > 2)) this.skidding = false;
       }
       if (speed > 0.08) {
         let va = Math.atan2(this.vel.x, this.vel.z);
@@ -387,7 +425,7 @@ export class Bike {
       this.vel.y = -(n.x * this.vel.x + n.z * this.vel.z) / Math.max(0.3, n.y);
 
       // ---- wheelie / manual and stoppie / nose manual
-      this.updateBalance(dt, c, thr, back, fwdL, sp, surf, assist);
+      this.updateBalance(dt, c, thr, back, fwdL, sp, surf, assist, brake);
       if (this.crash > 0) return;
 
       // ---- bunny hop: hold to crouch, let go to pop
@@ -560,25 +598,28 @@ export class Bike {
       this.lastSafe = { x: this.pos.x, z: this.pos.z, yaw: this.yaw };
     }
 
-    // gears: automatic, with a derailleur hiccup
-    const ratio = Math.max(0, fwdSpeed) / this.gearTop();
+    // gears: automatic, with a derailleur hiccup. Pedalling, she settles into whichever gear
+    // pulls hardest at this cadence and speed (bottom gear to get going, top gear once the
+    // pedals have to spin fast); coasting, she drops back down as she slows
     if (this.shiftTimer > 0) this.shiftTimer -= dt;
-    else if (ratio > 0.92 && this.gear < s.gears && thr > 0) {
-      this.gear++;
-      this.shiftTimer = 0.22;
-      this.emit('gear', { dir: 1 });
-    } else if (this.gear > 1 && ratio < 0.45) {
-      this.gear--;
-      this.shiftTimer = 0.12;
-      this.emit('gear', { dir: -1 });
+    else {
+      let want = this.gear;
+      if (this.pushing && this.grounded) want = this.bestGear(fwdSpeed, surf);
+      else if (this.gear > 1 && fwdSpeed < 0.62 * this.gearTop(this.gear - 1)) want = this.gear - 1;
+      this.wantT = want !== this.gear ? this.wantT + dt : 0;
+      if (this.wantT > 0.12) {
+        const dir = want > this.gear ? 1 : -1;
+        this.gear += dir;
+        this.wantT = 0;
+        this.shiftTimer = dir > 0 ? 0.22 : 0.12;
+        this.emit('gear', { dir });
+      }
     }
-    const cadTarget = this.grounded && thr > 0 ? clamp(0.4 + ratio * 0.75, 0, 1.25) * (1 + this.rhythm * 0.3) : this.slipT > 0 ? 1.6 : 0;
-    this.cadence = damp(this.cadence, cadTarget, 6, dt);
-    this.crank += this.cadence * 9.5 * dt;
+    this.updateStamina(dt, fwdSpeed);
     const st = Math.floor(this.crank / Math.PI);
     if (st !== this.strokes) {
       this.strokes = st;
-      if (thr > 0 && this.grounded) this.emit('pedalStroke', { rhythm: this.rhythm, gear: this.gear });
+      if (this.pushing && this.grounded) this.emit('pedalStroke', { rhythm: this.steady, gear: this.gear });
     }
     this.wheelAngle += (fwdSpeed / 0.34) * dt * (this.stoppie > 0.1 ? 0.2 : 1);
 
@@ -632,35 +673,84 @@ export class Bike {
     C.low = h.obj?.y1 != null && h.obj.y1 - prevY < 0.5 && h.obj.kind !== 'boundary';
   }
 
-  // Rhythm pedalling: tapping the pedal in a steady beat (2-4 taps a second) is a sprint;
-  // holding it is a steady cruise; mashing like a maniac slips a foot off the pedal.
+  // The crank: the rider's own turns wind it on (c.turn: radians since the last frame, handed
+  // to one step; c.pedal: rad/s) and it chases them. It never turns by itself, so when the
+  // spinning stops the pedals stop and Bessie coasts. Spinning backwards is a coaster brake.
   pedalInput(dt, c) {
-    const down = this.thrHeld ? c.throttle > 0.35 : c.throttle > 0.6;
-    if (down && !this.thrHeld) {
-      const iv = this.t - this.lastTap;
-      this.lastTap = this.t;
-      if (iv < 0.13) {
-        if (++this.mash >= 3 && this.grounded && this.speed > 1 && this.slipT <= 0) {
-          this.slipT = 0.55;
-          this.rhythm = 0;
-          this.mash = 0;
-          this.emit('pedalSlip');
-        }
-      } else {
-        this.mash = 0;
-        if (iv >= 0.2 && iv <= 0.6) {
-          const steady = this.tapIv >= 0.2 && this.tapIv <= 0.6 ? 1 - Math.min(1, Math.abs(iv - this.tapIv) / (this.tapIv * 0.4)) : 0.3;
-          this.rhythm = clamp(this.rhythm + 0.08 + 0.2 * steady, 0, 1);
-        } else this.rhythm *= 0.5;
-      }
-      this.tapIv = iv;
-      this.tapDrive = 0.34;
+    this.crankGoal += (c.turn || 0) + (c.pedal || 0) * dt;
+    let lag = this.crankGoal - this.crank;
+    // never more than a turn and a bit behind (a long hiccup, a crash)
+    if (Math.abs(lag) > 8) {
+      lag = Math.sign(lag) * 8;
+      this.crankGoal = this.crank + lag;
     }
-    this.thrHeld = down;
-    this.tapDrive -= dt;
-    this.slipT -= dt;
-    // holding the pedal (or not pedalling) lets the rhythm fade
-    if (this.t - this.lastTap > 0.62) this.rhythm = Math.max(0, this.rhythm - dt * 0.7);
+    this.crankRate = clamp(lag * 32, -40, 40);
+    this.crank += this.crankRate * dt;
+    this.spinRate = damp(this.spinRate, this.crankRate, 9, dt);
+    this.cadence = clamp(Math.abs(this.spinRate) / 12, 0, 1.2);
+    this.backPedal = this.crash > 0 ? 0 : clamp((-this.spinRate - 1) / 5, 0, 1);
+    // spent and still spinning like mad: his foot slips off the pedal
+    if (this.slipT > 0) this.slipT -= dt;
+    this.slipAcc = this.exhausted && this.grounded && this.spinRate > 10 ? this.slipAcc + dt : Math.max(0, this.slipAcc - dt);
+    if (this.slipAcc > 0.8 && this.slipT <= 0 && this.crash <= 0) {
+      this.slipAcc = 0;
+      this.slipT = 0.6;
+      this.emit('pedalSlip');
+    }
+    this.pushing = this.spinRate > 2.5 && this.slipT <= 0 && this.crash <= 0 && this.sinking <= 0;
+    // a steady, brisk spin (no stalls or flailing): Harold's "Smooth Spinning" note
+    this.cadAvg = damp(this.cadAvg, this.spinRate, 1.5, dt);
+    const smooth = this.pushing && this.cadAvg > 7 && Math.abs(this.spinRate - this.cadAvg) < this.cadAvg * 0.25;
+    this.steady = damp(this.steady, smooth ? 1 : 0, smooth ? 1.2 : 4, dt);
+    this.throttleIn = this.engage;
+  }
+
+  // how much of the spinning reaches the road: all of it fresh, less and less as Hank tires
+  cadenceK() {
+    return this.exhausted ? 0.5 : 0.62 + 0.38 * clamp(this.stamina / 0.45, 0, 1);
+  }
+  powerK() {
+    return this.exhausted ? 0.55 : 0.7 + 0.3 * clamp(this.stamina / 0.45, 0, 1);
+  }
+  // the cadence the road sees (rad/s): tiredness and soft ground eat into it
+  roadCadence(surf) {
+    return Math.max(0, this.spinRate) * this.cadenceK() * surf.top;
+  }
+  // the gear that pulls hardest right now (the current one on a tie; top gear if none bite)
+  bestGear(fwdSpeed, surf) {
+    const s = this.stats, v = Math.max(0, fwdSpeed), cad = this.roadCadence(surf);
+    let best = this.gear, bestA = -1;
+    for (let g = 1; g <= Math.min(s.gears, GEAR_K.length); g++) {
+      const eng = clamp((cad * GEAR_K[g - 1] - v) / SLACK, 0, 1);
+      const a = eng * Math.min(s.power * GEAR_PULL[g - 1], s.pedalPower / Math.max(v, 0.5)) + (g === this.gear ? 0.05 : 0);
+      if (a > bestA + 1e-6) { bestA = a; best = g; }
+    }
+    return bestA <= 0.05 ? Math.min(s.gears, GEAR_K.length) : best;
+  }
+
+  // Hank's wind: hard, fast pedalling drains it; coasting and stopping for a breather bring it
+  // back. Spent, he's slow and wobbly until he's caught his breath.
+  updateStamina(dt, fwdSpeed) {
+    const P = this.drive * Math.max(fwdSpeed, 1); // how hard he's pushing (power per kilo)
+    const fast = clamp((this.spinRate - 12) / 6, 0, 1.6); // spinning faster than an easy pace
+    let d;
+    if (this.crash > 0) d = 0.05;
+    else if (this.pushing && this.engage > 0.02) d = -(0.002 + 0.006 * Math.pow(P / 5.4, 3) + 0.03 * fast * fast);
+    else d = (this.speed < 0.4 ? 0.17 : 0.09) * (this.pushing ? 0.5 : 1) - 0.03 * fast * fast;
+    this.stamina = clamp(this.stamina + d * dt, 0, 1);
+    if (!this.winded && this.stamina < 0.3) {
+      this.winded = true;
+      this.emit('winded');
+    } else if (this.winded && this.stamina > 0.6) this.winded = false;
+    if (!this.exhausted && this.stamina <= 0) {
+      this.exhausted = true;
+      this.emit('exhausted');
+    } else if (this.exhausted && this.stamina > 0.4) {
+      this.exhausted = false;
+      this.emit('recovered');
+    }
+    const want = this.exhausted ? 1 : clamp((0.55 - this.stamina) / 0.55, 0, 1);
+    this.tired = damp(this.tired, want, want > this.tired ? 3 : 0.8, dt);
   }
 
   pop(crouch, lip, late = false) {
@@ -704,7 +794,7 @@ export class Bike {
   }
 
   // ---- wheelie / manual (front up) and stoppie / nose manual (back up): inverted pendulums
-  updateBalance(dt, c, thr, back, fwdL, sp, surf, assist) {
+  updateBalance(dt, c, thr, back, fwdL, sp, surf, assist, brake = c.brake) {
     const pedalling = thr > 0.3;
     const t = this.t;
     const noise = (Math.sin(t * 7.3) + Math.sin(t * 13.1 + 1.3) * 0.6 + Math.sin(t * 3.1 + 0.4) * 0.5) * (1 + surf.loose * 0.8);
@@ -721,7 +811,7 @@ export class Bike {
         const zone = Math.abs(th - WB_POINT) < 0.2 ? (assist ? 9 : 3) : assist ? 4 : 0;
         tau += zone * (WB_POINT - 0.06 - th);
         tau += noise * (1.4 + Math.min(1.6, this.wheelieT * 0.1));
-        tau -= c.brake * 15; // tap the back brake to stop a loop-out
+        tau -= brake * 15; // tap the back brake (or back-pedal) to stop a loop-out
         tau -= fwdL * 8;
         if (assist && th > WB_POINT + 0.08) tau -= 10;
       }
@@ -941,8 +1031,8 @@ export class Bike {
     if (this.slipT > 0) return 'slip';
     if (this.dab > 0.5) return 'dab';
     if (this.drifting) return 'drift';
-    if (c.brake > 0 && fwdSpeed > 1) return 'brake';
-    if (thr > 0 && (this.rhythm > 0.45 || this.slopePitch > 0.1 || fwdSpeed < 2)) return 'stand';
+    if (this.brakeIn > 0 && fwdSpeed > 1) return 'brake';
+    if (thr > 0 && !this.exhausted && this.tired < 0.6 && (this.spinRate > 15 || this.slopePitch > 0.1 || fwdSpeed < 2)) return 'stand';
     if (thr > 0) return 'pedal';
     return this.speed > 0.5 ? 'coast' : 'idle';
   }
@@ -997,8 +1087,8 @@ export class Bike {
     this.pos.y = g.h;
     this.speed = sp;
     this.fwdSpeed = 0;
-    this.cadence = 0;
-    this.rhythm = 0;
+    this.engage = this.drive = 0;
+    this.updateStamina(dt, 0);
     this.pose = 'crash';
     this.lean = damp(this.lean, 1.4 * Math.sign(this.crashSpin), 10, dt);
     this.leanVel = 0;

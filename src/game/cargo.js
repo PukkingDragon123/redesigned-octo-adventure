@@ -133,7 +133,13 @@ export class Cargo {
     this.model.root.updateMatrixWorld(true);
     const power = clamp((e.impact || 4) / 8, 0.5, 1.3);
     this.spilled = { t: 0, back: null };
+    const fx = this.game.effects;
     for (const c of this.cups) {
+      // a gasp of steam as the heat goes out of it (orders.crashCool)
+      if (fx?.poof) {
+        const w = c.g.getWorldPosition(_w);
+        fx.poof(w.x, w.y + 0.12, w.z, { scale: 0.32, color: [0.97, 0.97, 1], count: 4, rise: 1.4, life: 1.1 });
+      }
       scene.attach(c.g);
       const a = Math.random() * Math.PI * 2;
       c.fly = {

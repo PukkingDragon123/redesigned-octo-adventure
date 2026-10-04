@@ -1,9 +1,13 @@
 // node tools/biketest.mjs [-v]
 // Headless checks for Bessie: drives the real Bike class (src/game/bike.js) over a mock
-// world with scripted inputs at 120 Hz physics / 60 Hz input, and checks speed and hills,
-// rhythm pedalling, wheelies and loop-outs, stoppies and endos, bunny-hop timing, ramp
-// flips and spins, landings and bails, slides, foot dabs, kerbs, drifts and touch assists.
+// world with scripted inputs at 120 Hz physics / 60 Hz input, and checks the crank (spinning
+// makes speed, nothing moves her by itself, she coasts when the spinning stops, back-pedal
+// brake, alternating keys), Hank's stamina, crashes cooling the cocoa, hills, wheelies and
+// loop-outs, stoppies and endos, bunny-hop timing, ramp flips and spins, landings and bails,
+// slides, foot dabs, kerbs, drifts and touch assists.
 import { Bike } from '../src/game/bike.js';
+import { PedalFeed } from '../src/core/pedal.js';
+import { Orders } from '../src/game/orders.js';
 import { Skills, SKILLS, MAX_TIERS } from '../src/game/skills.js';
 import { newState } from '../src/game/state.js';
 import { PhysicsWorld } from '../src/world/collide.js';
@@ -58,16 +62,19 @@ function run(w, ctl, { T = 10, dt = 1 / 120, x = 0, z = 0, yaw = 0, setup, log =
   let t = 0, c = null, nextFrame = 0;
   const trace = [];
   while (t < T) {
-    if (t >= nextFrame) { c = ctl(t, b); nextFrame += frame; }
+    // (like the game: a frame's crank turn goes to its first physics step only)
+    if (t >= nextFrame) { c = ctl(t, b); nextFrame += frame; } else if (c.turn) c = { ...c, turn: 0 };
     b.update(dt, c);
     for (const e of b.events) events.push({ t: +t.toFixed(3), ...e });
-    if (log && Math.round(t * 120) % Math.round(log * 120) === 0) trace.push(`t=${t.toFixed(2)} v=${b.speed.toFixed(2)} y=${b.pos.y.toFixed(2)} z=${b.pos.z.toFixed(1)} wh=${b.wheelie.toFixed(2)} st=${b.stoppie.toFixed(2)} p=${b.pitch.toFixed(2)} gr=${b.grounded} pose=${b.pose} lean=${b.lean.toFixed(2)} rh=${b.rhythm.toFixed(2)} cr=${b.crash.toFixed(2)}`);
+    if (log && Math.round(t * 120) % Math.round(log * 120) === 0) trace.push(`t=${t.toFixed(2)} v=${b.speed.toFixed(2)} y=${b.pos.y.toFixed(2)} z=${b.pos.z.toFixed(1)} wh=${b.wheelie.toFixed(2)} st=${b.stoppie.toFixed(2)} p=${b.pitch.toFixed(2)} gr=${b.grounded} pose=${b.pose} lean=${b.lean.toFixed(2)} gear=${b.gear} spin=${b.spinRate.toFixed(1)} st=${b.stamina.toFixed(2)} cr=${b.crash.toFixed(2)}`);
     t += dt;
   }
   return { b, events, trace };
 }
 
-const C = (o = {}) => ({ throttle: 0, brake: 0, steer: 0, jump: false, drift: false, leanBack: 0, leanFwd: 0, assist: false, ...o });
+// controls; `throttle: 1` (the old held pedal) now means turning the crank at an easy, steady SPIN
+const SPIN = 11; // rad/s, ~1.75 turns a second
+const C = ({ throttle = 0, ...o } = {}) => ({ pedal: throttle * SPIN, turn: 0, brake: 0, steer: 0, jump: false, drift: false, leanBack: 0, leanFwd: 0, assist: false, ...o });
 
 const flat = world();
 const results = [];
@@ -75,12 +82,36 @@ const check = (name, ok, info = '') => { results.push({ name, ok, info }); conso
 const ev = (r, type) => r.events.filter((e) => e.type === type);
 const verbose = process.argv.includes('-v');
 
-// --- 1. pedalling on the flat: accelerates, tops out ~8 m/s
+// --- 1. the crank: spinning makes speed; nothing else does
 {
   const r = run(flat, () => C({ throttle: 1 }), { T: 12 });
   const r4 = run(flat, () => C({ throttle: 1 }), { T: 4 });
-  check('flat hold-pedal top speed 7-8.6 m/s', r.b.speed > 7 && r.b.speed < 8.6, `v12=${r.b.speed.toFixed(2)} v4=${r4.b.speed.toFixed(2)}`);
+  check('easy spin on the flat cruises 7-9 m/s in top gear', r.b.speed > 7 && r.b.speed < 9 && r.b.gear === 3, `v12=${r.b.speed.toFixed(2)} v4=${r4.b.speed.toFixed(2)} gear=${r.b.gear}`);
   check('pedal strokes emitted', ev(r, 'pedalStroke').length > 20, `${ev(r, 'pedalStroke').length}`);
+  const slow = run(flat, () => C({ pedal: 7 }), { T: 10 }), fast = run(flat, () => C({ pedal: 15 }), { T: 10 });
+  check('spinning faster goes faster (the gears want a quicker spin at speed)', fast.b.speed > slow.b.speed + 1.5 && slow.b.speed > 3, `spin7=${slow.b.speed.toFixed(2)} spin15=${fast.b.speed.toFixed(2)}`);
+  // standing still with nobody touching anything: she doesn't budge, on the flat or a gentle slope
+  for (const [name, w] of [['flat', flat], ['5% slope', world({ h: (x, z) => z * 0.05 + x * 0.02 })]]) {
+    let moved = 0;
+    const rest = run(w, (t, b) => { moved = Math.max(moved, Math.hypot(b.pos.x, b.pos.z)); return C(); }, { T: 10 });
+    check(`no input on the ${name}: the bike stays put`, moved < 1e-6 && rest.b.speed < 1e-6 && Math.abs(rest.b.crank) < 1e-9 && !ev(rest, 'pedalStroke').length, `moved=${moved.toExponential(1)} v=${rest.b.speed}`);
+  }
+  // stop spinning: the pedals stop at once and she coasts down, never speeding up again
+  let peak = 0, worst = 0, last = null, crankAt = 0, crankEnd = 0;
+  const co = run(flat, (t, b) => {
+    if (t < 10) peak = b.speed;
+    else {
+      if (last != null) worst = Math.max(worst, b.speed - last);
+      last = b.speed;
+      if (t < 10.6) crankAt = b.crank;
+      crankEnd = b.crank;
+    }
+    return C({ throttle: t < 10 ? 1 : 0 });
+  }, { T: 60 });
+  const at14 = run(flat, (t) => C({ throttle: t < 10 ? 1 : 0 }), { T: 14 });
+  check('stop spinning: the pedals stop and she coasts down to a halt', worst <= 1e-9 && at14.b.speed < peak * 0.8 && co.b.speed < 0.01 && Math.abs(crankEnd - crankAt) < 0.05, `peak=${peak.toFixed(2)} v14=${at14.b.speed.toFixed(2)} v60=${co.b.speed.toFixed(3)} speedup=${worst.toExponential(1)} crank drift=${(crankEnd - crankAt).toFixed(3)}`);
+  const bp = run(flat, (t) => C({ pedal: t < 8 ? SPIN : -8 }), { T: 11 });
+  check('back-pedalling is a coaster brake', bp.b.speed < 0.6, `v=${bp.b.speed.toFixed(2)}`);
 }
 // --- 2. hills: uphill slow, downhill coast fast
 {
@@ -91,15 +122,63 @@ const verbose = process.argv.includes('-v');
   const r2 = run(down, () => C({}), { T: 14, setup: (b) => b.vel.set(0, 0, 3) });
   check('downhill 14% coast > 10 m/s', r2.b.speed > 10, `v=${r2.b.speed.toFixed(2)}`);
 }
-// --- 3. rhythm tapping beats holding; mashing slips
+// --- 3. keys: W and S are the two feet; each change of foot winds the crank half a turn
 {
-  const tap = (t) => C({ throttle: (t % 0.36) < 0.18 ? 1 : 0 });
-  const r = run(flat, tap, { T: 14 });
-  const h = run(flat, () => C({ throttle: 1 }), { T: 14 });
-  check('rhythm tapping faster than holding', r.b.speed > h.b.speed + 0.4, `tap=${r.b.speed.toFixed(2)} hold=${h.b.speed.toFixed(2)} rhythm=${r.b.rhythm.toFixed(2)}`);
-  const mash = (t) => C({ throttle: t < 2 ? 1 : (t % 0.1) < 0.05 ? 1 : 0 });
-  const m = run(flat, mash, { T: 3, frame: 1 / 120 });
-  check('mashing slips a foot', ev(m, 'pedalSlip').length > 0, `${ev(m, 'pedalSlip').length}`);
+  const feed = (script, T = 3, fps = 60) => {
+    const f = new PedalFeed();
+    let out = 0, maxStep = 0;
+    for (let i = 0; i < T * fps; i++) {
+      script(f, i);
+      const d = f.update(1 / fps);
+      out += d;
+      if (i > 0.6 * fps) maxStep = Math.max(maxStep, d);
+    }
+    return { f, out, maxStep };
+  };
+  const hold = feed((f, i) => { if (i === 0) f.stroke(1); });
+  check('holding W turns the crank half a turn, then nothing (no auto pedal)', Math.abs(hold.out - Math.PI) < 1e-6, `turned=${hold.out.toFixed(3)}`);
+  const same = feed((f, i) => { if (i % 15 === 0) f.stroke(1); });
+  check('tapping the same key over and over does nothing more', Math.abs(same.out - Math.PI) < 1e-6, `turned=${same.out.toFixed(3)}`);
+  const sOnly = feed((f) => f.stroke(-1));
+  check('S on its own (from rest) is the brake, not a stroke', sOnly.out === 0, `turned=${sOnly.out}`);
+  // alternating at 4 strokes a second: two turns a second, handed out smoothly
+  const alt = feed((f, i) => { if (i % 15 === 0) f.stroke((i / 15) % 2 ? -1 : 1); }, 4);
+  const rate = alt.out / 4;
+  check('alternating W / S four times a second spins ~2 turns a second, smoothly', Math.abs(rate - 4 * Math.PI) < 1.5 && alt.maxStep < (4 * Math.PI / 60) * 2.2, `rate=${rate.toFixed(2)} rad/s maxStep=${alt.maxStep.toFixed(3)}`);
+  // ...and through the real bike
+  const f = new PedalFeed();
+  let k = 0;
+  const kb = run(flat, (t) => { if (t >= k * 0.24) { f.stroke(k % 2 ? -1 : 1); k++; } return C({ turn: f.update(1 / 60) }); }, { T: 12 });
+  check('alternating keys ride Bessie up to speed', kb.b.speed > 6.5, `v=${kb.b.speed.toFixed(2)} gear=${kb.b.gear}`);
+  const f2 = new PedalFeed();
+  const kh = run(flat, (t) => { if (t < 1e-9) f2.stroke(1); return C({ turn: f2.update(1 / 60) }); }, { T: 8 });
+  check('one key held: a nudge, then she coasts to a stop', kh.b.speed < 0.05 && kh.b.pos.z < 5, `v=${kh.b.speed.toFixed(3)} z=${kh.b.pos.z.toFixed(2)}`);
+}
+// --- 3b. Hank's wind: flat-out spinning tires him (slower, wobblier); coasting brings it back
+{
+  const r = run(flat, (t) => C({ pedal: t < 30 ? 18 : 0 }), { T: 46 });
+  const ex = ev(r, 'exhausted')[0], rec = ev(r, 'recovered')[0];
+  check('sprinting drains stamina until Hank is spent', !!ex && ex.t > 8 && ex.t < 30 && ev(r, 'winded').length > 0, `exhausted at ${ex?.t}s`);
+  check('coasting and resting bring his wind back', !!rec && rec.t > 30 && r.b.stamina > 0.6 && !r.b.exhausted, `recovered at ${rec?.t}s stamina=${r.b.stamina.toFixed(2)}`);
+  const cruise = run(flat, () => C({ throttle: 1 }), { T: 60 });
+  check('an easy spin can be kept up for a good minute', cruise.b.stamina > 0.3 && !ev(cruise, 'exhausted').length, `stamina after 60 s=${cruise.b.stamina.toFixed(2)}`);
+  const fresh = run(flat, () => C({ pedal: 14 }), { T: 6 });
+  const spent = run(flat, () => C({ pedal: 14 }), { T: 6, setup: (b) => { b.stamina = 0; b.exhausted = true; b.tired = 1; } });
+  check('spent, the same spinning goes much slower', spent.b.speed < fresh.b.speed * 0.8, `fresh=${fresh.b.speed.toFixed(2)} spent=${spent.b.speed.toFixed(2)}`);
+}
+// --- 3c. a crash knocks the heat out of every cup in the crate (more the harder the crash)
+{
+  const mk = () => {
+    const game = { time: 0, bike: { stats: { capacity: 3 } }, ui: { pop() {} }, state: {}, cargo: null };
+    const O = new Orders(game);
+    O.list = [{ id: 1, state: 'carried', quality: 90 }, { id: 2, state: 'carried', quality: 70 }, { id: 3, state: 'board', quality: 100 }];
+    return O;
+  };
+  const hard = mk(), soft = mk();
+  hard.crashCool(12, false);
+  soft.crashCool(4, true);
+  const [h1, h2, h3] = hard.list.map((o) => o.quality), [s1] = soft.list.map((o) => o.quality);
+  check('crash cools every carried cup (a hard one more than a soft one), not the ones on the board', h1 <= 90 - 25 && h2 <= 70 - 25 && h3 === 100 && s1 < 90 - 8 && s1 > h1 && hard.list[0].chills === 1, `hard: ${h1.toFixed(0)}, ${h2.toFixed(0)} soft: ${s1.toFixed(0)}`);
 }
 // --- 4. wheelie: holding lean back loops out; a feathering rider holds 12 s
 {

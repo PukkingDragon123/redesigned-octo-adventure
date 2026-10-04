@@ -1,0 +1,39 @@
+/* The crank (crank.js): chainring, chain and rear cogs in the bottom right corner while
+   riding. Art is 88 x 68 pixels at the kit's whole-number scale. */
+.crank-hud {
+  position: absolute;
+  right: calc(var(--u) * 4 + var(--safe-r, 0px));
+  bottom: calc(var(--u) * 4 + var(--safe-b, 0px));
+  width: calc(var(--u) * 88);
+  height: calc(var(--u) * 68);
+  display: none;
+  pointer-events: none;
+  z-index: 2;
+}
+.crank-hud.on { display: block; }
+.crank-hud canvas { position: absolute; left: 0; top: 0; width: 100%; height: 100%; display: block; image-rendering: pixelated; pointer-events: none; }
+/* where a finger or the mouse grabs it: round the chainring, a thumb's width beyond it */
+.crank-hud .crank-hit {
+  position: absolute;
+  left: calc(var(--u) * 30);
+  top: calc(var(--u) * 3);
+  width: calc(var(--u) * 60);
+  height: calc(var(--u) * 60);
+  border-radius: 50%;
+  pointer-events: auto;
+  touch-action: none;
+  cursor: grab;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.crank-hud.held .crank-hit { cursor: grabbing; }
+.touchmode .crank-hud .crank-hit { left: calc(var(--u) * 18); top: calc(var(--u) * -12); width: calc(var(--u) * 84); height: calc(var(--u) * 84); }
+/* phones held upright: up off the home bar, like the buttons */
+.k-portrait .touchmode .crank-hud { bottom: calc(var(--u) * 26 + var(--safe-b, 0px)); }
+/* which key (or trigger) goes down next */
+.crank-hud .ck { position: absolute; left: calc(var(--u) * 1); top: calc(var(--u) * 1); display: none; gap: calc(var(--u) * 2); pointer-events: none; }
+.crank-hud .ck.on { display: flex; }
+.crank-hud .ck .k-key { opacity: 0.75; }
+.crank-hud .ck .k-key.hot { opacity: 1; }

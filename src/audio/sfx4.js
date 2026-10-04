@@ -95,6 +95,19 @@ export const SFX4 = {
     setWet(c, 0.12);
     upto(c, 0.5);
   },
+  // a winded skeleton: one short pant of breath, and the long sigh once he's got it back
+  huff(c) {
+    N(c, { dur: 0.16, a: 0.02, h: 0.03, bp: rand(850, 1050), bp2: 650, q: 1.6, v: 0.5, sw: 0.15 });
+    N(c, { dur: 0.14, buf: 'pink', a: 0.02, lp: 1400, v: 0.2 });
+    upto(c, 0.3);
+  },
+  sigh(c) {
+    N(c, { dur: 0.35, a: 0.12, h: 0.1, bp: 1300, bp2: 1600, q: 1.4, v: 0.22 }); // in...
+    N(c, { t: 0.4, dur: 0.9, a: 0.05, h: 0.25, bp: 1000, bp2: 520, q: 1.5, v: 0.4, sw: 0.85 }); // ...and a long one out
+    T(c, { t: 0.42, dur: 0.6, type: 'triangle', f: 230, f2: 150, v: 0.05, a: 0.08, h: 0.15, lp: 900 });
+    setWet(c, 0.12);
+    upto(c, 1.5);
+  },
   door_slam(c) {
     T(c, { dur: 0.32, f: 120, f2: 48, g: 0.09, v: 0.8 });
     N(c, { dur: 0.25, buf: 'brown', lp: 600, v: 0.8, a: 0.001 });
