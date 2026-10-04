@@ -10,6 +10,7 @@ import { input } from '../core/input.js';
 import { clamp, damp, angleDamp, wrapAngle } from '../core/math.js';
 import { P } from '../render/particles.js';
 import * as FOOD from '../voxel/models/food.js';
+import { screenFade } from '../ui/leaves.js';
 
 const _v = new THREE.Vector3();
 
@@ -110,8 +111,9 @@ export class Interior {
     return Math.hypot(p.x - d.x, p.z - d.z) < r && Math.abs(p.y - d.y) < 1.2;
   }
 
+  // through the door on a gust of autumn leaves (see ui/leaves.js)
   fade(to, dur) {
-    return this.g.tween(this.g.pipeline.post.uFade, 'value', to, dur);
+    return screenFade(this.g, to, dur);
   }
 
   // put Hank on his feet (inside the cabin), with or without the bike nearby

@@ -344,6 +344,25 @@ export const SFX3 = {
     setWet(c, 0.35);
   },
 
+  // ------------------------------------------------ autumn leaves (UI transitions)
+
+  // a gust of wind sweeping a drift of dry leaves across the screen
+  leaf_gust(c) {
+    N(c, { dur: 0.95, a: 0.38, bp: 260, bp2: 1500, q: 0.9, v: 0.42, sw: 0.7 });
+    N(c, { dur: 0.9, buf: 'pink', a: 0.32, lp: 500, lp2: 1200, v: 0.22, sw: 0.6 });
+    N(c, { t: 0.12, dur: 0.75, buf: 'crackle', a: 0.2, bp: 3200, q: 0.7, v: 0.16 }); // the leaves themselves
+    for (let i = 0; i < 6; i++) N(c, { t: 0.15 + i * 0.09 + rand(0, 0.05), dur: 0.035, bp: rand(2400, 4800), q: 3, v: 0.05 });
+    setWet(c, 0.2);
+    upto(c, 1.1);
+  },
+  // a handful of leaves fluttering loose
+  leaf_rustle(c) {
+    N(c, { dur: 0.32, buf: 'crackle', a: 0.03, bp: 3600, q: 0.8, v: 0.14 });
+    N(c, { dur: 0.3, a: 0.08, bp: 900, bp2: 2200, q: 1.2, v: 0.08, sw: 0.25 });
+    for (let i = 0; i < 3; i++) N(c, { t: 0.04 + i * 0.07, dur: 0.03, bp: rand(2600, 4600), q: 3, v: 0.05 });
+    upto(c, 0.45);
+  },
+
   // ------------------------------------------------ bike tricks
 
   trick_whoosh(c) {

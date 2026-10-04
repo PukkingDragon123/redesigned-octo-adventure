@@ -5,6 +5,13 @@
 //   const p = new LivePortrait(game, { size: 160 });
 //   host.appendChild(p.canvas); p.set('gus', 'happy'); p.talk(true);
 // A portrait animates by itself while its canvas is in the page and stops when removed.
+//
+// Portraits are pixel art like the rest of the interface: with { art: n } the
+// canvas is n x n RENDER pixels, one per art pixel, and is shown n art pixels big
+// (n * --u, a whole number of device pixels per pixel, never smoothed). Squash and
+// stretch (squash(sx, sy)) happens inside the render, not by resizing the canvas,
+// so the picture is never resampled; `headroom` adds empty art rows above the bust
+// for the stretch to grow into.
 import * as THREE from 'three';
 import { VoxelCharacter } from '../game/vchar.js';
 import { G } from '../render/shaderlib.js';
@@ -18,6 +25,7 @@ const STUDIO = [
   ['uNight', 0], ['uWet', 0], ['uSnow', 0],
 ];
 const FPS = 30;
+const SQ = new THREE.Matrix4();
 
 // the shared renderer: scene -> linear target -> gamma + ink outline -> canvas
 let R = null;
@@ -57,16 +65,24 @@ function shared() {
 }
 
 export class LivePortrait {
-  constructor(game, { size = 160, bust = true, yaw = 0.3, outline = true, bg = null } = {}) {
+  constructor(game, { size = 160, art = 0, headroom = 0, bust = true, yaw = 0.3, outline = true, bg = null } = {}) {
     this.game = game;
-    this.size = size;
+    this.size = art || size;
+    this.head = art ? headroom : 0;
+    this.sx = this.sy = 1;
     this.bust = bust;
     this.yaw = yaw;
     this.outline = outline;
     this.bg = bg;
     this.canvas = document.createElement('canvas');
-    this.canvas.width = this.canvas.height = size;
+    this.canvas.width = this.size;
+    this.canvas.height = this.size + this.head;
     this.canvas.className = 'live3d';
+    if (art) {
+      this.canvas.style.width = `calc(var(--u) * ${this.size})`;
+      this.canvas.style.height = `calc(var(--u) * ${this.size + this.head})`;
+      this.canvas.style.imageRendering = 'pixelated';
+    }
     this.ctx = this.canvas.getContext('2d');
     this.scene = new THREE.Scene();
     this.cam = new THREE.PerspectiveCamera(bust ? 24 : 28, 1, 0.05, 30);
@@ -108,6 +124,12 @@ export class LivePortrait {
     }
     this.start();
     return this;
+  }
+
+  // squash and stretch about the bottom centre (1 = rest); drawn into the next frame
+  squash(sx = 1, sy = 1) {
+    this.sx = sx;
+    this.sy = sy;
   }
 
   talk(on) {
@@ -171,13 +193,24 @@ export class LivePortrait {
   render() {
     const S = shared();
     if (!S) return;
-    const n = this.size;
+    const n = this.size, h = n + this.head;
     const { renderer } = S;
-    if (S.size !== n) {
+    if (S.size !== n || S.h !== h) {
       S.size = n;
-      renderer.setSize(n, n, false);
+      S.h = h;
+      renderer.setSize(n, h, false);
       S.rt?.dispose();
-      S.rt = new THREE.WebGLRenderTarget(n, n, { type: THREE.HalfFloatType, minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter });
+      S.rt = new THREE.WebGLRenderTarget(n, h, { type: THREE.HalfFloatType, minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter });
+    }
+    // square framing, then headroom above it and the squash, as a clip-space matrix
+    const cam = this.cam;
+    cam.aspect = 1;
+    cam.updateProjectionMatrix();
+    if (this.head || this.sx !== 1 || this.sy !== 1) {
+      const r = this.head / n, a = this.sy / (1 + r);
+      SQ.set(this.sx, 0, 0, 0, 0, a, 0, a - 1, 0, 0, 1, 0, 0, 0, 0, 1);
+      cam.projectionMatrix.premultiply(SQ);
+      cam.projectionMatrixInverse.copy(cam.projectionMatrix).invert();
     }
     const keep = STUDIO.map(([k]) => G[k].value);
     for (const [k, v] of STUDIO) G[k].value = v;
@@ -188,7 +221,7 @@ export class LivePortrait {
       renderer.render(this.scene, this.cam);
       renderer.setRenderTarget(null);
       S.blit.uniforms.t.value = S.rt.texture;
-      S.blit.uniforms.px.value.set(1 / n, 1 / n);
+      S.blit.uniforms.px.value.set(1 / n, 1 / h);
       S.blit.uniforms.outline.value = this.outline ? 1 : 0;
       renderer.clear();
       renderer.render(S.blitScene, S.blitCam);
@@ -196,8 +229,9 @@ export class LivePortrait {
       STUDIO.forEach(([k], i) => (G[k].value = keep[i]));
     }
     const c = this.ctx;
-    c.clearRect(0, 0, n, n);
-    if (this.bg) { c.fillStyle = this.bg; c.fillRect(0, 0, n, n); }
+    c.clearRect(0, 0, n, h);
+    if (this.bg) { c.fillStyle = this.bg; c.fillRect(0, 0, n, h); }
+    c.imageSmoothingEnabled = false;
     c.drawImage(S.canvas, 0, 0);
   }
 

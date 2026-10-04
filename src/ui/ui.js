@@ -16,6 +16,7 @@ import { CHARACTERS } from '../art/characters.js';
 import { input } from '../core/input.js';
 import { sound } from '../game/sound.js';
 import { loadSettings } from '../game/state.js';
+import { leaves } from './leaves.js';
 
 // a pixel icon by name: the UI set first, then the food sprites
 export function anyIcon(name) {
@@ -174,8 +175,8 @@ export class UI {
     if (who) {
       // a live 3D head-and-shoulders of the real model, not a flat picture
       if (!this._dlgLive) {
-        this._dlgLive = new LivePortrait(this.game, { size: 160, bust: true, yaw: 0.3, outline: false, bg: '#2a1a14' });
-        this._dlgLive.canvas.style.cssText = 'width:100%;height:100%;display:block';
+        this._dlgLive = new LivePortrait(this.game, { art: 48, bust: true, yaw: 0.3, outline: false, bg: '#2a1a14' });
+        this._dlgLive.canvas.style.cssText = 'width:100%;height:100%;display:block;image-rendering:pixelated';
       }
       if (this._dlgLive.canvas.parentNode !== D.portrait) D.portrait.appendChild(this._dlgLive.canvas);
       this._dlgLive.set(who, opts.expr || 'neutral');
@@ -304,10 +305,17 @@ export class UI {
     this.highlight(m);
     sound.play('ui_open');
     snapBox(contentEl);
+    // a few leaves shaken loose as the sheet lands, and a little gust across
+    requestAnimationFrame(() => {
+      leaves.flutter(contentEl, 7);
+      leaves.gust(5, { speed: 1.3 });
+    });
     return m;
   }
   closeOverlay(m = this.menuStack[this.menuStack.length - 1]) {
     if (!m) return;
+    const sheet = m.ov.firstElementChild;
+    if (sheet) leaves.flutter(sheet, 6);
     m.ov.remove();
     this.menuStack = this.menuStack.filter((x) => x !== m);
     this.swallowInput();
@@ -379,6 +387,7 @@ export class UI {
     b.addEventListener('click', () => {
       if (b.disabled) return;
       sound.play('ui_click');
+      leaves.burstFrom(b, 6);
       onClick?.();
     });
     return this.hoverSelect(b);
@@ -391,6 +400,12 @@ export class UI {
   }
 
   update(dt) {
+    // a few leaves drift past while a menu (or the title) is open
+    const menu = this.menuStack.length > 0;
+    if (menu !== this._leafAmb) {
+      this._leafAmb = menu;
+      leaves.ambient('menu', menu, 4);
+    }
     if (this.dialogueTick) this.dialogueTick(dt);
     else this.menuTick();
     this.updateTags();

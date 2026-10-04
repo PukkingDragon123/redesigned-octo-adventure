@@ -23,6 +23,7 @@ import { BUBBLE_JOIN } from './kitart.js';
 import { el, scale, snap } from './kit.js';
 
 const ART = 56; // portrait size in art pixels
+const HEAD = 14; // empty art rows above him for the stretch to grow into
 const MAXQ = 6;
 // things the pop-up must keep clear of
 const OBSTACLES = '#touch.on .tbtn, #touch.on .twheel, #touch.on .t-talk.lit, .crank-hud.on, .hud-gauge, .hud-note, .hud-prompt.on, .hud-tl, .hud-compass';
@@ -122,9 +123,10 @@ export class Popups {
   // one live 3D portrait, reused for every message (the real model, never a flat picture)
   portrait(who, expr) {
     if (!this.live) {
-      this.live = new LivePortrait(this.game, { size: Math.min(256, Math.round(ART * scale.u * Math.min(2, devicePixelRatio || 1))) || 160, bust: true, yaw: 0.3, outline: true });
+      // rendered on the art grid (one render pixel per art pixel) and shown at the
+      // kit's whole-number scale: a crisp pixel portrait, never a smoothed one
+      this.live = new LivePortrait(this.game, { art: ART, headroom: HEAD, bust: true, yaw: 0.3, outline: true });
       this.live.canvas.classList.add('pop-char');
-      this.live.canvas.style.imageRendering = 'auto';
     }
     this.live.set(who, expr);
     return this.live.canvas;
@@ -260,14 +262,13 @@ export class Popups {
     let jx = 0, jy = 0;
     if (c.state === 'hold' && !c.typedAll) jy = Math.floor(this.t * 9) % 2 ? -1 : 0;
     if (c.shout && c.state === 'hold' && c.hold < 0.35) jx = Math.floor(this.t * 30) % 2 ? 1 : -1;
+    // the squash and stretch is drawn inside the portrait (the canvas never changes
+    // size, so it is never resampled); only whole art pixels of movement out here
     const u = scale.u;
-    const w = Math.max(4, Math.round(ART * k[2])), h = Math.max(4, Math.round(ART * k[3]));
-    const x = Math.round(c.cx / u - w / 2) + jx;
-    const y = Math.round(c.base / u - h + Math.round(k[1] * ART)) + jy;
-    const s = c.img.style;
-    s.width = `${w * u}px`;
-    s.height = `${h * u}px`;
-    s.transform = `translate(${snap(x * u)}px, ${snap(y * u)}px)${c.flip ? ' scaleX(-1)' : ''}`;
+    this.live?.squash(k[2], k[3]);
+    const x = Math.round(c.cx / u - ART / 2) + jx;
+    const y = Math.round(c.base / u - ART - HEAD + Math.round(k[1] * ART)) + jy;
+    c.img.style.transform = `translate(${snap(x * u)}px, ${snap(y * u)}px)${c.flip ? ' scaleX(-1)' : ''}`;
   }
 
   // pick a spot along the bottom of the screen (or just above whatever is there)

@@ -44,10 +44,10 @@ export function tempBarHTML(q, cls = '') {
   const T = cupTemp(q);
   const pct = Math.round(T.k * 100);
   const big = cls.includes('big');
-  const px = big ? 32 : 16; // the face is 16 art pixels: whole-number scales only
-  return `<span class="tbar ${cls}" title="${T.word} (${T.deg}\u00b0C)" style="display:inline-flex;align-items:center;gap:4px;flex:1;min-width:${big ? 120 : 40}px">` +
-    `<img class="tbar-face" src="${tempFaceURL(tempMood(q))}" alt="${T.word}" width="${px}" height="${px}" style="image-rendering:pixelated;flex:none">` +
-    `<span class="tbar-track" style="position:relative;flex:1;height:${big ? 10 : 6}px;background:#e8e0d0;border:2px solid #3a2a1e;overflow:hidden">` +
+  // sized in art pixels (--u) like the rest of the pixel UI: the 16px face at 1:1, a 1-pixel ink border
+  return `<span class="tbar ${cls}" title="${T.word} (${T.deg}\u00b0C)" style="display:inline-flex;align-items:center;gap:calc(var(--u) * 2);flex:1;min-width:calc(var(--u) * ${big ? 60 : 20})">` +
+    `<img class="tbar-face" src="${tempFaceURL(tempMood(q))}" alt="${T.word}" style="width:calc(var(--u) * 16);height:calc(var(--u) * 16);image-rendering:pixelated;flex:none">` +
+    `<span class="tbar-track" style="position:relative;flex:1;height:calc(var(--u) * ${big ? 6 : 4});background:#e8e0d0;border:var(--u) solid #3a2a1e;overflow:hidden">` +
     `<span class="tbar-fill" style="position:absolute;left:0;top:0;bottom:0;width:${pct}%;background:linear-gradient(90deg,#4682dc,${T.color})"></span></span></span>`;
 }
 

@@ -4,6 +4,7 @@ import { VoxelCharacter } from './vchar.js';
 import { Billboard } from '../render/sprites.js';
 import { meshVox } from '../voxel/mesh.js';
 import { voxMesh, sharedVoxelMaterial } from '../render/voxelMaterial.js';
+import { screenFade } from '../ui/leaves.js';
 
 const v3 = (a) => (a.isVector3 ? a.clone() : new THREE.Vector3(a[0], a[1], a[2]));
 
@@ -77,9 +78,10 @@ export class Scene {
     if (this.skip) return Promise.resolve();
     return this.g.wait(s);
   }
+  // short fades are autumn leaf wipes, long ones stay soft (see ui/leaves.js)
   async fade(to, dur = 0.6) {
     if (this.skip) dur = 0.01;
-    await this.g.tween(this.g.pipeline.post.uFade, 'value', to, dur);
+    await screenFade(this.g, to, dur);
   }
   // subject: who (or what point) the shot is about; whatever gets between them and the lens
   // melts away. Left out, the camera picks whoever is nearest the middle of the frame.

@@ -10,7 +10,10 @@
   padding: calc(var(--u) * 9) calc(var(--u) * 4) calc(var(--u) * 2);
   pointer-events: auto;
 }
-.m-title { position: absolute; top: calc(var(--u) * -20); left: 50%; transform: translateX(-50%); z-index: 2; }
+/* the sheet drops in by whole art pixels (and shakes a few leaves loose: see leaves.js) */
+.overlay > .menu { animation: k-drop 0.24s steps(1); }
+@keyframes k-drop { 0% { top: calc(var(--u) * -10); } 33% { top: calc(var(--u) * -4); } 67% { top: var(--u); } 100% { top: 0; } }
+.m-title { position: absolute; top: calc(var(--u) * -20); left: 0; right: 0; width: max-content; margin: 0 auto; z-index: 2; }
 .m-close { position: absolute; top: calc(var(--u) * -9); right: calc(var(--u) * -9); z-index: 2; }
 .m-body {
   min-height: 0;
