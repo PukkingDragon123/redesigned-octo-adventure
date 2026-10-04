@@ -14,6 +14,7 @@ import { PhysProps } from './physprops.js';
 import { Vox } from '../voxel/vox.js';
 import { dressPlaces } from './places.js';
 import { placeDeco2D } from './deco2d.js';
+import { dressContest } from './contest.js';
 import { buildingSpecPure } from './foundations.js';
 
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _s = new THREE.Vector3(1, 1, 1), _p = new THREE.Vector3();
@@ -418,6 +419,8 @@ export class VoxelWorld {
     });
     // the rest of the remade map: streets, green, harbour, farm, beach, campground...
     dressPlaces(this, physprops);
+    // the pumpkin carving contest at the west end of Main Street
+    dressContest(this, physprops);
     // and the 2D street clutter (fences, bins, stalls...), fitted around everything above
     this.world.deco2d = placeDeco2D(this);
   }
