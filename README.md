@@ -37,32 +37,40 @@ audio starts.
 
 | Keyboard | Gamepad | Action |
 | --- | --- | --- |
-| W / Up arrow | RT | Pedal. Hold it to cruise; tap it in a steady rhythm (about three taps a second) to sprint. Mash it and Hank's foot slips off |
-| S / Down arrow | LT | Brake; hold when stopped to roll backwards |
+| W and S / Up and Down, one after the other | Right stick turned in circles, or RT and LT one after the other | Pedal. You turn the crank yourself: each time the other foot goes down it winds on half a turn (holding a key does nothing). Spin faster to go faster: the three gears change by themselves, and top gear wants quick feet. Stop spinning and Bessie coasts; nothing pedals for you. Spinning flat out winds Hank (he slows down and wobbles until he gets his breath back) |
+| Mouse: drag round the crank | | Pedal with the mouse: drag in circles round the chainring, bottom right (backwards back-pedals) |
+| S / Down held on its own | LT held | Brake (a back-pedal on the stick or the crank brakes too); hold when stopped to roll backwards |
 | A D / Left Right arrows | Left stick | Steer (lean into corners; too fast on grass and the tyres let go); spin in the air |
 | Space | A | Hold to crouch, let go to bunny hop (crouch about a third of a second for the full pop; pop right at a ramp lip to go higher); jump on foot |
 | Q / Right Ctrl | Left stick down | Lean back: wheelie (while pedalling), manual (coasting), backflip (in the air). Tap the brake to save a loop-out |
-| F | Left stick up | Lean forward: stoppie (with the brake), nose manual (coasting), frontflip (in the air); kick on foot (F or Q) |
-| Shift | RB | Drift (let go for a little kick); run on foot |
+| F | Left stick up | Lean forward: stoppie (with the brake), nose manual (coasting), frontflip (in the air); on foot, kicks whatever kickable thing is right there (F or Q) |
+| Shift | RB | Drift (let go for a little kick); hold to run on foot (or push the stick right out) |
 | Shift + direction (in the air) | RB + stick | Poses: Superman, No-Hander, Can-Can, Nothin', Skull Toss. Let go before you land |
-| E / Enter | X | Talk, deliver, hop off / on the bike, pick things up |
+| E / Enter | X | Talk, deliver, hop off / on the bike, pick things up; on foot next to a pumpkin, a bin or a tree: kick it (F / Q / B too) |
 | R | Y | Ring the bell |
 | C | | Camera (once Birdie lends you hers) |
 | M | Back | The paper map |
 | Tab | | Harold's keepsakes |
-| Mouse drag | Right stick | Look around |
+| Mouse drag (right button) | Right stick (on foot) | Look around |
 | Esc | Start | Hank's journal (pause); skips a cutscene while one is playing |
 
 Landings have to match the ground: roughly level with the slope and pointing
 the way you're travelling. A perfect landing gives a little burst of speed; a
 crooked one wobbles; a bad one is a bail.
 
-On a touch screen, on-screen controls appear after your first tap: a steering
-wheel on the left (turn it, it springs back) and pedal, brake, hop, trick,
-lean and bell buttons on the right. Touch riding gets assists (steadier
-balance, forgiving landings, no slide-outs). On foot the wheel becomes a stick and the
-buttons become jump, kick and snap. A paper tag shows whatever you can do right
-now; tap it.
+On a touch screen, on-screen controls appear after your first tap: a floating
+steering stick on the left (pull it back to wheelie, push it up for a stoppie)
+and, bottom right, Bessie's crank: circle your thumb round the chainring to
+pedal (backwards brakes), with brake, hop, trick and bell buttons round it.
+The crank also shows the gear (the chain hops across three rear cogs), whether
+the pedals are catching the back wheel, and how winded Hank is (the brass glows
+red and the chain sags). Touch riding gets assists (steadier balance, forgiving
+landings, no slide-outs). On foot the stick walks (a gentle push ambles, all
+the way out runs) and there is a jump button; a paper tag shows whatever you can
+do right here (talk, hop on, kick the pumpkin...): tap it.
+
+Crash with cocoa in the crate and the cups go flying: every cup loses a chunk of
+its heat, more the harder the crash.
 
 ## What there is to do
 
@@ -169,15 +177,17 @@ now; tap it.
   (`src/art/icons.js`), and black-and-white speech bubbles over the real 3D
   speaker. Everything is drawn on one integer pixel grid so it stays crisp.
   Orders and customers live in a spiral notebook. Touch controls have a
-  floating thumb stick (pull back to wheelie, push to stoppie), pedal, brake,
-  hop, an auto-pedal switch and one trick button.
+  floating thumb stick (pull back to wheelie, push to stoppie), a pixel-art
+  crank to spin (`crank.js`), brake, hop and one trick button.
 - **Rendering** (`src/render`): three.js renders at native resolution (or
   above it on high-DPI screens) into an HDR target. A post pass adds height fog
   with sun scattering, cartoon depth-edge outlines, screen-space god rays,
   bloom, colour grading and FXAA. The 'Retro' and 'Chunky' resolution settings
   bring back the old low-resolution, dithered pixel look. Water uses planar
   reflections.
-- **Game** (`src/game`): bicycle physics with momentum, rhythm pedalling,
+- **Game** (`src/game`): bicycle physics with momentum, a crank the rider turns
+  himself through three auto gears (`src/core/pedal.js` turns keys, sticks and
+  drags into crank turns), a stamina pool that winds Hank,
   spring-lean cornering and grip limits, wheelies, manuals and stoppies as
   balancing inverted pendulums, crouch-and-pop hops, air spins and flips with
   landing checks, foot dabs, kerb bumps and comic bails; skill tracking

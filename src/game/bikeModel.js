@@ -323,7 +323,8 @@ export class BikeModel {
     if (rearDown) this.wR = roll;
     else {
       this.wR *= Math.exp(-(0.35 + brake * 6) * dt);
-      if (bike.cadence > 0.05 && !crashed) this.wR = Math.max(this.wR, bike.cadence * 9.5 * (RING_R / COG_R));
+      // pedalling in the air spins the back wheel up through the gear
+      if (bike.spinRate > 0.5 && !crashed) this.wR = Math.max(this.wR, (bike.spinRate * (bike.gearK?.() ?? RING_R / COG_R * WHEEL_R)) / WHEEL_R);
     }
     if (frontDown) this.wF = roll * (bike.stoppie > 0.1 ? 0.6 : 1);
     else this.wF *= Math.exp(-(0.35 + brake * 6) * dt);

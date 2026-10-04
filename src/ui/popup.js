@@ -25,7 +25,7 @@ import { el, scale, snap } from './kit.js';
 const ART = 56; // portrait size in art pixels
 const MAXQ = 6;
 // things the pop-up must keep clear of
-const OBSTACLES = '#touch.on .tbtn, #touch.on .twheel, #touch.on .t-talk.lit, .hud-gauge, .hud-note, .hud-prompt.on, .hud-tl, .hud-compass';
+const OBSTACLES = '#touch.on .tbtn, #touch.on .twheel, #touch.on .t-talk.lit, .crank-hud.on, .hud-gauge, .hud-note, .hud-prompt.on, .hud-tl, .hud-compass';
 
 // rise / duck keyframes: [t, y (fraction of the portrait, + is down), scaleX, scaleY]
 const RISE = [[0, 1, 0.8, 1.25], [0.11, 0.3, 0.86, 1.18], [0.19, -0.1, 0.95, 1.07], [0.25, 0, 1.18, 0.82], [0.32, 0, 0.93, 1.07], [0.39, 0, 1.04, 0.96], [0.45, 0, 1, 1]];

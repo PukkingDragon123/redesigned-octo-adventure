@@ -33,13 +33,42 @@ export class Interactables {
       if (d < s.r && d < bd) { bd = d; best = s; }
     }
     if (best) return { text: best.text, fn: () => this.use(best) };
-    const pr = this.props?.nearest(p, 1.3);
-    if (pr) return { text: KICK_TEXT[pr.kind] || 'Kick it', key: 'F', fn: () => this.kickNow(), passive: true };
-    const dk = this.deco.nearest(p, 1.0);
-    if (dk) return { text: dk.text, key: 'F', fn: () => this.kickNow(), passive: true };
+    // kicking is the context action next to something kickable (E, the touch action plate,
+    // or F / Q / gamepad B)
+    const k = this.kickable(g);
+    if (k) return { text: k, fn: () => this.kickNow() };
     const door = this.W.doors?.nearest(p);
     if (door) return { text: 'Knock on the door', fn: () => this.W.doors.knock(door, g) };
     return null;
+  }
+
+  // what Hank could kick right here (the prompt's words), or null: kicks only happen next to
+  // something kickable (a pumpkin, a bin, a fence, a tree trunk right in front of him)
+  kickable(g = this.game) {
+    if (!g.onFoot || this.sitting) return null;
+    const p = g.playerPos;
+    const pr = this.props?.nearest(p, 1.3);
+    if (pr) return KICK_TEXT[pr.kind] || 'Kick it';
+    const dk = this.deco.nearest(p, 1.0);
+    if (dk) return dk.text;
+    if (this.treeAhead(g.walker.pos, g.walker.yaw)) return 'Kick the tree';
+    return null;
+  }
+  canKick(g = this.game) {
+    return !!this.kickable(g);
+  }
+  // a trunk within a short step in front of him
+  treeAhead(pos, yaw) {
+    const C = this.W.forest?.colliders;
+    if (!C?.query) return false;
+    const fx = Math.sin(yaw), fz = Math.cos(yaw);
+    let hit = false;
+    C.query(pos.x, pos.z, 1.6, (o) => {
+      if (hit || !o.tree) return;
+      const dx = o.x - pos.x, dz = o.z - pos.z;
+      if (Math.hypot(dx, dz) - o.r < 0.7 && dx * fx + dz * fz > 0) hit = true;
+    });
+    return hit;
   }
 
   kickNow() {
@@ -61,6 +90,7 @@ export class Interactables {
         g.chase.shake(0.25);
         g.quests?.event('kick', hit);
       }
+      g.world.forest?.kick?.(pos, yaw);
     });
   }
 
@@ -100,7 +130,7 @@ export class Interactables {
     const g = this.game;
     if (this.sitting) {
       // any movement gets Hank back on his feet
-      if (Math.abs(input.steer()) + input.throttle() + input.brake() > 0.2) this.standUp();
+      if (Math.abs(input.moveX()) + Math.abs(input.moveY()) > 0.2 || input.pressed('jump')) this.standUp();
       else { g.walker.vel.set(0, 0, 0); }
     }
     // physics props get pushed by Hank and the bike

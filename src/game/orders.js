@@ -142,6 +142,39 @@ export class Orders {
     for (const o of this.carried()) o.quality = Math.max(0, o.quality - amount);
   }
 
+  // A crash: the cups fly out of the crate (Nana's lids stay on, but the cocoa sloshes about)
+  // and land out in the cold: every cup loses a chunk of its heat, more the harder the crash.
+  // Returns the most any cup lost; the HUD's thermometer face drops (o.chills ticks up).
+  crashCool(impact = 5, soft = false) {
+    const spill = soft ? 6 : 10;
+    const chill = Math.min(22, Math.max(6, 4 + (impact || 0) * 1.5)) * (soft ? 0.75 : 1);
+    let lost = 0, worst = 100, was = 100;
+    for (const o of this.carried()) {
+      const before = o.quality;
+      o.quality = Math.max(0, before - spill - chill);
+      o.chills = (o.chills || 0) + 1;
+      lost = Math.max(lost, before - o.quality);
+      if (o.quality < worst) { worst = o.quality; was = before; }
+    }
+    if (lost > 0) this.chillGag(was, worst);
+    return lost;
+  }
+  // Hank notices (now and then, not every time)
+  chillGag(before, after) {
+    const g = this.game;
+    const now = g.time || 0;
+    const crossed = (before > 60 && after <= 60) || (before > 35 && after <= 35) || (before > 12 && after <= 12);
+    if (!crossed || now - (this.chillPopT ?? -1e9) < 75) return;
+    this.chillPopT = now;
+    const lines = after <= 12
+      ? ['Stone cold. Nana is going to give me *the look*.', 'That cocoa is colder than my feet. And I have no feet. Well, bone feet.']
+      : after <= 35
+        ? ['Nooo, the cocoa! It\'s losing its heat... like I did, years ago.', 'Cocoa, meet gravity. Gravity, please stop cooling my cocoa.']
+        : ['Lids held! ...but that knocked the heat right out of it.', 'Oof. The cocoa felt that one too.'];
+    this.chillLine = ((this.chillLine ?? -1) + 1) % lines.length;
+    g.ui?.pop?.(lines[this.chillLine], { expr: after <= 35 ? 'worried' : 'sheepish', key: 'cocoa-chill' });
+  }
+
   // returns the carried order for a customer spot, if any
   orderFor(spot) {
     return this.carried().find((o) => o.spot === spot);

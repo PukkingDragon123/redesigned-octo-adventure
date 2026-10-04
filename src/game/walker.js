@@ -7,10 +7,17 @@
 // and collides in small sub-steps so a hiccup frame can't carry him through a fence;
 // walls and corners slide him along instead of sticking. Kerbs and steps snap the
 // physics height but the body eases over them (stepOffset) so it doesn't pop.
+//
+// The stick sets the pace (a gentle push ambles, a full one walks, Shift / RB / the stick
+// pushed right out runs). Jumps are forgiving: a press just before landing still jumps when
+// he touches down, a press just after stepping off an edge still counts, and letting go early
+// makes a smaller hop.
 import * as THREE from 'three';
 import { clamp, damp, wrapAngle } from '../core/math.js';
 
 const WALK = 2.6, RUN = 5.6; // top speeds (m/s)
+const JUMP_V = 5.4;
+const BUFFER = 0.15, COYOTE = 0.12; // seconds
 const ACCEL = 14; // speeding up on the ground (m/s^2)
 const DECEL = 20; // slowing down or turning against his own momentum
 const AIR = 4.5; // a little steering in the air
@@ -36,6 +43,9 @@ export class Walker {
     this.airTime = 0;
     this.vy = 0;
     this.kickT = 0;
+    this.jumpBuf = 0; // a jump pressed a moment ago, waiting to land
+    this.offGround = 0; // seconds since he last stood on something
+    this.jumpCut = false;
     this.stepOffset = 0; // visual height offset easing out a snapped step
     this.events = [];
     this.phys = null;
@@ -51,9 +61,11 @@ export class Walker {
     this.accel = 0;
     this.stepOffset = 0;
     this.grounded = true;
+    this.jumpBuf = 0;
+    this.offGround = 0;
   }
 
-  // c: { mx, mz } camera-relative stick (-1..1), run, jumpPressed, kickPressed
+  // c: { mx, mz } camera-relative stick (-1..1), run, jump (held), jumpPressed, kickPressed
   // phys: an optional stand-in physics (Nana's cabin has its own floor and walls);
   // frozen: no input (door transitions, sitting down)
   update(dt, c, camYaw) {
@@ -89,11 +101,21 @@ export class Walker {
       this.yaw = wrapAngle(this.yaw + step);
     }
     this.yawRate = damp(this.yawRate, wrapAngle(this.yaw - prevYaw) / dt, 10, dt);
-    // jump
-    if (c.jumpPressed && this.grounded) {
-      this.vy = 5.4;
+    // jump: buffered a moment before landing, allowed a moment after stepping off an edge
+    if (c.jumpPressed) this.jumpBuf = BUFFER;
+    else this.jumpBuf = Math.max(0, this.jumpBuf - dt);
+    if (this.jumpBuf > 0 && (this.grounded || this.offGround < COYOTE) && this.vy <= 0.5) {
+      this.vy = JUMP_V;
       this.grounded = false;
+      this.offGround = COYOTE;
+      this.jumpBuf = 0;
+      this.jumpCut = false;
       this.events.push({ type: 'jump' });
+    }
+    // let go early on the way up: a smaller hop
+    if (!this.grounded && !this.jumpCut && c.jump === false && this.vy > 1.5) {
+      this.vy *= 0.55;
+      this.jumpCut = true;
     }
     if (c.kickPressed && this.kickT <= 0) {
       this.kickT = 0.55;
@@ -129,6 +151,7 @@ export class Walker {
       this.vy = 0;
       this.grounded = true;
       this.airTime = 0;
+      this.offGround = 0;
       // a kerb or a step (not just a slope): the body eases up (or down) over it instead of popping
       const snap = this.pos.y - prevY;
       const slope = 0.04 + Math.hypot(this.pos.x - x0, this.pos.z - z0) * 0.75;
@@ -136,6 +159,7 @@ export class Walker {
     } else {
       this.grounded = false;
       this.airTime += dt;
+      this.offGround += dt;
     }
     this.stepOffset = clamp(damp(this.stepOffset, 0, 12, dt), -0.6, 0.6);
     // water: wade slowly

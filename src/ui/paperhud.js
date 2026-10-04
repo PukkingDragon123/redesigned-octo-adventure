@@ -356,6 +356,15 @@ function updateNote(ui) {
     const q = clamp(o.quality, 0, 100);
     const px = Math.round((q / 100) * 30);
     const hEl = r.querySelector('.heat');
+    // a crash knocked the heat out of it: the thermometer shivers and flashes cold
+    if ((o.chills || 0) !== (+r.dataset.chills || 0)) {
+      r.dataset.chills = o.chills || 0;
+      hEl.animate?.([
+        { transform: 'translateX(0)', filter: 'none' }, { transform: 'translateX(calc(var(--u) * -2))', filter: 'hue-rotate(160deg) brightness(1.3)' },
+        { transform: 'translateX(calc(var(--u) * 2))', filter: 'hue-rotate(160deg) brightness(1.3)' }, { transform: 'translateX(calc(var(--u) * -1))', filter: 'hue-rotate(100deg)' },
+        { transform: 'translateX(0)', filter: 'none' },
+      ], { duration: 700, easing: 'steps(8)' });
+    }
     if (hEl.dataset.p !== String(px)) {
       hEl.dataset.p = px;
       const T = cupTemp(q);

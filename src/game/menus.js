@@ -301,14 +301,15 @@ export class Menus {
     const touch = document.getElementById('ui')?.classList.contains('touchmode');
     const K = (...k) => k.map((x) => kKey(x)).join('');
     const ride = [
-      [K('W'), 'Pedal (tap in rhythm to sprint)'], [K('S'), 'Brake / reverse'], [K('A', 'D'), 'Steer; spin in the air'],
+      [K('W', 'S'), 'Pedal: alternate them, each one a half turn of the crank (or drag the crank round)'],
+      [K('S'), 'Hold on its own to brake / roll back'], [K('A', 'D'), 'Steer; spin in the air'],
       [K('Space'), 'Hop (hold to crouch, let go to pop)'], [K('Shift'), 'Drift; with a direction in the air: poses'],
       [K('Q'), 'Lean back: wheelie, manual, backflip'], [K('F'), 'Lean forward: stoppie, nose, frontflip'],
       [K('E'), 'Talk, deliver, hop off / on'], [K('R'), 'Ring the bell'],
     ];
     const foot = [
-      [K('W', 'A', 'S', 'D'), 'Walk (Shift runs)'], [K('Space'), 'Jump'], [K('F'), 'Kick!'], [K('C'), 'Camera (once you have one)'],
-      [K('M'), 'Map'], [K('Tab'), "Harold's keepsakes"], [K('Esc'), 'Journal / skip a scene'],
+      [K('W', 'A', 'S', 'D'), 'Walk (hold Shift to run)'], [K('Space'), 'Jump (tap for a hop)'], [K('E'), 'Do what the tag says: talk, hop on, kick it...'],
+      [K('C'), 'Camera (once you have one)'], [K('M'), 'Map'], [K('Tab'), "Harold's keepsakes"], [K('Esc'), 'Journal / skip a scene'],
     ];
     const col = (title, lines) => {
       const c = el('div', 'ccol');
@@ -318,7 +319,9 @@ export class Menus {
     const cols = el('div', 'ccols');
     cols.append(col('On the bike', ride), col('On foot & anywhere', foot));
     body.appendChild(cols);
-    body.appendChild(el('p', 'hint', touch ? 'On a touch screen: turn the wheel to steer, hold the pedal, tap hop, hold the lean buttons for wheelies and stoppies.' : 'Gamepad: RT pedal, LT brake, A hop, RB drift, left stick up/down leans, X talk, Start journal.'));
+    body.appendChild(el('p', 'hint', touch
+      ? 'On a touch screen: slide the left stick to steer (pull back to wheelie, push up for a stoppie); pedal by circling your thumb round the crank, bottom right (backwards brakes). Nothing pedals for you: stop spinning and Bessie coasts. Pedal flat out and Hank runs out of puff. On foot, the stick walks (all the way out runs) and the tag does whatever it says.'
+      : 'Gamepad: turn the right stick in circles to pedal (or alternate RT and LT), hold LT to brake, A hop, RB drift, left stick up/down leans, X talk, Start journal. Pedal flat out for too long and Hank runs out of puff: coast to get it back.'));
     const ok = ui.button('Got it', close);
     body.appendChild(el('div', 'm-foot')).appendChild(ok);
     m = ui.openOverlay(p, { onBack: close, items: [ok] });

@@ -2,16 +2,23 @@
 // Riding: the left thumb steers with a floating stick (put your thumb down anywhere on
 // the left and slide; it has a dead zone, a gentle response curve and springs back to
 // centre). Pull it down to lean back (wheelie / manual / backflip), push it up to lean
-// forward (stoppie / nose / frontflip). On the right: a big pedal, the brake, hop, the
-// bell, an auto-pedal switch, and one TRICK button: hold it to drift (or strike a pose
-// in the air) and slide your thumb off it to pick a direction from the little radial.
-// On foot the stick walks (push it all the way to run) and the buttons are jump, kick
-// and snap. A paper tag shows whatever Hank can do right now; tap it.
+// forward (stoppie / nose / frontflip). On the right the thumb pedals by turning the
+// crank (ui/crank.js: drag round the chainring; backwards is a coaster brake), with the
+// brake, hop, the bell and one TRICK button round it: hold TRICK to drift (or strike a
+// pose in the air) and slide your thumb off it to pick a direction from the little radial.
+// On foot the stick walks (a gentle push ambles, all the way out runs) and there's a JUMP
+// button; a paper tag shows whatever Hank can do right here (talk, hop on, kick the
+// pumpkin...): tap it.
 //
 // Buttons are hit-tested from every finger on the screen, and neighbouring buttons'
-// hit circles overlap a little, so a thumb can roll from PEDAL onto BRAKE without lifting.
+// hit circles overlap a little, so a thumb can roll from one onto the next without lifting.
+// Every finger is tracked by its pointer id from the window, so lifting it anywhere lets
+// go; and because a browser can lose a pointerup (a system gesture, the app going to the
+// background), anything still held is let go as soon as no finger is on the glass, when
+// a first finger lands, when the page loses focus or turns, and when a menu takes over.
 import { input } from '../core/input.js';
 import { el, scale, onScale } from './kit.js';
+import { CrankHUD } from './crank.js';
 import { field, paintBands, paintMetal, RAMP, C } from './kitart.js';
 import { iconAt } from '../art/icons.js';
 import { Pix } from '../art/pixel.js';
@@ -133,16 +140,14 @@ function knobArt() {
 }
 
 // [id, label, action, icon, face, size, right, bottom, mode]
+// (riding, the crank sits in the bottom right corner: 88 x 68, its chainring ~32 in from the right)
 const BUTTONS = [
-  ['pedal', 'PEDAL', 'pedal', 't_pedal', 'green', 56, 8, 14, 'ride'],
-  ['brake', 'BRAKE', 'brake', 't_brake', 'red', 42, 72, 8, 'ride'],
-  ['jump', 'HOP', 'jump', 't_hop', 'blue', 44, 16, 86, 'ride'],
-  ['trick', 'TRICK', 'drift', 't_trick', 'purple', 38, 76, 62, 'ride'],
-  ['auto', 'AUTO', 'auto', 't_pedal', 'leather', 26, 122, 22, 'ride'],
+  ['brake', 'BRAKE', 'brake', 't_brake', 'red', 42, 96, 8, 'ride'],
+  ['jump', 'HOP', 'jump', 't_hop', 'blue', 44, 12, 90, 'ride'],
+  ['trick', 'TRICK', 'drift', 't_trick', 'purple', 38, 66, 76, 'ride'],
   ['bell', '', 'bell', 't_bell', 'cream', 26, 8, 146, 'ride'],
-  ['fjump', 'JUMP', 'jump', 't_hop', 'blue', 46, 10, 18, 'foot'],
-  ['kick', 'KICK', 'boost', 't_kick', 'red', 40, 66, 16, 'foot'],
-  ['photo', 'SNAP', 'camera', 't_photo', 'cream', 36, 22, 80, 'foot'],
+  ['fjump', 'JUMP', 'jump', 't_hop', 'blue', 50, 12, 18, 'foot'],
+  ['photo', 'SNAP', 'camera', 't_photo', 'cream', 32, 76, 22, 'foot'],
 ];
 const DEAD = 0.08; // riding stick dead zone (fraction of its throw)
 const WALK_DEAD = 0.12; // walking stick dead zone (round)
@@ -152,6 +157,7 @@ const PETAL_AT = 12; // art pixels the thumb slides off TRICK to pick a directio
 const CSS = `
 #touch { --tc-lift: 0; }
 .k-portrait #touch { --tc-lift: 22; }
+#touch { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
 #touch .tc-zone { position: absolute; left: 0; bottom: 0; width: 46%; height: 72%; pointer-events: auto; touch-action: none; }
 .k-portrait #touch .tc-zone { width: 52%; height: 48%; }
 #touch .tc-stick { position: absolute; left: calc(var(--u) * 6 + var(--safe-l)); bottom: calc(var(--u) * 6 + var(--safe-b)); width: calc(var(--u) * 72); height: calc(var(--u) * 72); pointer-events: none; opacity: 0.92; }
@@ -161,7 +167,6 @@ const CSS = `
 #touch .tc-stick .walk { display: none; }
 #touch.foot .tc-stick .walk { display: block; }
 #touch.foot .tc-stick .plate { display: none; }
-#touch .tbtn.t-auto.on .tl { color: var(--k-gold); }
 #touch .tc-radial { position: absolute; pointer-events: none; display: none; }
 #touch .tc-radial.on { display: block; }
 #touch .tc-pet { position: absolute; transform: translate(-50%, -50%); white-space: nowrap; padding: 0 calc(var(--u) * 3); height: calc(var(--u) * 14); display: flex; align-items: center; color: var(--k-cream2, #e8d8b0); opacity: 0.85; }
@@ -182,7 +187,6 @@ export class TouchControls {
     style.textContent = CSS;
     document.head.appendChild(style);
     this.art = null;
-    this.auto = false; // auto-pedal; read from the settings once they're loaded (update)
 
     // ---- the floating stick (left): the zone catches the thumb, the plate jumps under it
     this.zone = el('div', 'tc-zone');
@@ -194,6 +198,9 @@ export class TouchControls {
     this.root.appendChild(this.stick);
     this.stickId = null;
     this.zone.addEventListener('pointerdown', (e) => {
+      // a first finger on the glass: anything we still think is held is long gone
+      if (e.pointerType === 'touch' && e.isPrimary) this.releaseAll();
+      // a second finger never steals (or freezes) the stick
       if (this.stickId != null) return;
       e.stopPropagation();
       e.preventDefault();
@@ -213,10 +220,17 @@ export class TouchControls {
       this.stick.classList.add('held');
       this.moveStick(e);
     });
-    this.zone.addEventListener('pointermove', (e) => e.pointerId === this.stickId && this.moveStick(e));
+    // followed from the window by its pointer id, so it doesn't matter where the finger goes
+    // (or whether the browser kept the capture)
+    window.addEventListener('pointermove', (e) => {
+      if (e.pointerId !== this.stickId) return;
+      // slid right off the edge of the screen: that's a let-go
+      if (e.clientX < -2 || e.clientY < -2 || e.clientX > window.innerWidth + 2 || e.clientY > window.innerHeight + 2) this.endStick();
+      else this.moveStick(e);
+    }, { passive: true });
     const end = (e) => e.pointerId === this.stickId && this.endStick();
-    this.zone.addEventListener('pointerup', end);
-    this.zone.addEventListener('pointercancel', end);
+    window.addEventListener('pointerup', end);
+    window.addEventListener('pointercancel', end);
 
     // ---- buttons
     this.buttons = {};
@@ -229,8 +243,6 @@ export class TouchControls {
       this.root.appendChild(b);
       this.buttons[id] = { el: b, action, icon, face, size, mode, img: b.querySelector('.ti'), held: false };
     }
-    this.buttons.auto.el.classList.toggle('on', this.auto);
-    input.touch.auto = false;
     // the trick radial: four little plates round the TRICK button
     this.radial = el('div', 'tc-radial');
     this.petals = {};
@@ -259,6 +271,7 @@ export class TouchControls {
     this.pointers = new Map();
     const track = (e) => {
       if (e.pointerType === 'mouse' && e.buttons === 0 && e.type === 'pointermove') return;
+      if (e.type === 'pointerdown' && e.pointerType === 'touch' && e.isPrimary) this.releaseAll();
       if (e.pointerId === this.stickId) return;
       this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
       this.updateHeld();
@@ -280,6 +293,7 @@ export class TouchControls {
     const openScreen = (t) => t instanceof HTMLCanvasElement || t?.id === 'stage' || t?.id === 'ui' || t === document.body;
     window.addEventListener('pointerdown', (e) => {
       if (e.pointerType === 'mouse' || !this.root.classList.contains('on') || !openScreen(e.target)) return;
+      if (e.pointerType === 'touch' && e.isPrimary) this.releaseAll();
       if (this.camPtrs.size >= 2) return;
       this.camPtrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
       this.pinch = null;
@@ -306,10 +320,30 @@ export class TouchControls {
     window.addEventListener('pointerup', camEnd);
     window.addEventListener('pointercancel', camEnd);
 
-    const relayout = () => { this.rects = null; this.restRect = null; };
+    // the crank (bottom right while riding, on every device)
+    this.crank = new CrankHUD(game);
+
+    // turning the phone or resizing moves everything: let go and measure again (a browser bar
+    // sliding in and out only re-measures)
+    this.size = { w: window.innerWidth, h: window.innerHeight };
+    const relayout = () => {
+      this.rects = null;
+      this.restRect = null;
+      const w = window.innerWidth, h = window.innerHeight, S = this.size;
+      if (Math.abs(w - S.w) > 40 || Math.abs(h - S.h) > 90 || (w > h) !== (S.w > S.h)) this.releaseAll();
+      S.w = w;
+      S.h = h;
+    };
     onScale(relayout);
     window.addEventListener('resize', relayout);
-    window.addEventListener('orientationchange', relayout);
+    window.addEventListener('orientationchange', () => { relayout(); this.releaseAll(); });
+    // safety nets for a lost pointerup: no fingers left on the glass, or the page went away
+    const noTouches = (e) => e.touches.length === 0 && this.releaseAll();
+    window.addEventListener('touchend', noTouches, { passive: true });
+    window.addEventListener('touchcancel', noTouches, { passive: true });
+    window.addEventListener('blur', () => this.releaseAll());
+    window.addEventListener('pagehide', () => this.releaseAll());
+    document.addEventListener('visibilitychange', () => document.hidden && this.releaseAll());
     window.addEventListener('touchstart', () => this.enable(true), { passive: true });
     window.addEventListener('keydown', () => this.enable(false));
     if (window.matchMedia?.('(pointer: coarse)').matches) this.enable(true);
@@ -334,8 +368,6 @@ export class TouchControls {
       T.walkX = dx * k;
       T.walkY = -dy * k;
       T.steer = T.walkX;
-      T.stickThrottle = Math.max(0, T.walkY);
-      T.stickBrake = Math.max(0, -T.walkY);
       T.run = T.run ? m > 0.75 : m > 0.88;
       T.leanBack = T.leanFwd = 0;
       return;
@@ -353,12 +385,13 @@ export class TouchControls {
     this.setPlate(T.leanBack ? 1 : T.leanFwd ? -1 : 0);
   }
   endStick() {
+    const id = this.stickId;
     this.stickId = null;
+    try { if (id != null && this.zone.hasPointerCapture?.(id)) this.zone.releasePointerCapture(id); } catch { /* gone */ }
     this.centre = null;
     const T = input.touch;
     T.steer = 0;
     T.walkX = T.walkY = 0;
-    T.stickThrottle = T.stickBrake = 0;
     T.leanBack = T.leanFwd = 0;
     T.run = false;
     this.knob.style.transform = '';
@@ -379,15 +412,20 @@ export class TouchControls {
     try { navigator.vibrate?.(pattern); } catch { /* not allowed yet */ }
   }
 
-  setAuto(on) {
-    this.auto = on;
-    this.buttons.auto.el.classList.toggle('on', on);
-    const b = this.buttons.auto;
-    if (b.upOn) b.img.src = on ? (b.held ? b.downOn : b.upOn) : b.held ? b.down : b.up;
-    if (this.game.settings) {
-      this.game.settings.autoPedal = on;
-      this.game.saveSettings?.();
-    }
+  // let go of everything: the stick, every button, the trick, the camera drag, the crank
+  releaseAll() {
+    if (this.stickId != null) this.endStick();
+    const T = input.touch;
+    T.steer = T.walkX = T.walkY = 0;
+    T.leanBack = T.leanFwd = 0;
+    T.run = false;
+    T.brake = 0;
+    T.radSteer = T.radUp = T.radDown = 0;
+    if (this.pointers?.size) this.pointers.clear();
+    this.camPtrs?.clear();
+    this.pinch = null;
+    if (this.buttons) this.updateHeld();
+    this.crank?.letGo();
   }
 
   // build the button and stick images once (cheap: a few dozen small canvases)
@@ -398,11 +436,7 @@ export class TouchControls {
       if (b.plate) continue;
       b.up = toURL(buttonArt(b.size, b.face, b.icon, false));
       b.down = toURL(buttonArt(b.size, b.face, b.icon, true));
-      if (b === this.buttons.auto) {
-        b.upOn = toURL(buttonArt(b.size, 'green', b.icon, false));
-        b.downOn = toURL(buttonArt(b.size, 'green', b.icon, true));
-      }
-      b.img.src = b === this.buttons.auto && this.auto ? b.upOn : b.up;
+      b.img.src = b.up;
     }
     this.walkImg.src = toURL(stickArt());
     this.knob.src = toURL(knobArt());
@@ -439,15 +473,9 @@ export class TouchControls {
       if (on === b.held) continue;
       b.held = on;
       b.el.classList.toggle('down', on);
-      if (on) navigator.vibrate?.(8);
-      if (b.action === 'auto' && on) this.setAuto(!this.auto);
-      if (b.img && b.up) {
-        const autoOn = b === this.buttons.auto && this.auto;
-        b.img.src = on ? (autoOn ? b.downOn : b.down) : autoOn ? b.upOn : b.up;
-      }
-      if (b.action === 'pedal') input.touch.throttle = on ? 1 : 0;
-      else if (b.action === 'brake') input.touch.brake = on ? 1 : 0;
-      else if (b.action === 'auto') { /* toggled above */ }
+      if (on) this.buzz(8);
+      if (b.img && b.up) b.img.src = on ? b.down : b.up;
+      if (b.action === 'brake') input.touch.brake = on ? 1 : 0;
       else if (b.action === 'drift') this.trickHeld(on);
       else if (on) {
         input.touch.buttons.add(b.action);
@@ -482,7 +510,7 @@ export class TouchControls {
   }
   updateTrick() {
     const T = input.touch;
-    T.radSteer = T.radThrottle = T.radBrake = 0;
+    T.radSteer = T.radUp = T.radDown = 0;
     if (this.trickPtr == null || !this.trickC) return;
     const p = this.pointers.get(this.trickPtr);
     if (!p) return;
@@ -494,8 +522,8 @@ export class TouchControls {
     const air = !this.game.bike?.grounded;
     // on the ground up/down lean (stoppie / wheelie while drifting off); in the air they pick poses
     if (air) {
-      if (dir === 'up') T.radThrottle = 1;
-      if (dir === 'down') T.radBrake = 1;
+      if (dir === 'up') T.radUp = 1;
+      if (dir === 'down') T.radDown = 1;
       if (dir === 'left') T.radSteer = -1;
       if (dir === 'right') T.radSteer = 1;
     }
@@ -510,7 +538,7 @@ export class TouchControls {
     if (on) input.touch.buttons.add('drift');
     else {
       input.touch.buttons.delete('drift');
-      T.radSteer = T.radThrottle = T.radBrake = 0;
+      T.radSteer = T.radUp = T.radDown = 0;
       if (this.stickId == null) T.leanBack = T.leanFwd = 0;
     }
   }
@@ -526,23 +554,14 @@ export class TouchControls {
 
   update(dt = 1 / 60) {
     const g = this.game;
-    if (!this.autoRead && g.settings) {
-      this.autoRead = true;
-      if (g.settings.autoPedal) this.setAuto(true);
-    }
+    this.crank.update(dt);
+    // (menus, talks and cutscenes hide the controls, and let go of everything as they open)
     const show = this.on && g.mode === 'ride' && !g.ui.dialogueTick && !g.ui.menuStack.length;
-    input.touch.auto = show && this.auto && !g.onFoot;
     if (this.root.classList.contains('on') !== show) {
       this.root.classList.toggle('on', show);
       this.rects = null;
       this.restRect = null;
-      if (!show) {
-        this.camPtrs.clear();
-        this.pinch = null;
-        this.pointers.clear();
-        this.updateHeld();
-        if (this.stickId != null) this.endStick();
-      }
+      this.releaseAll();
     }
     if (!show) return;
     const foot = !!g.onFoot;
