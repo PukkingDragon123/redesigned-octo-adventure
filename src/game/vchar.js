@@ -845,9 +845,19 @@ export class VoxelCharacter {
     this.mat.dispose(); this.faceMat.dispose(); this.faceTex.tex.dispose();
     for (const c of this.cloths) c.dispose();
   }
-  snapGround() {
-    if (!this.groundSnap || !this.game?.physics || this.ride) return;
-    this.pos.y = this.game.physics.groundAt(this.pos.x, this.pos.z, this.pos.y + 1.5).h;
+  snapGround(dt = 0) {
+    if (!this.groundSnap || !this.game?.physics || this.ride) {
+      if (this.stepY && dt > 0) this.stepY *= Math.exp(-12 * dt);
+      return;
+    }
+    const y0 = this.pos.y;
+    this.pos.y = this.game.physics.groundAt(this.pos.x, this.pos.z, this.pos.y + 1.5, 0.75, _gnd).h;
+    if (dt <= 0) return;
+    // a kerb or a porch step (not a slope): the body eases up or down it instead of popping
+    const jump = this.pos.y - y0;
+    const moved = Math.hypot(this.pos.x - this.lastPos.x, this.pos.z - this.lastPos.z);
+    if (Math.abs(jump) > 0.04 + moved * 0.75 && Math.abs(jump) < 0.8 && moved < 1) this.stepY -= jump;
+    this.stepY = clamp(this.stepY * Math.exp(-12 * dt), -0.5, 0.5);
   }
 
   // ride a bike: anchors are Object3Ds on the bike model; pass null to get off
@@ -962,6 +972,7 @@ export class VoxelCharacter {
       const a = clamp((this.vx * fs + this.vz * fc - f0) / dt, -20, 20);
       this.acc += (a - this.acc) * (1 - Math.exp(-6 * dt));
     }
+    this.snapGround(dt);
     this.lastPos.copy(this.pos);
     const yaw0 = this.yaw;
     if (!this.ride) this.yaw = angleDamp(this.yaw, this.targetYaw, 10, dt);
@@ -976,7 +987,6 @@ export class VoxelCharacter {
         this.hopV = 0;
       }
     }
-    this.snapGround();
     this.computeTargets(dt);
     this.springs(dt);
     this.updateFeet(dt, camPos);
