@@ -82,6 +82,8 @@ const SIDES = ['L', 'R'];
 // keep the cheap phase-swing walk)
 const IK_DIST = 24;
 const frac = (x) => x - Math.floor(x);
+// poses whose timing is the point: no soft blend into them
+const SNAPPY = new Set(['kick', 'flail', 'air', 'push', 'knock', 'jump', 'reassemble']);
 
 // ---------------------------------------------------------------- personalities
 const PERSONA = {
@@ -754,7 +756,8 @@ export class VoxelCharacter {
     if (anim !== this.anim) {
       this.anim = anim;
       this.animT = 0;
-      this.blendT = 0;
+      // ease into the new pose (quick, timed moves like a kick keep their snap)
+      this.blendT = SNAPPY.has(anim) ? 1 : 0;
       this.autoHold(anim);
     }
     if (expr) this.expr = expr === 'blink' ? 'neutral' : expr;
@@ -1256,10 +1259,10 @@ export class VoxelCharacter {
     // not a twang); squash kicks keep their snap
     let kb = 1, cb = 1;
     if (this.blendT < 1) {
-      this.blendT = Math.min(1, this.blendT + dt / 0.35);
+      this.blendT = Math.min(1, this.blendT + dt / 0.3);
       const e = this.blendT * this.blendT * (3 - 2 * this.blendT);
-      kb = 0.3 + 0.7 * e;
-      cb = Math.sqrt(kb) * (1 + 0.7 * (1 - e));
+      kb = 0.45 + 0.55 * e;
+      cb = Math.sqrt(kb) * (1 + 0.6 * (1 - e));
     }
     for (let s = 0; s < steps; s++) {
       for (let i = 0; i < KEYS.length; i++) {
