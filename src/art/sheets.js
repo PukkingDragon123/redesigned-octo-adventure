@@ -1,7 +1,6 @@
 // Paints every sprite frame the game needs into one atlas.
 import { CHARACTERS, poseFrame, drawRider, drawPart, FOOT_FRAME, RIDE_FRAME } from './characters.js';
 import { drawEmote, EMOTES } from './emotes.js';
-import { paintAnimals } from './animals.js';
 import { icon, ICON_NAMES } from './icons.js';
 import { shadeRegion } from './characters.js';
 import { Pix } from './pixel.js';
@@ -92,7 +91,6 @@ export function buildSheets(atlas) {
     shadeRegion(q, 0, 0, 12, 12);
     p.blit(q, x, y);
   }, 6, 6);
-  paintAnimals(atlas);
   return performance.now() - t0;
 }
 

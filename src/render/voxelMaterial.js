@@ -3,6 +3,28 @@
 import * as THREE from 'three';
 import { worldUniforms, LIGHT_PARS_VERT, SHADOW_VERT, LIGHT_PARS_FRAG, NOISE_GLSL } from './shaderlib.js';
 
+// Posed creatures (render/voxelRig.js): every vertex names its part ("bone"); each instance
+// row of uBones holds a fade texel, then one 3x4 world matrix (three texels) per bone.
+const RIG_PARS = /* glsl */ `
+#ifdef VOX_RIG
+attribute float bone;
+uniform highp sampler2D uBones;
+varying float vRigFade;
+#endif
+`;
+const RIG_VERT = /* glsl */ `
+#ifdef VOX_RIG
+  {
+    int b = 1 + int(bone + 0.5) * 3;
+    vec4 r0 = texelFetch(uBones, ivec2(b, gl_InstanceID), 0);
+    vec4 r1 = texelFetch(uBones, ivec2(b + 1, gl_InstanceID), 0);
+    vec4 r2 = texelFetch(uBones, ivec2(b + 2, gl_InstanceID), 0);
+    M = mat4(r0.x, r1.x, r2.x, 0.0, r0.y, r1.y, r2.y, 0.0, r0.z, r1.z, r2.z, 0.0, r0.w, r1.w, r2.w, 1.0);
+    vRigFade = texelFetch(uBones, ivec2(0, gl_InstanceID), 0).x;
+  }
+#endif
+`;
+
 const VERT = /* glsl */ `
 ${LIGHT_PARS_VERT}
 attribute vec4 color4;
@@ -14,6 +36,7 @@ uniform float uWobble;    // jelly wobble (squash bounce on props)
 varying vec4 vColor;
 varying vec3 vWorldPos;
 varying vec3 vNormal;
+${RIG_PARS}
 void main() {
   vColor = color4;
   vDetail = detail.xyz;
@@ -22,6 +45,7 @@ void main() {
   #ifdef USE_INSTANCING
   M = modelMatrix * instanceMatrix;
   #endif
+  ${RIG_VERT}
   vec4 worldPosition = M * vec4(p, 1.0);
   if (uSway > 0.0) {
     float k = max(p.y - uSwayY0, 0.0) * uSway;
@@ -53,6 +77,9 @@ varying vec4 vColor;
 varying vec3 vWorldPos;
 varying vec3 vNormal;
 varying vec3 vDetail;
+#ifdef VOX_RIG
+varying float vRigFade;
+#endif
 // pixel-art surface detail: 4 texels per voxel, 16x16-texel tiles (4x4 voxels) from a 4x4 atlas,
 // point sampled; fades to flat once a texel gets smaller than a screen pixel (no shimmer)
 float surfaceDetail() {
@@ -75,6 +102,9 @@ float surfaceDetail() {
 void main() {
   if (vWorldPos.y < uClipY) discard;
   if (uFade > 0.0 && bayer4(gl_FragCoord.xy) < uFade) discard;
+  #ifdef VOX_RIG
+  if (vRigFade > 0.0 && bayer4(gl_FragCoord.xy) < vRigFade) discard;
+  #endif
   vec3 albedo = vColor.rgb * uTint * surfaceDetail();
   vec3 n = normalize(vNormal);
   // snow settles on upward faces
@@ -116,11 +146,13 @@ const DEPTH_VERT = /* glsl */ `
 ${LIGHT_PARS_VERT}
 uniform float uSway;
 uniform float uSwayY0;
+${RIG_PARS}
 void main() {
   mat4 M = modelMatrix;
   #ifdef USE_INSTANCING
   M = modelMatrix * instanceMatrix;
   #endif
+  ${RIG_VERT}
   vec4 wp = M * vec4(position, 1.0);
   gl_Position = projectionMatrix * viewMatrix * wp;
 }
@@ -210,9 +242,11 @@ export function createVoxelMaterial(opts = {}) {
     uSway: { value: opts.sway ?? 0 },
     uSwayY0: { value: opts.swayY0 ?? 0 },
     uWobble: { value: 0 },
+    ...(opts.rig ? { uBones: { value: opts.rig } } : {}),
   });
-  const mat = new THREE.ShaderMaterial({ uniforms, vertexShader: VERT, fragmentShader: FRAG, lights: true, side: opts.side ?? THREE.FrontSide });
-  const depth = new THREE.ShaderMaterial({ uniforms, vertexShader: DEPTH_VERT, fragmentShader: DEPTH_FRAG, defines: { DEPTH_PASS: '' } });
+  const rig = opts.rig ? { VOX_RIG: '' } : {};
+  const mat = new THREE.ShaderMaterial({ uniforms, vertexShader: VERT, fragmentShader: FRAG, lights: true, side: opts.side ?? THREE.FrontSide, defines: { ...rig } });
+  const depth = new THREE.ShaderMaterial({ uniforms, vertexShader: DEPTH_VERT, fragmentShader: DEPTH_FRAG, defines: { DEPTH_PASS: '', ...rig } });
   mat.userData.depth = depth;
   return mat;
 }

@@ -2,33 +2,17 @@
 // the cabin. While their people are scared of Hank, the cat arches up, hisses
 // and bolts under the porch and the dog barks its head off; once the village
 // warms to him, the cat comes to wind round his shins and the dog bounces about.
+// Both are posed voxel puppets (voxel/models/animals.js) drawn by the wildlife
+// (critters.js); this only decides where they go and what they're up to.
 import * as THREE from 'three';
-import { Vox, tone } from '../voxel/vox.js';
-import { meshVox } from '../voxel/mesh.js';
-import { voxMesh, sharedVoxelMaterial } from '../render/voxelMaterial.js';
-import { catVox } from './quests.js';
 import { frontOf } from '../world/layout.js';
 
 const hyp = Math.hypot;
 const rand = (a, b) => a + Math.random() * (b - a);
 
-function dogVox() {
-  const v = new Vox(9, 11, 16);
-  const c = 0xc8904a, d = tone(c, -0.18), b = 0xf2e2c4;
-  v.ellipsoid(4, 4.2, 7, 2.8, 2.4, 4.6, (x, y, z) => (y < 3 && Math.abs(x - 4) < 1.3 ? b : (x + z) % 5 === 0 ? d : c)); // body
-  for (const [x, z] of [[2, 4], [6, 4], [2, 10], [6, 10]]) v.fill(x, 0, z, x, 2, z, x === 2 && z === 4 ? b : d); // legs
-  v.ellipsoid(4, 7, 12.5, 2.4, 2.2, 2.3, c); // head
-  v.fill(3, 5, 14, 5, 6, 15, b); v.set(4, 6, 15, 0x1e1418); // muzzle & nose
-  v.set(3, 8, 14, 0x1e1418); v.set(5, 8, 14, 0x1e1418); // eyes
-  v.fill(1, 6, 11, 1, 9, 12, d); v.fill(7, 6, 11, 7, 9, 12, d); // floppy ears
-  v.fill(3, 5, 9, 5, 5, 10, 0xc8302a); v.set(4, 4, 10, 0xf2c443); // collar & tag
-  v.line(4, 5, 2, 4, 8, 0, c); // tail up
-  return { vox: v, size: 0.045, origin: [4.5, 0, 8] };
-}
-
 const PETS = [
-  { id: 'duchess', name: 'Duchess', kind: 'cat', owner: 'agnes', at: () => frontOf('agnes', 0.9, -2.6), yaw: Math.PI, build: () => catVox(0xf0ece4, 0xfff8f0, 0x6ab8e8) },
-  { id: 'biscuit', name: 'Biscuit', kind: 'dog', owner: 'gus', at: () => frontOf('gus', 1.8, -1.2), yaw: 0.25, build: dogVox },
+  { id: 'duchess', name: 'Duchess', kind: 'cat', owner: 'agnes', at: () => frontOf('agnes', 0.9, -2.6), yaw: Math.PI, species: 'duchess' },
+  { id: 'biscuit', name: 'Biscuit', kind: 'dog', owner: 'gus', at: () => frontOf('gus', 1.8, -1.2), yaw: 0.25, species: 'biscuit' },
 ];
 
 export class Pets {
@@ -36,16 +20,14 @@ export class Pets {
     this.V = V;
     this.g = V.game;
     this.list = PETS.map((P) => {
-      const r = P.build();
-      const body = voxMesh(meshVox(r.vox, { size: r.size, origin: r.origin, jitter: 0.03 }), sharedVoxelMaterial());
-      body.castShadow = true;
-      const root = new THREE.Group();
-      root.add(body);
+      // root carries the pet's place and heading for the logic; the puppet copies it
+      const root = new THREE.Object3D();
       const h = P.at();
-      root.position.set(h.x, 0, h.z);
+      root.position.set(h.x, this.g.physics.groundAt(h.x, h.z).h, h.z);
       root.rotation.y = P.yaw;
-      this.g.scene.add(root);
-      return { P, root, body, home: { x: h.x, z: h.z, yaw: P.yaw }, state: 'sit', t: rand(2, 6), to: null, yaw: P.yaw, ph: 0, cool: 0, tag: new THREE.Vector3() };
+      const critter = this.g.critters?.add(P.species, h.x, h.z, { resident: true, despawn: Infinity, maxDraw: 90, cat: 'pet', yaw: P.yaw, anim: 'sit' }) || null;
+      if (critter) critter.pet = P.id;
+      return { P, root, critter, home: { x: h.x, z: h.z, yaw: P.yaw }, state: 'sit', t: rand(2, 6), to: null, yaw: P.yaw, ph: 0, cool: 0, tag: new THREE.Vector3() };
     });
   }
   update(dt, X) {
@@ -54,6 +36,7 @@ export class Pets {
       const R = p.root;
       const d = hyp(R.position.x - X.p.x, R.position.z - X.p.z);
       R.visible = d < 90 && p.state !== 'gone';
+      if (p.critter) p.critter.hidden = !R.visible;
       if (d > 90) continue;
       p.t -= dt;
       p.cool -= dt;
@@ -120,11 +103,11 @@ export class Pets {
       // pose
       R.position.y = g.physics.groundAt(R.position.x, R.position.z, R.position.y + 1).h;
       R.rotation.y += Math.atan2(Math.sin(p.yaw - R.rotation.y), Math.cos(p.yaw - R.rotation.y)) * Math.min(1, dt * 10);
-      const B = p.body;
-      const arch = p.state === 'angry' && p.P.kind === 'cat' ? 1 : 0;
-      B.scale.set(1 - arch * 0.12, 1 + arch * 0.25 + (speed ? 0 : Math.sin(p.ph * 2) * 0.015), 1 - arch * 0.1);
-      B.position.y = speed ? Math.abs(Math.sin(p.ph * (speed > 3 ? 22 : 12))) * 0.04 : p.state === 'angry' && p.P.kind === 'dog' ? Math.abs(Math.sin(p.ph * 9)) * 0.06 : 0;
-      B.rotation.z = p.state === 'friend' && p.P.kind === 'dog' ? Math.sin(p.ph * 14) * 0.12 : arch ? Math.sin(p.ph * 40) * 0.03 : 0;
+      const c = p.critter;
+      if (c) {
+        c.x = R.position.x; c.y = R.position.y; c.z = R.position.z; c.yaw = R.rotation.y;
+        c.anim = p.state === 'angry' ? 'angry' : p.state === 'friend' ? 'friend' : p.state === 'sit' ? 'sit' : speed > 3 ? 'run' : 'walk';
+      }
       p.tag.set(R.position.x, R.position.y + 0.8, R.position.z);
     }
   }

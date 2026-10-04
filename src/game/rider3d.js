@@ -270,8 +270,7 @@ export class VoxelRider {
       const V = g.villagers;
       if (V?.actors) for (const a of Object.values(V.actors)) if (a?.pos && a.visible !== false) consider(a.pos, 'person', 3, 1.4, a);
       for (const pt of V?.pets?.list || []) consider(pt.root.position, 'pet', 2.4, 0.4, pt);
-      for (const c of g.wildlife?.list || []) if (c.pos) consider(c.pos, 'animal', 2, 0.9, c);
-      for (const f of g.wildlife?.flocks || []) for (const c of f.birds || []) if (c.pos) consider(c.pos, 'bird', 1.6, (c.pos.y || 0) + 0.3, c);
+      for (const c of g.wildlife?.list || []) if (!c.dying && !c.pet && c.kind !== 'bin') consider(c, c.air ? 'bird' : 'animal', c.air ? 1.6 : 2, Math.min(0.9, c.sp?.meta?.headH ?? 0.5), c);
       L.lookA = best?.ref || null;
       L.lookKind = best?.kind || '';
       L.lookD = best?.d ?? 99;
