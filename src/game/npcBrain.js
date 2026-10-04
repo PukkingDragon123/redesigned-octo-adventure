@@ -246,6 +246,8 @@ export class NpcBrain {
 
   // what happens around Hank (only while he's riding about, not in cutscenes)
   perceive(dt, X) {
+    // until the village has met him (the first-arrival scene at the contest), nobody bolts early
+    if (!this.g.state?.flags?.village1) return;
     const a = this.a, d = this.d, sp = X.speed, mood = this.mood;
     const calm = sp < 1.7 && d < 24 && d > 2.4 && !X.crashed;
     const seen = this.shown && this.hankVisible();
@@ -406,6 +408,14 @@ export class NpcBrain {
         a.react('nod');
         settle(this.home.yaw, 'idle');
         await linger();
+        return;
+      }
+      case 'contest': {
+        // the pumpkin carving contest: their own place and part there (contest.js)
+        const s = V.game.contest?.spotFor(this.key);
+        if (!s) { await walkTo(this.home); settle(this.home.yaw, V.idlePose(this)); await linger(); return; }
+        await walkTo(s);
+        await V.game.contest.perform(this, w, s, stillOn);
         return;
       }
       case 'chat': {
@@ -1066,6 +1076,7 @@ export class NpcBrain {
     let pt = null;
     if (act.k === 'home' || act.k === 'errand') pt = this.home;
     else if (act.k === 'chat') pt = this.meetSpot(act.meet);
+    else if (act.k === 'contest') pt = this.V.game.contest?.spotFor(this.key) || this.home;
     else if (act.k === 'at') pt = act;
     else if (act.k === 'inside' && this.door) { this.inside = true; this.setShown(false); a.pos.set(this.door.x, a.pos.y, this.door.z); return; }
     else if (act.k === 'patrol' || act.k === 'jog') pt = act.pts[Math.floor(Math.random() * act.pts.length)];

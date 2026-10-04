@@ -162,7 +162,7 @@ export class Villagers {
     else {
       let opts = b.cfg.day[idx][2];
       if (rain) {
-        const dry = opts.filter((o) => o.k !== 'bench' && o.k !== 'jog' && !(o.k === 'at' && ['garden', 'water'].includes(o.pose)));
+        const dry = opts.filter((o) => o.k !== 'bench' && o.k !== 'jog' && o.k !== 'contest' && !(o.k === 'at' && ['garden', 'water'].includes(o.pose)));
         opts = dry.length ? dry : [{ k: 'home' }];
       }
       act = opts[Math.floor(Math.random() * opts.length)];
@@ -350,7 +350,7 @@ export class Villagers {
   }
   onBikeEvent(e) {
     const X = this.ctx;
-    if (!X.live) return;
+    if (!X.live || !this.game.state?.flags?.village1) return;
     if (e.type === 'crash') {
       for (const b of this.brains) if (!b.a.scripted) b.onCrash(X);
       return;

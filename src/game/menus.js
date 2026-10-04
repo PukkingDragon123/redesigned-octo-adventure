@@ -571,7 +571,7 @@ export class Menus {
     pin(POI.cabin.x, POI.cabin.z, glyphURL('home'));
     for (const o of g.orders.carried()) { const c2 = CUSTOMERS[o.spot]; if (c2) pin(c2.x, c2.z, glyphURL('cocoa')); }
     for (const k of KEEPSAKES) if (g.state.keepsakes[k.id]) pin(k.x, k.z, iconSmallURL(KEEPSAKE_ICON[k.id]));
-    if (g.catEventActive) pin(POI.catLog.x, POI.catLog.z, iconSmallURL('cat'));
+    if (g.catEventActive) { const c = g.story.stray?.pos || POI.catLog; pin(c.x, c.z, iconSmallURL('cat')); }
     for (const q of g.quests?.markers() || []) pin(q.x, q.z, iconSmallURL(q.icon), 'quest');
     pin(g.playerPos.x, g.playerPos.z, iconSmallURL('skull'), 'me');
     const legend = el('div', 'maplegend', `<span><img class="k-g" src="${glyphURL('cocoa')}">cocoa</span><span><img class="k-g" src="${iconSmallURL('skull')}">you</span><span><img class="k-g" src="${glyphURL('home')}">home</span>`);
