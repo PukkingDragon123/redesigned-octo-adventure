@@ -1121,13 +1121,8 @@ export function mooseAI(c, dt, M) {
   c.anim = c.state;
   walk(c, dt, c.spd, M);
   if (c.collider) {
-    // move the collider along (it lives in a spatial hash; reinsert cheaply when it strays)
-    c.collider.x = c.x;
-    c.collider.z = c.z;
-    if (!c.lastIns || Math.hypot(c.lastIns.x - c.x, c.lastIns.z - c.z) > 4) {
-      M.game.physics.solids.insert(c.collider, c.x, c.z, 2);
-      c.lastIns = { x: c.x, z: c.z };
-    }
+    // move the collider along (updateCircle re-files it in the spatial hash)
+    if (Math.abs(c.collider.x - c.x) + Math.abs(c.collider.z - c.z) > 0.02) M.game.physics.updateCircle(c.collider, { x: c.x, z: c.z });
   }
 }
 

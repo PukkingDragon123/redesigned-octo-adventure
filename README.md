@@ -76,6 +76,12 @@ now; tap it.
   sit on benches, and walk around inside Nana's cabin: sit by the fire, look
   at Harold's photos, talk to Nana.
 - Ride into a tree and Hank goes flying while the tree shakes its leaves loose.
+- The village is holding a pumpkin carving contest on Main Street, the first
+  thing you see riding in from Nana's. The first time Hank shows up, the whole
+  crowd screams and hides behind the tables and hay bales; they drift back to
+  their pumpkins as they get used to him.
+- On the first evening a stray cat is out walking the road home; go slowly and
+  she comes to you, rush her and she bolts.
 - Chat with villagers for favours: Agnes's three lost cats, lost glasses, puck,
   compass, stethoscope and Mountie hat, six saplings to plant for Gus, bird
   photos for Birdie, a secret letter, pumpkins for the café, lawn bowling,
@@ -120,15 +126,19 @@ now; tap it.
   walk the sidewalks and crosswalks.
 - **Houses** (`src/voxel/models/buildings.js`, `src/world/foundations.js`):
   buildings are painted at 1/16 m voxels with lap siding, sashed windows,
-  shutters, panelled doors, shingle roofs, gutters and stone foundations. Near
-  and far LOD meshes are built in workers. Lots are levelled and foundations,
+  shutters, shingle roofs, gutters, hydro meters, hoses and stone foundations;
+  front doors are hinged leaves that swing open when Hank walks or rides into
+  them and spring shut (`src/world/doors.js`). Near and far LOD meshes are
+  built in workers. Lots are levelled and foundations,
   steps and stilts reach the ground; `node tools/floatcheck.mjs` reports gaps.
 - **Street clutter and furniture** (`src/art/deco2d.js`,
   `src/art/furniture2d.js`, `src/world/deco2d.js`, `src/world/furniture2d.js`,
-  `src/game/deco2d.js`): 2D fences, bins, crates, barrels, hay, mailboxes,
+  `src/game/deco2d.js`): bins, crates, barrels, hay, mailboxes,
   market stalls with fish, porch rockers and swings, café terraces, shop window
   displays, beach and harbour gear, with simple physics so small things tip
   over, roll and spill when knocked, then tidy themselves up off-screen.
+  Fences are voxel geometry (`src/world/fences3d.js`) that follow the ground
+  post by post and topple when hit.
 - **Nana's cabin** (`src/world/cabinInterior.js`, `src/game/interior.js`,
   `src/voxel/models/interior.js`): a walkable voxel room inside the real
   cabin, with its own colliders, camera box, firelight and things to use.
@@ -145,11 +155,13 @@ now; tap it.
   procedural poses, idle fidgets, cartoon reactions, pixel face decals with
   many expressions, verlet-cloth scarves and capes, held props, bike-riding IK
   and a fall-apart mode.
-- **Creatures and effects** (`src/game/critters2d.js`, `src/game/effects.js`):
-  2D pixel-art deer, rabbits, foxes, squirrels, songbirds, geese, gulls,
-  ducks, frogs, trout, butterflies, bats, owls and ghost wisps, sculpted in
-  code into shaded sprites with several view angles. They live alongside the
-  voxel animals and react to Hank. Particles are instanced: outlined toon
+- **Creatures and effects** (`src/game/critters.js`, `src/game/critterAnim.js`,
+  `src/voxel/models/animals.js`, `src/game/effects.js`): 31 kinds of voxel
+  animals (deer, moose, foxes, raccoons, rabbits, squirrels, songbirds, geese,
+  gulls, ducks, owls, bats, frogs, fish, butterflies...) built from parts and
+  animated procedurally: gaits picked from speed, feet placed on the ground,
+  heads that follow Hank, flapping and gliding, all blended. Each species is
+  one instanced draw (`src/render/voxelRig.js`). Particles are instanced: outlined toon
   smoke, impact stars, bouncing debris, skid marks, splash crowns and anime
   speed lines.
 - **UI** (`src/ui`): a pixel kit of carved wood panels with brass nails, buttons,
@@ -193,7 +205,7 @@ These are useful while developing:
   plays a later story beat (add `&autotalk` to advance the dialogue by itself)
 - `?loaderonly=60` shows just the loading scene for 60 seconds (`&pop=1` drops
   the head sooner)
-- `?critters=deer:2:10,robin:4:5` places 2D animals in front of the camera
+- `?critters=deer:2:10,robin:4:5` places animals in front of the camera
   (`&calm` stops them fleeing)
 - `?hour=19.5&weather=rain|snow|misty|overcast|breezy|clear`
 - `?cam=x,y,z,lx,ly,lz` opens a free camera, which is handy for screenshots

@@ -1,5 +1,5 @@
 // Hand-posed 2D street clutter for Maple Cove, in the same sculpted pixel-art
-// style as the wildlife (critters2d.js): picket and split-rail fences, trash
+// style as the old 2D wildlife: picket and split-rail fences, trash
 // cans and recycling bins, crates, barrels, sandwich boards, mailboxes, flower
 // boxes, laundry lines, parked bikes, lobster traps, buoys, firewood, round hay
 // bales, a friendly scarecrow, lamp posts, the harbour fish stall (with cod,
