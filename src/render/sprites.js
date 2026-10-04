@@ -306,16 +306,18 @@ void main() {
   if (vWorldPos.y < uClipY) discard;
   if (vMisc.y > 0.0 && bayer4(gl_FragCoord.xy) < vMisc.y) discard;
   vec3 albedo = tx.rgb * vTint.rgb;
-  #ifdef STEADY_LIGHT
-  // the art is shaded already: light it the same from every side (no brightening and darkening as
-  // the camera goes round), mostly from the sky, a little towards the sun
-  vec3 n = normalize(vec3(0.0, 1.0, 0.0) + vec3(uSunDir.x, 0.0, uSunDir.z) * 0.45);
-  #else
-  vec3 n = normalize(vNormal);
-  #endif
   float shadow = getShadowMask();
   // the sprites carry their own banded shading, so the scene light is kept flatter than on voxels
+  #ifdef STEADY_LIGHT
+  // ...and the same from every side (no brightening and darkening as the camera goes round):
+  // as if each card half faced the sky and half the sun
+  vec2 sh = normalize(uSunDir.xz + vec2(1e-4, 0.0));
+  vec3 n = normalize(vec3(sh.x * 0.8, 0.6, sh.y * 0.8));
+  float ndl = 0.74;
+  #else
+  vec3 n = normalize(vNormal);
   float ndl = max(dot(n, uSunDir), 0.0) * 0.5 + 0.5;
+  #endif
   vec3 light = hemiAmbient(n) * 1.0 + uSunColor * shadow * ndl * 0.62 + pointLightsAt(vWorldPos, n, 0.7);
   vec3 col = albedo * light;
   vec3 v = normalize(uCamPos - vWorldPos);
