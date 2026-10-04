@@ -343,15 +343,17 @@ export class BikeModel {
 
   update(dt, bike, steerInput) {
     this.t += dt;
-    this.root.position.copy(bike.pos);
-    this.root.rotation.set(0, bike.yaw, 0);
+    // the physics runs at a fixed step: draw the state blended between steps (bike.view)
+    const V = bike.view || bike;
+    this.root.position.copy(V.pos);
+    this.root.rotation.set(0, V.yaw, 0);
     // attitude: slope pitch and lean about the contact patch (about the middle in the air), then
     // the wheelie / stoppie tip about whichever wheel is still on the ground
     const down = bike.grounded || bike.crash > 0;
-    const tipA = bike.crash > 0 ? bike.pitch - bike.slopePitch : down ? bike.wheelie - bike.stoppie : 0;
+    const tipA = bike.crash > 0 ? V.pitch - bike.slopePitch : down ? V.wheelie - V.stoppie : 0;
     const wantY = down ? 0 : 0.5;
     this.pivY = dt > 0 ? damp(this.pivY ?? 0, wantY, 10, dt) : wantY;
-    _e.set(-(bike.pitch - tipA), 0, bike.lean, 'YXZ');
+    _e.set(-(V.pitch - tipA), 0, V.lean, 'YXZ');
     _q.setFromEuler(_e);
     this.body.quaternion.copy(_q);
     _p.set(0, this.pivY, 0).applyQuaternion(_q);
@@ -366,7 +368,7 @@ export class BikeModel {
     // the handlebars: steering about the raked head tube (so the wheel leans into the turn), drift
     // counter-steer, a shimmy when slow or knocked about, and the front flops toward the lean when parked
     const shimmy = bike.shimmy * 2.2 + (bike.grounded && bike.speed > 0.3 && bike.speed < 2 ? Math.sin(this.t * 11) * 0.06 * (2 - bike.speed) : 0);
-    const flop = bike.speed < 1.2 && bike.crash <= 0 ? clamp(bike.lean, -0.4, 0.4) * 0.9 * (1 - bike.speed / 1.2) : 0;
+    const flop = bike.speed < 1.2 && bike.crash <= 0 ? clamp(V.lean, -0.4, 0.4) * 0.9 * (1 - bike.speed / 1.2) : 0;
     this.steer = damp(this.steer, -steerInput * 0.45 * Math.max(0.25, 1 - bike.speed / 14) + (bike.drifting ? bike.driftDir * 0.35 : 0) + (bike.dab > 0.5 ? -steerInput * 0.3 : 0) - flop, 10, dt);
     this.steerG.rotation.y = this.steer + clamp(shimmy, -0.35, 0.35);
     if (dt > 0) this.spinWheels(dt, bike);
@@ -376,14 +378,14 @@ export class BikeModel {
     const ws = 0.78 + this.wheelSq * 0.22;
     for (const W of [this.wf, this.wr]) W.w.scale.set(1 + (1 - ws) * 0.6, ws, 1 + (1 - ws) * 0.35);
     // cranks turn with the cadence; pedals stay level; the chain scrolls ring -> cog on top
-    this.crank.rotation.x = bike.crank;
-    for (const p of this.pedals) p.rotation.x = -bike.crank;
-    this.cog.rotation.x = bike.crank * (RING_R / COG_R);
-    const run = (((bike.crank * RING_R) % (2 * PITCH)) + 2 * PITCH) % (2 * PITCH);
+    this.crank.rotation.x = V.crank;
+    for (const p of this.pedals) p.rotation.x = -V.crank;
+    this.cog.rotation.x = V.crank * (RING_R / COG_R);
+    const run = (((V.crank * RING_R) % (2 * PITCH)) + 2 * PITCH) % (2 * PITCH);
     for (const c of this.chain) c.m.position.z = c.top ? run - PITCH : PITCH - run;
     // crash: the bike flops over and skids round
     if (bike.crash > 0) {
-      this.root.rotation.y = bike.yaw + (1.9 - bike.crash) * bike.crashSpin * Math.max(0, bike.crash - 1) * 0.4;
+      this.root.rotation.y = V.yaw + (1.9 - bike.crash) * bike.crashSpin * Math.max(0, bike.crash - 1) * 0.4;
     }
   }
 

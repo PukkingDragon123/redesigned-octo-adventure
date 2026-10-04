@@ -144,7 +144,8 @@ const BUTTONS = [
   ['kick', 'KICK', 'boost', 't_kick', 'red', 40, 66, 16, 'foot'],
   ['photo', 'SNAP', 'camera', 't_photo', 'cream', 36, 22, 80, 'foot'],
 ];
-const DEAD = 0.1; // stick dead zone (fraction of its throw)
+const DEAD = 0.08; // riding stick dead zone (fraction of its throw)
+const WALK_DEAD = 0.12; // walking stick dead zone (round)
 const LEAN_AT = 0.55; // how far up / down the stick goes before Hank leans
 const PETAL_AT = 12; // art pixels the thumb slides off TRICK to pick a direction
 
@@ -324,16 +325,24 @@ export class TouchControls {
     const u = scale.u;
     const T = input.touch;
     if (this.game.onFoot) {
-      // a free stick for walking; all the way out runs
+      // a free stick for walking: a round dead zone, then the push sets the pace (full walk at
+      // ~80%); all the way out runs, and keeps running down to ~75% so a wobbly thumb doesn't
+      // flicker between a walk and a run
       this.knob.style.transform = `translate(${Math.round(dx * 22) * u}px, ${Math.round(dy * 22) * u}px)`;
-      T.steer = clamp(dx * 1.3, -1, 1);
-      T.stickThrottle = clamp(-dy * 1.3, 0, 1);
-      T.stickBrake = clamp(dy * 1.3, 0, 1);
-      T.run = len > 0.85;
+      const m = Math.hypot(dx, dy);
+      const k = m < WALK_DEAD ? 0 : Math.min(1, (m - WALK_DEAD) / (0.8 - WALK_DEAD)) / m;
+      T.walkX = dx * k;
+      T.walkY = -dy * k;
+      T.steer = T.walkX;
+      T.stickThrottle = Math.max(0, T.walkY);
+      T.stickBrake = Math.max(0, -T.walkY);
+      T.run = T.run ? m > 0.75 : m > 0.88;
       T.leanBack = T.leanFwd = 0;
       return;
     }
-    // riding: the knob rides in the slot sideways, and dips toward the arrows when leaning
+    T.walkX = T.walkY = 0;
+    // riding: the knob rides in the slot sideways, and dips toward the arrows when leaning.
+    // A dead zone, then a gentle curve: small slides for small corrections, full lock at the rim
     const ax = Math.abs(dx);
     const s = ax < DEAD ? 0 : Math.pow((ax - DEAD) / (1 - DEAD), 1.3);
     T.steer = Math.sign(dx) * s;
@@ -348,6 +357,7 @@ export class TouchControls {
     this.centre = null;
     const T = input.touch;
     T.steer = 0;
+    T.walkX = T.walkY = 0;
     T.stickThrottle = T.stickBrake = 0;
     T.leanBack = T.leanFwd = 0;
     T.run = false;

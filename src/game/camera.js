@@ -1,6 +1,10 @@
 // Chase camera with springy lag, speed FOV, look-ahead, shake, anime punch-ins, and cinematic shots.
 // It sits well back so the road ahead reads, follows a smoothed ride height (bumps don't bob it),
 // leans the boom with the slope, eases in past walls quickly and back out slowly.
+// It follows on critically damped springs (no jerk when Hank stops dead against a wall or
+// sets off), tracks the bike's interpolated pose (bike.view) so it glides at any frame rate,
+// and eases the player's orbit (mouse, stick, a thumb dragged on the screen) instead of
+// jumping with every pointer event.
 import * as THREE from 'three';
 import { clamp, damp, angleDamp, lerp, wrapAngle, easeInOut } from '../core/math.js';
 import { input } from '../core/input.js';
@@ -10,6 +14,18 @@ const ZOOM_MIN = Math.log(0.42), ZOOM_MAX = Math.log(2.4);
 
 const _v = new THREE.Vector3();
 const _t = new THREE.Vector3();
+
+// critically damped spring step (no overshoot): moves s.x towards target, s.v is its speed.
+// omega ~ 2x the rate of an equivalent damp(); returns the new value.
+function spring(s, k, target, omega, dt) {
+  const x = omega * dt;
+  const e = 1 / (1 + x + 0.48 * x * x + 0.235 * x * x * x);
+  const ch = s[k] - target;
+  const tmp = (s.v[k] + omega * ch) * dt;
+  s.v[k] = (s.v[k] - omega * tmp) * e;
+  s[k] = target + (ch + tmp) * e;
+  return s[k];
+}
 
 export class ChaseCamera {
   constructor(camera, physics) {
@@ -37,6 +53,11 @@ export class ChaseCamera {
     this.boom = 1; // fraction of the boom left after walls pull it in
     this.zoomT = 0; // player zoom target (log of the distance factor)
     this.zoomS = 0; // ...smoothed
+    this.orbitYawT = 0; // player orbit targets (the orbit eases towards them)
+    this.orbitPitchT = 0;
+    // spring states for the camera position and the look point
+    this.sp = { x: 0, y: 0, z: 0, v: { x: 0, y: 0, z: 0 } };
+    this.sl = { x: 0, y: 0, z: 0, v: { x: 0, y: 0, z: 0 } };
   }
 
   snap(bike) {
@@ -91,42 +112,59 @@ export class ChaseCamera {
       return;
     }
     const speed = bike.speed;
+    // the bike is drawn between physics steps; follow what's drawn
+    const BP = bike.view ? bike.view.pos : bike.pos;
+    const byaw = bike.view ? bike.view.yaw : bike.yaw;
     // player zoom: wheel / pinch, eased so it glides
     this.zoomT = clamp(this.zoomT + input.takeZoom(), ZOOM_MIN, ZOOM_MAX);
     this.zoomS = instant ? this.zoomT : damp(this.zoomS, this.zoomT, 8, dt);
     const zf = Math.exp(this.zoomS);
-    // user orbit (mouse drag / right stick), drifts back when idle
+    // user orbit (mouse drag / right stick / a dragged thumb), eased, drifts back when idle
     if (Math.abs(lookIn.x) + Math.abs(lookIn.y) > 0.001) {
-      this.orbitYaw = clamp(this.orbitYaw - lookIn.x * 2.2, -Math.PI, Math.PI);
-      this.orbitPitch = clamp(this.orbitPitch + lookIn.y * 1.2, -0.25, 0.7);
+      this.orbitYawT = clamp(this.orbitYawT - lookIn.x * 2.2, -Math.PI, Math.PI);
+      this.orbitPitchT = clamp(this.orbitPitchT + lookIn.y * 1.2, -0.25, 0.7);
       this.orbitIdle = 0;
     } else {
       this.orbitIdle += dt;
       if (this.orbitIdle > 3) {
-        this.orbitYaw = damp(this.orbitYaw, 0, 2.2, dt);
-        this.orbitPitch = damp(this.orbitPitch, 0, 2.2, dt);
+        this.orbitYawT = damp(this.orbitYawT, 0, 2.2, dt);
+        this.orbitPitchT = damp(this.orbitPitchT, 0, 2.2, dt);
       }
     }
+    // (something else may have set the orbit directly)
+    if (this._oy !== undefined && this.orbitYaw !== this._oy) this.orbitYawT = this.orbitYaw;
+    if (this._op !== undefined && this.orbitPitch !== this._op) this.orbitPitchT = this.orbitPitch;
+    this.orbitYaw = instant ? this.orbitYawT : damp(this.orbitYaw, this.orbitYawT, 16, dt);
+    this.orbitPitch = instant ? this.orbitPitchT : damp(this.orbitPitch, this.orbitPitchT, 16, dt);
+    this._oy = this.orbitYaw;
+    this._op = this.orbitPitch;
     // follow the heading, partly the velocity when drifting/sliding
-    let want = bike.yaw;
+    let want = byaw;
+    let rate = bike.grounded ? 2.8 : 1.5;
     if (speed > 2) {
       const va = Math.atan2(bike.vel.x, bike.vel.z);
       const backwards = bike.fwdSpeed < -0.5;
-      want = backwards ? bike.yaw : bike.yaw + wrapAngle(va - bike.yaw) * (bike.drifting ? 0.55 : 0.3);
+      want = backwards ? byaw : byaw + wrapAngle(va - byaw) * (bike.drifting ? 0.55 : 0.3);
       // in the air follow the flight, not the spinning bike
       if (!bike.grounded && !this.walk && bike.airTime > 0.1) want = va;
     }
     if (bike.crash > 0) want = this.yaw;
-    if (this.walk) want = speed > 0.5 ? bike.yaw : this.yaw;
-    this.yaw = instant ? want : angleDamp(this.yaw, want, this.walk ? 1.1 : bike.grounded ? 2.8 : 1.5, dt);
+    if (this.walk) {
+      // on foot the camera swings round behind Hank lazily, more the faster he goes, and not
+      // at all while he walks towards it (no whirling round when he comes back to the camera)
+      want = byaw;
+      const toward = Math.cos(wrapAngle(byaw - this.yaw));
+      rate = 1.1 * clamp(speed / 2.6, 0, 1.4) * clamp(toward + 0.35, 0, 1);
+    }
+    this.yaw = instant ? want : angleDamp(this.yaw, want, rate, dt);
     const yaw = this.yaw + this.orbitYaw;
     const walk = this.walk ? 1 : 0;
     const sp = clamp(speed, 0, 25);
     const grounded = bike.grounded ?? true;
     // ride height, smoothed so rough ground and kerbs don't bob the view
-    if (this.by == null || instant) this.by = bike.pos.y;
-    else this.by = damp(this.by, bike.pos.y, grounded ? 5 : 2.6, dt);
-    if (Math.abs(this.by - bike.pos.y) > 3) this.by = bike.pos.y;
+    if (this.by == null || instant) this.by = BP.y;
+    else this.by = damp(this.by, BP.y, grounded ? 5 : 2.6, dt);
+    if (Math.abs(this.by - BP.y) > 3) this.by = BP.y;
     const by = this.by;
     // slope: downhill lifts the boom to see down the hill, uphill lowers it and looks up the road
     const slope = walk ? 0 : clamp(bike.slopePitch || 0, -0.4, 0.4);
@@ -148,8 +186,8 @@ export class ChaseCamera {
       this.ahead.x = damp(this.ahead.x, dx * la, 2.2, dt);
       this.ahead.z = damp(this.ahead.z, dz * la, 2.2, dt);
     }
-    const target = _t.set(bike.pos.x + this.ahead.x, by + 1.0 + Math.min(0.6, (zf - 1) * 0.4 + 0.3) + Math.sin(slope) * (la + 2) * 0.55, bike.pos.z + this.ahead.z);
-    const desired = _v.set(bike.pos.x - Math.sin(yaw) * dist, by + hgt, bike.pos.z - Math.cos(yaw) * dist);
+    const target = _t.set(BP.x + this.ahead.x, by + 1.0 + Math.min(0.6, (zf - 1) * 0.4 + 0.3) + Math.sin(slope) * (la + 2) * 0.55, BP.z + this.ahead.z);
+    const desired = _v.set(BP.x - Math.sin(yaw) * dist, by + hgt, BP.z - Math.cos(yaw) * dist);
     // keep above ground
     const gh = this.ph.groundAt(desired.x, desired.z, desired.y).h;
     desired.y = Math.max(desired.y, gh + 1.1);
@@ -158,17 +196,25 @@ export class ChaseCamera {
     const boomT = hit < 1 ? Math.max(0.2, hit - 0.05) : 1;
     this.boom = instant || boomT < this.boom ? (instant ? boomT : damp(this.boom, boomT, 18, dt)) : damp(this.boom, boomT, 1.6, dt);
     if (this.boom < 0.999) desired.lerpVectors(target, desired, this.boom);
+    const SP = this.sp, SL = this.sl;
+    // a cut, a teleport or a long hitch: jump rather than swoop across the map
+    if (!instant && (this.pos.distanceToSquared(desired) > 6400 || dt > 0.25)) instant = true;
     if (instant) {
       this.pos.copy(desired);
       this.look.copy(target);
-    } else {
-      const k = grounded ? 5.5 : 4;
-      this.pos.x = damp(this.pos.x, desired.x, k, dt);
-      this.pos.z = damp(this.pos.z, desired.z, k, dt);
-      this.pos.y = damp(this.pos.y, desired.y, grounded ? 4 : 2.5, dt);
-      this.look.x = damp(this.look.x, target.x, 9, dt);
-      this.look.y = damp(this.look.y, target.y, grounded ? 6 : 3.5, dt);
-      this.look.z = damp(this.look.z, target.z, 9, dt);
+      SP.v.x = SP.v.y = SP.v.z = SL.v.x = SL.v.y = SL.v.z = 0;
+    } else if (dt > 0) {
+      // the springs pick up from wherever the camera is (cuts and shots move it too)
+      SP.x = this.pos.x; SP.y = this.pos.y; SP.z = this.pos.z;
+      SL.x = this.look.x; SL.y = this.look.y; SL.z = this.look.z;
+      // omega = 2x the old damp rates: the same trailing distance at a steady speed
+      const k = grounded ? 11 : 8;
+      this.pos.x = spring(SP, 'x', desired.x, k, dt);
+      this.pos.z = spring(SP, 'z', desired.z, k, dt);
+      this.pos.y = spring(SP, 'y', desired.y, grounded ? 8 : 5, dt);
+      this.look.x = spring(SL, 'x', target.x, 18, dt);
+      this.look.y = spring(SL, 'y', target.y, grounded ? 12 : 7, dt);
+      this.look.z = spring(SL, 'z', target.z, 18, dt);
     }
     const gh2 = this.ph.groundAt(this.pos.x, this.pos.z, this.pos.y).h;
     this.pos.y = Math.max(this.pos.y, gh2 + 0.7);
