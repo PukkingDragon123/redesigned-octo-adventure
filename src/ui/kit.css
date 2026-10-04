@@ -422,6 +422,7 @@
 /* little inline glyphs (16px) */
 .k-g { display: inline-block; width: calc(var(--u) * 16); height: calc(var(--u) * 16); vertical-align: top; image-rendering: pixelated; flex: none; }
 img.k-g { background: none; }
+.k-food { display: inline-block; flex: none; width: calc(var(--u) * 24); height: calc(var(--u) * 24); margin: calc(var(--u) * -4) 0; vertical-align: middle; image-rendering: pixelated; }
 .k-row { display: flex; align-items: center; gap: calc(var(--u) * 4); }
 .k-stack { display: flex; flex-direction: column; gap: calc(var(--u) * 3); }
 .k-grid { display: grid; gap: calc(var(--u) * 2); }

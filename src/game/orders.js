@@ -2,6 +2,7 @@
 import { CUSTOMERS, POI } from '../world/layout.js';
 import { RNG } from '../core/noise.js';
 import { RECIPES, STARTER_PANTRY } from './quests.js';
+import { tempMood, tempFaceURL } from '../art/tempfaces.js';
 
 export const COCOAS = [
   { id: 'classic', label: 'Classic Cocoa', price: 8, color: 0x6a3a1e },
@@ -43,9 +44,9 @@ export function tempBarHTML(q, cls = '') {
   const T = cupTemp(q);
   const pct = Math.round(T.k * 100);
   const big = cls.includes('big');
+  const px = big ? 32 : 16; // the face is 16 art pixels: whole-number scales only
   return `<span class="tbar ${cls}" title="${T.word} (${T.deg}\u00b0C)" style="display:inline-flex;align-items:center;gap:4px;flex:1;min-width:${big ? 120 : 40}px">` +
-    `<svg class="tbar-th" viewBox="0 0 10 22" width="9" height="20" aria-hidden="true"><rect x="3" y="1" width="4" height="15" rx="2" fill="#fff" stroke="#3a2a1e" stroke-width="1"/>` +
-    `<rect x="4" y="${2 + 13 * (1 - T.k)}" width="2" height="${13 * T.k + 1}" fill="${T.color}"/><circle cx="5" cy="17.5" r="3.4" fill="${T.color}" stroke="#3a2a1e" stroke-width="1"/></svg>` +
+    `<img class="tbar-face" src="${tempFaceURL(tempMood(q))}" alt="${T.word}" width="${px}" height="${px}" style="image-rendering:pixelated;flex:none">` +
     `<span class="tbar-track" style="position:relative;flex:1;height:${big ? 10 : 6}px;background:#e8e0d0;border:2px solid #3a2a1e;overflow:hidden">` +
     `<span class="tbar-fill" style="position:absolute;left:0;top:0;bottom:0;width:${pct}%;background:linear-gradient(90deg,#4682dc,${T.color})"></span></span></span>`;
 }

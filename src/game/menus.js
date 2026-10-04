@@ -349,13 +349,13 @@ export class Menus {
       id: o.customer, spot: o.spot,
       stamp: o.state === 'delivered' ? ['DONE', 'ok'] : o.state === 'carried' ? ['PACKED', 'ok'] : o.rush ? ['RUSH', ''] : null,
       lines: [
-        `<div class="nb-line wrap"><img class="k-g" src="${glyphURL(`mug_${mugOf(o)}`)}"><span class="v">${esc(o.label)}</span></div>`,
+        `<div class="nb-line wrap"><img class="k-food" src="${foodIconURL(`cocoa_${mugOf(o)}`)}"><span class="v">${esc(o.label)}</span></div>`,
         heatLine(o),
       ],
       quote: o.note,
     });
     all.forEach((o, i) => {
-      const r = el('button', 'nb-row pick', `<i class="bx"></i><img class="k-g" src="${glyphURL(`mug_${mugOf(o)}`)}"><span class="nm">${esc(SHORT_NAME[o.customer] || (CHARACTERS[o.customer]?.name || o.customer).split(' ')[0])}</span><span class="rt">${o.rush ? `<img class="k-g rush" src="${glyphURL('rush')}">` : ''}$${o.price}</span>`);
+      const r = el('button', 'nb-row pick', `<i class="bx"></i><img class="k-food" src="${foodIconURL(`cocoa_${mugOf(o)}`)}"><span class="nm">${esc(SHORT_NAME[o.customer] || (CHARACTERS[o.customer]?.name || o.customer).split(' ')[0])}</span><span class="rt">${o.rush ? `<img class="k-g rush" src="${glyphURL('rush')}">` : ''}$${o.price}</span>`);
       const sync = () => { r.classList.toggle('packed', o.state === 'carried'); r.classList.toggle('done', o.state === 'delivered'); };
       sync();
       r.addEventListener('focus-item', () => detail(o));
@@ -423,13 +423,13 @@ export class Menus {
     const rows = Object.entries(CUSTOMERS).map(([spot, c]) => {
       const o = today.find((x) => x.spot === spot);
       const id = spot === 'kids' ? 'pip' : spot === 'lou_lh' ? 'ollie' : spot;
-      const r = el('button', `nb-row pick${o?.state === 'delivered' ? ' done' : o?.state === 'carried' ? ' packed' : ''}`, `<i class="bx"></i><span class="nm">${esc(c.name)}</span><span class="rt">${o ? `<img class="k-g" src="${glyphURL(`mug_${mugOf(o)}`)}">` : ''}</span>`);
+      const r = el('button', `nb-row pick${o?.state === 'delivered' ? ' done' : o?.state === 'carried' ? ' packed' : ''}`, `<i class="bx"></i><span class="nm">${esc(c.name)}</span><span class="rt">${o ? `<img class="k-food" src="${foodIconURL(`cocoa_${mugOf(o)}`)}">` : ''}</span>`);
       r.addEventListener('focus-item', () => nbCard(right, {
         id, spot,
         stamp: o?.state === 'delivered' ? ['DONE', 'ok'] : null,
         lines: [
           `<div class="nb-line wrap nb-pencil-note">${esc(NANA_NOTE[spot] || '')}</div>`,
-          o ? `<div class="nb-line wrap"><span class="lbl">Today:</span><img class="k-g" src="${glyphURL(`mug_${mugOf(o)}`)}"><span class="v">${esc(o.label)}</span></div>` : '<div class="nb-line"><span class="lbl">Today:</span><span class="v">no order</span></div>',
+          o ? `<div class="nb-line wrap"><span class="lbl">Today:</span><img class="k-food" src="${foodIconURL(`cocoa_${mugOf(o)}`)}"><span class="v">${esc(o.label)}</span></div>` : '<div class="nb-line"><span class="lbl">Today:</span><span class="v">no order</span></div>',
         ],
       }));
       ui.hoverSelect(r);
@@ -676,9 +676,9 @@ function nbCard(page, { id, spot, where = '', stamp = null, lines = [], quote = 
 // how hot a cup is (every cup leaves the kitchen piping hot)
 function heatLine(o) {
   const q = o.state === 'carried' ? o.quality : 100;
-  const [g, w] = q > 85 ? ['steam3', 'piping hot'] : q > 60 ? ['steam2', 'still hot'] : q > 30 ? ['steam1', 'only warm'] : ['cold', 'gone cold!'];
+  const w = q > 85 ? 'piping hot' : q > 60 ? 'still hot' : q > 30 ? 'only warm' : 'gone cold!';
   const T = cupTemp(q);
-  return `<div class="nb-line"><img class="k-g" src="${glyphURL(g)}"><span class="v${q > 30 ? '' : ' nb-redink'}">${w}</span><span style="margin-left:auto;color:${T.color};font-weight:bold">${T.deg}\u00b0C</span></div>` +
+  return `<div class="nb-line"><span class="v${q > 30 ? '' : ' nb-redink'}">${w}</span><span style="margin-left:auto;color:${T.color};font-weight:bold">${T.deg}\u00b0C</span></div>` +
     `<div class="nb-line" style="gap:6px">${tempBarHTML(q, 'big')}</div>`;
 }
 // pen doodles, a coffee ring and a pencil: a notebook that gets used
