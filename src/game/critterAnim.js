@@ -237,13 +237,21 @@ function poseQuad(c, dt, W) {
   const flag = kind === 'deer' || kind === 'fawn' || kind === 'buck' ? Math.max(wGal, A.alert * 0.4) : 0;
   A.flag = damp(A.flag || 0, flag, 6, dt);
   let tx = -m.tailDroop + A.flag * (m.tailDroop + 1.5), tyw = 0, t2 = 0;
+  let t2y = 0;
   if (kind === 'fox' || kind === 'raccoon') {
-    tx += 0.4 * wGal + 0.25 * A.alert + 0.5 * A.pounce - 0.3 * A.sit + 0.25 * A.crouch;
-    tyw = Math.sin(ph * TAU) * 0.18 * (wWalk + wTrot) + Math.sin(c.t * 1.3) * 0.12 * (1 - mv) + tk * 0.35 + 1.1 * A.sit + Math.sin(c.t * 16) * 0.2 * A.crouch;
-    t2 = -0.25 + 0.15 * Math.sin(ph * TAU - 1) * mv + 0.25 * wGal - 0.4 * A.sit;
+    tx += 0.4 * wGal + 0.25 * A.alert + 0.5 * A.pounce + 0.25 * A.crouch;
+    tyw = Math.sin(ph * TAU) * 0.18 * (wWalk + wTrot) + Math.sin(c.t * 1.3) * 0.12 * (1 - mv) + tk * 0.35 + Math.sin(c.t * 16) * 0.2 * A.crouch;
+    t2 = -0.25 + 0.15 * Math.sin(ph * TAU - 1) * mv + 0.25 * wGal;
+    t2y = tyw * 0.6;
+    // sitting or rearing: the brush lies along the ground and curls round the feet
+    const low = Math.max(A.sit, A.rear);
+    if (low > 0.001) {
+      tx = lerp(tx, -sitP - 0.15, low); tyw = lerp(tyw, 1.15 * A.sit + 0.1 * Math.sin(c.t * 1.1), low);
+      t2 = lerp(t2, 0.12, low); t2y = lerp(t2y, 0.85 * A.sit + 0.06 * Math.sin(c.t * 1.4), low);
+    }
   } else tyw = tk * 0.5 * Math.sin(c.t * 30) + Math.sin(ph * TAU) * 0.1 * mv;
   R(P, Q.tail, tx, tyw, 0);
-  R(P, Q.tail2, t2, 0.5 * A.sit + tyw * 0.6, 0);
+  R(P, Q.tail2, t2, t2y, 0);
   // the stomp: a nervous deer lifts a forehoof and slams it down
   if (anim === 'alert' && !c.stompK && Math.random() < dt * 0.35) c.stompK = 0.001;
   if (c.stompK) { c.stompK += dt * 2.2; if (c.stompK >= 1) c.stompK = 0; }
@@ -371,7 +379,7 @@ function poseBird(c, dt, W) {
   const bob = swim * (0.04 * Math.sin(c.t * 2.1) + 0.03 * Math.sin(c.t * 1.3 + 1));
   let bp = lerp(standP + 0.45 * peck + 0.25 * caw, climb, fly) + dab * 1.75 * swim + bob * 0.5;
   // take-off: a steep, flappy climb for a moment
-  bp -= 0.45 * fly * (1 - sstep(0, 0.6, c.flyT || 0)) * (flying ? 1 : 0);
+  bp -= 0.45 * fly * (1 - sstep(0, 0.6, c.flyT ?? 9)) * (flying ? 1 : 0);
   if (up) bp += 1.2 * fly;
   let br = bank * fly + swim * 0.04 * Math.sin(c.t * 1.7 + 2);
   let by = flyBob;
