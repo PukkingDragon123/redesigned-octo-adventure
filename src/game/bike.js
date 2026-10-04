@@ -719,13 +719,15 @@ export class Bike {
   // the gear that pulls hardest right now (the current one on a tie; top gear if none bite)
   bestGear(fwdSpeed, surf) {
     const s = this.stats, v = Math.max(0, fwdSpeed), cad = this.roadCadence(surf);
-    let best = this.gear, bestA = -1;
-    for (let g = 1; g <= Math.min(s.gears, GEAR_K.length); g++) {
+    const top = Math.min(s.gears, GEAR_K.length);
+    let best = this.gear, bestA = 0;
+    for (let g = 1; g <= top; g++) {
       const eng = clamp((cad * GEAR_K[g - 1] - v) / SLACK, 0, 1);
-      const a = eng * Math.min(s.power * GEAR_PULL[g - 1], s.pedalPower / Math.max(v, 0.5)) + (g === this.gear ? 0.05 : 0);
+      // (the gear she's in gets a little loyalty, so she doesn't hunt between two)
+      const a = eng * Math.min(s.power * GEAR_PULL[g - 1], s.pedalPower / Math.max(v, 0.5)) * (g === this.gear ? 1.08 : 1);
       if (a > bestA + 1e-6) { bestA = a; best = g; }
     }
-    return bestA <= 0.05 ? Math.min(s.gears, GEAR_K.length) : best;
+    return bestA > 0 ? best : top;
   }
 
   // Hank's wind: hard, fast pedalling drains it; coasting and stopping for a breather bring it
