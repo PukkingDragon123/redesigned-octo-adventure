@@ -53,6 +53,7 @@ export class Atmosphere {
     this.pipeline = pipeline;
     this.sun = sunLight;
     this.hour = 17.4;
+    this.lightHour = null; // when set, the sun and sky follow this instead of `hour`
     this.weather = { ...WEATHERS.clear };
     this.weatherTarget = 'clear';
     this.snowCover = 0;
@@ -78,7 +79,8 @@ export class Atmosphere {
 
   apply() {
     const W = this.weather;
-    const h = this.hour;
+    // the title can light the scene at one hour while the village keeps another's routine
+    const h = this.lightHour ?? this.hour;
     // sun path: rises in the east (+x), arcs through the south (+z), sets west
     const dayT = (h - 7) / (19.4 - 7); // 0 sunrise .. 1 sunset
     const elev = Math.sin(clamp(dayT, -0.2, 1.2) * Math.PI) * 0.72 - 0.02;
