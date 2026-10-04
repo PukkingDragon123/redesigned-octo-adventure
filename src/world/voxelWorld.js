@@ -147,6 +147,13 @@ export class VoxelWorld {
       at.voxel = { mesh, meta, M };
       // the hinged front doors (only with worker-built models: their near meshes have the doorways cut)
       if (job && !job.error && meta.doors?.length) this.doors.add(b.id, M, yaw, meta, at.walls);
+      // the voxel houses' porch decks and stoops are walked on at floor height (not down in the yard)
+      if (!at.generic) {
+        for (const d of meta.porch || []) {
+          const c = new THREE.Vector3((d.x0 + d.x1) / 2, d.y, (d.z0 + d.z1) / 2).applyMatrix4(M);
+          this.world.physics.addPlatform({ x: c.x, z: c.z, yaw, w: d.x1 - d.x0, l: d.z1 - d.z0, y0: c.y, surface: 'wood', kind: 'deck' });
+        }
+      }
       // voxel-only kinds bring their own walkable decks, posts and extra solids
       if (at.generic) {
         const PH = this.world.physics;
