@@ -8,9 +8,13 @@
 // a landing spot predicted from the walking speed (stride matched to speed, so no
 // skating), the hips drop when a foot has to reach down a step or a slope, two-bone
 // IK bends hip and knee to reach, and the ankle lays the foot along the slope.
-// Standing still they shuffle a foot when they turn or get nudged. Poses that move
-// the legs themselves (sitting, kicking, dancing...) take over smoothly; far away
-// characters keep the cheap phase-swing walk.
+// Standing still they shuffle a foot when they turn or get nudged. Standing poses
+// keep their stance (a foot forward, knees bent, a stomp) but on the real ground: the
+// pose's own foot placement becomes the planted spot and any lift it gives the foot is
+// kept on top of the ground. Poses that really move the legs (sitting, kneeling,
+// kicking, lying down...) take over smoothly; far away characters keep the cheap
+// phase-swing walk. In cutscenes the range follows the lens (a long shot from across
+// the graveyard still plants feet) and a teleport replants both feet at once.
 import * as THREE from 'three';
 import { CHARACTERS, VS, buildHead, buildJaw, buildTorso, buildLimb, buildSkirt, hipVoxels } from '../voxel/models/characters.js';
 import { meshVox } from '../voxel/mesh.js';
@@ -79,8 +83,25 @@ const _q2 = new THREE.Quaternion(), _Y = new THREE.Vector3(0, 1, 0);
 const _gnd = { h: 0, nx: 0, ny: 1, nz: 0 };
 const SIDES = ['L', 'R'];
 // procedural feet: only characters this close to the camera plant their feet (the rest
-// keep the cheap phase-swing walk)
+// keep the cheap phase-swing walk); scripted characters and cutscenes reach further,
+// more so through a long lens
 const IK_DIST = 24;
+const TAN_BASE = Math.tan((55 * Math.PI) / 360);
+const _fk = { x: 0, y: 0, z: 0 };
+// where the ankle sits relative to the hip for leg angles (forward swing, out, knee bend),
+// body-local (+x the character's left, +z forward): the same rotations apply() sets
+function legFK(lF, lO, kB, s, l1, l2, out) {
+  kB = Math.max(0, kB);
+  const vy = -(l1 + l2 * Math.cos(kB)), vz = -l2 * Math.sin(kB);
+  const th = s * lO;
+  const y = vy * Math.cos(th);
+  const c = Math.cos(lF), sn = Math.sin(lF);
+  out.x = -vy * Math.sin(th);
+  out.y = y * c + vz * sn;
+  out.z = -y * sn + vz * c;
+  return out;
+}
+const smooth01 = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
 const frac = (x) => x - Math.floor(x);
 // poses whose timing is the point: no soft blend into them
 const SNAPPY = new Set(['kick', 'flail', 'air', 'push', 'knock', 'jump', 'reassemble']);
@@ -581,7 +602,10 @@ export class VoxelCharacter {
     this.yawRate = 0;
     this.feet = null; // procedural foot placement (updateFeet)
     this.pelvis = 0; // how far the hips drop so a foot can reach down a step
-    this.legFree = { L: true, R: true }; // legs no pose is driving (the feet can plant them)
+    // where the pose wants each foot (relative to standing straight: x to the left, z ahead,
+    // lift above the ground) and how much the feet may plant that leg (0: the pose drives it)
+    this.stance = { L: { x: 0, z: 0, lift: 0, w: 1 }, R: { x: 0, z: 0, lift: 0, w: 1 } };
+    this._poseLegs = new Float32Array(7);
     this.look = [0, 0];
     this.lastPos = this.pos.clone();
     this.parentObj = parent || game?.scene;
@@ -965,6 +989,8 @@ export class VoxelCharacter {
       const mx = (this.pos.x - this.lastPos.x) / dt, mz = (this.pos.z - this.lastPos.z) / dt;
       const mv = Math.hypot(mx, mz);
       const tele = mv > 20;
+      // a cut in a scene (or any jump across the map): plant both feet afresh where they are now
+      if (tele && this.feet) this.feet.init = false;
       const sp = this.speedOverride ?? (tele ? 0 : mv);
       this.speed += (sp - this.speed) * (1 - Math.exp(-12 * dt));
       const fs = Math.sin(this.yaw), fc = Math.cos(this.yaw);
@@ -1060,25 +1086,27 @@ export class VoxelCharacter {
     fn(this, this.animT, T);
     if (this.fidget) this.applyFidget(dt, T);
     if (this.talking > 0 && (anim === 'idle' || anim === 'talk')) this.talkGestures(T);
-    // legs a pose moves itself (sitting, kicking, a dance, a tapping foot) aren't planted by the feet
-    let fL = T.lFL === REST.lFL && T.lOL === REST.lOL && T.kBL === REST.kBL;
-    let fR = T.lFR === REST.lFR && T.lOR === REST.lOR && T.kBR === REST.kBR;
+    // the legs (and hip height) as the pose has them, before the walk cycle writes over them:
+    // the feet plant them where the pose puts them (poseStance)
+    const PL = this._poseLegs;
+    PL[0] = T.lFL; PL[1] = T.lOL; PL[2] = T.kBL; PL[3] = T.lFR; PL[4] = T.lOR; PL[5] = T.kBR; PL[6] = T.bodyY;
     const armsFree = LOCO_ARMS.has(anim) && !this.held.R && !this.held.L;
     const ikW = this.feet?.on ? (this.feet.L.w + this.feet.R.w) / 2 : 0;
     if (moving) this.locomotion(dt, T, v, armsFree, ikW);
     else if (!ikW) this.phase = 0;
-    // reactions
+    let walkLegs = moving;
+    // reactions (one that moves the legs, a jump tuck, a stomp, a faint, owns them)
     if (this.reaction) {
       const r = this.reaction;
-      const l0 = T.lFL, l1 = T.kBL, r0 = T.lFR, r1 = T.kBR;
+      const l0 = T.lFL, l1 = T.kBL, l2 = T.lOL, r0 = T.lFR, r1 = T.kBR, r2 = T.lOR, b0 = T.bodyY;
       r.t += dt;
       r.R.f?.(this, r.t, T);
-      if (T.lFL !== l0 || T.kBL !== l1) fL = false;
-      if (T.lFR !== r0 || T.kBR !== r1) fR = false;
+      if (T.lFL !== l0 || T.kBL !== l1 || T.lOL !== l2) { PL[0] = T.lFL; PL[1] = T.lOL; PL[2] = T.kBL; walkLegs = false; }
+      if (T.lFR !== r0 || T.kBR !== r1 || T.lOR !== r2) { PL[3] = T.lFR; PL[4] = T.lOR; PL[5] = T.kBR; walkLegs = false; }
+      PL[6] += T.bodyY - b0;
       if (r.t >= r.R.d) this.reaction = null;
     }
-    this.legFree.L = fL;
-    this.legFree.R = fR;
+    this.poseStance(dt, walkLegs, T.bodyRx);
     if (!this.ride && !this.broken) {
       // ---- secondary motion: lean into a start, rock back on a stop, bank into turns;
       // the eyes stay on the way ahead and loose arms trail behind
@@ -1113,6 +1141,36 @@ export class VoxelCharacter {
       T.headY += yawH * 0.75; T.twist += yawH * 0.25; T.headX += pitch * 0.8;
       this.look[0] = clamp(yawH * 1.2, -1, 1);
       this.look[1] = clamp(pitch * 2, -1, 1);
+    }
+  }
+
+  // Where the pose puts each foot, relative to standing straight, and whether the feet may
+  // plant that leg. A standing pose (a wide stance, a foot forward, bent knees, a little
+  // stomp) is planted on the real ground with its own offsets and any lift kept on top;
+  // a pose that really moves the leg (sitting, kneeling, a knee up, a kick, lying down)
+  // keeps it. Walking, the walk cycle's legs are the feet's to place.
+  poseStance(dt, walking, bodyRx) {
+    const P = this.P, PL = this._poseLegs, legLen = P.thighL + P.shinL;
+    const F0 = P.fk0 || (P.fk0 = legFK(REST.lFL, REST.lOL, REST.kBL, 1, P.thighL, P.shinL, { x: 0, y: 0, z: 0 }));
+    const k = dt > 0 ? 1 - Math.exp(-14 * dt) : 1;
+    const by = PL[6];
+    // sitting, kneeling, crouched right down or lying: no planting at all
+    const low = (1 - smooth01(0.18, 0.28, -by / P.hipH)) * (1 - smooth01(0.25, 0.4, Math.abs(bodyRx)));
+    for (let i = 0; i < 2; i++) {
+      const s = i ? -1 : 1, st = this.stance[SIDES[i]];
+      let x = 0, z = 0, lift = 0, w = 1;
+      if (!walking) {
+        const lF = PL[i * 3];
+        legFK(lF, PL[i * 3 + 1], PL[i * 3 + 2], s, P.thighL, P.shinL, _fk);
+        x = _fk.x - s * F0.x;
+        z = _fk.z - F0.z;
+        lift = by + _fk.y - F0.y;
+        w = low * (1 - smooth01(0.75, 1.05, lF)) * (1 - smooth01(0.1, 0.24, lift / legLen));
+      }
+      st.x += (x - st.x) * k;
+      st.z += (z - st.z) * k;
+      st.lift += (lift - st.lift) * k;
+      st.w = w;
     }
   }
 
@@ -1320,19 +1378,21 @@ export class VoxelCharacter {
   // speed, so nothing skates), and the hips drop if a foot has to reach down to the ground.
   updateFeet(dt, camPos) {
     const g = this.game, P = this.P;
-    const want = !!(dt > 0 && dt < 0.07 && camPos && g?.physics && this.root.parent === g.scene && !this.ride && !this.broken &&
-      this.visible && this.spec.kind !== 'reaper' && this.hop < 0.02 && Math.abs(this.J.bodyRx) < 0.3 &&
-      (camPos.x - this.pos.x) ** 2 + (camPos.z - this.pos.z) ** 2 < IK_DIST * IK_DIST);
+    const lift = this.yOffset + this.floatY;
+    const scene = this.scripted || g?.mode === 'cutscene';
+    const want = !!(dt > 0 && dt < (scene ? 0.11 : 0.07) && camPos && g?.physics && this.root.parent === g.scene && !this.ride && !this.broken &&
+      this.visible && this.spec.kind !== 'reaper' && this.hop < 0.02 && Math.abs(this.J.bodyRx) < 0.3 && Math.abs(lift) < 0.3 &&
+      (camPos.x - this.pos.x) ** 2 + (camPos.z - this.pos.z) ** 2 < this.ikRange(scene) ** 2);
     let F = this.feet;
     if (!F) {
       if (!want) { this.pelvis = 0; return; }
-      const foot = (s) => ({ s, w: 0, planted: true, idle: false, t: 0, dur: 0.2, x: 0, y: 0, z: 0, sx: 0, sy: 0, sz: 0, tx: 0, tz: 0, yaw: 0, nx: 0, ny: 1, nz: 0, lift: 0 });
+      const foot = (s) => ({ s, w: 0, planted: true, idle: false, t: 0, dur: 0.2, x: 0, y: 0, z: 0, sx: 0, sy: 0, sz: 0, tx: 0, tz: 0, yaw: 0, nx: 0, ny: 1, nz: 0, lift: 0, up: 0 });
       F = this.feet = { on: false, init: false, moving: false, gp: 0, wait: 0, L: foot(1), R: foot(-1), legLen: P.thighL + P.shinL };
     }
     // legs no pose is driving fade in; let go quickly (a jump, a kick, sitting down)
     for (const side of SIDES) {
       const f = F[side];
-      const tgt = want && this.legFree[side] ? 1 : 0;
+      const tgt = want ? this.stance[side].w : 0;
       f.w = tgt >= f.w ? Math.min(tgt, f.w + dt * 6) : Math.max(tgt, f.w - dt * 10);
     }
     F.on = F.L.w > 0 || F.R.w > 0;
@@ -1347,21 +1407,24 @@ export class VoxelCharacter {
     const lx = cy, lz = -sy; // the character's own left (+x)
     const footW = P.hipX * 1.05;
     const legLen = F.legLen;
-    // (re)starting, or just teleported: both feet planted under the hips
+    const v = this.speed;
+    const moving = F.moving ? v > 0.1 : v > 0.22;
+    // standing, the feet go where the pose puts them (a wide stance, one foot forward)
+    const ST = this.stance, sk = moving ? 0 : 1;
+    // (re)starting, or just teleported (a cut in a scene): both feet planted under the hips
     if (!F.init || Math.hypot(F.L.x - this.pos.x, F.L.z - this.pos.z) > legLen * 2.5 || Math.hypot(F.R.x - this.pos.x, F.R.z - this.pos.z) > legLen * 2.5) {
       F.init = true;
       F.moving = false;
       for (const side of SIDES) {
-        const f = F[side];
-        f.x = this.pos.x + lx * f.s * footW;
-        f.z = this.pos.z + lz * f.s * footW;
+        const f = F[side], st = ST[side];
+        const ox = f.s * footW + st.x * sk, oz = st.z * sk;
+        f.x = this.pos.x + lx * ox + sy * oz;
+        f.z = this.pos.z + lz * ox + cy * oz;
         f.y = this.footGround(f.x, f.z, f);
         f.planted = true; f.idle = false; f.t = 0; f.lift = 0; f.yaw = this.yaw;
       }
     }
     // ---- the gait: steps a second and the share of each cycle a foot is down, from the speed
-    const v = this.speed;
-    const moving = F.moving ? v > 0.1 : v > 0.22;
     const run = clamp((v - 1.6) / 2, 0, 1);
     const duty = 0.53 - 0.21 * run;
     const style = this.persona.walk;
@@ -1382,9 +1445,10 @@ export class VoxelCharacter {
     const lift0 = (style === 'march' ? 1.6 : style === 'shamble' || style === 'slow' ? 0.6 : 1) * (0.045 + 0.028 * Math.min(v, 5));
     F.wait -= dt;
     for (const side of SIDES) {
-      const f = F[side];
+      const f = F[side], st = ST[side];
       const other = side === 'L' ? F.R : F.L;
-      const restX = this.pos.x + lx * f.s * footW, restZ = this.pos.z + lz * f.s * footW;
+      const ox = f.s * footW + st.x * sk, oz = st.z * sk;
+      const restX = this.pos.x + lx * ox + sy * oz, restZ = this.pos.z + lz * ox + cy * oz;
       let tx = restX, tz = restZ;
       if (moving) {
         const ph = frac(F.gp + (f.s > 0 ? 0 : 0.5));
@@ -1429,22 +1493,31 @@ export class VoxelCharacter {
     }
     // ---- hips: as low as the lower foot needs (down a step, across a slope, a long stride);
     // a swinging foot counts more as it comes down, so the hips are ready for the heel strike
-    const base = this.pos.y + this.stepY, sqY = Math.max(0.4, this.J.sq);
+    const base = this.pos.y + this.stepY + lift, sqY = Math.max(0.4, this.J.sq);
     const reach = legLen * 0.993;
     let drop = 0;
     for (const side of SIDES) {
       const f = F[side];
       if (f.w <= 0) continue;
+      // (a stomp or a bounce on the toes lifts the foot off the ground with the body)
+      f.up = Math.max(0, ST[side].lift) * sk;
       const hx = this.pos.x + lx * f.s * P.hipX, hz = this.pos.z + lz * f.s * P.hipX;
       const dh = Math.hypot(f.x - hx, f.z - hz);
       // the highest the hips can be and still reach this foot (the body squash stretches them)
-      const top = (f.y + P.footH - base + Math.sqrt(Math.max(0, reach * reach - dh * dh))) / sqY;
+      const top = (f.y + f.up + P.footH - base + Math.sqrt(Math.max(0, reach * reach - dh * dh))) / sqY;
       const need = P.hipH + this.J.bodyY - top;
       const k = f.planted ? 1 : 0.35 + 0.65 * clamp((f.t - 0.55) / 0.4, 0, 1);
       if (need > 0) drop = Math.max(drop, need * f.w * k);
     }
     drop = Math.min(drop, P.hipH * 0.45);
     this.pelvis += (-drop - this.pelvis) * (1 - Math.exp(-(-drop < this.pelvis ? 22 : 14) * dt));
+  }
+  // how far from the camera feet are still planted: further for scripted characters and
+  // in cutscenes, and further again through a long lens (a long shot still reads the steps)
+  ikRange(scene) {
+    if (!scene) return IK_DIST;
+    const fov = this.game.camera?.fov || 50;
+    return IK_DIST * 1.5 * clamp(TAN_BASE / Math.tan((fov * Math.PI) / 360), 1, 3);
   }
   liftFoot(f, idle, dur) {
     f.planted = false;
@@ -1470,7 +1543,8 @@ export class VoxelCharacter {
   // physics doesn't know) counts as flat ground at the character's own height
   footGround(x, z, f) {
     const G = this.game.physics.groundAt(x, z, this.pos.y + 0.45, 0.45, _gnd);
-    if (Math.abs(G.h - this.pos.y) > 0.6) {
+    // (a scene that stands someone on a log pile or a stage: their own height is the floor)
+    if (Math.abs(G.h - this.pos.y) > (this.groundSnap || !this.scripted ? 0.6 : 0.15)) {
       f.nx = 0; f.ny = 1; f.nz = 0;
       return this.pos.y;
     }
@@ -1486,7 +1560,7 @@ export class VoxelCharacter {
       const f = F[side], L = this.legs[side];
       if (f.w <= 0) { L.ankle.rotation.x = 0; continue; }
       // the ankle sits a foot's height above the sole, along the ground's normal
-      _v.set(f.x + f.nx * P.footH, f.y + f.ny * P.footH, f.z + f.nz * P.footH);
+      _v.set(f.x + f.nx * P.footH, f.y + (f.up || 0) + f.ny * P.footH, f.z + f.nz * P.footH);
       this.solveLeg(side, _v, f.w);
       // flat on the slope; toe off as it lifts, heel first as it comes down
       let want = Math.atan2(sy * f.nx + cy * f.nz, f.ny);
