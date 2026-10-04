@@ -2,7 +2,8 @@
 // rides up (fear style), what they shout, and their day, hour by hour.
 // Activities: home (stand at their spot), at (a place + pose), bench (sit on the
 // nearest bench), patrol / jog (a loop), errand (shop and carry the bag home),
-// chat (meet up with friends), inside (go home and shut the door).
+// chat (meet up with friends), inside (go home and shut the door), contest (the pumpkin
+// carving contest on Main Street: each has a place and a part there, see contest.js).
 import { frontOf, DOUG_BEAT, MO_SPOT } from '../world/layout.js';
 import { LANE_N, LANE_S } from './npcNav.js';
 
@@ -13,6 +14,7 @@ const bench = (x, z, pose = 'sit') => ({ k: 'bench', x, z, pose });
 const inside = () => ({ k: 'inside' });
 const errand = (to, carry = 'carryBag') => ({ k: 'errand', to, carry });
 const chat = (meet) => ({ k: 'chat', meet });
+const contest = () => ({ k: 'contest' });
 
 // meet-ups: where, and who stands round
 export const MEETS = {
@@ -46,7 +48,8 @@ export const PEOPLE = {
     hello: ['Bonjour, Hank!', 'Ah, mon petit squelette!', 'Coucou, Hank!'],
     day: [
       [6.5, 8.5, [at(P(frontOf('cafe', 1.4, 3.6), 0), 'sweep')]],
-      [8.5, 12, [home()]],
+      [8.5, 10, [home()]],
+      [10, 12, [contest()]],
       [12, 13.5, [chat('cafeGossip')]],
       [13.5, 16, [home()]],
       [16, 17, [bench(223, LANE_N - 0.5, 'sitSip')]],
@@ -61,9 +64,9 @@ export const PEOPLE = {
     hello: ['Hello, dear!', 'Yoo-hoo, Hank!', 'Mind the cats, dear!'],
     day: [
       [6.5, 9, [at(P(frontOf('agnes', 0.9, 3.1), 0), 'water'), at(P(frontOf('agnes', 0.9, 3.1), 0), 'garden')]],
-      [9, 12, [home('knit')]],
+      [9, 12, [contest()]],
       [12, 13.5, [chat('cafeGossip')]],
-      [13.5, 16, [bench(173, LANE_S + 0.5, 'sitKnit')]],
+      [13.5, 16, [contest(), contest(), bench(173, LANE_S + 0.5, 'sitKnit')]],
       [16, 18, [errand(STORE_FRONT)]],
       [18, 21, [home('knit')]],
     ],
@@ -76,7 +79,7 @@ export const PEOPLE = {
     hello: ['Ahoy, Hank!', 'Fair winds, sailor!', 'Hank, me hearty!'],
     day: [
       [6.5, 10, [at({ x: 190, z: 87.3, yaw: 0 }, 'fish')]],
-      [10, 12, [home()]],
+      [10, 12, [contest()]],
       [12, 14, [bench(201.5, LANE_S + 0.5, 'sitPaper')]],
       [14, 17, [at({ x: 178, z: 87.3, yaw: 0.1 }, 'lookout'), at({ x: 190, z: 87.3, yaw: 0 }, 'fish')]],
       [17, 20, [at({ x: 190, z: 87.3, yaw: 0 }, 'fish')]],
@@ -90,7 +93,8 @@ export const PEOPLE = {
     wary: ['Keep your hands where I can see them. All twenty-seven bones.', 'Move along, citizen.', "I'm watching you."],
     hello: ['Citizen.', 'Evening, Hank. Drive safe.', 'Afternoon, Hank.'],
     day: [
-      [6.5, 11, [{ k: 'patrol', pts: DOUG_BEAT }]],
+      [6.5, 9, [{ k: 'patrol', pts: DOUG_BEAT }]],
+      [9, 11, [contest()]],
       [11, 12, [at(P(frontOf('donuts', 1.4, 2.4), 0), 'sip')]],
       [12, 15, [{ k: 'patrol', pts: DOUG_BEAT }]],
       [15, 16, [chat('clinicVisit')]],
@@ -106,9 +110,10 @@ export const PEOPLE = {
     hello: ['Doctor Ingrid. Hello, Hank.', 'Still no pulse? Wonderful!', 'Hello, my favourite anomaly.'],
     day: [
       [6.5, 8, [{ k: 'jog', pts: [{ x: 240, z: LANE_N }, { x: 206, z: LANE_N }, { x: 205.5, z: LANE_S, cross: true }, { x: 261, z: LANE_S }, { x: 262, z: LANE_N, cross: true }, { x: 249, z: LANE_N }] }]],
-      [8, 12, [home('clipboard')]],
+      [8, 9, [home('clipboard')]],
+      [9, 12, [contest()]],
       [12, 13, [bench(253, LANE_N - 0.5, 'sitSip')]],
-      [13, 15, [home('clipboard')]],
+      [13, 15, [contest()]],
       [15, 16, [chat('clinicVisit')]],
       [16, 19.5, [home('clipboard')]],
       [19.5, 21, [bench(237, LANE_S + 0.5, 'sitPaper')]],
@@ -119,14 +124,14 @@ export const PEOPLE = {
     scare: ['WHOA! A REAL SKELETON!', 'SKELETON!!! COOOOL!', 'MOM! MOM! LOOK!'],
     hello: ['HANK!!!', 'Do a wheelie!', 'Hi skeleton!!'],
     fan: ['DO A BACKFLIP!', 'Can I ride on the handlebars?!', 'Hank is the COOLEST!'],
-    day: [[6.5, 21, [home('hockey')]]],
+    day: [[6.5, 9, [home('hockey')]], [9, 12, [contest()]], [12, 13.5, [home('hockey')]], [13.5, 15.5, [contest()]], [15.5, 21, [home('hockey')]]],
   },
   pop: {
     char: 'pop', house: 'kids', fear: 'cool', run: 3.4, kid: true, umbrella: 'pop',
     scare: ["I'm not scared. Pip is scared.", 'Whoa... are those REAL bones?', 'Is your skull detachable?!'],
     hello: ['Hey, Hank.', 'Hank! Watch this!', "Pip says hi. I mean - hi."],
     fan: ['Do a flip! Pip wants to see. Not me.', 'Can you take your head off again?'],
-    day: [[6.5, 21, [home('hockey')]]],
+    day: [[6.5, 9, [home('hockey')]], [9, 12, [contest()]], [12, 13.5, [home('hockey')]], [13.5, 15.5, [contest()]], [15.5, 21, [home('hockey')]]],
   },
   lou: {
     house: 'sawmill', fear: 'scream', run: 4.4, scream: 1.75,
@@ -137,7 +142,8 @@ export const PEOPLE = {
     day: [
       [6.5, 12, [at({ x: 106.2, z: 119.8, yaw: 0.2 }, 'chop')]],
       [12, 13, [home('sip')]],
-      [13, 18, [at({ x: 106.2, z: 119.8, yaw: 0.2 }, 'chop'), home()]],
+      [13, 15, [contest(), at({ x: 106.2, z: 119.8, yaw: 0.2 }, 'chop')]],
+      [15, 18, [at({ x: 106.2, z: 119.8, yaw: 0.2 }, 'chop'), home()]],
       [18, 21, [home('sip')]],
     ],
   },
@@ -175,9 +181,10 @@ export const PEOPLE = {
     hello: ['Hi, Hank! Thanks for being nice to the kids.', 'Morning, Hank!', 'Pip will NOT stop talking about you.'],
     day: [
       [6.5, 9, [at(P(frontOf('kids', 0.9, 2.6), Math.PI + Math.PI), 'garden')]],
-      [9, 12, [home('idle')]],
+      [9, 12, [contest()]],
       [12, 13.5, [chat('cafeGossip')]],
-      [13.5, 16, [home('idle')]],
+      [13.5, 15.5, [contest()]],
+      [15.5, 16, [home('idle')]],
       [16, 17.5, [errand(STORE_FRONT)]],
       [17.5, 21, [home('idle')]],
     ],

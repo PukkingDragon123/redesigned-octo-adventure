@@ -19,6 +19,7 @@ import { drawTV } from '../world/voxelWorld.js';
 import { Effects } from './effects.js';
 import { Wildlife } from './wildlife.js';
 import { Villagers } from './npcs.js';
+import { Contest } from './contest.js';
 import { Keepsakes } from './keepsakes.js';
 import { Orders } from './orders.js';
 import { Cargo } from './cargo.js';
@@ -97,6 +98,7 @@ export class Game {
     this.story = new Story(this);
     this.settings = loadSettings();
     this.state = newState();
+    this.contest = new Contest(this);
     this.villagers = new Villagers(this);
     this.keepsakes = new Keepsakes(this);
     this.interior = new Interior(this);
@@ -124,7 +126,7 @@ export class Game {
     else this.showTitle();
   }
 
-  // test entry: jump straight into one story beat (?scene=cabinNight|morning|garageReveal|villagePanic|catRescue|strayCat|ending)
+  // test entry: jump straight into one story beat (?scene=cabinNight|morning|garageReveal|villagePanic|contestScream|catRescue|strayCat|ending)
   async debugScene(name) {
     this.debugRide();
     if (name === 'villagePanic') {
@@ -132,6 +134,16 @@ export class Game {
       this.villagers.scaredOfHank = true;
     }
     if (name === 'catRescue') this.state.cat = false;
+    if (name === 'contestScream') {
+      // a save from before the contest: ride in from the bridge road at mid-morning, the crowd still nervous
+      this.state.flags.contestScream = false;
+      this.world.atmosphere.hour = 10;
+      for (const b of this.villagers.brains) this.villagers.force(b.char, b.cfg.kid ? 50 : 8, true);
+      this.villagers.syncState();
+      this.bike.reset(84, 46.5, Math.PI / 2 - 0.08);
+      this.chase.snap(this.bike);
+      return;
+    }
     if (name === 'strayCat') {
       // the little stray wandering the road home, Hank riding up from the bridge side
       this.state.cat = false;
@@ -790,6 +802,7 @@ export class Game {
     this.updateSpeedLines();
     this.wildlife.update(dt);
     this.villagers.update(dt);
+    this.contest.update(dt);
     this.currentScene?.update(dt);
     this.keepsakes.update(dt);
     this.story.update(dt);
