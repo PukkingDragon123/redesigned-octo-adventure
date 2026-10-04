@@ -32,12 +32,14 @@ export const PEOPLE = {
     peek: ['Still out there, is it?', 'Hmph. Rattling around like it owns the place.'],
     wary: ["Don't you come any closer.", 'I got my eye on you, bones.', "...You still here?"],
     hello: ['Hank.', 'Mornin\'.', "Hmph. Ridin' slow for once."],
+    // he hosts the pumpkin carving contest (megaphone, rounds of the tables, ribbons)
     day: [
-      [6.5, 9, [home('sip')]],
-      [9, 12, [at(P(frontOf('gus', 3.8, -3.6), 0.25), 'chop')]],
+      [6.5, 8.5, [home('sip')]],
+      [8.5, 12, [contest()]],
       [12, 13, [inside()]],
-      [13, 17, [at(P(frontOf('gus', 1.4, 2.6), 0.25), 'paper'), at(P(frontOf('gus', 3.8, -3.6), 0.25), 'chop')]],
-      [17, 21, [home('sip')]],
+      [13, 16.5, [contest()]],
+      [16.5, 18, [at(P(frontOf('gus', 1.4, 2.6), 0.25), 'paper'), at(P(frontOf('gus', 3.8, -3.6), 0.25), 'chop')]],
+      [18, 21, [home('sip')]],
     ],
   },
   marie: {

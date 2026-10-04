@@ -13,6 +13,7 @@ import { hasSave } from './state.js';
 import { tempBarHTML, cupTemp } from './orders.js';
 import { foodIconURL, FOOD_INFO } from '../art/foodsprites.js';
 import { QUESTS, SHOP, RECIPES, LOST, BIRD_NAMES } from './quests.js';
+import { RIBBONS } from './carveScore.js';
 
 const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V'];
 
@@ -121,6 +122,12 @@ export class Menus {
     left.appendChild(list);
     if (st.photos && Object.keys(st.photos).length) {
       left.insertAdjacentHTML('beforeend', `<div class="k-h k-bold">Bird book</div><div class="jphotos">${Object.keys(st.photos).map((k) => `<span class="jph"><img class="k-g" src="${glyphURL('camera')}">${esc(BIRD_NAMES[k] || k)}</span>`).join('')}</div>`);
+    }
+    // the pumpkin carving contest: the ribbons Hank has won (src/game/carving.js)
+    const pr = st.carving?.ribbons;
+    if (pr && Object.values(pr).some((n) => n)) {
+      const medal = { first: 'medalG', second: 'medalS', third: 'medalB', part: 'medalNone' };
+      left.insertAdjacentHTML('beforeend', `<div class="k-h k-bold">Pumpkin ribbons</div><div class="jphotos">${Object.keys(RIBBONS).filter((k) => pr[k]).map((k) => `<span class="jph"><img class="k-g" src="${glyphURL(medal[k])}">${pr[k] > 1 ? `${pr[k]} x ` : ''}${esc(RIBBONS[k].name)}</span>`).join('')}<span class="jph">Best: ${st.carving.best || 0} pts</span></div>`);
     }
     // right page: an index of where to go
     right.insertAdjacentHTML('beforeend', '<div class="k-h k-bold">Contents</div>');

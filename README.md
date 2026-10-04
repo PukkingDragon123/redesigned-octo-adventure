@@ -85,9 +85,21 @@ its heat, more the harder the crash.
   at Harold's photos, talk to Nana.
 - Ride into a tree and Hank goes flying while the tree shakes its leaves loose.
 - The village is holding a pumpkin carving contest on Main Street, the first
-  thing you see riding in from Nana's. The first time Hank shows up, the whole
+  thing you see riding in from Nana's. Gus hosts it with a dented tin megaphone:
+  he strolls the tables, leans in, hums, points and has his say, calls the
+  finished pumpkins and hands out the hourly ribbons, and the crowd cheers
+  (pennants, jumping kids, "Hooray!"). The first time Hank shows up, the whole
   crowd screams and hides behind the tables and hay bales; they drift back to
   their pumpkins as they get used to him.
+- Carve a pumpkin at Hank's own little table at the west end of the contest
+  (once a day): drag on the big pixel pumpkin to cut (knife for thin lines,
+  scoop for big bites, undo, an optional faint stencil), 75 seconds on the
+  clock. Cuts glow with the candle inside; ring a bit and it drops in; cut right
+  across the face and it caves in. Gus and Dr. Ingrid judge it on eyes, mouth,
+  nose, symmetry, how much is cut and style, and Gus announces the ribbon. The
+  face is saved and stands on the table as a glowing carved voxel pumpkin.
+  (`?scene=carve` opens it straight away; `node tools/carvetest.mjs` checks the
+  scoring, the saved mask and the models.)
 - On the first evening a stray cat is out walking the road home; go slowly and
   she comes to you, rush her and she bolts.
 - Chat with villagers for favours: Agnes's three lost cats, lost glasses, puck,

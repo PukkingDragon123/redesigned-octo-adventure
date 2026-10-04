@@ -471,7 +471,7 @@ export class Story {
       await S.say('grandma', "Ta-da! Harold's old roadster. He called her *Bessie.*", { actor: N, expr: 'happy' });
       await S.say('hank', "She's... beautiful.", { actor: H, expr: 'happy' });
       await S.say('grandma', 'She\'s held together with hope and duct tape. Harold always said: "just pedal, and don\'t think about it."', { actor: N, expr: 'laugh' });
-      await S.say('grandma', "Maple Cove is down the road to the east, past the covered bridge. Gus lives at the edge of the village. Mind his temper.", { actor: N, expr: 'neutral' });
+      await S.say('grandma', "Maple Cove is down the road to the east, past the covered bridge. Gus is hosting the pumpkin carving contest on Main Street. Mind his temper.", { actor: N, expr: 'neutral' });
       await S.say('hank', 'Got it. East. Bridge. Temper.', { actor: H, expr: 'determined' });
       g.villagers.setVisible('grandma', true);
       g.rider.visible = true;
@@ -484,8 +484,9 @@ export class Story {
   }
 
   // ---------------------------------------------------------------- 4. the village panics
-  // Hank's first ride into Maple Cove: the pumpkin carving contest is on in the street and
-  // everyone is busy at their pumpkins... until they see who has come to visit.
+  // Hank's first ride into Maple Cove: the pumpkin carving contest is on in the street,
+  // Gus is hosting through his tin megaphone and everyone is busy at their pumpkins...
+  // until they see who has come to visit. (Every shot is out in the open street.)
   villagePanic() {
     const g = this.g;
     return this.scene(async (S) => {
@@ -494,7 +495,7 @@ export class Story {
       g.bike.vel.set(0, 0, 0);
       // (coming in some other way than the road from Nana's? start him at the west end of Main Street)
       const p0 = g.playerPos;
-      const moved = g.onFoot || p0.x > C.banner.x - 4 || Math.abs(p0.z - E.z) > 7;
+      const moved = g.onFoot || p0.x > C.west - 4 || Math.abs(p0.z - E.z) > 7;
       if (moved) {
         await S.fade(1, 0.35);
         if (g.onFoot) g.hopOn();
@@ -525,19 +526,38 @@ export class Story {
         a.lookAt(null);
         a.play(POSE[s.role] || 'idle', s.role === 'kid' || s.role === 'cheer' ? 'happy' : 'determined');
       }
-      if (gus) gus.visible = false;
+      // Gus hosts: out in the street at the west end, megaphone in hand, greeting whoever comes in
+      const GS = { x: C.west + 1.4, z: E.z - 1.1 };
+      if (gus) {
+        gus.path = null;
+        gus.pos.set(GS.x, g.physics.groundAt(GS.x, GS.z, y + 2).h, GS.z);
+        gus.yaw = gus.targetYaw = -Math.PI / 2;
+        gus.lookAt(null);
+        gus.visible = true;
+        gus.play('hostWalk', 'neutral');
+      }
       const shout = (a, text, ms = 2200) => a && g.ui.tag(`npc:${a.spot}`, text, V(a.pos.x, a.pos.y + a.P.height + 0.45, a.pos.z), ms);
       const busy = S.every((dt) => {
         for (const a of crowd) if (Math.random() < dt * 0.3) a.react(['nod', 'bounce', 'laugh'][Math.floor(Math.random() * 3)]);
         return false;
       });
-      // the first look: the banner across the street, the tables, the crowd
+      // the first look: the bunting, the tables, the crowd, Gus out front
       const look = V(125, y + 1.6, E.z);
       await S.cam(V(bp.x - fwd.x * 5 - fwd.z * 1.6, y + 2.5, bp.z - fwd.z * 5 + fwd.x * 1.6), look, 0, 50);
       if (moved) await S.fade(0, 0.4);
       S.cam(V(bp.x - fwd.x * 1.5 - fwd.z * 1.2, y + 2.1, bp.z - fwd.z * 1.5 + fwd.x * 1.2), look, 3.2, 46);
       await S.wait(1.4);
       await S.say('hank', 'Ooh! A *pumpkin carving contest!*', { actor: H, expr: 'sparkle' });
+      // the host, through his tin megaphone; and the street cheers
+      if (gus) {
+        await S.cam(V(GS.x - 2.4, y + 1.55, GS.z + 1.1), V(GS.x + 0.6, y + 1.45, GS.z - 0.1), 0, 42);
+        gus.play('announce', 'happy');
+        S.sfx('megaphone', { volume: 0.7 });
+        await S.say('gus', 'TEN MINUTES, CARVERS! TEN MINUTES! ...And mind your fingers!', { actor: gus, expr: 'laugh' });
+        g.contest.cheer(1, { actors: crowd, force: true });
+        await S.wait(0.6);
+        gus.play('hostWalk', 'neutral');
+      }
       await S.cam(V(128.2, y + 1.8, E.z + 1.2), V(125.4, y + 0.95, 46.4), 0, 44);
       shout(marie, 'Non, non, the nose goes HERE...');
       V2.get('agnes')?.react('laugh');
@@ -549,17 +569,18 @@ export class Story {
       H.play('wave', 'happy');
       await S.say('hank', 'Hi there! Cocoa delivery from Nana Marguerite!', { actor: H, expr: 'happy' });
       H.play('idle', 'happy');
-      // ...they freeze, and turn, and stare
+      // ...they freeze, and turn, and stare (Gus too)
       busy();
-      for (const a of crowd) {
-        a.play('idle', 'neutral');
+      for (const a of [...crowd, gus].filter(Boolean)) {
+        if (a !== gus) a.play('idle', 'neutral');
         a.faceTowards(H.pos.x, H.pos.z);
         a.lookAt(H);
         a.showEmote('dots', 1.6);
       }
-      await S.cam(V(121.8, y + 2.0, E.z + 0.6), V(129, y + 1.1, 47.6), 0, 50);
+      await S.cam(V(120.0, y + 2.2, E.z + 1.6), V(129, y + 1.1, 47.6), 0, 50);
       await S.wait(1.5);
       for (const a of crowd) a.tempExpr('shock', 3);
+      gus?.tempExpr('shock', 3);
       S.sfx('gasp', { volume: 0.5 });
       await S.wait(0.5);
       if (kid) {
@@ -584,36 +605,44 @@ export class Story {
         b._act = null;
         b.startle(X);
       }
+      // ...all but Gus, who has hosted forty-one of these and isn't about to stop now:
+      // he marches straight up the street to the intruder
+      const GT = { x: H.pos.x + fwd.x * 2.4 + fwd.z * 0.3, z: H.pos.z + fwd.z * 2.4 - fwd.x * 0.3 };
+      if (gus) {
+        gus.tempExpr('angry', 8);
+        gus.walkTo([[GT.x, GT.z]], 1.7, 'hostWalk').then(() => gus.faceTowards(H.pos.x, H.pos.z));
+      }
       await S.wait(3.6);
       await S.say('marie', 'Mon dieu! Un mort-vivant!', { actor: marie, expr: 'scared' });
       await S.say('doug', 'Everybody stay calm! I am a trained professional!', { actor: doug, expr: 'scared' });
       await S.say('ingrid', 'Clinically speaking... that is extremely interesting.', { actor: ingrid, expr: 'surprised' });
       H.play('idle', 'sheepish');
-      // Gus comes down from his cabin with his shotgun
       if (gus) {
-        gus.pos.set(bp.x - fwd.x * 6 + fwd.z * 4.5, y, bp.z - fwd.z * 6 - fwd.x * 4.5);
-        gus.pos.y = g.physics.groundAt(gus.pos.x, gus.pos.z, y + 2).h;
-        gus.visible = true;
-        gus.play('aim', 'angry');
+        // (still on his way? he's there now)
+        gus.path = null;
+        gus.pos.set(GT.x, g.physics.groundAt(GT.x, GT.z, y + 2).h, GT.z);
         gus.faceTowards(H.pos.x, H.pos.z);
-        S.sfx('gun_cock');
-        await S.frame(gus, [2.2, 1.0, 2.6], 0.5, 40, 1.1);
+        H.faceTowards(GT.x, GT.z);
+        gus.play('announce', 'angry');
+        S.sfx('megaphone', { volume: 0.9, pitch: 0.9 });
+        g.chase.shake(0.3);
+        // out in the street, in front of Gus: his face, the contest behind him
+        await S.cam(V(GT.x - 1.9, y + 1.6, GT.z + 1.7), V(GT.x, y + 1.45, GT.z), 0.5, 42);
         await S.say('gus', 'STAY RIGHT THERE, YOU ROTTEN TURNIP!', { actor: gus, expr: 'angry' });
         H.play('handsup', 'scared');
         H.showEmote('sweat', 3);
-        await S.frame(H, [1.8, 1.0, 2.4], 0.4, 40, 1.0);
-        await S.say('hank', "WAIT! DON'T SHOOT! I'm just... I'm just *delivering cocoa!*", { actor: H, expr: 'scared' });
-        await S.frame(gus, [2.0, 1.0, 2.6], 0.4, 40, 1.1);
+        await S.frame(H, [0.6, 1.0, 2.6], 0.4, 40, 1.0);
+        await S.say('hank', "WAIT! Don't... *megaphone* me! I'm just... I'm just *delivering cocoa!*", { actor: H, expr: 'scared' });
+        gus.play('hostWalk', 'surprised');
+        await S.cam(V(GT.x - 1.9, y + 1.6, GT.z + 1.7), V(GT.x, y + 1.45, GT.z), 0.4, 40);
         gus.showEmote('question', 2);
         await S.say('gus', '...Cocoa?', { actor: gus, expr: 'surprised' });
         await S.say('gus', 'Is that... *Marguerite\'s* cocoa?', { actor: gus, expr: 'surprised' });
         await S.say('hank', 'Classic. Extra hot. For a... "Gus"?', { actor: H, expr: 'sheepish' });
-        gus.play('gun', 'happy');
         await S.say('gus', "Well why in the blue blazes didn't ya say so!", { actor: gus, expr: 'laugh' });
         await S.say('gus', 'Hand it over before it gets cold, ya rattling coat rack.', { actor: gus, expr: 'smug' });
         H.play('offer', 'happy');
-        gus.walkTo([[H.pos.x + 1.2 * fwd.x, H.pos.z + 1.2 * fwd.z]], 2);
-        await S.wait(1.4);
+        await S.wait(1.0);
         const o = g.orders.orderFor('gus');
         if (o) {
           const r = g.orders.deliver(o);
@@ -622,6 +651,17 @@ export class Story {
           g.ui.pop(`*$${r.pay}*${r.tip ? ` and a *$${r.tip}* tip` : ''} from Gus! I think he almost smiled.`, { expr: 'happy' });
         }
         gus.play('sip', 'happy');
+        S.sfx('sip');
+        await S.wait(1.2);
+        // the all-clear, through the megaphone; the kids, at least, cheer
+        gus.faceTowards(C.x, C.z);
+        gus.play('announce', 'happy');
+        S.sfx('megaphone', { volume: 0.7 });
+        await S.cam(V(GT.x - 2.6, y + 1.8, GT.z + 2.2), V(GT.x + 6, y + 1.3, GT.z - 0.6), 0.6, 50);
+        await S.say('gus', "ALL CLEAR, FOLKS! IT'S JUST THE COCOA BOY! BACK TO YOUR PUMPKINS!", { actor: gus, expr: 'laugh' });
+        for (const k of [kid, V2.get('pop')]) if (k) { k.react('yay'); g.wait(0.9).then(() => k.react('yay')); }
+        S.sfx('kids_yay', { volume: 0.6 });
+        gus.play('hostWalk', 'neutral');
       }
       // the contest peeks out from behind its tables and hay bales
       H.play('idle', 'sheepish');
@@ -631,20 +671,42 @@ export class Story {
       await S.say('marie', "If he brings Marguerite's cocoa, he can be as dead as he likes! ...Mine goes on the café step, mon chou!", { actor: marie, expr: 'scared' });
       await S.say('pip', 'MOM! Let go! I want to see him do a WHEELIE!', { actor: kid, expr: 'laugh' });
       await S.wait(0.6);
+      // and the entry form, so to speak
+      if (gus) {
+        gus.faceTowards(H.pos.x, H.pos.z);
+        H.faceTowards(gus.pos.x, gus.pos.z);
+        const mx = (H.pos.x + gus.pos.x) / 2, mz = (H.pos.z + gus.pos.z) / 2;
+        await S.cam(V(mx + fwd.z * 3.2, y + 1.7, mz - fwd.x * 3.2), V(mx, y + 1.3, mz), 0.6, 44);
+        H.play('idle', 'happy');
+        await S.say('hank', 'So... can anybody enter?', { actor: H, expr: 'happy' });
+        gus.play('inspect', 'neutral');
+        gus.showEmote('question', 2);
+        await S.say('gus', 'A skeleton... carving a face?', { actor: gus, expr: 'surprised' });
+        gus.react('shake');
+        await S.say('gus', "Well, it IS a fair contest. Little table at the end's yours. One pumpkin a day.", { actor: gus, expr: 'smug' });
+        H.play('cheer', 'sparkle');
+        await S.say('hank', 'Yes! I used to whittle! Mostly canoe paddles!', { actor: H, expr: 'sparkle' });
+        this.flag('carveIntro', true);
+      }
       // they've met him now, but only Gus (who got his cocoa) and the kids (who think he's
       // the coolest) are anything like at ease; the rest drift back to their pumpkins as
-      // they get used to a skeleton on a bicycle (npcBrain.js)
+      // they get used to a skeleton on a bicycle (npcBrain.js). Gus goes back to hosting.
       for (const [c, t] of Object.entries({ gus: 46, ...AFTER_SCREAM })) V2.force(c, t);
       if (gus) {
         gus.scripted = false;
-        gus.play('idle', 'neutral');
-        if (gus.homePos) gus.walkTo([gus.homePos], 1.5).then(() => gus.face(gus.homeYaw));
+        gus.play('hostWalk', 'neutral');
       }
       g.rider.visible = true;
       this.flag('village1', true);
       this.flag('contestScream', true);
       g.save();
     }).then(() => g.ui.pop('...Was it something I said?', { expr: 'sheepish', ms: 3500 }));
+  }
+
+  // (test entry point: ?scene=carve) straight into the pumpkin carving mini-game at Hank's
+  // contest table (add &intro for Gus's verdict on skeletons entering first)
+  carve() {
+    return this.g.contest.carving.debug();
   }
 
   // ---------------------------------------------------------------- 5. Poutine

@@ -1,11 +1,11 @@
 // The pumpkin carving contest on Main Street, right where the road from Nana's comes
-// into Maple Cove (the first thing Hank sees of the village): a hand-painted banner
-// across the street, bunting, trestle tables along both kerbs with the carvers'
-// pumpkins and tools, the judges' table, the stand of finished entries, a pile of
-// pumpkins to pick from, hay bales, corn sheaves and raked leaves. The middle of the
-// street stays clear for Bessie.
+// into Maple Cove (the first thing Hank sees of the village): bunting, trestle tables
+// along both kerbs with the carvers' pumpkins and tools, Hank's own little table at
+// the west end (src/game/carving.js), the judges' table, the stand of finished entries,
+// a pile of pumpkins to pick from, hay bales, corn sheaves and raked leaves. No signs:
+// Gus, the host, does the announcing. The middle of the street stays clear for Bessie.
 //
-// The big pieces (banner, bunting, tables, hay) merge into the town's static chunks
+// The big pieces (bunting, tables, hay) merge into the town's static chunks
 // (VoxelWorld.addStatic); all the little things (pumpkins, the trophy, leaves) merge
 // into one more mesh that src/game/contest.js hides once Hank is far off. CONTEST also
 // tells the villagers where to stand.
@@ -24,7 +24,7 @@ const PI = Math.PI;
 export const CONTEST = {
   x: 133, z: M.z, r: 20, // the crowd notices Hank inside this circle
   entry: { x: 113, z: M.z, yaw: PI / 2 }, // where Bessie stops for the first look
-  banner: { x: 121.2, span: 12 },
+  west: 121.2, // the west end of the dressing (bunting strings start here)
   // tables along the kerbs: carvers stand on the kerb side (side -1: north, +1: south)
   tables: [
     { x: 125, z: NK + 1.05, yaw: 0, cloth: 'red', seed: 1, wip: [['half', 'cat', 'medium', 4], ['lid', 'happy', 'medium', 7]] },
@@ -32,6 +32,8 @@ export const CONTEST = {
     { x: 126.4, z: SK - 1.05, yaw: PI, cloth: 'green', seed: 3, wip: [['half', 'owl', 'medium', 15], ['lid', 'wink', 'medium', 16]] },
     { x: 132.4, z: SK - 1.05, yaw: PI, cloth: 'blue', seed: 4, wip: [['sketch', 'heart', 'medium', 19], ['half', 'happy', 'medium', 20]] },
   ],
+  // Hank's table (an empty place for him to carve at; he stands on the kerb side)
+  hank: { x: 121.6, z: SK - 1.05, yaw: PI, cloth: 'orange', seed: 5, stand: { x: 121.6, z: SK + 0.05, yaw: PI } },
   judges: { x: 139.6, z: NK + 1.05, len: 2.8 },
   entries: { x: 144, z: NK + 1.0, len: 2.8 },
   giant: { x: 136.6, z: NK + 1.0 },
@@ -47,6 +49,9 @@ export const CONTEST = {
     ingrid: { x: 139.2, z: NK - 0.05, yaw: 0, role: 'judge' },
     doug: { x: 141.7, z: NK - 0.1, yaw: 0.15, role: 'watch' },
     josee: { x: 133.2, z: NK - 0.2, yaw: -1.45, role: 'cheer' },
+    // Gus hosts: announcements from the middle of the street (facing the road in), then
+    // a stroll along the tables for a close look at every entry (src/game/contest.js)
+    gus: { x: 128.4, z: M.z - 1.4, yaw: -PI / 2, role: 'host' },
   },
   // the judge's round: in front of each north table, looking at the work
   round: [{ x: 130.2, z: NK - 0.1, yaw: 0.25 }, { x: 125, z: NK - 0.1, yaw: 0.25 }],
@@ -75,18 +80,14 @@ export function dressContest(vw, physprops) {
   const at = (x, z, yaw, lx, lz) => [x + lx * Math.cos(yaw) + lz * Math.sin(yaw), z - lx * Math.sin(yaw) + lz * Math.cos(yaw)];
   const C = CONTEST;
 
-  // ---- the banner across the street, facing the road in from Nana's (and back)
-  const bx = C.banner.x;
-  S('contest:banner', () => CM.contestBanner({ span: C.banner.span }), bx, M.z, -PI / 2);
-  for (const s of [-1, 1]) {
-    const z = M.z + s * C.banner.span / 2;
-    post(bx, z, 0.12, 5);
-    if (s < 0) SD('contest:corn', () => PR.cornBundle({ seed: 2 }), bx - 0.4, z + 0.3, 2.2);
-  }
+  // ---- no banner, no signs: corn sheaves on both sidewalks where the street comes in
+  const bx = C.west;
+  SD('contest:corn', () => PR.cornBundle({ seed: 2 }), bx - 0.4, M.z - 5.7, 2.2);
+  SD('contest:corn2', () => PR.cornBundle({ seed: 5 }), bx - 0.2, M.z + 5.8, 0.6);
 
   // ---- bunting poles and strings: across the street, and along both sidewalks
   const poleH = 4.4;
-  for (const x of [133.6, 146.3]) for (const z of [M.z - 6, M.z + 6]) {
+  for (const x of [bx, 133.6, 146.3]) for (const z of [M.z - 6, M.z + 6]) {
     S('contest:pole', () => CM.pole({ h: poleH }), x, z);
     SD('contest:finial', () => CM.simplePumpkin({ r: 0.13, seed: 3 }), x, z, 0, poleH + 0.1);
     post(x, z, 0.1, poleH);
@@ -115,6 +116,20 @@ export function dressContest(vw, physprops) {
     const [ex, ez] = at(t.x, t.z, t.yaw, (i % 2 ? -1 : 1) * 1.55, 0.2);
     SD(`contest:spare:${i % 3}`, () => CM.simplePumpkin({ r: 0.15, seed: 40 + i, color: ['orange', 'white', 'amber'][i % 3] }), ex, ez, i * 1.7, top);
   });
+
+  // ---- Hank's own little table at the west end: an empty place, a knife and a bowl; his
+  // pumpkin (plain, or the face he carved: src/game/carving.js) is placed by the game
+  const Hk = C.hank;
+  const hr = S('contest:table:hank', () => CM.contestTable({ len: 1.8, seed: Hk.seed, cloth: Hk.cloth, places: 1 }), Hk.x, Hk.z, Hk.yaw);
+  box(Hk.x, Hk.z, Hk.yaw, 1.9, 0.98, 0.86);
+  {
+    const p = hr.meta.places[0];
+    const [x, z] = at(Hk.x, Hk.z, Hk.yaw, p.x, p.z);
+    const y = gy(x, z) + hr.meta.top;
+    const light = { pos: new THREE.Vector3(x, y + 0.35, z), color: [1.0, 0.55, 0.18], radius: 4, kind: 'lamp', on: false };
+    vw.lights.push(light);
+    vw.contestHank = { x, y, z, yaw: Hk.yaw, light };
+  }
 
   // ---- the judges' table, the trophy, the stand of finished entries and the giant
   const J = C.judges;
