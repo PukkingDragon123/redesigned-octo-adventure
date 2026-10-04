@@ -66,6 +66,18 @@ function yards(vw, { S, post, box, gy }) {
     if (i % 2 === 0) S(`clothes:${i % 3}`, () => PR.clothesline({ seed: i }), b.x - 1, back + 4.5, 0.08);
     else { S(`vines:${i % 3}`, () => PR.pumpkinVines({ seed: i }), b.x - 2.5, back + 4.5, i); S(`pp:medium:${i % 4}`, () => PR.pumpkin({ kind: 'medium', seed: i % 4 + 50 }), b.x - 2.2, back + 4.2, i); }
   });
+  // a mailbox on its post out by the gate of every house in the country
+  const mailAt = (id, lz, k) => {
+    const b = L.BUILDINGS.find((q) => q.id === id);
+    if (!b) return;
+    const f = b.facing || 0, c = Math.cos(f), s2 = Math.sin(f), lx = 2.1, z0 = b.d / 2 + lz;
+    const x = b.x + lx * c + z0 * s2, z = b.z - lx * s2 + z0 * c;
+    if (vw.world.terrain.splatAt(x, z).road > 0.3) return;
+    S(`mailbox:c${k % 4}`, () => PR.mailbox({ variant: ['classic', 'black', 'red', 'teal'][k % 4], flag: k % 2 ? 'down' : 'up', seed: k + 3 }), x, z, f);
+    post(x, z, 0.12, 1.3);
+  };
+  ['houseRiver', 'farmhouse'].forEach((id, k) => mailAt(id, 6.1, k));
+  ['houseLoop', 'houseHill', 'gus', 'lighthouseHut'].forEach((id, k) => mailAt(id, 4.8, k + 2));
   // the countryside houses get a picket fence along their front yard
   for (const id of ['houseRiver', 'farmhouse']) {
     const b = L.BUILDINGS.find((q) => q.id === id);

@@ -5,7 +5,7 @@
 // costs a few bit operations per 32 voxels; after that all the work is per exposed face (colour,
 // AO, greedy merge), never per voxel. That keeps big high-resolution buildings cheap to mesh.
 import * as THREE from 'three';
-import { FLAGS, EMIT, GLASS, vhash } from './vox.js';
+import { FLAGS, EMIT, GLASS, UNLIT, vhash } from './vox.js';
 
 const LIN = new Float32Array(256);
 for (let i = 0; i < 256; i++) {
@@ -264,7 +264,7 @@ export function meshVox(vox, opts = {}) {
     const fl = c & FLAGS;
     const r = LIN[(c >> 16) & 255], g = LIN[(c >> 8) & 255], b = LIN[c & 255];
     const tint = 1 + jit;
-    const em = fl & EMIT ? 1 : fl & GLASS ? 0.5 : 0;
+    const em = fl & EMIT ? 1 : fl & GLASS ? (fl & UNLIT ? 0.375 : 0.5) : 0;
     const did = detailOf(c);
     // side faces: u = the horizontal in-plane axis, v = y; top/bottom: (x, z)
     const fu = a === 0 ? 2 : 0, fv = a === 1 ? 2 : 1;

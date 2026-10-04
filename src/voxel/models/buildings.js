@@ -17,7 +17,7 @@
 //   signs [{x,y,z,w,h,text,normal,bg,fg}]  plain boards; draw text on a plane at (x,y,z)
 //   porch [{x0,z0,x1,z1,y}]  walkable decks
 //   solids [{x0,y0,z0,x1,y1,z1}]  coarse collision boxes (body, tower, ...)
-import { Vox, EMIT, GLASS, tone, mixc, vhash } from '../vox.js';
+import { Vox, EMIT, GLASS, UNLIT, FLAGS, tone, mixc, vhash } from '../vox.js';
 import { BUILDINGS } from '../../world/layout.js';
 import { groundAt } from '../../world/foundations.js';
 
@@ -771,8 +771,11 @@ function windowOn(ctx, F, u0, y0, o = {}) {
   const fr = o.frame ?? P.trim, frD = tone(fr, -0.12);
   const U0 = u0 * K, U1 = u1 * K + 1, Y0 = y0 * K, Y1 = y1 * K + 1;
   F.clear(u0 - 1, y0 - 1, 1, u1 + 1, y1 + 2, 1);
-  // the opening: glass one voxel in, the reveal around it painted like the frame
-  const gf = o.glassFn ? (U, Y) => o.glassFn(U >> 1, Y >> 1) : glassF(U0, Y1);
+  // the opening: glass one voxel in, the reveal around it painted like the frame. Some rooms have
+  // their lights off at night (the windows that light the street never do)
+  const dark = !o.lit && !o.glassFn && vhash(u0, y0, F.f.length * 7 + F.nx * 3 + F.nz, (ctx.seed & 1023) + 41) < 0.42;
+  const gf0 = o.glassFn ? (U, Y) => o.glassFn(U >> 1, Y >> 1) : glassF(U0, Y1);
+  const gf = dark ? (U, Y) => { const c = gf0(U, Y); return c & GLASS ? c | UNLIT : c; } : gf0;
   F.ff(U0, Y0, -1, U1, Y1, -1, gf);
   F.fc(U0, Y0, 0, U1, Y1, 0);
   F.ff(U0 - 1, Y0 - 1, 0, U1 + 1, Y1 + 1, 0, (U, Y) => (U < U0 || U > U1 || Y < Y0 || Y > Y1 ? fr : 0));
@@ -826,6 +829,23 @@ function windowOn(ctx, F, u0, y0, o = {}) {
   F.ff(U0 - 3, Y0 - 1, 1, U1 + 3, Y0 - 1, 3, fr); // sill
   F.ff(U0 - 2, Y0 - 2, 1, U1 + 2, Y0 - 2, 2, frD); // its nose shadow
   F.ff(U0 - 1, Y0 - 4, 1, U1 + 1, Y0 - 3, 1, fr); // apron
+  // years of rain off the sill: faint streaks down the wall under it (two shades, so the siding
+  // still merges into long strips)
+  if (!o.box && !o.glassFn && o.streaks !== false) {
+    for (let U = U0 - 1; U <= U1 + 1; U++) {
+      const h = vhash(U, Y0, F.f.length, 5);
+      if (h < 0.3) continue;
+      const len = 3 + Math.floor(h * 10);
+      for (let k = 0; k < len; k++) {
+        const Y = Y0 - 5 - k;
+        if (Y < 3) break;
+        for (const N of [0, 1]) {
+          const c = F.fg(U, Y, N);
+          if (c && !(c & FLAGS)) F.fs(U, Y, N, tone(c, k < len / 2 ? -0.06 : -0.03));
+        }
+      }
+    }
+  }
   if (SPOOKY && o.jack && ww >= 5) {
     const cu = u0 + (ww >> 1);
     const rows = [['.SS.', 0], ['OOOOO', -2], ['OEOEO', -2], ['OOMOO', -2], ['.OOO.', -2]];
@@ -1729,6 +1749,8 @@ function buildHouse(spec, ctx) {
     windowRow(ctx, F.back, F.back.umin + 6, F.back.umax - 6, fl * FH + y1, cnt, { shutter: S ? null : shut, curtain: pick(CURTAINS, R()) });
   }
   if (S > 0 && W >= 64) doorOn(ctx, F.back, Math.round(W * 0.28), { color: tone(doorC, -0.1), main: false, lantern: false });
+  // lived in: the hydro meter and its conduit by the front corner, a tap with a coiled garden hose
+  if (!cfg.shop && !cfg.boat) for (const f of ctx.seed & 1 ? ['right', 'left'] : ['left', 'right']) if (utilities(F[f], H, !S)) break;
 
   // ---- front deck (stilt houses) / porch / stoop
   const jackSpots = [];
@@ -1897,6 +1919,34 @@ function buildHouse(spec, ctx) {
   ctx.solids.push({ roof: true, x0: (Rf.axis === 'z' ? Rf.S0 : Rf.R0) / VPM, y0: H / VPM, z0: (Rf.axis === 'z' ? Rf.R0 : Rf.S0) / VPM, x1: ((Rf.axis === 'z' ? Rf.S1 : Rf.R1) + 1) / VPM, y1: (Rf.ridge + 1) / VPM, z1: ((Rf.axis === 'z' ? Rf.R1 : Rf.S1) + 1) / VPM });
   return ctx;
 }
+// a hydro meter on its plate with the conduit up to the eaves, and (on the ground floor of a
+// house on the ground) an outside tap with a green hose coiled on a hook; near the front of
+// side wall F, where nothing else is. Returns false when there was no room.
+function utilities(F, H, hose) {
+  const u0 = F.umin + 3, u1 = u0 + (hose ? 10 : 4);
+  if (!F.free(u0, 1, u1, 12, 1)) return false;
+  const Ua = u0 * K;
+  const metal = P.metalL, dial = 0xd4dee4;
+  F.ff(Ua, 12, 1, Ua + 5, 19, 1, P.greyD); // backing board
+  F.ff(Ua + 1, 13, 2, Ua + 4, 18, 3, metal); // the meter
+  F.ff(Ua + 2, 16, 4, Ua + 3, 17, 4, dial | GLASS);
+  F.fs(Ua + 2, 14, 4, P.iron);
+  F.ff(Ua + 2, 20, 1, Ua + 3, H * K - 6, 1, (U, Y) => ((Y & 15) === 0 ? P.iron : P.metal)); // conduit
+  if (hose) {
+    const Ut = Ua + 9;
+    F.ff(Ut, 8, 1, Ut + 1, 8, 2, P.brass); // the tap
+    F.fs(Ut, 9, 2, P.iron);
+    const Uh = Ut + 6;
+    F.ff(Uh, 13, 1, Uh, 13, 2, P.iron); // the hook, and the hose coiled on it
+    for (let a = 0; a < 16; a++) {
+      const t = (a / 16) * Math.PI * 2;
+      F.fs(Math.round(Uh + Math.cos(t) * 2.6), Math.round(10 + Math.sin(t) * 3), 2, a & 2 ? 0x3e7a34 : 0x4e9a3e);
+    }
+  }
+  F.occ.push([u0, 1, u1, 12]);
+  return true;
+}
+
 // brick chimney: running-bond brick, a corbelled course under a stone cap, a clay flue pot
 function chimneyBrick(ctx, x0, z0, y0, y1, w = 5) {
   const vb = ctx.vb, X0 = x0 * K, Z0 = z0 * K, X1 = (x0 + w) * K - 1, Z1 = (z0 + w) * K - 1, Y0 = y0 * K, Y1 = y1 * K + 1;
