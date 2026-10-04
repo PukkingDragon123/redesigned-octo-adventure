@@ -114,6 +114,10 @@ export class Walker {
       const hit = ph.resolve(this.pos, RAD, HGT, opt);
       if (hit) this.slide(ph, hit);
     }
+    // pinned (a corner, a crowd): keep no more speed than he really moved with, so he
+    // doesn't run on the spot
+    const ax = (this.pos.x - x0) / dt, az = (this.pos.z - z0) / dt;
+    if (ax * ax + az * az < this.vel.x * this.vel.x + this.vel.z * this.vel.z) { this.vel.x = ax; this.vel.z = az; }
     this.vy -= 15 * dt;
     this.pos.y += this.vy * dt;
     const prevY = this.pos.y;
