@@ -457,12 +457,16 @@ export async function leafTransition(swap, { layer = 'front', dur = 0.6, revealD
 // screen, the 3D fade goes black underneath, and fading back in blows the cover
 // away. Longer fades are the slow, emotional ones (a funeral, falling
 // asleep): they stay soft, with a few leaves drifting down.
+let fadeToken = 0;
 export async function screenFade(game, to, dur = 0.6) {
   const U = game.pipeline.post.uFade;
+  const me = ++fadeToken;
   // an older fade still running would fight this one: let it finish on a dummy
   for (const tw of game.tweens || []) if (tw.obj === U) tw.obj = { value: 0 };
   if (dur <= 0.05 || typeof document === 'undefined' || document.hidden) {
+    const w = back.wipe;
     back.wipe = null;
+    w?.res?.();
     U.value = to;
     return;
   }
@@ -480,6 +484,8 @@ export async function screenFade(game, to, dur = 0.6) {
   }
   if (to > 0.5) {
     await leafCover({ layer: 'back', dur: clamp(dur * 1.2, 0.45, 0.8) });
+    // a newer fade took over meanwhile (a skip, another cut): it owns the 3D fade now
+    if (me !== fadeToken) return;
     U.value = to;
     leafRelease({ layer: 'back' });
   } else {

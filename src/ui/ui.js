@@ -307,15 +307,15 @@ export class UI {
     snapBox(contentEl);
     // a few leaves shaken loose as the sheet lands, and a little gust across
     requestAnimationFrame(() => {
-      leaves.flutter(contentEl, 9);
-      leaves.gust(6, { speed: 1.3 });
+      leaves.flutter(contentEl, 7);
+      leaves.gust(5, { speed: 1.3 });
     });
     return m;
   }
   closeOverlay(m = this.menuStack[this.menuStack.length - 1]) {
     if (!m) return;
     const sheet = m.ov.firstElementChild;
-    if (sheet) leaves.flutter(sheet, 7);
+    if (sheet) leaves.flutter(sheet, 6);
     m.ov.remove();
     this.menuStack = this.menuStack.filter((x) => x !== m);
     this.swallowInput();
@@ -404,7 +404,7 @@ export class UI {
     const menu = this.menuStack.length > 0;
     if (menu !== this._leafAmb) {
       this._leafAmb = menu;
-      leaves.ambient('menu', menu, 5);
+      leaves.ambient('menu', menu, 4);
     }
     if (this.dialogueTick) this.dialogueTick(dt);
     else this.menuTick();
