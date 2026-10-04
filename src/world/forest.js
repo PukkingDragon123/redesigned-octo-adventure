@@ -72,9 +72,10 @@ function pickSpecies(x, z, h, river, rng) {
   const wet = 1 - smoothstep(4, 30, river);
   const nearHome = 1 - smoothstep(30, 90, Math.hypot(x - L.POI.cabin.x, z - L.POI.cabin.z));
   const nearVillage = 1 - smoothstep(20, 80, Math.hypot(x - L.POI.village.x, z - L.POI.village.z));
+  // (no white pines: their tall bare trunks under a tuft of flat pads read as palm trees;
+  // spruce takes their share of the hills)
   const w = {
-    spruce: 0.22 + elev * 0.9 + (a < -0.25 ? 0.35 : 0),
-    pine: 0.06 + elev * 0.3,
+    spruce: 0.28 + elev * 1.2 + (a < -0.25 ? 0.35 : 0),
     tamarack: 0.1 + wet * 0.5 + (b < -0.3 ? 0.35 : 0),
     maple: 0.24 + (a > 0.12 ? 0.4 : 0) + nearHome * 0.5 + nearVillage * 0.4,
     maple2: 0.12 + (a > 0.3 ? 0.3 : 0) + nearHome * 0.2,
@@ -160,6 +161,7 @@ export class Forest {
   }
 
   addTree(species, x, y, z, H, rng) {
+    if (species === 'pine') species = 'spruce'; // (see pickSpecies)
     const spec = TREE_SPECS[species];
     const trunkH = spec.trunk === 'forked' ? H * 0.72 : H * 0.97;
     const trunkR = (spec.trunk === 'forked' ? 0.2 : 0.14) + H * 0.014;
