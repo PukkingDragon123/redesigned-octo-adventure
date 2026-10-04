@@ -16,7 +16,7 @@
 //  - LOD: near (full), middle (fewer, bigger cards), then the 2D sprites of
 //    forest2d.js; neighbours cross-fade with a complementary dither.
 import * as THREE from 'three';
-import { G, worldUniforms, LIGHT_PARS_VERT, SHADOW_VERT, LIGHT_PARS_FRAG, NOISE_GLSL } from '../render/shaderlib.js';
+import { G, worldUniforms, LIGHT_PARS_VERT, SHADOW_VERT, LIGHT_PARS_FRAG, NOISE_GLSL, SEE_GLSL } from '../render/shaderlib.js';
 import { CLASSES, ROW_W, TREE3D, SMALL3D, LEAFY3D, ATLAS_N, LEAF_TILE_MAX, buildAtlas, rampData, buildModel, classIndex } from '../art/trees3d.js';
 import { SPRITES } from '../art/trees2d.js';
 
@@ -200,6 +200,7 @@ vec4 sampleTile() {
 const FRAG = /* glsl */ `
 ${LIGHT_PARS_FRAG}
 ${NOISE_GLSL}
+${SEE_GLSL}
 uniform sampler2D tAtlas;
 uniform sampler2D tRamp;
 varying vec2 vUv;
@@ -218,6 +219,7 @@ void main() {
   if (vWorldPos.y < uClipY) discard;
   vec4 tx = sampleTile();
   if (tx.a < 0.5) discard;
+  float seeR = seeThrough(vWorldPos);
   vec3 n = normalize(vN);
   if (vLeaf < 0.5 && !gl_FrontFacing) n = -n;
   float shadow = getShadowMask();
@@ -244,7 +246,7 @@ void main() {
   vec3 col = albedo * light;
   // sun shining through the leaves when riding into it
   col += albedo * uSunColor * back * (0.2 + 0.6 * shadow) * 0.8;
-  gl_FragColor = vec4(col, 1.0);
+  gl_FragColor = vec4(seeRim(col, seeR), 1.0);
 }
 `;
 

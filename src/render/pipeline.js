@@ -378,6 +378,8 @@ export class Pipeline {
     P.uDither.value = this.retro ? 0.85 : 0.5;
     P.uOutlineW.value = this.retro ? 1 : Math.max(1, Math.round(this.h / 620));
     P.uVignette.value = this.retro ? 0.9 : 0.55;
+    // the see-through dissolve dithers in cells about as big as a retro pixel
+    G.uSeePx.value = this.retro ? 1 : Math.max(1, Math.round(this.h / 400));
     this.makeTargets();
   }
 
@@ -413,6 +415,10 @@ export class Pipeline {
     m.set(0.5, 0, 0, 0.5, 0, 0.5, 0, 0.5, 0, 0, 0.5, 0.5, 0, 0, 0, 1);
     m.multiply(rc.projectionMatrix).multiply(rc.matrixWorldInverse);
     G.uClipY.value = waterY - 0.05;
+    // the mirrored lens sees no see-through ring or bubble
+    const seeW = G.uSee.value.w, seeB = G.uSeeP.value.z;
+    G.uSee.value.w = 0;
+    G.uSeeP.value.z = 0;
     const prevMask = rc.layers.mask;
     rc.layers.set(0);
     rc.layers.enable(2); // reflection-visible extras
@@ -421,6 +427,8 @@ export class Pipeline {
     this.renderer.render(scene, rc);
     rc.layers.mask = prevMask;
     G.uClipY.value = -1e5;
+    G.uSee.value.w = seeW;
+    G.uSeeP.value.z = seeB;
   }
 
   render(scene, camera) {

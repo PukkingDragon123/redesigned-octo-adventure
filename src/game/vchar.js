@@ -25,7 +25,7 @@ import { Cloth, scarfTexture, capeTexture, stripeTexture } from '../render/cloth
 import { clamp, angleDamp, wrapAngle } from '../core/math.js';
 import * as PR from '../voxel/models/props.js';
 import * as FOOD from '../voxel/models/food.js';
-import { voxMesh, sharedVoxelMaterial } from '../render/voxelMaterial.js';
+import { voxMesh, sharedVoxelMaterial, keepSolid } from '../render/voxelMaterial.js';
 
 // ---------------------------------------------------------------- held props per pose
 function stick(len, col, blade) {
@@ -550,6 +550,9 @@ const REACT = {
 
 // ---------------------------------------------------------------- the character
 let SEED = 1;
+// every character standing in the game world (the camera picks a cutscene's subject from
+// these and keeps whoever shares the shot with them solid)
+export const LIVE = new Set();
 export class VoxelCharacter {
   constructor(game, charId, { x = 0, z = 0, y = null, yaw = 0, anim = 'idle', expr = 'neutral', shadow = true, cloth = true, parent = null } = {}) {
     this.game = game;
@@ -614,6 +617,8 @@ export class VoxelCharacter {
     if (HELD[this.anim]) this.autoHold(this.anim);
     this.parentObj?.add(this.root);
     for (const cl of this.cloths) this.parentObj?.add(cl.group);
+    this.setSeeThrough(true);
+    if (game?.physics && this.parentObj) LIVE.add(this);
     this.snapGround();
     this.apply();
   }
@@ -638,6 +643,9 @@ export class VoxelCharacter {
     for (const s of ['L', 'R']) if (held[s]) this.hold(held[s], s);
     parent?.add(this.root);
     for (const cl of this.cloths) parent?.add(cl.group);
+    this._see = undefined;
+    this.setSeeThrough(true);
+    if (this.game?.physics && parent) LIVE.add(this);
     this.apply();
   }
 
@@ -862,7 +870,18 @@ export class VoxelCharacter {
     this.headPiece.updateWorldMatrix(true, false);
     return out.set(0, this.P.headH, 0).applyMatrix4(this.headPiece.matrixWorld);
   }
+  // may the camera's see-through dissolve this character when it blocks the view? (never
+  // Hank: the camera keeps a cutscene's subject and whoever shares the shot solid too)
+  setSeeThrough(ok) {
+    const v = ok && !this._char.startsWith('hank') ? 1 : 0;
+    if (this._see === v) return;
+    this._see = v;
+    this.mat.uniforms.uSeeOK.value = v;
+    this.faceMat.uniforms.uSeeOK.value = v;
+    for (const c of this.cloths) for (const m of c.materials) m.uniforms.uSeeOK.value = v;
+  }
   remove() {
+    LIVE.delete(this);
     this.root.parent?.remove(this.root);
     for (const c of this.cloths) c.group.parent?.remove(c.group);
     if (this.broken) for (const p of this.broken.parts) p.node.parent?.remove(p.node);
@@ -892,6 +911,17 @@ export class VoxelCharacter {
     this.ride = r ? { ikW: 1, ...r } : null;
     if (r) this.play('ride');
     else if (this.anim === 'ride') this.play('idle');
+    this._solidT = 2;
+  }
+  // Hank's bike never dissolves in the camera's see-through (checked now and then while he
+  // rides: cups and parts can be added to it)
+  keepRideSolid(dt) {
+    if (!this.ride?.seat || !this._char.startsWith('hank')) return;
+    if ((this._solidT = (this._solidT || 0) + dt) < 2) return;
+    this._solidT = 0;
+    let o = this.ride.seat;
+    while (o.parent && !o.parent.isScene) o = o.parent;
+    keepSolid(o);
   }
 
   // ------------------------------------------------------------ fall apart!
@@ -988,7 +1018,7 @@ export class VoxelCharacter {
     if (dt > 0) {
       const mx = (this.pos.x - this.lastPos.x) / dt, mz = (this.pos.z - this.lastPos.z) / dt;
       const mv = Math.hypot(mx, mz);
-      const tele = mv > 20;
+      const tele = mv > (this.scripted ? 9 : 20); // (a scene's characters never run that fast)
       // a cut in a scene (or any jump across the map): plant both feet afresh where they are now
       if (tele && this.feet) this.feet.init = false;
       const sp = this.speedOverride ?? (tele ? 0 : mv);
@@ -1018,6 +1048,7 @@ export class VoxelCharacter {
     }
     this.computeTargets(dt);
     this.springs(dt);
+    if (this.ride) this.keepRideSolid(dt);
     this.updateFeet(dt, camPos);
     this.apply();
     if (this.ride) this.solveRide(dt);

@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { Pix } from '../art/pixel.js';
 import { pixTexture } from './textures.js';
-import { worldUniforms, LIGHT_PARS_VERT, SHADOW_VERT, LIGHT_PARS_FRAG, NOISE_GLSL } from './shaderlib.js';
+import { worldUniforms, LIGHT_PARS_VERT, SHADOW_VERT, LIGHT_PARS_FRAG, NOISE_GLSL, SEE_GLSL } from './shaderlib.js';
 
 export const PPM = 25.6; // sprite pixels per metre
 
@@ -130,6 +130,7 @@ void main() {
 const FRAG = /* glsl */ `
 ${LIGHT_PARS_FRAG}
 ${NOISE_GLSL}
+${SEE_GLSL}
 uniform sampler2D tAtlas;
 uniform vec3 uTint;
 uniform float uFlash;
@@ -144,6 +145,7 @@ void main() {
   if (tx.a < 0.5) discard;
   if (vWorldPos.y < uClipY) discard;
   if (uFade > 0.0 && bayer4(gl_FragCoord.xy) < uFade) discard;
+  float seeR = seeThrough(vWorldPos);
   vec3 albedo = tx.rgb * uTint;
   vec3 n = normalize(vNormal);
   float shadow = getShadowMask();
@@ -163,7 +165,7 @@ void main() {
     col += (albedo * 0.7 + 0.06) * vec3(0.42, 0.52, 0.95) * min(e, 1.0) * uNight * uLit;
   }
   col = mix(col, vec3(1.0, 0.98, 0.9) * 1.6, uFlash);
-  gl_FragColor = vec4(col, 1.0);
+  gl_FragColor = vec4(seeRim(col, seeR), 1.0);
 }
 `;
 
@@ -292,6 +294,7 @@ void main() {
 const BATCH_FRAG = /* glsl */ `
 ${LIGHT_PARS_FRAG}
 ${NOISE_GLSL}
+${SEE_GLSL}
 uniform sampler2D tAtlas;
 uniform float uTexel;
 uniform float uMoonRim;
@@ -305,6 +308,7 @@ void main() {
   if (tx.a < 0.3) discard;
   if (vWorldPos.y < uClipY) discard;
   if (vMisc.y > 0.0 && bayer4(gl_FragCoord.xy) < vMisc.y) discard;
+  float seeR = seeThrough(vWorldPos);
   vec3 albedo = tx.rgb * vTint.rgb;
   float shadow = getShadowMask();
   // the sprites carry their own banded shading, so the scene light is kept flatter than on voxels
@@ -333,7 +337,7 @@ void main() {
   float glow = max(step(tx.a, 0.8), vMisc.x);
   col = mix(col, albedo * (1.25 + uNight * 0.9), glow);
   col = mix(col, vec3(1.0, 0.98, 0.9) * 1.6, vTint.a);
-  gl_FragColor = vec4(col, 1.0);
+  gl_FragColor = vec4(seeRim(col, seeR), 1.0);
 }
 `;
 

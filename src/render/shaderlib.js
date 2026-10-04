@@ -23,14 +23,24 @@ export const G = {
   uHeightN: { value: 321 },
   uHRes: { value: 2 },
   uClipY: { value: -1e5 }, // reflection pass: discard fragments below this
+  // camera see-through (game/camera.js drives these; SEE_GLSL reads them):
+  // focus point (Hank, or a scene's subject) and how far the ring is open (0..1)
+  uSee: { value: new THREE.Vector4(0, 0, 0, 0) },
+  // ring radius at the focus, gap kept in front of the focus, bubble radius round the lens,
+  // and the height below which nothing dissolves (the floor under the focus)
+  uSeeP: { value: new THREE.Vector4(1.25, 0.75, 0.9, -1e5) },
+  uSeePx: { value: 2 }, // dither cell size in screen pixels
+  uSeeCamR: { value: 0.3 }, // ring radius at the lens end (wide when a building is in the way)
 };
 
 // Per-material light uniforms are cloned (three writes shadow maps into them),
 // the G uniforms are shared by reference so one update drives every material.
+// uSeeOK is each material's own: 0 keeps it solid whatever the camera does (Hank, Bessie).
 export function worldUniforms(extra = {}) {
   return {
     ...THREE.UniformsUtils.clone(THREE.UniformsLib.lights),
     ...G,
+    uSeeOK: { value: 1 },
     ...extra,
   };
 }
@@ -159,3 +169,54 @@ vec3 shadeWorld(vec3 albedo, vec3 n, vec3 wp, float shadow, float ao) {
 export function clipDiscard() {
   return 'if (vWorldPos.y < uClipY) discard;';
 }
+
+// Camera see-through. Whatever stands between the lens and the focus (Hank, or the subject
+// of a cutscene shot) dissolves in a ring around them, and anything pressed against the
+// lens melts away: a cone from the camera to a little short of the focus (it widens towards
+// the lens into a tunnel when a building is in the way), plus a bubble round the camera. The dissolve is an ordered dither in chunky screen pixels with a slow
+// noise eating at its edge, and the pixels about to go glow like embers (seeRim). Only the
+// colour pass calls it: shadows and the depth pass never see a hole.
+// Include after LIGHT_PARS_FRAG and NOISE_GLSL; call seeThrough() after the shader's own
+// discards and pass its result to seeRim() on the final colour.
+export const SEE_GLSL = /* glsl */ `
+uniform vec4 uSee;
+uniform vec4 uSeeP;
+uniform float uSeePx;
+uniform float uSeeCamR;
+uniform float uSeeOK;
+float seeThrough(vec3 wp) {
+  if (uSeeOK < 0.5) return 0.0;
+  vec3 r = wp - uCamPos;
+  float dc2 = dot(r, r);
+  float m = 0.0;
+  if (dc2 < uSeeP.z * uSeeP.z) m = 1.0 - smoothstep(uSeeP.z * 0.5, uSeeP.z, sqrt(dc2));
+  vec3 ax = uSee.xyz - uCamPos;
+  float L2 = dot(ax, ax);
+  float along = dot(r, ax);
+  // (most of the world is past the focus or behind the lens: one dot product and out)
+  if (uSee.w > 0.0 && along > 0.0 && along < L2) {
+    float L = sqrt(L2);
+    along /= L;
+    float perp = sqrt(max(dc2 - along * along, 0.0));
+    // the ring opens (and grows) with uSee.w; full in its middle, dithered towards its edge
+    float rad = mix(uSeeCamR, uSeeP.x, along / L) * (0.35 + 0.65 * uSee.w);
+    float c = (1.0 - smoothstep(rad * 0.6, rad, perp))
+      * (1.0 - smoothstep(L - uSeeP.y - 0.7, L - uSeeP.y, along))
+      * smoothstep(uSeeP.w, uSeeP.w + 0.3, wp.y);
+    m = max(m, c * uSee.w);
+  }
+  if (m < 0.004) return 0.0;
+  // a burning edge: slow world-space noise eats the boundary unevenly
+  float e = m * (1.0 - m) * 4.0;
+  vec2 q = vec2(dot(wp.xz, vec2(2.1, 1.7)) + wp.y * 1.3, wp.y * 2.3 + dot(wp.xz, vec2(-0.9, 1.4)));
+  m = clamp(m + (vnoise(q + uTime * vec2(0.35, -0.5)) - 0.5) * 0.8 * e, 0.0, 1.0);
+  // ordered dither in chunky screen pixels: the wall goes pixel by pixel
+  float th = bayer4(floor(gl_FragCoord.xy / uSeePx));
+  if (th < m) discard;
+  // the pixels about to go glow like embers
+  return (1.0 - smoothstep(0.0, 0.16, th - m)) * smoothstep(0.03, 0.2, m);
+}
+vec3 seeRim(vec3 col, float rim) {
+  return rim > 0.0 ? mix(col, vec3(2.6, 1.0, 0.3), rim * 0.8) : col;
+}
+`;
