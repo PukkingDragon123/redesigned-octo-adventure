@@ -391,8 +391,7 @@ function graveyard(ctx, B) {
   const hg = L.POI.grave;
   const y = terrain.heightAt(hg.x, hg.z);
   const M = buildingMatrix(hg.x, y, hg.z, Math.PI * 0.75);
-  B.box([0, 0.02, 0], [1.1, 0.04, 2.1], { color: 0x140c0a }, null, M);
-  B.box([0, -0.25, 0], [1.0, 0.5, 2.0], { color: 0x2a1a12 }, null, M);
+  // (no open pit: a flat black box read as a hole in the world; the scenes lay a voxel mound here)
   B.geom(new THREE.SphereGeometry(0.9, 8, 5, 0, Math.PI * 2, 0, Math.PI / 2), [1.4, -0.05, 0.1], null, [0.8, 0.55, 1.4], { tile: 'leaves', keepUV: true, color: 0x9a7a5a }, M);
   B.tube([1.4, 0.2, -0.4], [1.6, 1.4, -0.5], 0.03, 0.03, { color: 0x8a5a30 }, 4, M);
   B.box([1.62, 0.15, -0.38], [0.24, 0.32, 0.03], { color: 0x8a8a92 }, [0.2, 0, 0], M);

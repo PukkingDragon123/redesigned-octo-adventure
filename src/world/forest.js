@@ -207,7 +207,7 @@ export class Forest {
         if (villageMask(px, pz) > 0.3) p *= 0.04;
         p *= clearingFactor(px, pz) * (0.35 + 0.65 * vistaFactor(px, pz));
         if (roll > p) continue;
-        const species = kind < 0.4 ? 'mushroom' : kind < 0.7 ? 'sapling' : 'stump';
+        const species = kind < 0.55 ? 'mushroom' : 'stump'; // (no saplings: the player found them messy)
         if (species === 'log') {
           // lay the log along the slope it rests on
           const Lh = 1.6, ux = Math.cos(yaw), uz = -Math.sin(yaw);

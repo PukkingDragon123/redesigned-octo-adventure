@@ -93,7 +93,8 @@ void main() {
   // back-lit rim from the sun
   vec3 v = normalize(uCamPos - vWorldPos);
   float rim = pow(1.0 - max(dot(n, v), 0.0), 3.0) * max(dot(-v, uSunDir), 0.0) * shadow;
-  col += albedo * uSunColor * rim * 0.25;
+  // (only on upright faces: soil, mounds and floors stay matte)
+  col += albedo * uSunColor * rim * 0.12 * (1.0 - smoothstep(0.3, 0.7, n.y));
   float em = vColor.a;
   if (em > 0.75) col = mix(col, albedo * (1.6 + uNight * 1.6), 0.85);
   else if (em > 0.25) {

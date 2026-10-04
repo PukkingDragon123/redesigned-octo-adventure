@@ -122,13 +122,8 @@ void main() {
 
   float shadow = getShadowMask();
   vec3 lit = shadeWorld(col, n, vWorldPos, shadow, 1.0);
-  // wet specular sheen
-  vec3 v = normalize(uCamPos - vWorldPos);
-  vec3 h = normalize(v + uSunDir);
-  lit += uWet * uSunColor * pow(max(dot(n, h), 0.0), 60.0) * 0.6 * shadow;
-  // wet sand: a soft glossy sheen and a little sky in it
-  lit += wetSand * uSunColor * pow(max(dot(n, h), 0.0), 24.0) * 0.18 * shadow;
-  lit += wetSand * 0.1 * hemiAmbient(vec3(0.0, 1.0, 0.0)) * pow(1.0 - max(dot(v, n), 0.0), 3.0);
+  // the ground is matte: rain only darkens it (wet sand reads a touch darker too)
+  lit *= 1.0 - wetSand * 0.12;
   gl_FragColor = vec4(lit, 1.0);
 }
 `;
