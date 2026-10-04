@@ -612,7 +612,7 @@ export class VoxelRider {
       const base = { wheelie: 'pedal', manual: 'coast', stoppie: 'brake', nose: 'coast', crouch: 'coast', pop: 'air', flip: 'air', dab: 'idle', slip: 'pedal' }[st] || st;
       ch.rideStyle = base;
       ch.yaw = ch.targetYaw = bike.yaw; // so looking around is measured from the handlebars
-      ch.rideCrank = bike.crank;
+      ch.rideCrank = bike.view?.crank ?? bike.crank;
       ch.rideLean = bike.lean;
       this.st = st;
       ch.trickPose = this.poseFn;

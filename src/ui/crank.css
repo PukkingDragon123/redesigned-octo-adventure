@@ -29,7 +29,7 @@
   -webkit-tap-highlight-color: transparent;
 }
 .crank-hud.held .crank-hit { cursor: grabbing; }
-.touchmode .crank-hud .crank-hit { left: calc(var(--u) * 18); top: calc(var(--u) * -12); width: calc(var(--u) * 84); height: calc(var(--u) * 84); }
+.touchmode .crank-hud .crank-hit { left: calc(var(--u) * 18); top: calc(var(--u) * -9); width: calc(var(--u) * 84); height: calc(var(--u) * 84); }
 /* phones held upright: up off the home bar, like the buttons */
 .k-portrait .touchmode .crank-hud { bottom: calc(var(--u) * 26 + var(--safe-b, 0px)); }
 /* which key (or trigger) goes down next */

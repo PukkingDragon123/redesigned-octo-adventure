@@ -117,8 +117,8 @@ export class Bike {
     this.jumpHeld = false;
     this.popT = 9;
     this.wheelAngle = 0;
-    this.crank = 0;
-    this.crankGoal = 0; // where the rider has wound the crank to (it chases this, nothing else)
+    this.crank = this.crank ?? 0; // (kept across resets: the on-screen crank stays in step)
+    this.crankGoal = this.crank; // where the rider has wound the crank to (it chases this, nothing else)
     this.crankRate = 0; // rad/s
     this.spinRate = 0; // the crank rate, smoothed a touch (legs and chain have some give)
     this.cadAvg = 0;

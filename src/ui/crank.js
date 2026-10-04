@@ -23,7 +23,7 @@ const RC = [60, 33]; // chainring centre
 const CC = [16, 38]; // rear hub
 const TEETH = 24, R_TIP = 23.2, R_ROOT = 20.5, R_BODY = 15, R_HUB = 5.5, R_PITCH = 21.6;
 const ARM = 16; // crank arm length
-const COGS = [{ r: 10, n: 14 }, { r: 7.5, n: 11 }, { r: 5.2, n: 8 }]; // gears 1..3 (big to small)
+const COGS = [{ r: 9, n: 13 }, { r: 6.8, n: 10 }, { r: 4.8, n: 7 }]; // gears 1..3 (big to small)
 const RIM0 = 14.5, RIM1 = 16.2;
 const TAU = Math.PI * 2;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
