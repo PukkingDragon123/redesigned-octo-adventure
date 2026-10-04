@@ -1,8 +1,10 @@
-// Title screen: a live 3D shot of Hank on Harold's bike outside Nana's cabin at
-// dusk, a hand-made pixel-art logo, and a leather-and-brass menu.
+// Title screen: just the real 3D voxel Hank running on a plain dark background
+// (a tiny stage of its own, rendered through the game pipeline instead of the
+// world), a hand-made pixel-art logo, and a leather-and-brass menu.
 import * as THREE from 'three';
-import { HOME_SPAWN, POI } from '../world/layout.js';
+import { HOME_SPAWN } from '../world/layout.js';
 import { hasSave } from '../game/state.js';
+import { RunStage } from '../boot/loader3d.js';
 
 const INK = '#1e1418';
 
@@ -111,10 +113,12 @@ export class TitleScreen {
 
   async show({ onContinue, onNew, onSettings, onControls }) {
     const g = this.g;
+    // the stage goes up at once (black, fading in) so the world never flashes past
+    this.stage();
     try { await document.fonts.load('32px BoldPixels'); await document.fonts.load('24px Monogram'); } catch { /* fonts are optional */ }
     const s = uiScale();
     this.s = s;
-    const root = el('div', `position:fixed;inset:0;z-index:40;pointer-events:none;font-family:Monogram,monospace;color:#fff4e0;`);
+    const root = el('div', `position:fixed;inset:0;z-index:40;pointer-events:none;font-family:Monogram,monospace;color:#fff4e0;opacity:0;`);
     root.id = 'title3d';
     // logo
     const logo = drawLogo();
@@ -160,8 +164,6 @@ export class TitleScreen {
     this.m = m;
     g.ui.menuStack.push(m);
     this.select(0);
-    // stage
-    this.stage();
   }
 
   select(i) {
@@ -171,50 +173,62 @@ export class TitleScreen {
     this.selI = i;
   }
 
-  // Hank on the bike in the yard, Nana on the porch, lanterns lit
+  // Hank running on his own on a dark plum background. The world keeps ticking
+  // underneath (parked at the cabin, so it is warm when the game starts) but is
+  // not drawn while the title is up.
   stage() {
     const g = this.g;
+    if (this.run) return;
     const A = g.world.atmosphere;
     A.hour = 17.35;
     A.setWeather('breezy', true);
     g.parkBike(HOME_SPAWN.x, HOME_SPAWN.z, HOME_SPAWN.yaw + 0.5);
     g.setBikeVisible(true);
     g.rider.visible = true;
+    const b = g.bike.pos;
+    g.chase.cut(new THREE.Vector3(b.x + 4, b.y + 1.6, b.z + 4), new THREE.Vector3(b.x, b.y + 1, b.z), 50);
+    g.chase.apply(0);
+    this.run = new RunStage({ bg: 0x1c1018, dash: 0x5a4450 });
+    this.run.hank.sfx = (name) => g.sound?.play?.(name, { volume: 0.4 });
+    this.layout();
+    g.overrideScene = this.run;
     g.pipeline.post.uFade.value = 1;
     g.tween(g.pipeline.post.uFade, 'value', 0, 1.4);
     this.t = 0;
   }
 
-  update(dt) {
-    if (!this.root) return;
-    const g = this.g;
-    this.t += dt;
-    // camera: a slow, low push-in on Hank with the cabin glowing behind him
-    const b = g.bike.pos;
-    const k = this.t * 0.05;
+  // wide screens: Hank right of centre, clear of the menu on the left;
+  // tall screens: smaller, between the logo and the menu
+  layout() {
+    const r = this.run;
+    if (!r) return;
     const narrow = innerWidth < innerHeight;
-    const ang = HOME_SPAWN.yaw + 0.5 + 0.9 + Math.sin(k) * 0.28;
-    const r = (narrow ? 7.4 : 5.6) - Math.min(1, this.t / 12) * 0.5;
-    const pos = new THREE.Vector3(b.x + Math.sin(ang) * r, b.y + 1.25 + Math.sin(k * 1.3) * 0.12, b.z + Math.cos(ang) * r);
-    // frame Hank right of centre on wide screens so the menu has room on the left
-    const side = narrow ? 0 : -1.25;
-    const look = new THREE.Vector3(b.x + Math.cos(ang) * side, b.y + 1.0, b.z - Math.sin(ang) * side);
-    g.chase.cut(pos, look, narrow ? 50 : 42);
-    g.chase.apply(dt);
-    // little bits of business: bell, head pop, a wave at the camera
+    r.fx = narrow ? 0 : 0.42;
+    r.fy = narrow ? 0.2 : -0.22;
+    r.size = narrow ? 0.22 : 0.48;
+    r.ang = narrow ? 0.8 : 1.05;
+  }
+
+  update(dt) {
+    const run = this.run;
+    if (!run) return;
+    this.t += dt;
+    this.layout();
+    run.update(dt);
+    if (!this.root) return;
+    if (this.t < 1.2) this.root.style.opacity = String(Math.min(1, this.t / 0.8));
+    else if (this.root.style.opacity !== '1') this.root.style.opacity = '1';
+    // little bits of business: the skull pops off, a happy hop, a twirl
     this.gagT -= dt;
-    const ch = g.rider.ch;
-    if (this.gagT <= 0 && ch) {
-      this.gagT = 4 + Math.random() * 4;
+    if (this.gagT <= 0) {
+      this.gagT = 5 + Math.random() * 4;
       const r2 = Math.random();
-      if (r2 < 0.35) ch.react('headpop');
-      else if (r2 < 0.6) { g.sound?.play?.('bell', { volume: 0.5 }); ch.react('nod'); }
-      else if (r2 < 0.8) ch.react('laugh');
-      else ch.react('love');
+      if (r2 < 0.45) run.hank.react('headpop');
+      else if (r2 < 0.8) run.hank.react('yay');
+      else run.hank.react('spin');
     }
     // the mug's steam bobs in pixel steps
     if (this.mugEl) this.mugEl.style.transform = `translateY(${-Math.round((Math.sin(this.t * 2.4) + 1) * 1) * this.ls}px)`;
-    void POI;
   }
 
   close(fn) {
@@ -226,6 +240,10 @@ export class TitleScreen {
     r.style.transition = 'opacity 0.5s';
     r.style.opacity = '0';
     setTimeout(() => r.remove(), 550);
+    // back to drawing the world
+    if (g.overrideScene === this.run) g.overrideScene = null;
+    this.run?.dispose();
+    this.run = null;
     fn?.();
   }
 }

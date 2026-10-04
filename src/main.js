@@ -73,13 +73,22 @@ async function boot() {
       world.update(1 / 30, camera, game.focus());
     }
   }
+  let warmed = false;
   const loop = (now) => {
     const dt = maxFrames < Infinity ? parseFloat(params.get('step') || '0') || 1 / 30 : Math.min(0.05, (now - last) / 1000);
     last = now;
     if (game) game.update(dt);
     const focus = game ? game.focus() : camera.position.clone().add(new THREE.Vector3(0, 0, -30).applyQuaternion(camera.quaternion));
     world.update(dt, camera, focus);
-    pipeline.render(world.scene, camera);
+    // a scene can stand in for the world (the title's lone running Hank); the
+    // world is drawn once first so its shaders are compiled before the game starts
+    const ov = game?.overrideScene;
+    if (ov && warmed) ov.render(pipeline);
+    else {
+      pipeline.render(world.scene, camera);
+      warmed = true;
+      if (ov) ov.render(pipeline);
+    }
     window.__frames = (window.__frames || 0) + 1;
     if (window.__frames < maxFrames) requestAnimationFrame(loop);
     else window.__done = true;
@@ -95,7 +104,8 @@ window.__step = (n = 1, dt = 1 / 30) => {
     if (game) game.update(dt);
     world.update(dt, camera, game ? game.focus() : camera.position);
   }
-  pipeline.render(world.scene, camera);
+  if (game?.overrideScene) game.overrideScene.render(pipeline);
+  else pipeline.render(world.scene, camera);
 };
 boot().catch((e) => {
   console.error(e);

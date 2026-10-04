@@ -53,6 +53,8 @@ export class Game {
     this.tweens = [];
     this.sound = sound;
     this.catEventActive = false;
+    // a stand-in scene drawn instead of the world ({ render(pipeline) }): the title's running Hank
+    this.overrideScene = null;
   }
 
   // ---------------------------------------------------------------- setup
