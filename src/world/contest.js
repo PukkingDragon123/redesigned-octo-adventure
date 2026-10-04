@@ -86,12 +86,10 @@ export function dressContest(vw, physprops) {
 
   // ---- bunting poles and strings: across the street, and along both sidewalks
   const poleH = 4.4;
-  const poles = [];
   for (const x of [133.6, 146.3]) for (const z of [M.z - 6, M.z + 6]) {
     S('contest:pole', () => CM.pole({ h: poleH }), x, z);
     SD('contest:finial', () => CM.simplePumpkin({ r: 0.13, seed: 3 }), x, z, 0, poleH + 0.1);
     post(x, z, 0.1, poleH);
-    poles.push([x, z]);
   }
   const string = (ax, az, bx2, bz2, seed) => {
     const len = Math.hypot(bx2 - ax, bz2 - az);
@@ -127,7 +125,7 @@ export function dressContest(vw, physprops) {
   const E = C.entries;
   const er = S('contest:entries', () => CM.entryStand({ len: E.len }), E.x, E.z, PI);
   box(E.x, E.z, PI, E.len + 0.1, 0.95, 0.9);
-  const faces = [['happy', 'medium'], ['maple', 'medium'], ['cat', 'small'], ['classic', 'small'], ['toothy', 'medium'], ['owl', 'small']];
+  const faces = [['happy', 'medium'], ['maple', 'medium'], ['cat', 'small'], ['classic', 'small'], ['wink', 'medium'], ['owl', 'small']];
   er.meta.tiers.forEach((tier, row) => {
     for (let n = 0; n < 3; n++) {
       const [face, kind] = faces[row * 3 + n];
