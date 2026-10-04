@@ -92,7 +92,6 @@ const KNOCK = {
   syrupstand: { mode: 'fixed', stall: true, sound: 'cup' },
   cart: { mode: 'fixed', stall: true, sound: 'crash', vol: 0.3, bits: ['bit_paper', 'bit_paper', 'bit_news'], nBits: 3 },
   swing: { mode: 'fixed', sound: 'wobble' },
-  hangfern: { mode: 'fixed', sound: 'paper' },
   chimes: { mode: 'fixed', sound: 'cup', vol: 0.25 },
   umbrellatable: { mode: 'fixed', sound: 'cup' },
   phonebooth: { mode: 'fixed', sound: 'crash', vol: 0.25 },
