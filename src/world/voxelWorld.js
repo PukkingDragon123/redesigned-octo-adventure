@@ -201,9 +201,14 @@ export class VoxelWorld {
     this.nearStarted = true;
     const P = new URLSearchParams(typeof location !== 'undefined' ? location.search : '');
     const sp = (P.get('spawn') || P.get('cam') || '').split(',').map(Number);
-    const from = sp.length >= 2 && !isNaN(sp[0]) ? { x: sp[0], z: P.get('cam') ? sp[2] : sp[1] } : L.POI.cabin;
+    // the title menu opens on the village (its close shot is the contest at the west end of
+    // Main Street), so a plain start streams from there, after the homestead's few buildings
+    const title = !['start', 'scene', 'auto', 'spawn', 'cam'].some((k) => P.has(k));
+    const from = sp.length >= 2 && !isNaN(sp[0]) ? { x: sp[0], z: P.get('cam') ? sp[2] : sp[1] } : title ? { x: 140, z: 50 } : L.POI.cabin;
+    const C = L.POI.cabin;
+    const home = (b) => (title && Math.hypot(b.x - C.x, b.z - C.z) < 60 ? 0 : 1);
     const ids = L.BUILDINGS.filter((b) => this.lodById?.[b.id] && !this.lodById[b.id].userData.near)
-      .sort((a, b) => Math.hypot(a.x - from.x, a.z - from.z) - Math.hypot(b.x - from.x, b.z - from.z)).map((b) => b.id);
+      .sort((a, b) => home(a) - home(b) || Math.hypot(a.x - from.x, a.z - from.z) - Math.hypot(b.x - from.x, b.z - from.z)).map((b) => b.id);
     const tn = performance.now();
     this.nearDone = this.world.buildingJobs.near(ids, (id, data) => {
       const lod = this.lodById[id];
