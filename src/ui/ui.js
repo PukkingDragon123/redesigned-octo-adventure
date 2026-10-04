@@ -16,6 +16,7 @@ import { CHARACTERS } from '../art/characters.js';
 import { input } from '../core/input.js';
 import { sound } from '../game/sound.js';
 import { loadSettings } from '../game/state.js';
+import { leaves } from './leaves.js';
 
 // a pixel icon by name: the UI set first, then the food sprites
 export function anyIcon(name) {
@@ -304,10 +305,17 @@ export class UI {
     this.highlight(m);
     sound.play('ui_open');
     snapBox(contentEl);
+    // a few leaves shaken loose as the sheet lands, and a little gust across
+    requestAnimationFrame(() => {
+      leaves.flutter(contentEl, 9);
+      leaves.gust(6, { speed: 1.3 });
+    });
     return m;
   }
   closeOverlay(m = this.menuStack[this.menuStack.length - 1]) {
     if (!m) return;
+    const sheet = m.ov.firstElementChild;
+    if (sheet) leaves.flutter(sheet, 7);
     m.ov.remove();
     this.menuStack = this.menuStack.filter((x) => x !== m);
     this.swallowInput();
@@ -379,6 +387,7 @@ export class UI {
     b.addEventListener('click', () => {
       if (b.disabled) return;
       sound.play('ui_click');
+      leaves.burstFrom(b, 6);
       onClick?.();
     });
     return this.hoverSelect(b);
@@ -391,6 +400,12 @@ export class UI {
   }
 
   update(dt) {
+    // a few leaves drift past while a menu (or the title) is open
+    const menu = this.menuStack.length > 0;
+    if (menu !== this._leafAmb) {
+      this._leafAmb = menu;
+      leaves.ambient('menu', menu, 5);
+    }
     if (this.dialogueTick) this.dialogueTick(dt);
     else this.menuTick();
     this.updateTags();

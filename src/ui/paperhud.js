@@ -9,6 +9,7 @@ import { el, esc } from './kit.js';
 import { cupTemp } from '../game/orders.js';
 import { foodIconURL } from '../art/foodsprites.js';
 import { tempMood, tempFaceURL } from '../art/tempfaces.js';
+import { leaves } from './leaves.js';
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const INK = 0x1e1418;
@@ -304,6 +305,12 @@ export function updatePaperHUD(ui, dt) {
   if (gaugeOn) ui.gauge.draw(g.bike, dt);
   updateNote(ui);
   updateCompassP(ui);
+  // now and then a leaf blows in and gets caught on the clipboard's clip for a while
+  ui._leafT = (ui._leafT ?? 14 + Math.random() * 10) - dt;
+  if (ui._leafT <= 0) {
+    ui._leafT = 35 + Math.random() * 45;
+    if (g.mode === 'ride' && !ui.noteEl.classList.contains('empty') && !ui.hud.classList.contains('hidden')) leaves.catchOn(ui.noteEl.querySelector('.clip'));
+  }
 }
 
 const SHORT = { birdie: 'Birdie', ingrid: 'Dr. Ingrid', doug: 'Doug', lou: 'Big Lou', ollie: 'Ollie', marie: 'Marie', grandma: 'Nana', pip: 'Pip & Pop', gus: 'Gus', agnes: 'Agnes', mo: 'Mo' };
@@ -344,7 +351,12 @@ function updateNote(ui) {
       ui.orderCards.set(o.id, r);
     }
     if (o.state === 'delivered') {
-      if (!ui._doneAt.has(o.id)) ui._doneAt.set(o.id, now);
+      if (!ui._doneAt.has(o.id)) {
+        ui._doneAt.set(o.id, now);
+        // ticked off: a burst of leaves off the line, and out of the coin pouch
+        leaves.burstFrom(r, 14);
+        leaves.burstFrom(ui.pouchEl, 6);
+      }
       r.classList.add('done');
       continue;
     }

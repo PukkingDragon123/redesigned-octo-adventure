@@ -448,9 +448,9 @@ export async function leafTransition(swap, { layer = 'front', dur = 0.6, revealD
 
 // ---------------------------------------------------------------- the 3D fade
 // Scene fades (cutscenes, Nana's cabin, the end of the day) go through here. Short
-// fades are leaf wipes on the layer under the interface: the leaves cover the
+// fades (up to 1.25 s) are leaf wipes on the layer under the interface: the leaves cover the
 // screen, the 3D fade goes black underneath, and fading back in blows the cover
-// away. Fades of a second or more are the slow, emotional ones (a funeral, falling
+// away. Longer fades are the slow, emotional ones (a funeral, falling
 // asleep): they stay soft, with a few leaves drifting down.
 export async function screenFade(game, to, dur = 0.6) {
   const U = game.pipeline.post.uFade;
@@ -461,7 +461,7 @@ export async function screenFade(game, to, dur = 0.6) {
     U.value = to;
     return;
   }
-  const wipe = !reduced && dur < 1 && (to > 0.99 || to < 0.01);
+  const wipe = !reduced && dur <= 1.25 && (to > 0.99 || to < 0.01);
   // nothing to sweep: already black (a cover) or already clear (a reveal)
   if (wipe && to > 0.5 && U.value > 0.99) return;
   if (wipe && to < 0.5 && U.value < 0.01 && back.wipe?.mode !== 'hold') return;
@@ -478,7 +478,7 @@ export async function screenFade(game, to, dur = 0.6) {
     U.value = to;
     leafRelease({ layer: 'back' });
   } else {
-    const p = leafReveal({ layer: 'back', dur: clamp(dur * 1.3, 0.5, 0.85), sound: true });
+    const p = leafReveal({ layer: 'back', dur: clamp(dur * 1.3, 0.5, 0.9), sound: true });
     U.value = to;
     await p;
   }

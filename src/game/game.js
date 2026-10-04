@@ -35,6 +35,7 @@ import { riverInfo, forestNoise } from '../world/terrain.js';
 import { Grass } from '../world/grass.js';
 import { clamp } from '../core/math.js';
 import * as L from '../world/layout.js';
+import { leafTransition } from '../ui/leaves.js';
 
 const STEP = 1 / 120;
 const GAME_MIN_PER_SEC = 2; // in-game minutes per real second while riding
@@ -243,8 +244,9 @@ export class Game {
     sound.music('title');
     this.title = new TitleScreen(this);
     this.title.show({
-      onContinue: () => { this.title = null; this.continueGame(); },
-      onNew: () => { this.title = null; this.startNewGame(); },
+      // off the title on a gust of leaves: the game starts under the cover
+      onContinue: () => { this.title = null; leafTransition(() => { this.continueGame(); }); },
+      onNew: () => { this.title = null; leafTransition(() => { this.startNewGame(); }); },
       onSettings: () => this.menus.settings(),
       onControls: () => this.menus.controls(),
     });
