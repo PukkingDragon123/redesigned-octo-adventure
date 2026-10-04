@@ -1,7 +1,7 @@
 // Lit material for voxel meshes (characters, props, buildings, trees).
 // Vertex colour carries baked AO in rgb and an emissive amount in alpha.
 import * as THREE from 'three';
-import { worldUniforms, LIGHT_PARS_VERT, SHADOW_VERT, LIGHT_PARS_FRAG, NOISE_GLSL } from './shaderlib.js';
+import { worldUniforms, LIGHT_PARS_VERT, SHADOW_VERT, LIGHT_PARS_FRAG, NOISE_GLSL, SEE_GLSL } from './shaderlib.js';
 
 // Posed creatures (render/voxelRig.js): every vertex names its part ("bone"); each instance
 // row of uBones holds a fade texel, then one 3x4 world matrix (three texels) per bone.
@@ -67,6 +67,7 @@ void main() {
 const FRAG = /* glsl */ `
 ${LIGHT_PARS_FRAG}
 ${NOISE_GLSL}
+${SEE_GLSL}
 uniform vec3 uTint;
 uniform float uFade;
 uniform float uFlash;
@@ -105,6 +106,7 @@ void main() {
   #ifdef VOX_RIG
   if (vRigFade > 0.0 && bayer4(gl_FragCoord.xy) < vRigFade) discard;
   #endif
+  float seeR = seeThrough(vWorldPos);
   vec3 albedo = vColor.rgb * uTint * surfaceDetail();
   vec3 n = normalize(vNormal);
   // snow settles on upward faces
@@ -138,7 +140,7 @@ void main() {
   }
   col += uHighlight * vec3(0.18, 0.15, 0.08) * (0.6 + 0.4 * sin(uTime * 6.0));
   col = mix(col, uFlashColor, uFlash);
-  gl_FragColor = vec4(col, 1.0);
+  gl_FragColor = vec4(seeRim(col, seeR), 1.0);
 }
 `;
 
@@ -256,6 +258,25 @@ let shared = null;
 export function sharedVoxelMaterial() {
   return shared || (shared = createVoxelMaterial());
 }
+// its twin that the camera never sees through (Bessie's frame, crate and lamp)
+let solid = null;
+export function solidVoxelMaterial() {
+  if (!solid) {
+    solid = createVoxelMaterial();
+    solid.uniforms.uSeeOK.value = 0;
+  }
+  return solid;
+}
+// keep everything under root solid for the camera's see-through (the bike Hank rides):
+// shared voxel parts move to the solid twin, own materials get uSeeOK = 0
+export function keepSolid(root) {
+  const sh = sharedVoxelMaterial();
+  root.traverse((o) => {
+    if (!o.isMesh) return;
+    if (o.material === sh) o.material = solidVoxelMaterial();
+    else if (o.material?.uniforms?.uSeeOK) o.material.uniforms.uSeeOK.value = 0;
+  });
+}
 
 export function voxMesh(geometry, material = sharedVoxelMaterial(), { cast = true, receive = true } = {}) {
   const m = new THREE.Mesh(geometry, material);
@@ -286,6 +307,7 @@ void main() {
 const FLAT_FRAG = /* glsl */ `
 ${LIGHT_PARS_FRAG}
 ${NOISE_GLSL}
+${SEE_GLSL}
 uniform sampler2D map;
 uniform vec3 uTint;
 uniform float uFade;
@@ -300,6 +322,7 @@ void main() {
   vec4 tex = texture2D(map, vUv);
   if (tex.a < 0.3) discard;
   if (uFade > 0.0 && bayer4(gl_FragCoord.xy) < uFade) discard;
+  float seeR = seeThrough(vWorldPos);
   vec3 albedo = tex.rgb * uTint;
   vec3 n = normalize(vNormal);
   if (!gl_FrontFacing) { n = -n; albedo *= uShade; }
@@ -310,7 +333,7 @@ void main() {
   vec3 col = albedo * (hemiAmbient(n) * 1.05 + uSunColor * diff * 0.95 + pointLightsAt(vWorldPos, n, 0.35));
   if (tex.a < 0.75) col = albedo * (1.5 + uNight * 1.4);
   col = mix(col, uFlashColor, uFlash);
-  gl_FragColor = vec4(col, 1.0);
+  gl_FragColor = vec4(seeRim(col, seeR), 1.0);
 }
 `;
 const FLAT_DEPTH_VERT = /* glsl */ `

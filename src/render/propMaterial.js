@@ -1,6 +1,6 @@
 // Lit material for merged static geometry (buildings, props, bike): atlas tile * vertex colour.
 import * as THREE from 'three';
-import { worldUniforms, LIGHT_PARS_VERT, SHADOW_VERT, LIGHT_PARS_FRAG, NOISE_GLSL } from './shaderlib.js';
+import { worldUniforms, LIGHT_PARS_VERT, SHADOW_VERT, LIGHT_PARS_FRAG, NOISE_GLSL, SEE_GLSL } from './shaderlib.js';
 
 const VERT = /* glsl */ `
 ${LIGHT_PARS_VERT}
@@ -28,6 +28,7 @@ void main() {
 const FRAG = /* glsl */ `
 ${LIGHT_PARS_FRAG}
 ${NOISE_GLSL}
+${SEE_GLSL}
 uniform sampler2D tAtlas;
 uniform float uEmissiveBoost;
 uniform float uSnowRoofs;
@@ -43,6 +44,7 @@ void main() {
   // mip level from the unwrapped uv, so tile repeats don't pick a tiny mip along every seam
   vec4 tx = textureGrad(tAtlas, auv, dFdx(vUv) * vTile.zw, dFdy(vUv) * vTile.zw);
   if (tx.a < 0.5) discard;
+  float seeR = seeThrough(vWorldPos);
   vec3 albedo = tx.rgb * vColor.rgb;
   vec3 n = normalize(vNormal);
   if (!gl_FrontFacing) n = -n;
@@ -74,7 +76,7 @@ void main() {
     // lamps, bulbs, the lighthouse lens
     col += albedo * em * (0.6 + uNight * 2.2) * uEmissiveBoost;
   }
-  gl_FragColor = vec4(col, 1.0);
+  gl_FragColor = vec4(seeRim(col, seeR), 1.0);
 }
 `;
 

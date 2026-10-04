@@ -15,6 +15,11 @@ export class Scene {
     this.emotes = [];
     this.tickers = [];
     this.skip = false;
+    // the camera's see-through melts whatever stands between the lens and each shot's subject
+    if (game.chase) {
+      game.chase.scene = this;
+      game.chase.subject = null;
+    }
   }
   // run fn(dt) every frame until it returns true or the scene ends
   every(fn) {
@@ -76,10 +81,13 @@ export class Scene {
     if (this.skip) dur = 0.01;
     await this.g.tween(this.g.pipeline.post.uFade, 'value', to, dur);
   }
-  cam(pos, look, dur = 0, fov = 50) {
+  // subject: who (or what point) the shot is about; whatever gets between them and the lens
+  // melts away. Left out, the camera picks whoever is nearest the middle of the frame.
+  cam(pos, look, dur = 0, fov = 50, subject = null) {
     const c = this.g.chase;
     if (dur <= 0 || this.skip) c.cut(v3(pos), v3(look), fov);
     else c.move(v3(pos), v3(look), dur, fov);
+    c.subject = subject;
     return this.wait(dur);
   }
   // camera framing helper: look at an actor from an offset. The voxel cast holds up
@@ -90,7 +98,7 @@ export class Scene {
     // aim a little low so the subject sits in the upper part of the frame, clear of the dialogue box
     const look = new THREE.Vector3(t.x, t.y + lookUp * 0.9 - 0.4, t.z);
     const pos = new THREE.Vector3(t.x + offset[0] * k, t.y + 0.6 + (offset[1] - 0.6) * k * 0.8, t.z + offset[2] * k);
-    return this.cam(pos, look, dur, fov);
+    return this.cam(pos, look, dur, fov, target.isVector3 ? look : target);
   }
   // a front-on shot of an actor's face, whichever way they're facing.
   // side > 0 slides the lens to their left; dist is how far out in front.
@@ -102,7 +110,7 @@ export class Scene {
     const head = a.headWorld ? a.headWorld() : new THREE.Vector3(a.pos.x, a.pos.y + 1.4, a.pos.z);
     const pos = new THREE.Vector3(a.pos.x + fx * dist + rx * side, head.y + up, a.pos.z + fz * dist + rz * side);
     const look = new THREE.Vector3(head.x + rx * side * 0.2, head.y - lookDown, head.z + rz * side * 0.2);
-    return this.cam(pos, look, dur, fov);
+    return this.cam(pos, look, dur, fov, a.pos ? a : null);
   }
   async say(who, text, opts = {}) {
     if (this.skip && !opts.choices) return undefined;
@@ -142,6 +150,11 @@ export class Scene {
     this.g.sound.music(m);
   }
   cleanup() {
+    const c = this.g.chase;
+    if (c?.scene === this) {
+      c.scene = null;
+      c.subject = null;
+    }
     if (this.fill) this.g.lightPool.removeDynamic(this.fill);
     this.fill = null;
     for (const a of this.temp) a.remove();
