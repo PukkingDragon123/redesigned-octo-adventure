@@ -16,8 +16,11 @@ export const PAGE = 1024;
 const viewOf = (v) => (typeof v === 'string' ? VIEWS[v] : v);
 export const viewName = (v, i) => (typeof v === 'string' ? v : `v${i}`);
 
+// (the fences are voxel geometry now, see world/fences3d.js: nothing to pixel)
+const BAKED = Object.keys(CATALOGUE).filter((k) => k !== 'picket' && k !== 'rail' && k !== 'rail2');
+
 // all the frames to bake, as small jobs
-export function frameJobs(kinds = Object.keys(CATALOGUE)) {
+export function frameJobs(kinds = BAKED) {
   const jobs = [];
   for (const kind of kinds) {
     const K = CATALOGUE[kind];

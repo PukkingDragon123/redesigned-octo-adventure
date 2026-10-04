@@ -261,6 +261,7 @@ export class World {
     this.atmosphere.update(dt);
     this.sky.position.copy(camera.position);
     this.forest2d?.update(camera.position, camera);
+    this.fences?.update(camera);
     this.forest?.updateVisibility(camera.position);
     this.grass?.update(camera.position);
     this.updateShadow(focus);

@@ -552,7 +552,7 @@ export class Deco2D {
     const rx = this.rx, rz = this.rz;
     for (const B of BS) B.begin();
     for (const it of this.items) {
-      if (it.st === 3) continue;
+      if (it.st === 3 || it.fence3d) continue; // (the fences are voxel geometry: world/fences3d.js)
       const dx = it.x - cp.x, dy = it.y - cp.y, dz = it.z - cp.z;
       const far = FAR[it.kind] ?? (it.goods ? SMALL : 90);
       const dd = dx * dx + dy * dy + dz * dz;

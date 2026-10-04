@@ -48,9 +48,9 @@ function yards(vw, { S, post, box, gy }) {
   const fenceRun = (ax, az, bx, bz) => {
     const len = Math.hypot(bx - ax, bz - az), n = Math.max(1, Math.round(len / 3));
     const yaw = -Math.atan2(bz - az, bx - ax);
+    vw.fenceRun('picket', ax, az, bx, bz);
     for (let k = 0; k < n; k++) {
       const t = (k + 0.5) / n, x = ax + (bx - ax) * t, z = az + (bz - az) * t;
-      S('picket:c', () => PR.picketFence({ len: 3, coarse: true }), x, z, yaw);
       box(x, z, yaw + Math.PI / 2, 0.15, len / n, 1.0, 'fence');
     }
   };
@@ -191,7 +191,7 @@ function bikePark(vw, { S, post, box, bench, gy }) {
   S('welcome:park', () => PR.welcomeSign({ text: 'BIKE PARK' }), bp.x - 10, bp.z + 15, 0.2);
   box(bp.x - 10, bp.z + 15, 0.2, 3.2, 0.4, 2.2);
   bench(bp.x + 13, bp.z + 15, Math.PI + 0.1, 'red');
-  for (let i = 0; i < 5; i++) S(`railfence:p${i % 2}`, () => PR.railFence({ len: 3, seed: i % 2 }), bp.x - 20 + i * 3.1, bp.z - 15.5, 0);
+  vw.fenceRun('rail', bp.x - 21.55, bp.z - 15.5, bp.x - 5.95, bp.z - 15.5);
 }
 
 // ---------------------------------------------------------------- harbour
@@ -235,7 +235,8 @@ function farm(vw, { S, post, box, gy, kickable }) {
         if (sd === gapSide && k === Math.floor(segs / 2)) continue;
         const t = (k + 0.5) / segs, x = cx + ax + (bx - ax) * t, z = cz + az + (bz - az) * t;
         const yaw = Math.atan2(bz - az, bx - ax);
-        S(`railfence:${k % 2}`, () => PR.railFence({ len: 3, seed: k % 2 }), x, z, -yaw);
+        const t0 = k / segs, t1 = (k + 1) / segs;
+        vw.fenceRun('rail', cx + ax + (bx - ax) * t0, cz + az + (bz - az) * t0, cx + ax + (bx - ax) * t1, cz + az + (bz - az) * t1);
         box(x, z, -yaw + Math.PI / 2, 0.2, 3.1, 1.3, 'fence');
       }
     }

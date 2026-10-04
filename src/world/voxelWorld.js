@@ -15,6 +15,7 @@ import { Vox } from '../voxel/vox.js';
 import { dressPlaces } from './places.js';
 import { placeDeco2D } from './deco2d.js';
 import { buildingSpecPure } from './foundations.js';
+import { Fences3D } from './fences3d.js';
 
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _s = new THREE.Vector3(1, 1, 1), _p = new THREE.Vector3();
 const UP = new THREE.Vector3(0, 1, 0);
@@ -353,6 +354,11 @@ export class VoxelWorld {
     this.spots.push({ x, z, r, text, action, ...extra });
   }
 
+  // a fixed fence (kind picket | rail) from (ax, az) to (bx, bz), drawn by fences3d.js
+  fenceRun(kind, ax, az, bx, bz) {
+    (this.fenceRuns ||= []).push({ kind, ax, az, bx, bz });
+  }
+
   // ------------------------------------------------------------ fall-fair extras
   dress(physprops) {
     const P = L.POI;
@@ -418,8 +424,13 @@ export class VoxelWorld {
     });
     // the rest of the remade map: streets, green, harbour, farm, beach, campground...
     dressPlaces(this, physprops);
-    // and the 2D street clutter (fences, bins, stalls...), fitted around everything above
+    // and the 2D street clutter (bins, stalls...), fitted around everything above
     this.world.deco2d = placeDeco2D(this);
+    // the fences (the knockable ones placed with the clutter, the fixed runs above) as voxel geometry
+    const fences = new Fences3D(this.world, { items: this.world.deco2d.items, runs: this.fenceRuns || [] });
+    this.scene.add(fences.group);
+    this.world.fences = fences;
+    console.log('fences', JSON.stringify(fences.stats));
   }
 
   // (older name, kept for callers that still use it)
