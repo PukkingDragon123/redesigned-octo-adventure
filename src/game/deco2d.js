@@ -149,8 +149,9 @@ export class Deco2D {
       const atlas = new SpriteAtlas(pg.size);
       atlas.pix.data.set(pg.data);
       for (const f of pg.frames) { const fr = { ...f, page: pi }; atlas.frames.set(f.name, fr); byName.set(f.name, fr); }
-      atlas.finalize();
-      const B = new SpriteBatch(atlas, 1500, { castShadow: true, upright: 0.9 });
+      atlas.finalize({ mips: true });
+      // cut-outs standing on their spot, lit alike from every side, only a hint of the night rim
+      const B = new SpriteBatch(atlas, 1500, { castShadow: true, upright: 0.9, flatDepth: true, steadyLight: true, moonRim: 0.3 });
       B.mesh.name = `deco2d:${pi}`;
       this.game.scene.add(B.mesh);
       return B;
@@ -202,7 +203,10 @@ export class Deco2D {
       geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
       geo.setIndex(idx);
       geo.computeBoundingSphere();
-      const mesh = new THREE.Mesh(geo, createFlatMaterial(atlas.texture));
+      const mat = createFlatMaterial(atlas.texture);
+      // (mats and towels lie a hair above the ground or deck: pulled forward so they never flicker in it)
+      mat.polygonOffset = true; mat.polygonOffsetFactor = -2; mat.polygonOffsetUnits = -4;
+      const mesh = new THREE.Mesh(geo, mat);
       mesh.receiveShadow = true;
       mesh.name = `deco2d:cards:${pi}`;
       mesh.matrixAutoUpdate = false;
