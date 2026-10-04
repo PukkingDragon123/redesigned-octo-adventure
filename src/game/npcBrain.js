@@ -134,7 +134,6 @@ export class NpcBrain {
   }
   stopWalk() {
     this.path = null;
-    this.mv = 0;
     const rej = this.walkRej;
     this.walkRes = this.walkRej = null;
     rej?.(CANCEL);
@@ -256,7 +255,7 @@ export class NpcBrain {
         if (Math.abs(lat) > room) continue;
         const k = (1 - Math.abs(lat) / room) * (1 - ahead / (1.6 + sp * 0.4 + 0.01));
         // pass on the side away from them (on our right if they're dead ahead)
-        const s = lat > 0.05 ? -1 : 1;
+        const s = lat > -0.05 ? -1 : 1;
         dx += wz * s * k * 1.4;
         dz += -wx * s * k * 1.4;
       }
@@ -316,6 +315,7 @@ export class NpcBrain {
     this.closing += (cl - this.closing) * Math.min(1, dt * 6);
     this.lastD = d;
     if (this.path) this.walkStep(dt, X);
+    else this.mv = 0; // (one walk straight into the next keeps its pace)
     if (this.leash) this.followLeash(dt, X);
     else if (X.live && this.mode !== 'engaged' && this.mode !== 'script') this.perceive(dt, X);
     // the hour moved on (or it started raining, or Hank picked up their order): drop what they're doing
