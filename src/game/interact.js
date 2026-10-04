@@ -1,5 +1,5 @@
 // Things Hank can poke at around town: kick pumpkins and the bowling ball, sit on
-// benches, watch Nana's TV, and knock over the 2D
+// benches, watch Nana's TV, knock on (and barge through) front doors, and knock over the 2D
 // street clutter (bins, fences, crates, signs, the fish stall...: see deco2d.js).
 import { input } from '../core/input.js';
 import { Deco2D } from './deco2d.js';
@@ -37,6 +37,8 @@ export class Interactables {
     if (pr) return { text: KICK_TEXT[pr.kind] || 'Kick it', key: 'F', fn: () => this.kickNow(), passive: true };
     const dk = this.deco.nearest(p, 1.0);
     if (dk) return { text: dk.text, key: 'F', fn: () => this.kickNow(), passive: true };
+    const door = this.W.doors?.nearest(p);
+    if (door) return { text: 'Knock on the door', fn: () => this.W.doors.knock(door, g) };
     return null;
   }
 
@@ -110,6 +112,8 @@ export class Interactables {
     }
     // the 2D street clutter: knocked over by the bike and by Hank, tidied away while nobody looks
     this.deco.update(dt);
+    // the front doors: swung open by Hank and Bessie, pulled shut by their springs
+    this.W.doors?.update(dt, g);
   }
 }
 

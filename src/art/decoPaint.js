@@ -16,8 +16,11 @@ export const PAGE = 1024;
 const viewOf = (v) => (typeof v === 'string' ? VIEWS[v] : v);
 export const viewName = (v, i) => (typeof v === 'string' ? v : `v${i}`);
 
+// (the fences are voxel geometry now, see world/fences3d.js: nothing to pixel)
+const BAKED = Object.keys(CATALOGUE).filter((k) => k !== 'picket' && k !== 'rail' && k !== 'rail2');
+
 // all the frames to bake, as small jobs
-export function frameJobs(kinds = Object.keys(CATALOGUE)) {
+export function frameJobs(kinds = BAKED) {
   const jobs = [];
   for (const kind of kinds) {
     const K = CATALOGUE[kind];
@@ -46,7 +49,10 @@ export function bakeJob({ kind, i }) {
   return out;
 }
 
-// shelf-pack baked frames (tallest first) into pages
+// shelf-pack baked frames (tallest first) into pages, on a 4 px grid with at least 4 px between
+// frames, so the first three mip levels never mix two sprites (see coverMips in sprites.js)
+const GRID = 4;
+const al = (v) => Math.ceil(v / GRID) * GRID;
 export function packPages(frames, size = PAGE) {
   const order = frames.slice().sort((a, b) => b.h - a.h || b.w - a.w);
   const pages = [];
@@ -55,13 +61,13 @@ export function packPages(frames, size = PAGE) {
   open();
   for (const f of order) {
     const w = Math.min(f.w, size), h = Math.min(f.h, size);
-    if (x + w + 1 > size) { x = 0; y += shelf + 1; shelf = 0; }
+    if (x + w > size) { x = 0; y += shelf; shelf = 0; }
     if (y + h > size) { open(); }
     const d = pg.data;
     for (let j = 0; j < h; j++) d.set(f.px.subarray(j * f.w * 4, j * f.w * 4 + w * 4), ((y + j) * size + x) * 4);
     pg.frames.push({ name: f.name, x, y, w, h, ax: f.ax, ay: f.ay, ppm: f.ppm });
-    x += w + 1;
-    shelf = Math.max(shelf, h);
+    x += al(w + GRID);
+    shelf = Math.max(shelf, al(h + GRID));
   }
   return pages;
 }

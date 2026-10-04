@@ -48,9 +48,9 @@ function yards(vw, { S, post, box, gy }) {
   const fenceRun = (ax, az, bx, bz) => {
     const len = Math.hypot(bx - ax, bz - az), n = Math.max(1, Math.round(len / 3));
     const yaw = -Math.atan2(bz - az, bx - ax);
+    vw.fenceRun('picket', ax, az, bx, bz);
     for (let k = 0; k < n; k++) {
       const t = (k + 0.5) / n, x = ax + (bx - ax) * t, z = az + (bz - az) * t;
-      S('picket:c', () => PR.picketFence({ len: 3, coarse: true }), x, z, yaw);
       box(x, z, yaw + Math.PI / 2, 0.15, len / n, 1.0, 'fence');
     }
   };
@@ -66,6 +66,18 @@ function yards(vw, { S, post, box, gy }) {
     if (i % 2 === 0) S(`clothes:${i % 3}`, () => PR.clothesline({ seed: i }), b.x - 1, back + 4.5, 0.08);
     else { S(`vines:${i % 3}`, () => PR.pumpkinVines({ seed: i }), b.x - 2.5, back + 4.5, i); S(`pp:medium:${i % 4}`, () => PR.pumpkin({ kind: 'medium', seed: i % 4 + 50 }), b.x - 2.2, back + 4.2, i); }
   });
+  // a mailbox on its post out by the gate of every house in the country
+  const mailAt = (id, lz, k) => {
+    const b = L.BUILDINGS.find((q) => q.id === id);
+    if (!b) return;
+    const f = b.facing || 0, c = Math.cos(f), s2 = Math.sin(f), lx = 2.1, z0 = b.d / 2 + lz;
+    const x = b.x + lx * c + z0 * s2, z = b.z - lx * s2 + z0 * c;
+    if (vw.world.terrain.splatAt(x, z).road > 0.3) return;
+    S(`mailbox:c${k % 4}`, () => PR.mailbox({ variant: ['classic', 'black', 'red', 'teal'][k % 4], flag: k % 2 ? 'down' : 'up', seed: k + 3 }), x, z, f);
+    post(x, z, 0.12, 1.3);
+  };
+  ['houseRiver', 'farmhouse'].forEach((id, k) => mailAt(id, 6.1, k));
+  ['houseLoop', 'houseHill', 'gus', 'lighthouseHut'].forEach((id, k) => mailAt(id, 4.8, k + 2));
   // the countryside houses get a picket fence along their front yard
   for (const id of ['houseRiver', 'farmhouse']) {
     const b = L.BUILDINGS.find((q) => q.id === id);
@@ -191,7 +203,7 @@ function bikePark(vw, { S, post, box, bench, gy }) {
   S('welcome:park', () => PR.welcomeSign({ text: 'BIKE PARK' }), bp.x - 10, bp.z + 15, 0.2);
   box(bp.x - 10, bp.z + 15, 0.2, 3.2, 0.4, 2.2);
   bench(bp.x + 13, bp.z + 15, Math.PI + 0.1, 'red');
-  for (let i = 0; i < 5; i++) S(`railfence:p${i % 2}`, () => PR.railFence({ len: 3, seed: i % 2 }), bp.x - 20 + i * 3.1, bp.z - 15.5, 0);
+  vw.fenceRun('rail', bp.x - 21.55, bp.z - 15.5, bp.x - 5.95, bp.z - 15.5);
 }
 
 // ---------------------------------------------------------------- harbour
@@ -235,7 +247,8 @@ function farm(vw, { S, post, box, gy, kickable }) {
         if (sd === gapSide && k === Math.floor(segs / 2)) continue;
         const t = (k + 0.5) / segs, x = cx + ax + (bx - ax) * t, z = cz + az + (bz - az) * t;
         const yaw = Math.atan2(bz - az, bx - ax);
-        S(`railfence:${k % 2}`, () => PR.railFence({ len: 3, seed: k % 2 }), x, z, -yaw);
+        const t0 = k / segs, t1 = (k + 1) / segs;
+        vw.fenceRun('rail', cx + ax + (bx - ax) * t0, cz + az + (bz - az) * t0, cx + ax + (bx - ax) * t1, cz + az + (bz - az) * t1);
         box(x, z, -yaw + Math.PI / 2, 0.2, 3.1, 1.3, 'fence');
       }
     }

@@ -196,7 +196,7 @@ function house(ctx, B, b) {
   // lights
   ctx.lights.push({ pos: toWorld(M, doorX + 0.85, 1.9, d / 2 + 0.3), color: [1.0, 0.7, 0.35], radius: 7, kind: 'lamp' });
   // collision
-  physics.addBox({ x: b.x, z: b.z, yaw: b.facing || 0, w: w + 0.3, l: d + 0.3, y0: y0 - 0.5, y1: y0 + H + rise });
+  const wall = physics.addBox({ x: b.x, z: b.z, yaw: b.facing || 0, w: w + 0.3, l: d + 0.3, y0: y0 - 0.5, y1: y0 + H + rise });
   // porch platform for stilt houses (between house and boardwalk)
   if (b.stilts) {
     const pz = d / 2 + 1.25;
@@ -204,7 +204,7 @@ function house(ctx, B, b) {
     B.box([0, -0.12, pz], [Math.min(w, 5), 0.24, 2.6], { tile: 'planks', tileMeters: 2.5 }, null, M);
     physics.addPlatform({ x: pc.x, z: pc.z, yaw: b.facing || 0, w: Math.min(w, 5), l: 2.6, y0: y0, surface: 'wood' });
   }
-  return { M, y0, H, rise };
+  return { M, y0, H, rise, walls: [wall] };
 }
 
 function cabin(ctx, B, b) {
@@ -239,7 +239,7 @@ function cabin(ctx, B, b) {
     B.box([cx, H + rise + 1.25, -d * 0.15], [1.3, 0.15, 1.5], { tile: 'stone', tileMeters: 2 }, null, M);
     ctx.smoke.push(toWorld(M, cx, H + rise + 1.5, -d * 0.15));
   }
-  physics.addBox({ x: b.x, z: b.z, yaw: b.facing || 0, w: w + 1.2, l: d + 0.4, y0: y0 - 1, y1: y0 + H + rise });
+  const wall = physics.addBox({ x: b.x, z: b.z, yaw: b.facing || 0, w: w + 1.2, l: d + 0.4, y0: y0 - 1, y1: y0 + H + rise });
   if (b.porch) {
     // wide porch with railing, posts and a shed roof
     const pd = 2.8;
@@ -277,7 +277,7 @@ function cabin(ctx, B, b) {
   }
   // warm firelight inside
   ctx.lights.push({ pos: toWorld(M, 0, 1.5, d / 2 + 1.0), color: [1.0, 0.55, 0.25], radius: 6, kind: 'window' });
-  return { M, y0, H };
+  return { M, y0, H, walls: [wall] };
 }
 
 function shed(ctx, B, b) {
@@ -348,11 +348,11 @@ function chapel(ctx, B, b) {
   B.tube([0, top + sp - 0.1, tz], [0, top + sp + 1.0, tz], 0.05, 0.05, { color: 0xf2c443 }, 4, M);
   B.tube([-0.3, top + sp + 0.7, tz], [0.3, top + sp + 0.7, tz], 0.05, 0.05, { color: 0xf2c443 }, 4, M);
   doorAt(B, M, 0, 0, tz + 1.2, 'front', 0x8a2a24, { canopy: false });
-  physics.addBox({ x: b.x, z: b.z, yaw: b.facing || 0, w: w + 0.3, l: d + 0.3, y0: y0 - 1, y1: y0 + 20 });
+  const nave = physics.addBox({ x: b.x, z: b.z, yaw: b.facing || 0, w: w + 0.3, l: d + 0.3, y0: y0 - 1, y1: y0 + 20 });
   const tw = toWorld(M, 0, 0, tz);
-  physics.addBox({ x: tw.x, z: tw.z, yaw: b.facing || 0, w: 2.6, l: 2.6, y0: y0 - 1, y1: y0 + 20 });
+  const tower = physics.addBox({ x: tw.x, z: tw.z, yaw: b.facing || 0, w: 2.6, l: 2.6, y0: y0 - 1, y1: y0 + 20 });
   ctx.lights.push({ pos: toWorld(M, 0, 2.5, tz + 2), color: [1.0, 0.7, 0.4], radius: 7, kind: 'lamp' });
-  return { M, y0, H };
+  return { M, y0, H, walls: [nave, tower] };
 }
 
 function lighthouse(ctx, B, b) {
@@ -462,8 +462,8 @@ function generic(ctx, B, b) {
   // a recessed shopfront (the general store's porch) leaves its front strip walkable
   const rec = b.recess || 0, f = b.facing || 0;
   const cx = b.x - Math.sin(f) * rec / 2, cz = b.z - Math.cos(f) * rec / 2;
-  if (!g.open) physics.addBox({ x: cx, z: cz, yaw: f, w: b.w + 0.2, l: b.d - rec + 0.2, y0: y0 - 1, y1: y0 + H });
-  return { M, y0, H, generic: true };
+  const walls = g.open ? [] : [physics.addBox({ x: cx, z: cz, yaw: f, w: b.w + 0.2, l: b.d - rec + 0.2, y0: y0 - 1, y1: y0 + H })];
+  return { M, y0, H, generic: true, walls };
 }
 
 export function buildBuildings(ctx, B, list = L.BUILDINGS) {

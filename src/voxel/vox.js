@@ -3,7 +3,8 @@
 
 export const EMIT = 1 << 24; // always glowing (jack-o-lantern insides, candles, eyes)
 export const GLASS = 1 << 25; // window glass: dark by day, warm lamp-light at night
-export const FLAGS = EMIT | GLASS;
+export const UNLIT = 1 << 26; // (with GLASS) a window whose room has the light off: dark at night too
+export const FLAGS = EMIT | GLASS | UNLIT;
 
 export class Vox {
   constructor(w, h, d) {

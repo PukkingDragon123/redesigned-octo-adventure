@@ -98,12 +98,13 @@ void main() {
   float em = vColor.a;
   if (em > 0.75) col = mix(col, albedo * (1.6 + uNight * 1.6), 0.85);
   else if (em > 0.25) {
-    // window glass: dark sheen by day, warm lamp light at night
-    float wid = hash12(floor(vWorldPos.xz * 0.8) + floor(vWorldPos.y * 0.5));
+    // window glass: dark sheen by day, warm lamp light at night (a gentle drift of tint from window
+    // to window, never a seam across one); rooms with the light off (em 0.375) stay dark
+    float wid = 0.5 + 0.5 * sin(dot(vWorldPos.xz, vec2(0.31, 0.43)) + vWorldPos.y * 0.37);
     vec3 warm = mix(vec3(1.0, 0.62, 0.28), vec3(1.0, 0.8, 0.5), wid) * (0.8 + uNight * 1.3);
     float fres = pow(1.0 - clamp(abs(dot(n, v)), 0.0, 1.0), 3.0);
     vec3 day = col * 0.55 + uSkyAmb * (0.12 + fres * 0.6);
-    col = mix(day, warm * (0.75 + 0.5 * albedo), clamp(uNight * 1.4 + 0.04, 0.0, 1.0));
+    col = mix(day, warm * (0.75 + 0.5 * albedo), clamp(uNight * 1.4 + 0.04, 0.0, 1.0) * step(0.44, em));
   }
   col += uHighlight * vec3(0.18, 0.15, 0.08) * (0.6 + 0.4 * sin(uTime * 6.0));
   col = mix(col, uFlashColor, uFlash);

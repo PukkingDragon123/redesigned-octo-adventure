@@ -16,6 +16,8 @@ import { dressPlaces } from './places.js';
 import { placeDeco2D } from './deco2d.js';
 import { dressContest } from './contest.js';
 import { buildingSpecPure } from './foundations.js';
+import { Fences3D } from './fences3d.js';
+import { Doors } from './doors.js';
 
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _s = new THREE.Vector3(1, 1, 1), _p = new THREE.Vector3();
 const UP = new THREE.Vector3(0, 1, 0);
@@ -32,6 +34,8 @@ export class VoxelWorld {
     this.spots = []; // interactable things: { x, z, r, text, fn }
     this.lights = [];
     this.lodDist = 48;
+    // the front doors swing only while the near models (which have them cut out) can show
+    this.doors = world.doors = new Doors(world, { active: () => this.lodDist > 0 });
   }
 
   // cached builder result + geometry
@@ -142,6 +146,15 @@ export class VoxelWorld {
       const ls = (meta.lights || []).slice().sort((a, b2) => (a.kind === 'porch' ? -1 : 0) - (b2.kind === 'porch' ? -1 : 0)).slice(0, 3);
       for (const l of ls) this.lights.push({ pos: new THREE.Vector3(l.x, l.y, l.z).applyMatrix4(M), color: l.color, radius: Math.min(9, l.radius || 6), kind: l.kind === 'beacon' ? 'beacon' : 'lamp' });
       at.voxel = { mesh, meta, M };
+      // the hinged front doors (only with worker-built models: their near meshes have the doorways cut)
+      if (job && !job.error && meta.doors?.length) this.doors.add(b.id, M, yaw, meta, at.walls);
+      // the voxel houses' porch decks and stoops are walked on at floor height (not down in the yard)
+      if (!at.generic) {
+        for (const d of meta.porch || []) {
+          const c = new THREE.Vector3((d.x0 + d.x1) / 2, d.y, (d.z0 + d.z1) / 2).applyMatrix4(M);
+          this.world.physics.addPlatform({ x: c.x, z: c.z, yaw, w: d.x1 - d.x0, l: d.z1 - d.z0, y0: c.y, surface: 'wood', kind: 'deck' });
+        }
+      }
       // voxel-only kinds bring their own walkable decks, posts and extra solids
       if (at.generic) {
         const PH = this.world.physics;
@@ -175,8 +188,10 @@ export class VoxelWorld {
     if (lod.userData.near) return;
     const far = lod.levels[lod.levels.length - 1];
     far.distance = this.lodDist;
-    lod.addLevel(lodMesh(geo, sharedVoxelMaterial()), 0);
+    const near = lodMesh(geo, sharedVoxelMaterial());
+    lod.addLevel(near, 0);
     lod.userData.near = true;
+    this.doors.attach(lod.userData.id, near);
   }
 
   // Stream the 1/16 m meshes in from workers, nearest to the player's start first. Test runs
@@ -354,6 +369,11 @@ export class VoxelWorld {
     this.spots.push({ x, z, r, text, action, ...extra });
   }
 
+  // a fixed fence (kind picket | rail) from (ax, az) to (bx, bz), drawn by fences3d.js
+  fenceRun(kind, ax, az, bx, bz) {
+    (this.fenceRuns ||= []).push({ kind, ax, az, bx, bz });
+  }
+
   // ------------------------------------------------------------ fall-fair extras
   dress(physprops) {
     const P = L.POI;
@@ -421,8 +441,12 @@ export class VoxelWorld {
     dressPlaces(this, physprops);
     // the pumpkin carving contest at the west end of Main Street
     dressContest(this, physprops);
-    // and the 2D street clutter (fences, bins, stalls...), fitted around everything above
+    // and the 2D street clutter (bins, stalls...), fitted around everything above
     this.world.deco2d = placeDeco2D(this);
+    // the fences (the knockable ones placed with the clutter, the fixed runs above) as voxel geometry
+    const fences = new Fences3D(this.world, { items: this.world.deco2d.items, runs: this.fenceRuns || [] });
+    this.scene.add(fences.group);
+    this.world.fences = fences;
   }
 
   // (older name, kept for callers that still use it)

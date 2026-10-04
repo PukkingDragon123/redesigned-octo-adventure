@@ -12,7 +12,8 @@ self.onmessage = (e) => {
   const near = !!e.data.near;
   for (const job of e.data.jobs) {
     try {
-      const r = buildVoxelBuilding(job.spec);
+      // (the near model has its front doors cut out to swing on their own: world/doors.js)
+      const r = buildVoxelBuilding(near ? { ...job.spec, cutDoors: true } : job.spec);
       if (near) {
         const hi = arrays(meshVox(r.vox, { size: r.size, origin: r.origin, jitter: 0, compact: true }));
         self.postMessage({ id: job.id, hi }, buffers(hi));

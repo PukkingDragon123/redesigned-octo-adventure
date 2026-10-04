@@ -41,8 +41,15 @@ export class SpriteAtlas {
   get(name) {
     return this.frames.get(name);
   }
-  finalize() {
+  // mips: coverage-keeping mip levels (frames must sit 4 px apart on a 4 px grid, see decoPaint.js),
+  // so sprites far away neither shimmer nor thin out, and glowing pixels stay glowing
+  finalize({ mips = false } = {}) {
     this.texture = pixTexture(this.pix, { repeat: false, mips: false });
+    if (mips) {
+      const t = this.texture;
+      t.mipmaps = coverMips(t.image.data, this.size, this.size);
+      t.minFilter = THREE.NearestMipmapNearestFilter;
+    }
     this.texture.name = 'spriteAtlas';
     return this.texture;
   }
@@ -50,6 +57,32 @@ export class SpriteAtlas {
     const s = this.size;
     return [f.x / s, f.y / s, (f.x + f.w) / s, (f.y + f.h) / s];
   }
+}
+
+// Mip chain for alpha-tested pixel art: a texel is solid when at least 2 of its 4 children are,
+// takes their mean colour and the alpha of the first one (alpha marks glowing pixels).
+export function coverMips(data, w, h) {
+  const out = [{ data, width: w, height: h }];
+  let src = data, sw = w, sh = h;
+  while (sw > 1 || sh > 1) {
+    const dw = Math.max(1, sw >> 1), dh = Math.max(1, sh >> 1);
+    const dst = new Uint8Array(dw * dh * 4);
+    for (let y = 0; y < dh; y++) for (let x = 0; x < dw; x++) {
+      let n = 0, r = 0, g = 0, b = 0, a = 0;
+      for (let q = 0; q < 4; q++) {
+        const o = (Math.min(sh - 1, 2 * y + (q >> 1)) * sw + Math.min(sw - 1, 2 * x + (q & 1))) * 4;
+        if (src[o + 3] < 128) continue;
+        if (!n) a = src[o + 3];
+        n++; r += src[o]; g += src[o + 1]; b += src[o + 2];
+      }
+      if (n < 2) continue;
+      const o = (y * dw + x) * 4;
+      dst[o] = r / n; dst[o + 1] = g / n; dst[o + 2] = b / n; dst[o + 3] = a;
+    }
+    out.push({ data: dst, width: dw, height: dh });
+    src = dst; sw = dw; sh = dh;
+  }
+  return out;
 }
 
 const VERT = /* glsl */ `
@@ -245,6 +278,12 @@ void main() {
   vec4 mvPosition = viewMatrix * worldPosition;
   vec3 transformedNormal = (viewMatrix * vec4(vNormal, 0.0)).xyz;
   gl_Position = projectionMatrix * mvPosition;
+  #if defined(FLAT_DEPTH) && !defined(DEPTH_PASS)
+  // the whole card takes the depth of a point just in front of its anchor (props stand on their
+  // spot like a cut-out: they never dig into the slope under them or the wall behind them)
+  vec4 cc = projectionMatrix * viewMatrix * vec4(center + normalize(cameraPosition - center) * min(0.45, 0.3 * iSize.x), 1.0);
+  if (cc.w > 0.2) gl_Position.z = clamp(cc.z / cc.w, -1.0, 1.0) * gl_Position.w;
+  #endif
   worldPosition.xyz += uSunDir * 0.35;
   ${SHADOW_VERT}
 }
@@ -255,6 +294,7 @@ ${LIGHT_PARS_FRAG}
 ${NOISE_GLSL}
 uniform sampler2D tAtlas;
 uniform float uTexel;
+uniform float uMoonRim;
 varying vec2 vUv;
 varying vec3 vWorldPos;
 varying vec3 vNormal;
@@ -266,10 +306,18 @@ void main() {
   if (vWorldPos.y < uClipY) discard;
   if (vMisc.y > 0.0 && bayer4(gl_FragCoord.xy) < vMisc.y) discard;
   vec3 albedo = tx.rgb * vTint.rgb;
-  vec3 n = normalize(vNormal);
   float shadow = getShadowMask();
   // the sprites carry their own banded shading, so the scene light is kept flatter than on voxels
+  #ifdef STEADY_LIGHT
+  // ...and the same from every side (no brightening and darkening as the camera goes round):
+  // as if each card half faced the sky and half the sun
+  vec2 sh = normalize(uSunDir.xz + vec2(1e-4, 0.0));
+  vec3 n = normalize(vec3(sh.x * 0.8, 0.6, sh.y * 0.8));
+  float ndl = 0.74;
+  #else
+  vec3 n = normalize(vNormal);
   float ndl = max(dot(n, uSunDir), 0.0) * 0.5 + 0.5;
+  #endif
   vec3 light = hemiAmbient(n) * 1.0 + uSunColor * shadow * ndl * 0.62 + pointLightsAt(vWorldPos, n, 0.7);
   vec3 col = albedo * light;
   vec3 v = normalize(uCamPos - vWorldPos);
@@ -279,7 +327,7 @@ void main() {
     vec2 t = vec2(uTexel, 0.0);
     float e = step(texture2D(tAtlas, vUv + t.xy).a, 0.3) + step(texture2D(tAtlas, vUv - t.xy).a, 0.3)
             + step(texture2D(tAtlas, vUv + t.yx).a, 0.3) + step(texture2D(tAtlas, vUv - t.yx).a, 0.3);
-    col += (albedo * 0.7 + 0.06) * vec3(0.42, 0.52, 0.95) * min(e, 1.0) * uNight;
+    col += (albedo * 0.7 + 0.06) * vec3(0.42, 0.52, 0.95) * min(e, 1.0) * uNight * uMoonRim;
   }
   // glowing pixels (eyes, wisps, firefly tails) and whole-sprite glow
   float glow = max(step(tx.a, 0.8), vMisc.x);
@@ -296,8 +344,10 @@ varying vec2 vMisc;
 void main() { if (texture2D(tAtlas, vUv).a < 0.3) discard; gl_FragColor = vec4(1.0); }
 `;
 
+// opts: flatDepth (cards drawn at their anchor's depth), steadyLight (lit alike from every side),
+// moonRim (strength of the cool silhouette rim at night)
 export class SpriteBatch {
-  constructor(atlas, max = 256, { castShadow = true, upright = 0.85 } = {}) {
+  constructor(atlas, max = 256, { castShadow = true, upright = 0.85, flatDepth = false, steadyLight = false, moonRim = 1 } = {}) {
     this.atlas = atlas;
     this.max = max;
     this.upright = upright;
@@ -315,8 +365,11 @@ export class SpriteBatch {
     g.instanceCount = 0;
     g.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 1e6);
     this.geo = g;
-    this.uniforms = worldUniforms({ tAtlas: { value: atlas.texture }, uTexel: { value: 1 / atlas.size } });
-    this.material = new THREE.ShaderMaterial({ uniforms: this.uniforms, vertexShader: BATCH_VERT, fragmentShader: BATCH_FRAG, lights: true, side: THREE.DoubleSide });
+    this.uniforms = worldUniforms({ tAtlas: { value: atlas.texture }, uTexel: { value: 1 / atlas.size }, uMoonRim: { value: moonRim } });
+    const defines = {};
+    if (flatDepth) defines.FLAT_DEPTH = '';
+    if (steadyLight) defines.STEADY_LIGHT = '';
+    this.material = new THREE.ShaderMaterial({ uniforms: this.uniforms, vertexShader: BATCH_VERT, fragmentShader: BATCH_FRAG, lights: true, side: THREE.DoubleSide, defines });
     this.depth = new THREE.ShaderMaterial({ uniforms: this.uniforms, vertexShader: BATCH_VERT, fragmentShader: BATCH_DEPTH_FRAG, side: THREE.DoubleSide, defines: { DEPTH_PASS: '' } });
     this.mesh = new THREE.Mesh(g, this.material);
     this.mesh.customDepthMaterial = this.depth;

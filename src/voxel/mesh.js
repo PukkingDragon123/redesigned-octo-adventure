@@ -5,7 +5,7 @@
 // costs a few bit operations per 32 voxels; after that all the work is per exposed face (colour,
 // AO, greedy merge), never per voxel. That keeps big high-resolution buildings cheap to mesh.
 import * as THREE from 'three';
-import { FLAGS, EMIT, GLASS, vhash } from './vox.js';
+import { FLAGS, EMIT, GLASS, UNLIT, vhash } from './vox.js';
 
 const LIN = new Float32Array(256);
 for (let i = 0; i < 256; i++) {
@@ -59,7 +59,8 @@ const AX = [
   { a: 2, u: 0, v: 1, flip: 1 },
 ];
 
-// opts: size (m per voxel), origin [x,y,z] in voxel units (the pivot), greedy, jitter, seed, aoStrength, compact
+// opts: size (m per voxel), origin [x,y,z] in voxel units (the pivot), greedy, jitter, seed, aoStrength, compact,
+// ao (false: no ambient occlusion at all, so thin things like fences merge into far fewer quads)
 export function meshVox(vox, opts = {}) {
   const size = opts.size ?? 0.05;
   const [ox, oy, oz] = opts.origin ?? [vox.w / 2, 0, vox.d / 2];
@@ -67,6 +68,7 @@ export function meshVox(vox, opts = {}) {
   const greedy = opts.greedy ?? jitter === 0;
   const seed = opts.seed ?? 0;
   const aoK = opts.aoStrength ?? 1;
+  const aoOn = opts.ao !== false;
   // compact: small integer vertex formats (needs a whole-voxel origin); see the output below
   const compact = !!opts.compact && (opts.origin ?? [0, 0, 0]).every((v) => Number.isInteger(v));
   const W = vox.w, H = vox.h, D = vox.d;
@@ -193,7 +195,7 @@ export function meshVox(vox, opts = {}) {
         const m = i + j * du;
         maskC[m] = at(x, y, z);
         let ao = 0xff;
-        if (front) {
+        if (front && aoOn) {
           ao = 0;
           // the 8 cells around the one in front of the face, in its (u, v) plane
           const fx = x + (a === 0 ? s : 0), fy = y + (a === 1 ? s : 0), fz = z + (a === 2 ? s : 0);
@@ -262,7 +264,7 @@ export function meshVox(vox, opts = {}) {
     const fl = c & FLAGS;
     const r = LIN[(c >> 16) & 255], g = LIN[(c >> 8) & 255], b = LIN[c & 255];
     const tint = 1 + jit;
-    const em = fl & EMIT ? 1 : fl & GLASS ? 0.5 : 0;
+    const em = fl & EMIT ? 1 : fl & GLASS ? (fl & UNLIT ? 0.375 : 0.5) : 0;
     const did = detailOf(c);
     // side faces: u = the horizontal in-plane axis, v = y; top/bottom: (x, z)
     const fu = a === 0 ? 2 : 0, fv = a === 1 ? 2 : 1;

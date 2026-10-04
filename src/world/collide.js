@@ -166,4 +166,11 @@ export class PhysicsWorld {
     }
     return hit;
   }
+
+  // Move, turn or resize a box made by addBox (swinging doors, walls notched for a doorway). It stays
+  // in the hash cells it was first added to, so keep it within a metre or so of where it started.
+  updateBox(b, { x = b.x, z = b.z, yaw = b.yaw, w = b.hw * 2, l = b.hl * 2 } = {}) {
+    b.x = x; b.z = z; b.yaw = yaw; b.c = Math.cos(yaw); b.s = Math.sin(yaw); b.hw = w / 2; b.hl = l / 2;
+    return b;
+  }
 }

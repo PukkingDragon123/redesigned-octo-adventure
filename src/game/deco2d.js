@@ -149,8 +149,9 @@ export class Deco2D {
       const atlas = new SpriteAtlas(pg.size);
       atlas.pix.data.set(pg.data);
       for (const f of pg.frames) { const fr = { ...f, page: pi }; atlas.frames.set(f.name, fr); byName.set(f.name, fr); }
-      atlas.finalize();
-      const B = new SpriteBatch(atlas, 1500, { castShadow: true, upright: 0.9 });
+      atlas.finalize({ mips: true });
+      // cut-outs standing on their spot, lit alike from every side, only a hint of the night rim
+      const B = new SpriteBatch(atlas, 1500, { castShadow: true, upright: 0.9, flatDepth: true, steadyLight: true, moonRim: 0.3 });
       B.mesh.name = `deco2d:${pi}`;
       this.game.scene.add(B.mesh);
       return B;
@@ -202,7 +203,10 @@ export class Deco2D {
       geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
       geo.setIndex(idx);
       geo.computeBoundingSphere();
-      const mesh = new THREE.Mesh(geo, createFlatMaterial(atlas.texture));
+      const mat = createFlatMaterial(atlas.texture);
+      // (mats and towels lie a hair above the ground or deck: pulled forward so they never flicker in it)
+      mat.polygonOffset = true; mat.polygonOffsetFactor = -2; mat.polygonOffsetUnits = -4;
+      const mesh = new THREE.Mesh(geo, mat);
       mesh.receiveShadow = true;
       mesh.name = `deco2d:cards:${pi}`;
       mesh.matrixAutoUpdate = false;
@@ -268,6 +272,8 @@ export class Deco2D {
     if (D.mode === 'burst') {
       it.st = 3;
       this.burst(it, vx, vz, speed);
+    } else if (D.mode === 'tip' && D.anchored && it.tip > 1.2) {
+      // a fence panel or sign already lying flat just gets ridden over (it doesn't stand back up)
     } else if (D.mode === 'tip') {
       let tx = vx / sp, tz = vz / sp;
       if (D.anchored) {
@@ -552,7 +558,7 @@ export class Deco2D {
     const rx = this.rx, rz = this.rz;
     for (const B of BS) B.begin();
     for (const it of this.items) {
-      if (it.st === 3) continue;
+      if (it.st === 3 || it.fence3d) continue; // (the fences are voxel geometry: world/fences3d.js)
       const dx = it.x - cp.x, dy = it.y - cp.y, dz = it.z - cp.z;
       const far = FAR[it.kind] ?? (it.goods ? SMALL : 90);
       const dd = dx * dx + dy * dy + dz * dz;
