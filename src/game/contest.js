@@ -398,7 +398,7 @@ export class Contest {
     const n = crowd.length + actors.length;
     if (!n) return 0;
     const at = _v.set(CONTEST.x - 4, (g.playerPos?.y ?? 0) + 1, CONTEST.z);
-    this.sfx('crowd_hooray', at, 0.45 + level * 0.15);
+    this.sfx('crowd_hooray', at, 0.65 + level * 0.15);
     if (kids) g.wait(0.15).then(() => this.sfx('kids_yay', at, 0.35));
     if (level > 1) g.wait(0.4).then(() => this.sfx('applause', at, 0.35));
     return n;
