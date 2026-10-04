@@ -264,7 +264,7 @@ export class Contest {
           b.say(pick(LINES.score), 2200);
           await w(0.6);
           for (const o of near) o.a.react(o.cfg.kid ? 'yay' : 'love');
-          this.cheer(1, { except: b });
+          this.cheer(1, { except: b, force: true });
           await w(1.6);
         }
         await w(0.8);
@@ -330,7 +330,7 @@ export class Contest {
       b.say(pick(LINES.announce), 2800);
       a.say(2);
       await w(1.3);
-      this.cheer(1);
+      this.cheer(1, { force: true });
       await w(2.2);
     }
     a.play('hostWalk', 'neutral');
@@ -367,7 +367,7 @@ export class Contest {
       a.say(1.5);
       await w(0.7);
       o.a.play('present', 'proud');
-      this.cheer(1, { except: o });
+      this.cheer(1, { except: o, force: true });
       await w(2.4);
     }
     a.play('hostWalk', 'neutral');

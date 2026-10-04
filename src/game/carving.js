@@ -649,6 +649,8 @@ export class Carving {
       if (gus) { this.place(gus, T.x + 3.8, T.z - 2.4, -PI / 2); gus.play('hostWalk', 'neutral'); }
       if (ingrid) { this.place(ingrid, T.x - 3.2, T.z - 2.2, PI / 2); ingrid.play('clipboard', 'neutral'); }
       const pumpkin = this.pumpkin;
+      if (this.rosette) this.rosette.visible = false; // (pinned on when Gus announces it)
+      S.temp.push({ remove: () => { if (this.rosette) this.rosette.visible = true; } });
       if (r.collapse && pumpkin) pumpkin.scale.set(1, 1, 1);
       // Hank presents his work
       await S.cam(V(T.x - 3.4, y + 2.0, T.z - 4.4), V(T.x, y + 0.95, T.z - 0.3), 0, 46);
@@ -702,6 +704,7 @@ export class Carving {
       if (ingrid) ingrid.react('clap');
       S.sfx(r.ribbon === 'part' ? 'quest_done' : 'upgrade', { volume: 0.7 });
       this.award(r);
+      if (this.rosette) this.rosette.visible = true;
       if (r.ribbon !== 'part') g.effects.confetti(P.x, P.y + 1.2, P.z - 0.4, r.ribbon === 'first' ? 60 : 36);
       H.play(r.ribbon === 'part' ? 'shrug' : 'cheer', r.ribbon === 'part' ? 'sheepish' : 'laugh');
       if (r.ribbon !== 'part') H.react('yay');
@@ -746,9 +749,10 @@ export class Carving {
     if (c?.collapsed) m.scale.set(1.18, 0.5, 1.18);
     grp.add(m);
     this.pumpkin = m;
+    this.rosette = null;
     if (mask && c.ribbon) {
       const rr = CM.prizeRosette({ color: (RIBBONS[c.ribbon] || RIBBONS.part).color });
-      const rm = voxMesh(meshVox(rr.vox, { size: rr.size, origin: rr.origin }), sharedVoxelMaterial());
+      const rm = (this.rosette = voxMesh(meshVox(rr.vox, { size: rr.size, origin: rr.origin }), sharedVoxelMaterial(), { cast: false }));
       rm.position.set(0.5, 0.005, 0.2);
       rm.rotation.y = 0.4;
       grp.add(rm);
@@ -757,7 +761,16 @@ export class Carving {
     if (T.light) T.light.on = !!mask && !c.collapsed;
   }
   update(dt, near) {
-    if (near) this.sync();
+    // (built in idle time, so riding into the contest never hitches)
+    if (near && !this.pending) {
+      const c = this.st?.carving;
+      const key = c?.mask ? `${c.mask}|${c.ribbon}|${c.collapsed ? 1 : 0}` : 'plain';
+      if (key !== this.key) {
+        this.pending = true;
+        const idle = window.requestIdleCallback || ((f) => setTimeout(f, 30));
+        idle(() => { this.pending = false; this.sync(); }, { timeout: 1200 });
+      }
+    }
     if (this.group) this.group.visible = near;
   }
 
