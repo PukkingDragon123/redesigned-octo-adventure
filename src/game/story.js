@@ -13,6 +13,7 @@ import * as FOOD from '../voxel/models/food.js';
 import { meshVox, fragmentVox } from '../voxel/mesh.js';
 import { Vox } from '../voxel/vox.js';
 import { voxMesh, sharedVoxelMaterial } from '../render/voxelMaterial.js';
+import * as BED from './bedtime.js';
 
 // a plate of voxel food that steams; returns { mesh, res, steam: [world points] }
 function voxelFood(g, builder, x, y, z, yaw = 0) {
@@ -765,12 +766,171 @@ export class Story {
     g.mode = 'menu';
     g.sound.play('day_end');
     await new Promise((res) => g.menus.summary(res));
-    await this.scene(async (S) => {
-      await S.fade(1, 1.2);
-      S.music('night');
-      await S.wait(0.8);
-    });
+    await this.bedtime();
     g.newDay();
+  }
+
+  // ---------------------------------------------------------------- bedtime, in Harold's old pajamas
+  // (test entry point: ?scene=bedtime) Hank yawns by the fire, Nana brings Harold's flannel
+  // pajamas, *poof*, nightcap and all; he says goodnight and stretches out on the sofa, she
+  // tucks the quilt round him and turns the lamps down. Ends on black; the morning follows.
+  bedtime() {
+    const g = this.g;
+    const I = g.interior, R = I.room;
+    const A = g.world.atmosphere;
+    const L = (x, y, z) => R.wp(x, y, z); // room-local -> world
+    const first = !this.flag('pajamas');
+    const pick = (a) => a[Math.floor(Math.random() * a.length)];
+    return this.scene(async (S) => {
+      await S.fade(1, 1.0);
+      I.reset();
+      I.stage(true);
+      S.temp.push({ remove: () => I.stage(false) });
+      A.hour = Math.min(23.8, Math.max(A.hour, 21.6));
+      A.cold = 0;
+      g.setBikeVisible(false);
+      g.rider.visible = false;
+      g.villagers.setVisible('grandma', false);
+      S.temp.push({ remove: () => g.villagers.setVisible('grandma', true) });
+      S.music('night');
+      const floor = R.floorY;
+      // Hank by the fire, Nana coming over from the dining table with the folded pajamas
+      const hs = L(2.95, 0, -0.95), ns = L(0.2, 0, 1.4);
+      const H = S.actor('hank', hs.x, hs.z, R.wyaw(-Math.PI / 2), 'idle');
+      H.yaw = H.targetYaw;
+      const N = S.actor('grandma', ns.x, ns.z, R.wyaw(Math.PI / 2), 'carry');
+      const pjRes = BED.pajamaBundle();
+      const pjGeo = meshVox(pjRes.vox, { size: pjRes.size, origin: pjRes.origin, jitter: 0.02 });
+      const bundle = voxMesh(pjGeo, sharedVoxelMaterial());
+      bundle.position.set(0, -0.05, 0.12);
+      N.hold(bundle);
+      S.temp.push({ remove: () => { bundle.parent?.remove(bundle); pjGeo.dispose(); } });
+      // the quilt that goes over him later (room-local, so it sits on the sofa whatever way the cabin faces)
+      const qRes = BED.sleepQuilt();
+      const qGeo = meshVox(qRes.vox, { size: qRes.size, origin: qRes.origin, jitter: 0 });
+      const quilt = voxMesh(qGeo, R.mat, { cast: false, receive: true });
+      quilt.position.set(qRes.at.x, 0, qRes.at.z);
+      quilt.visible = false;
+      R.root.add(quilt);
+      S.temp.push({ remove: () => { R.root.remove(quilt); qGeo.dispose(); } });
+      // the two lamps by the sofa, put back the way they were afterwards
+      const lamps = [R.lights[1], R.lights[2]].filter(Boolean);
+      const lampBase = lamps.map((l) => l.intensity);
+      S.temp.push({ remove: () => lamps.forEach((l, i) => (l.intensity = lampBase[i])) });
+
+      const wide = [L(-0.5, 2.3, 1.9), L(2.7, 0.95, -0.9)];
+      await S.cam(wide[0], wide[1], 0, 48);
+      S.cam(L(0.2, 2.15, 1.3), wide[1], 4, 46);
+      const nw = N.walkTo([L(1.4, 0, 1.05), L(2.3, 0, 0.7), L(2.75, 0, 0.1)], 1.0, 'carry');
+      await S.fade(0, 1.2);
+      // a big yawn
+      H.play('yawn', 'sleepy');
+      S.sfx('bone_rattle', { volume: 0.3 });
+      await S.faceShot(H, { dist: 2.4, side: 0.5, dur: 0.8, fov: 42 });
+      await S.say('hank', first ? "*Yaaawn.* ...Huh. I didn't know skeletons could get sleepy. My bones feel all heavy." : pick(['*Yaaawn.* Bedtime already? My knees are clacking.', '*Yaaawn.* I pedalled so much today my femurs are humming.', '*Yaaawn.* ...Sorry, Nana. My jaw nearly came off that time.']), { actor: H, expr: 'sleepy' });
+      H.play('idle');
+      await Promise.race([nw, S.wait(3)]);
+      if (N.path) { N.path = null; N.pos.copy(L(2.75, 0, 0.1)); }
+      N.faceTowards(H.pos.x, H.pos.z);
+      H.faceTowards(N.pos.x, N.pos.z);
+      H.lookAt(N);
+      N.lookAt(H);
+      await S.cam(L(1.0, 1.75, -0.3), L(2.85, 1.05, -0.45), 0.8, 44);
+      await S.say('grandma', first ? "Of course you're sleepy, dear, you've been up and down every hill in Maple Cove. Here: Harold's old flannel pajamas. Freshly washed. Mostly." : 'Your pajamas have been warming by the fire, dear. In you go.', { actor: N, expr: 'happy' });
+      // she hands them over...
+      N.play('offer');
+      await S.wait(0.4);
+      N.hold(null);
+      H.hold(bundle, 'R');
+      H.play('hold', 'surprised');
+      N.play('idle');
+      if (first) await S.say('hank', "Pajamas? For me? I haven't worn pajamas since... well, since I had skin.", { actor: H, expr: 'surprised' });
+      else await S.wait(0.5);
+      // ...and *poof*: striped flannel, a nightcap and slippers
+      S.sfx('flash_pop');
+      S.sfx('magic', { volume: 0.6 });
+      g.effects.poof?.(H.pos.x, H.pos.y + 0.9, H.pos.z, { scale: 1.3, color: [1, 0.96, 0.9], count: 9 });
+      g.effects.poof?.(H.pos.x, H.pos.y + 0.3, H.pos.z, { scale: 0.9, color: [1, 0.96, 0.9], count: 5 });
+      await S.wait(0.15);
+      H.hold(null, 'R');
+      bundle.parent?.remove(bundle);
+      H.char = 'hankPajamas';
+      H.play('idle', 'happy');
+      H.react('spin');
+      g.effects.confetti?.(H.pos.x, H.pos.y + 1.4, H.pos.z, 12);
+      await S.wait(0.8);
+      await S.faceShot(H, { dist: 2.4, side: 0.5, up: 0.2, dur: 0.6, fov: 42 });
+      await S.say('hank', first ? 'Ooh! Striped flannel! And a nightcap with a pompom! I look like a very distinguished candy cane.' : pick(['Ahh, flannel. Best part of the day.', 'Nightcap: on. Pompom: magnificent.', "Snug as a bug in a... well, a bug's skeleton."]), { actor: H, expr: 'happy' });
+      if (first) {
+        N.react('laugh');
+        await S.cam(L(1.0, 1.75, -0.3), L(2.85, 1.05, -0.45), 0.6, 44);
+        await S.say('grandma', "Harold wore those every winter for forty years. He'd be tickled they're keeping somebody's bones warm again.", { actor: N, expr: 'laugh' });
+      }
+      await S.faceShot(H, { dist: 2.3, side: 0.5, up: 0.2, dur: 0.5, fov: 42 });
+      await S.say('hank', first ? 'Goodnight, Nana. And... thank you. For all of it.' : 'Goodnight, Nana.', { actor: H, expr: 'happy' });
+      this.flag('pajamas', true);
+      // he stretches out on the sofa, head on the armrest by the lamp
+      await S.cam(L(3.95, 1.85, -0.35), L(2.15, 0.62, -1.45), 0, 46);
+      const stand = L(2.95, 0, -1.5), lie = L(2.15, 0, -1.5);
+      const lw = H.walkTo([stand], 1.0, 'walk');
+      H.lookAt(null);
+      await Promise.race([lw, S.wait(1.2)]);
+      H.path = null;
+      H.groundSnap = false;
+      H.yaw = H.targetYaw = R.wyaw(Math.PI);
+      H.play('sofaSleep', 'sleepy');
+      S.sfx('whoosh', { volume: 0.3, pitch: 0.8 });
+      const from = H.pos.clone();
+      await S.anim(0.5, (k) => {
+        H.pos.x = from.x + (lie.x - from.x) * k;
+        H.pos.z = from.z + (lie.z - from.z) * k;
+        H.pos.y = floor + 0.46 * k + Math.sin(k * Math.PI) * 0.3;
+      });
+      H.pos.set(lie.x, floor + 0.46, lie.z);
+      S.sfx('creak', { volume: 0.5 });
+      S.sfx('bone_rattle', { volume: 0.25 });
+      // Nana tucks Harold's quilt round him
+      const nt = N.walkTo([L(2.9, 0, -0.45), L(2.95, 0, -1.2)], 0.9, 'walk');
+      await Promise.race([nt, S.wait(2.2)]);
+      if (N.path) { N.path = null; N.pos.copy(L(2.95, 0, -1.2)); }
+      N.faceTowards(H.pos.x, H.pos.z);
+      N.lookAt(null);
+      N.play('tuck');
+      quilt.visible = true;
+      S.sfx('whoosh', { volume: 0.35, pitch: 0.7 });
+      await S.anim(0.7, (k) => {
+        const e = 1 - Math.pow(1 - k, 3);
+        quilt.scale.set(0.45 + 0.55 * e, 1, 0.45 + 0.55 * e);
+        quilt.position.y = (1 - e) * 0.45;
+      });
+      quilt.scale.set(1, 1, 1);
+      quilt.position.y = 0;
+      const qt0 = g.time;
+      S.every(() => void (quilt.scale.y = 1 + Math.sin((g.time - qt0) * 1.4) * 0.015));
+      await S.wait(0.6);
+      await S.say('grandma', first ? "Sleep tight, dear. Don't let the bedbugs bite. ...Not that there's much left to bite." : pick(['Sleep tight, dear. Sweet dreams.', "Night night. I'll have breakfast waiting. For the squirrels, mostly.", 'Goodnight, Hank. Mind you wake up this time.']), { actor: N, expr: first ? 'laugh' : 'happy' });
+      // and the lamps go down
+      N.play('idle');
+      const nl = N.walkTo([L(2.5, 0, -0.1)], 0.8, 'walk');
+      await Promise.race([nl, S.wait(1.4)]);
+      N.path = null;
+      N.faceTowards(L(2.0, 0, 0.12).x, L(2.0, 0, 0.12).z);
+      N.play('reach');
+      await S.cam(L(-1.3, 2.55, 2.4), L(2.4, 0.75, -1.3), 0, 50);
+      await S.wait(0.5);
+      S.sfx('ui_click', { volume: 0.6 });
+      await S.anim(1.2, (k) => lamps.forEach((l, i) => (l.intensity = lampBase[i] * (1 - 0.82 * k))));
+      N.play('idle');
+      H.setExpr('sleepy');
+      H.showEmote('zzz', 6);
+      S.sfx('snore', { volume: 0.4 });
+      S.cam(L(-0.6, 2.4, 1.6), L(2.3, 0.7, -1.4), 5, 48);
+      await S.wait(2.4);
+      S.sfx('big_snore', { volume: 0.3 });
+      await S.wait(1.0);
+      await S.fade(1, 1.6);
+      await S.wait(0.5);
+    });
   }
 
   // ---------------------------------------------------------------- the ending
