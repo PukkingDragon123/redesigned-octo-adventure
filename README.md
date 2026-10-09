@@ -37,14 +37,16 @@ audio starts.
 
 | Keyboard | Gamepad | Action |
 | --- | --- | --- |
-| W and S / Up and Down, one after the other | Right stick turned in circles, or RT and LT one after the other | Pedal. You turn the crank yourself: each time the other foot goes down it winds on half a turn (holding a key does nothing). Spin faster to go faster: the three gears change by themselves, and top gear wants quick feet. Stop spinning and Bessie coasts; nothing pedals for you. Spinning flat out winds Hank (he slows down and wobbles until he gets his breath back) |
+| W and S / Up and Down, one after the other | Right stick turned in circles, or RT and LT one after the other | Pedal. You turn the crank yourself: each time the other foot goes down it winds on half a turn (holding a key does nothing). Spin faster to go faster, as fast as you can crank: an easy spin cruises about 10.5 m/s in top gear, flat out (3-4 turns a second) about 18-20 m/s, more downhill. Stop spinning and Bessie coasts; nothing pedals for you. Spinning hard winds Hank fast (a full sprint lasts 10-15 seconds; the bone under the crank is his wind): spent, he slows down and wobbles until coasting gets his breath back |
+| Z / X (or , / .) | D-pad down / up (LB down too) | Change gear. Bottom gear spins up easily and climbs but tops out early; top gear is a slog to wind up and flies. The gears change by themselves until you shift by hand; from then on they're yours (Settings: Gears puts them back on automatic). The crank shows the gear (an A while automatic) |
 | Mouse: drag round the crank | | Pedal with the mouse: drag in circles round the chainring, bottom right (backwards back-pedals) |
 | S / Down held on its own | LT held | Brake (a back-pedal on the stick or the crank brakes too); hold when stopped to roll backwards |
 | A D / Left Right arrows | Left stick | Steer (lean into corners; too fast on grass and the tyres let go); spin in the air |
+| W A S D / arrows (on foot) | Left stick | Walk: a key (or the stick all the way out) jogs, half a push walks briskly, a gentle one ambles. Indoors Hank keeps to a walk |
 | Space | A | Hold to crouch, let go to bunny hop (crouch about a third of a second for the full pop; pop right at a ramp lip to go higher); jump on foot |
 | Q / Right Ctrl | Left stick down | Lean back: wheelie (while pedalling), manual (coasting), backflip (in the air). Tap the brake to save a loop-out |
 | F | Left stick up | Lean forward: stoppie (with the brake), nose manual (coasting), frontflip (in the air); on foot, kicks whatever kickable thing is right there (F or Q) |
-| Shift | RB | Drift (let go for a little kick); hold to run on foot (or push the stick right out) |
+| Shift | RB | Drift (let go for a little kick); on foot, hold to sprint |
 | Shift + direction (in the air) | RB + stick | Poses: Superman, No-Hander, Can-Can, Nothin', Skull Toss. Let go before you land |
 | E / Enter | X | Talk, deliver, hop off / on the bike, pick things up; on foot next to a pumpkin, a bin or a tree: kick it (F / Q / B too) |
 | R | Y | Ring the bell |
@@ -61,13 +63,17 @@ crooked one wobbles; a bad one is a bail.
 On a touch screen, on-screen controls appear after your first tap: a floating
 steering stick on the left (pull it back to wheelie, push it up for a stoppie)
 and, bottom right, Bessie's crank: circle your thumb round the chainring to
-pedal (backwards brakes), with brake, hop, trick and bell buttons round it.
-The crank also shows the gear (the chain hops across three rear cogs), whether
-the pedals are catching the back wheel, and how winded Hank is (the brass glows
-red and the chain sags). Touch riding gets assists (steadier balance, forgiving
-landings, no slide-outs). On foot the stick walks (a gentle push ambles, all
-the way out runs) and there is a jump button; a paper tag shows whatever you can
-do right here (talk, hop on, kick the pumpkin...): tap it.
+pedal (backwards brakes; spin it as fast as you dare and the crank arm smears),
+with the gear shifter beside it (up and down arrows, the gear number between
+them), and brake, hop, bell and a TRICK button (Hank pulling a wheelie) round it.
+The crank also shows the gear (the chain hops across three rear cogs, the number
+sits top left), whether the pedals are catching the back wheel, and how winded
+Hank is: the bone along the bottom is his wind (red once he's puffed, cracked
+when he's spent), the brass glows red and the chain sags. Touch riding gets
+assists (steadier balance, forgiving landings, no slide-outs). On foot the stick
+walks (a gentle push ambles, half way out walks briskly, all the way out jogs),
+hold SPRINT to run flat out, and there is a jump button; a paper tag shows
+whatever you can do right here (talk, hop on, kick the pumpkin...): tap it.
 
 Crash with cocoa in the crate and the cups go flying: every cup loses a chunk of
 its heat, more the harder the crash.
@@ -203,7 +209,9 @@ its heat, more the harder the crash.
   speaker. Everything is drawn on one integer pixel grid so it stays crisp.
   Orders and customers live in a spiral notebook. Touch controls have a
   floating thumb stick (pull back to wheelie, push to stoppie), a pixel-art
-  crank to spin (`crank.js`), brake, hop and one trick button.
+  crank to spin as fast as you like (`crank.js`, with Hank's wind as a bone and
+  the gear number on it), a gear shifter, brake, hop and one trick button (a
+  skeleton pulling a wheelie); on foot a jump and a sprint button.
 - **Rendering** (`src/render`): three.js renders at native resolution (or
   above it on high-DPI screens) into an HDR target. A post pass adds height fog
   with sun scattering, cartoon depth-edge outlines, screen-space god rays,
@@ -211,8 +219,9 @@ its heat, more the harder the crash.
   bring back the old low-resolution, dithered pixel look. Water uses planar
   reflections.
 - **Game** (`src/game`): bicycle physics with momentum, a crank the rider turns
-  himself through three auto gears (`src/core/pedal.js` turns keys, sticks and
-  drags into crank turns), a stamina pool that winds Hank,
+  himself (no cadence cap) through three gears that shift by themselves or by
+  hand (`src/core/pedal.js` turns keys, sticks and drags into crank turns), a
+  stamina pool that a sprint empties in 10-15 seconds,
   spring-lean cornering and grip limits, wheelies, manuals and stoppies as
   balancing inverted pendulums, crouch-and-pop hops, air spins and flips with
   landing checks, foot dabs, kerb bumps and comic bails; skill tracking
