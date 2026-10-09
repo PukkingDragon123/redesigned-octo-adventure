@@ -85,21 +85,41 @@ its heat, more the harder the crash.
   at Harold's photos, talk to Nana.
 - Ride into a tree and Hank goes flying while the tree shakes its leaves loose.
 - The village is holding a pumpkin carving contest on Main Street, the first
-  thing you see riding in from Nana's. Gus hosts it with a dented tin megaphone:
-  he strolls the tables, leans in, hums, points and has his say, calls the
-  finished pumpkins and hands out the hourly ribbons, and the crowd cheers
-  (pennants, jumping kids, "Hooray!"). The first time Hank shows up, the whole
-  crowd screams and hides behind the tables and hay bales; they drift back to
-  their pumpkins as they get used to him.
+  thing you see riding in from Nana's, and it's packed: the regulars plus two
+  dozen and more townsfolk (`src/game/crowd.js`, dressed from a seed by
+  `crowdGen.js`: kids, elders with canes, toques, earmuffs, scarves, plaid
+  jackets, puffy vests) carving at the tables, chatting and laughing on the
+  sidewalks, sipping cider, taking photos, wandering from table to table,
+  playing tag through the leaf pile, strolling hand in hand, walking a dog on a
+  leash and pushing a stroller. Gus hosts it in the game itself with a dented
+  tin megaphone: he strolls the tables (the townsfolk's too), leans in, hums,
+  points and has his say, calls the finished pumpkins and hands out the hourly
+  ribbons, and the crowd cheers and claps (pennants, jumping kids, "Hooray!").
+  Near the camera the townsfolk are full rigs; further off each is one baked
+  mesh, and the lot is hidden when the contest is out of sight.
+- The first time Hank rides in, the whole contest freezes mid-action and
+  stares: no screams, just silence and crickets, heads turning to follow him, a
+  dropped pumpkin lid, a toddler peeking out from behind a parent. Nana sent a
+  carrier of extra cocoa in Bessie's crate: walk up and *offer cocoa* to each of
+  them; they hesitate, take it, sip and warm right up, and the people round them
+  thaw too. Once the eight regulars have a cup, Gus comes over: "Any skeleton who
+  brings cocoa can carve at my contest." (`?scene=villagePanic` rides in,
+  `?scene=cocoaRound` starts frozen, `?scene=carveInvite` jumps to Gus's
+  invitation; `node tools/crowdtest.mjs` checks the crowd and the round.)
 - Carve a pumpkin at Hank's own little table at the west end of the contest
-  (once a day): drag on the big pixel pumpkin to cut (knife for thin lines,
-  scoop for big bites, undo, an optional faint stencil), 75 seconds on the
-  clock. Cuts glow with the candle inside; ring a bit and it drops in; cut right
-  across the face and it caves in. Gus and Dr. Ingrid judge it on eyes, mouth,
-  nose, symmetry, how much is cut and style, and Gus announces the ribbon. The
-  face is saved and stands on the table as a glowing carved voxel pumpkin.
-  (`?scene=carve` opens it straight away; `node tools/carvetest.mjs` checks the
-  scoring, the saved mask and the models.)
+  (once a day). Gus makes a request (spooky, funny or cute for a style bonus, or
+  copy his design off a little card for a likeness bonus), then scoop out the
+  guts with a few drags, and carve: a pixel knife saws under your finger or
+  mouse, chunks of pumpkin fly, the gouge takes big bites, undo, an optional
+  faint stencil, 75 seconds on the clock. Ring a bit and it drops in; cut right
+  across the face and it caves in. At the end the lights go down, Hank lowers a
+  candle in and strikes a match, the face flickers alight and the street goes
+  "ooooh". Gus and Dr. Ingrid judge it on eyes, mouth, nose, symmetry, how much
+  is cut, style and the request, Gus announces the ribbon and it lands in a
+  flurry of leaves. The face is saved and stands on the table as a glowing
+  carved voxel pumpkin. (`?scene=carve` opens it straight away;
+  `node tools/carvetest.mjs` checks the scoring, the requests, the saved mask
+  and the models.)
 - On the first evening a stray cat is out walking the road home; go slowly and
   she comes to you, rush her and she bolts.
 - Chat with villagers for favours: Agnes's three lost cats, lost glasses, puck,
@@ -152,7 +172,8 @@ its heat, more the harder the crash.
 - **Villagers** (`src/game/npcs.js`, `npcBrain.js`, `npcRoutines.js`,
   `npcNav.js`, `npcPets.js`): everyone is terrified of the walking skeleton at
   first. They scream, drop things, run for cover, hide and peek, faint, throw
-  a boot or blow a whistle. Trust (saved per villager) grows with hot
+  a boot or blow a whistle (except at the pumpkin contest, where they freeze
+  and watch). Trust (saved per villager) grows with hot
   deliveries, a polite bell, calm riding and favours, from terrified to wary,
   friendly and fan. They keep daily routines by the hour (opening shop,
   sweeping, fishing, jogging, gossiping at the café, going home at night) and
@@ -236,7 +257,7 @@ These are useful while developing:
 - `?start=intro` plays the new-game story
 - `?scene=cabinArrive|cabinSofa|loadCargo` plays the cabin and cargo-loading
   beats; `?scene=lumberCamp|funeral|yearsPass|revival|nanaFindsHank` plays one part of
-  the prologue; `?scene=cabinNight|morning|garageReveal|villagePanic|catRescue|ending`
+  the prologue; `?scene=cabinNight|morning|garageReveal|villagePanic|cocoaRound|carveInvite|catRescue|ending`
   plays a later story beat (add `&autotalk` to advance the dialogue by itself)
 - `?loaderonly=60` shows just the loading scene for 60 seconds (`&pop=1` drops
   the head sooner)

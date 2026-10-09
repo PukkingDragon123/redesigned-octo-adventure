@@ -971,6 +971,8 @@ export class Carving {
   action(p, slow) {
     const g = this.g, T = this.spot();
     if (!T || !slow || this.busy || !this.st?.flags?.village1 || g.interior?.active) return null;
+    // (not while the contest is frozen at the sight of him: Gus invites him once it thaws)
+    if (this.contest.round?.isActive() || this.contest.inviting) return null;
     if (hyp(p.x - T.x, p.z - T.z) > 2.3 || Math.abs(p.y - T.y) > 2.5) return null;
     if (this.doneToday()) return { text: 'Admire my pumpkin', fn: () => this.admire() };
     return { text: 'Carve a pumpkin', fn: () => this.start() };

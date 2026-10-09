@@ -582,6 +582,8 @@ export class Contest {
       if (g.onFoot) g.walker.yaw = Math.atan2(a.pos.x - p.x, a.pos.z - p.z);
       g.playerChar?.react('offerCup');
       g.sound.play('cup', { volume: 0.6 });
+      // (the cup leaves his hand even if something else interrupts the reaching out)
+      g.wait(1.6).then(() => { const ch = g.playerChar; if (ch?.held.R?.userData.cup) ch.hold(null, 'R'); });
       if (t.b) {
         await Promise.race([t.b.acceptCocoa(), g.wait(7)]);
         if (R.isKey(t.b.key)) {

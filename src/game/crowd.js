@@ -242,6 +242,7 @@ export class Crowd {
     a.root.visible = false;
     m.a = a;
     m.yaw = a.yaw;
+    this.fixHeld(m);
     // the far view: their home pose, and a cheer
     m.imp = { stand: bake(a, m.homePose), cheer: bake(a, m.role === 'elder' ? 'cane' : 'cheer') };
     for (const k of ['stand', 'cheer']) if (m.imp[k]) { m.imp[k].visible = k === 'stand'; m.base.add(m.imp[k]); }
