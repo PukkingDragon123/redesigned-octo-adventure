@@ -2571,23 +2571,53 @@ export function sidewalk({ len = 4, w = 2.6, seed = 1 } = {}) {
   const R = rng(seed * 13 + 1);
   const slabT = [];
   for (let i = 0; i < 8; i++) slabT.push([CONCRETE, CONCRETE_L, tone(CONCRETE, -0.04), tone(CONCRETE, 0.03)][Math.floor(R() * 4)]);
-  for (let z = 0; z < Wd; z++) for (let x = 0; x < L; x++) {
-    const curb = z >= Wd - 2;
-    for (let y = 0; y < H; y++) {
-      let c;
-      if (curb) c = y === H - 1 ? (z === Wd - 1 ? GRANITE : GRANITE_L) : GRANITE;
-      else if (y < H - 1) c = CONCRETE_D;
-      else {
-        const sx = Math.floor(x / 10), sz = z < (Wd - 2) / 2 ? 0 : 1;
-        const seam = x % 10 === 0 || z === Math.floor((Wd - 2) / 2);
-        c = seam ? CONCRETE_D : slabT[(sx * 2 + sz) % slabT.length];
+  // granite curb stones of uneven lengths, each a shade of its own, joints between
+  const curbJ = new Set();
+  for (let x = Math.floor(R() * 6); x < L; x += 9 + Math.floor(R() * 7)) curbJ.add(x);
+  let stone = 0;
+  const half = Math.floor((Wd - 2) / 2);
+  for (let x = 0; x < L; x++) {
+    if (curbJ.has(x)) stone++;
+    const gT = stone % 3 === 1 ? tone(GRANITE, 0.04) : stone % 3 === 2 ? tone(GRANITE, -0.03) : GRANITE;
+    for (let z = 0; z < Wd; z++) {
+      const curb = z >= Wd - 2;
+      for (let y = 0; y < H; y++) {
+        let c;
+        if (curb) {
+          if (curbJ.has(x) && y >= H - 2) c = tone(GRANITE, -0.18);
+          else if (y === H - 1) c = z === Wd - 1 ? gT : (x + stone) % 7 === 0 ? tone(GRANITE_L, 0.05) : GRANITE_L; // a worn, lighter top
+          else c = y === H - 2 && z === Wd - 1 ? tone(gT, -0.05) : gT;
+        } else if (y < H - 1) c = CONCRETE_D;
+        else {
+          // flagstones a metre long, two across, the odd one weathered or patched darker
+          const sx = Math.floor(x / 10), sz = z < half ? 0 : 1;
+          const seam = x % 10 === 0 || z === half;
+          c = seam ? CONCRETE_D : slabT[(sx * 2 + sz) % slabT.length];
+          // the gutter edge of each slab and the shop-front edge collect grime
+          if (!seam && (z === 0 || z === Wd - 3) && (x + z * 3) % 4 === 0) c = tone(c, -0.06);
+        }
+        v.set(x, y, z, c);
       }
-      v.set(x, y, z, c);
     }
   }
-  // a few fallen leaves and a crack or two
-  for (let i = 0; i < 5; i++) v.set(Math.floor(R() * L), H, Math.floor(R() * (Wd - 3)), [0xc8401e, 0xe8781e, 0xd8a032][i % 3]);
-  for (let i = 0; i < 2; i++) { const x = 2 + Math.floor(R() * (L - 4)), z = 1 + Math.floor(R() * (Wd - 5)); v.set(x, H - 1, z, CONCRETE_D); v.set(x + 1, H - 1, z + 1, CONCRETE_D); }
+  // hairline cracks wandering across a slab or two
+  for (let i = 0; i < 2 + Math.floor(R() * 2); i++) {
+    let x = 2 + Math.floor(R() * (L - 6)), z = 1 + Math.floor(R() * (Wd - 5));
+    const dx = R() < 0.5 ? 1 : -1;
+    for (let k = 0; k < 3 + Math.floor(R() * 4); k++) {
+      if (z >= Wd - 2 || z < 0) break;
+      v.set(x, H - 1, z, tone(CONCRETE_D, -0.08));
+      if (R() < 0.6) x += dx; else z += 1;
+    }
+  }
+  // a dark spot or two (spilt cocoa, old gum)
+  for (let i = 0; i < 2; i++) v.set(1 + Math.floor(R() * (L - 2)), H - 1, 1 + Math.floor(R() * (Wd - 4)), tone(CONCRETE, -0.16));
+  // moss and grass tufts in the seams at the shop-front edge, fallen leaves drifted against the curb
+  for (let x = 0; x < L; x += 10) if (R() < 0.6) { v.set(x, H, 0, 0x6a7a34); if (R() < 0.5) v.set(x, H, 1, 0x7e8c3c); }
+  for (let i = 0; i < 7; i++) {
+    const z = i < 4 ? Wd - 3 - Math.floor(R() * 2) : Math.floor(R() * (Wd - 3));
+    v.set(Math.floor(R() * L), H, z, [0xc8401e, 0xe8781e, 0xd8a032, 0x9e3b1b][i % 4]);
+  }
   return finish(v, MID, { origin: [L / 2, 0, Wd / 2], radius: 0.1, meta: { top: H * MID } });
 }
 

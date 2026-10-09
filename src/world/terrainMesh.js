@@ -4,7 +4,7 @@ import { G, worldUniforms, LIGHT_PARS_VERT, SHADOW_VERT, LIGHT_PARS_FRAG, NOISE_
 import { SEA, SEA_GLSL, buildSeaTexture } from './water.js';
 import { pixTexture, dataTexture } from '../render/textures.js';
 import { grassTex, dirtTex, litterTex, rockTex, sandTex, gravelTex, asphaltTex } from '../art/groundtex.js';
-import { H_RES } from './terrain.js';
+import { H_RES, ROAD_SPAN } from './terrain.js';
 import { WORLD_HALF, VILLAGE_FLAT, MAIN_ST, CROSSWALKS, SIDE_STREETS } from './layout.js';
 
 const VERT = /* glsl */ `
@@ -38,6 +38,7 @@ uniform sampler2D tAsphalt;
 uniform sampler2D uPaint;
 uniform vec4 uPaintRect;
 uniform sampler2D uSplatTex;
+uniform sampler2D uRoadTex;
 uniform vec4 uVillage;
 varying vec3 vWorldPos;
 varying vec3 vNormal;
@@ -93,21 +94,95 @@ void main() {
   if (an.y > 0.75) ruv = uv;
   if (sp.g > 0.2 + dn * 0.6) col = tex(tRock, ruv);
 
-  // roads & paths: a crisp edge with a little wobble, a darker worn rim, lighter wheel-worn middle
+  // roads & paths. The road frame (signed distance across the nearest road, its style) is read
+  // at the texel centre, so tracks and grooves come out as whole pixels running along the road.
   bool village = wp.x > uVillage.x && wp.x < uVillage.y && wp.y > uVillage.z && wp.y < uVillage.w;
   float re = sp.r - (0.4 + (dn - 0.5) * 0.16);
+  vec2 wq = (texel + 0.5) / 32.0;
+  float across = 99.0, style = 0.0, rut = 0.0, bare = 0.0;
+  if (re > -0.08) {
+    vec2 rf = texture2D(uRoadTex, (wq + uWorldHalf) / (2.0 * uWorldHalf)).rg;
+    if (rf.r < 0.985) { across = (rf.r * 255.0 - 128.0) / 127.0 * ${ROAD_SPAN.toFixed(1)}; style = rf.g; }
+  }
+  bool framed = across < 50.0;
+  float ad = abs(across);
   if (re > 0.0) {
-    col = village ? tex(tGravel, uv) : tex(tDirt, uv);
-    col *= re < 0.09 ? 0.84 : (sp.r > 0.97 ? 1.04 : 1.0);
+    bare = 1.0;
+    float h1 = hash12(floor(texel / 2.0) + 7.0), h2 = hash12(texel + 1.7);
+    vec3 dirt = tex(tDirt, uv);
+    // gravel in the village and on the country roads, dirt on the trails, pale grit on footpaths
+    col = (village || style > 0.9) ? tex(tGravel, uv) : dirt;
+    if (framed && style < 0.15) col = mix(dirt, vec3(0.24, 0.19, 0.13), 0.4); // (scene colours are linear)
+    float lum = dot(dirt, vec3(0.3, 0.55, 0.15));
+    vec3 pk = mix(dirt, vec3(lum) * vec3(1.12, 0.94, 0.76), 0.55) * 0.86;
+    if (framed) {
+      // wheel tracks: two ruts on lanes and roads, one worn line down the middle of a trail or path
+      bool twin = style > 0.5;
+      float rw = style > 0.9 ? 1.05 : 0.8;
+      float tc = twin ? abs(ad - rw) : ad;
+      float thw = twin ? 0.32 : (style < 0.15 ? 0.34 : 0.4);
+      float edge = thw + (h1 - 0.5) * 0.09;
+      if (tc < edge) {
+        rut = 1.0 - smoothstep(edge - 0.12, edge, tc);
+        // packed soil (a footpath's worn line is pale and smooth instead)
+        col = style < 0.15 ? mix(col, vec3(lum) * vec3(1.25, 1.1, 0.9), 0.45) : pk;
+        // tyre grooves: whole-pixel lines along the track, broken where the tread skipped
+        float k = floor(across * 32.0);
+        float g = hash12(vec2(k, 3.1 + style * 7.0));
+        float run = vnoise(wq * vec2(1.3, 1.1) + k * 0.37);
+        if (g > 0.7 && run > 0.32) col *= 0.74;
+        else if (g < 0.1 && run > 0.45) col *= 1.12;
+        // the bank of the track: a pixel of darker spoil along its rim
+        if (tc > edge - 0.05) col *= 0.82;
+      } else if (twin && ad < rw - thw) {
+        // the crown between the ruts: loose stones, and a ragged strip of grass on the country roads
+        if (style > 0.9 && vnoise(wq * 2.2 + 5.0) * 0.6 + h1 * 0.4 > 0.58 - (rw - thw - ad) * 0.4) col = tex(tGrass, uv) * 0.92;
+        else if (h2 > 0.93) col *= 1.18;
+      }
+    }
+    // the edge: loose stones and a darker worn rim, grass tufts reaching in, leaves blown off the forest floor
+    if (re < 0.1) {
+      col *= 0.86;
+      float cell = hash12(floor(texel / 2.0) + 3.3);
+      if (cell > 0.9) { vec2 q = mod(texel, 2.0); col = vec3(0.26, 0.24, 0.21) * (q.y < 0.5 ? (q.x < 0.5 ? 1.3 : 1.0) : 0.55); }
+    }
+    float blade = hash12(vec2(texel.x, floor(texel.y / 3.0)) + 11.0);
+    if (re < 0.075 && blade > 0.35 + re * 7.0) col = tex(tGrass, uv) * (blade > 0.8 ? 1.15 : 0.95);
+    float leafy = smoothstep(0.04, 0.3, sp.a);
+    if (leafy > 0.0 && re < 0.05 + 0.22 * leafy && vnoise(wq * 3.1 + 2.0) * 0.7 + h1 * 0.3 > 0.62 - re) col = tex(tLitter, uv + 0.23);
+    // a granite edging along the village lanes
+    if (village && framed && style > 0.5 && style < 0.9 && re < 0.05) col = h2 > 0.2 ? vec3(0.36, 0.35, 0.33) : vec3(0.17, 0.16, 0.15);
   } else if (re > -0.06) col *= 0.88; // grass trodden flat along the verge
   // village road paint: asphalt on Main Street, a dashed centre line, zebra crossings, stop lines
   vec2 puv = (wp - uPaintRect.xy) / (uPaintRect.zw - uPaintRect.xy);
   if (puv.x > 0.0 && puv.y > 0.0 && puv.x < 1.0 && puv.y < 1.0) {
     vec4 pt = texture2D(uPaint, puv);
-    if (pt.b > 0.5) col = tex(tAsphalt, uv);
+    if (pt.b > 0.5) {
+      col = tex(tAsphalt, uv);
+      bare = 1.0;
+      // the lanes' wheel paths, polished a shade darker, an oil drip down the middle of each lane
+      if (framed) {
+        float tc = min(abs(ad - 1.15), abs(ad - 2.85));
+        if (tc < 0.4) col *= 0.9;
+        if (abs(ad - 2.0) < 0.12 && hash12(floor(texel / 2.0) + 7.0) > 0.82) col *= 0.7;
+        rut = 0.6 * (1.0 - step(0.45, abs(ad - 3.6))); // (puddles gather along the gutters)
+      }
+    }
     float wear = vnoise(wp * 3.1) * 0.6 + hash12(floor(texel / 2.0)) * 0.4;
     if (pt.r > 0.5 && wear < 0.82) col = vec3(0.86, 0.85, 0.8);
     if (pt.g > 0.5 && wear < 0.85) col = vec3(0.88, 0.7, 0.22);
+  }
+  // puddles after rain: in the ruts and hollows of roads, lanes and yards, growing with the wet;
+  // matte (they take the sky's colour, no shine), a dark wet rim, rain rings popping on them
+  if (bare > 0.0 && uWet > 0.04) {
+    float pn = vnoise(wq * 0.85 + 3.3) * 0.62 + vnoise(wq * 2.6 - 1.1) * 0.38;
+    float thr = 1.0 - uWet * (0.2 + 0.24 * rut);
+    if (pn > thr) {
+      col = mix(col * 0.3, uSkyAmb * 0.45 + vec3(0.02, 0.025, 0.035), 0.6);
+      if (pn < thr + 0.02) col *= 0.75;
+      else if (hash12(texel + floor(uTime * 7.0) * 1.31) > 0.994) col += vec3(0.25, 0.27, 0.3);
+      col /= mix(1.0, 0.62, uWet); // (the wet darkening below is already in the water's colour)
+    } else if (pn > thr - 0.035) col *= 0.82; // the damp ring round it
   }
 
   // wet ground darkens + gets a sky sheen
@@ -131,6 +206,7 @@ void main() {
 // ---- road paint for the village (4 texels per metre): r white, g yellow, b asphalt
 const PAINT_RECT = [VILLAGE_FLAT.x0 - 6, VILLAGE_FLAT.z0 - 6, VILLAGE_FLAT.x1 + 6, VILLAGE_FLAT.z1 + 2];
 const PAINT = { value: null };
+const ROADTEX = { value: null };
 function buildPaintTexture() {
   const [x0, z0, x1, z1] = PAINT_RECT, K = 4;
   const w = Math.round((x1 - x0) * K), h = Math.round((z1 - z0) * K);
@@ -148,7 +224,22 @@ function buildPaintTexture() {
   const tex = new THREE.DataTexture(d, w, h, THREE.RGBAFormat);
   tex.magFilter = tex.minFilter = THREE.NearestFilter;
   tex.needsUpdate = true;
+  PAINT_DATA = { d, w, h };
   return tex;
+}
+let PAINT_DATA = null;
+const K_PAINT = 4;
+// Main Street's (and its side streets') asphalt at (x, z), as the terrain shader paints it
+export function isAsphalt(x, z) {
+  const P = PAINT_DATA;
+  if (!P) return false;
+  const i = Math.floor((x - PAINT_RECT[0]) * K_PAINT), j = Math.floor((z - PAINT_RECT[1]) * K_PAINT);
+  return i >= 0 && j >= 0 && i < P.w && j < P.h && P.d[(j * P.w + i) * 4 + 2] > 127;
+}
+// inside the village, where the roads are gravel lanes rather than dirt
+const VBOX = [VILLAGE_FLAT.x0 - 10, VILLAGE_FLAT.x1 + 10, VILLAGE_FLAT.z0 - 12, VILLAGE_FLAT.z1 + 10];
+export function inVillage(x, z) {
+  return x > VBOX[0] && x < VBOX[1] && z > VBOX[2] && z < VBOX[3];
 }
 
 export function createTerrainMaterial() {
@@ -163,7 +254,8 @@ export function createTerrainMaterial() {
     tAsphalt: { value: pixTexture(asphaltTex()) },
     uPaint: PAINT,
     uPaintRect: { value: new THREE.Vector4(...PAINT_RECT) },
-    uVillage: { value: new THREE.Vector4(VILLAGE_FLAT.x0 - 10, VILLAGE_FLAT.x1 + 10, VILLAGE_FLAT.z0 - 12, VILLAGE_FLAT.z1 + 10) },
+    uRoadTex: ROADTEX,
+    uVillage: { value: new THREE.Vector4(...VBOX) },
     ...SEA,
   });
   return new THREE.ShaderMaterial({ uniforms, vertexShader: VERT, fragmentShader: FRAG, lights: true });
@@ -183,7 +275,8 @@ export function createWorldTextures(terrain) {
   G.uHRes.value = H_RES;
   const seaTex = buildSeaTexture(terrain);
   PAINT.value = buildPaintTexture();
-  return { heightTex, splatTex, seaTex, paintTex: PAINT.value };
+  ROADTEX.value = dataTexture(terrain.roadInfo, terrain.rn, terrain.rn, { format: THREE.RGFormat, linear: true });
+  return { heightTex, splatTex, seaTex, paintTex: PAINT.value, roadTex: ROADTEX.value };
 }
 
 export function createTerrainMeshes(terrain, material, chunkCells = 40) {

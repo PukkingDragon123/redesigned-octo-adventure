@@ -38,7 +38,7 @@ export class RigSpecies {
     });
     this.ns = ns;
     this.max = max;
-    this.geometry = mergeParts(B, def.size, jitter, name.length);
+    this.geometry = mergeParts(B, def.size, jitter, name.length, this.slot);
     this.faces = this.geometry.userData.faces;
     // texel 0: per-creature params (x = fade), then three texels per posed part
     this.stride = (1 + ns * 3) * 4;
@@ -101,13 +101,15 @@ export class RigSpecies {
   }
 }
 
-// one geometry for all parts, each vertex tagged with its bone
-function mergeParts(bones, size, jitter, seed) {
+// one geometry for all parts, each vertex tagged with its bone's matrix slot in the pose texture
+// (not the bone index: bones without a part, like a deer's missing tail tip or a songbird's
+// missing eyelids, have no matrix there, so every later part would read its neighbour's)
+function mergeParts(bones, size, jitter, seed, slot) {
   const geos = [];
   bones.forEach((b, i) => {
     if (!b.part) return;
     const g = meshVox(b.part.vox, { size, origin: b.part.origin, jitter, seed: seed + i });
-    geos.push({ g, bone: i });
+    geos.push({ g, bone: slot[i] });
   });
   let nv = 0, ni = 0, faces = 0;
   for (const { g } of geos) { nv += g.attributes.position.count; ni += g.index.count; faces += g.userData.faces; }

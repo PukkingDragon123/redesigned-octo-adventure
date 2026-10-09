@@ -141,18 +141,36 @@ export function dirtTex() {
   p.wrap = true;
   const rng = new RNG(21);
   bandFill(p, [0x5a4232, 0x664c3a, 0x735642, 0x80604a], 7, 1.0, 0.15);
-  // two packed wheel tracks run along the tile (roads are textured in world space, any direction reads fine)
-  for (let i = 0; i < 26; i++) {
-    const x = rng.int(0, S), y = rng.int(0, S), l = rng.int(6, 16);
-    p.hline(x, x + l, y, rng.pick([0x8a6c50, 0x84664a]));
-    p.hline(x + 2, x + l - 2, y + 1, 0x6e5240);
-  }
+  // (no wheel tracks painted in: the terrain shader runs ruts and tyre grooves along each road)
+  // clods: lumps of soil in loose crumbles, a lit top-left pixel and a shadow under each
+  scatterClusters(rng, 16, [3, 6], 7, (x, y) => {
+    x = Math.round(x); y = Math.round(y);
+    const c = rng.pick([0x735642, 0x80604a, 0x6c5140]), w = rng.int(1, 2);
+    p.rect(x, y, w + 1, 2, c);
+    p.set(x, y, shade(c, 0.24));
+    p.hline(x, x + w, y + 2, shade(c, -0.42));
+  });
   // pebble beds
   scatterClusters(rng, 9, [4, 9], 7, (x, y) => pebble(p, rng, x, y, rng.pick([0x9a8c78, 0x8a7d6b, 0xa89b84, 0x7a6e5e]), rng.int(2, 3), 2));
-  // a couple of cracks
+  // grit: light specks in pairs
+  for (let i = 0; i < 70; i++) {
+    const x = rng.int(0, S), y = rng.int(0, S);
+    p.set(x, y, rng.pick([0x9a8670, 0x8e7a62]));
+    if (rng.chance(0.5)) p.set(x + 1, y, 0x4a3426);
+  }
+  // a few dry cracks
   for (let i = 0; i < 5; i++) {
     let x = rng.int(0, S), y = rng.int(0, S);
     for (let k = 0; k < rng.int(5, 10); k++) { p.set(x, y, 0x3e2a1c); p.set(x + 1, y, 0x8a6c50); x += rng.int(0, 1); y += rng.pick([-1, 0, 1]); }
+  }
+  // a root breaking the surface: dark, with a lit ridge along the top
+  for (let i = 0; i < 2; i++) {
+    let x = rng.int(0, S), y = rng.int(0, S);
+    const dy = rng.pick([-1, 1]);
+    for (let k = 0; k < rng.int(10, 18); k++) {
+      p.set(x, y, 0x4a2e1c); p.set(x, y + 1, 0x2e1c12); p.set(x, y - 1, 0x7a5434);
+      x += 1; if (rng.chance(0.3)) y += dy;
+    }
   }
   scatterClusters(rng, 3, [2, 3], 5, (x, y, c) => leaf(p, rng, x, y, LEAF_FAMILIES[(c + 1) % LEAF_FAMILIES.length][rng.int(0, 2)], 0));
   return p;

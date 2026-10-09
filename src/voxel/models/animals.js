@@ -94,13 +94,16 @@ function tube(v, pts, radii, col) {
     }
   }
 }
-// a straight leg hanging from its pivot: len voxels, w wide; col(t) with t = 0 at the top, 1 at the foot
-function leg(len, w, col, round = false) {
-  const v = new Vox(w, len, w);
-  for (let y = 0; y < len; y++) {
-    const t = 1 - y / Math.max(1, len - 1);
+// a straight leg hanging from its pivot: len voxels, w wide; col(t) with t = 0 at the top, 1 at the foot.
+// `above` voxels carry on up past the pivot: a stub buried in the parent (the body at the hip, the
+// thigh at the knee) so however far the leg swings, its top never opens a gap at the joint
+function leg(len, w, col, round = false, above = 0) {
+  const v = new Vox(w, len + above, w);
+  for (let y = 0; y < len + above; y++) {
+    const t = Math.max(0, 1 - y / Math.max(1, len - 1));
     for (let z = 0; z < w; z++) for (let x = 0; x < w; x++) {
-      if (round && w > 2 && (x === 0 || x === w - 1) && (z === 0 || z === w - 1) && t > 0.35) continue;
+      // (round legs keep square corners in their last two voxels: a knuckle the shin tucks into)
+      if (round && w > 2 && (x === 0 || x === w - 1) && (z === 0 || z === w - 1) && t > 0.35 && y > 1) continue;
       v.set(x, y, z, typeof col === 'function' ? col(t, x, z) : col);
     }
   }
@@ -132,6 +135,32 @@ const wing = (span, chord, col) => {
 };
 
 // ---------------------------------------------------------------- deer, moose, fox, raccoon
+// Where a leg of width w hangs from the body voxels bv (centre cx, cy, cz) at z: the lowest,
+// widest pivot (no higher than the body's middle, no lower than the old fixed hips at -H * k)
+// at which the leg's whole top stays buried in the body as it swings through a stride, snapped
+// so the leg's voxels line up with the body's. Returns [x, y, z] from the body centre.
+function hipIn(bv, cx, cy, cz, z, w, W, H, k = 0.2) {
+  const inside = (x, y, zz) => !!bv.get(Math.floor(x + cx + 0.5), Math.floor(y + cy + 0.5), Math.floor(zz + cz + 0.5));
+  const snap = (v, c, odd) => Math.round(v + c - (odd ? 0 : 0.5)) - c + (odd ? 0 : 0.5);
+  const odd = w % 2 === 1;
+  const hz = snap(z, cz, odd);
+  const r = w / 2 - 0.25;
+  const fits = (hx, hy) => {
+    for (let a = -0.8; a <= 0.81; a += 0.2) {
+      const ca = Math.cos(a), sa = Math.sin(a);
+      for (const px of [-r, 0, r]) for (const pz of [-r, 0, r]) for (const py of [-0.25, -1]) {
+        if (!inside(hx + px, hy + py * ca - pz * sa, hz + py * sa + pz * ca)) return false;
+      }
+    }
+    return true;
+  };
+  const y0 = snap(-H * k, cy - 0.5, true);
+  for (let hy = y0; hy <= 0.5; hy += 1) {
+    for (let hx = snap(W / 2 - w / 2 - 0.3, cx, odd); hx >= w / 2 + 0.4; hx -= 1) if (fits(hx, hy)) return [hx, hy, hz];
+  }
+  return [snap(W / 2 - w / 2 - 1, cx, odd), 0.5, hz];
+}
+
 // o: L, H, W body (voxels); neck, neckR; headLen, headW; legU, legL, legW; colours...
 function quad(o) {
   const { L, H, W } = o;
@@ -155,18 +184,20 @@ function quad(o) {
   if (o.ringBack) bv.paint((x, y, z, c) => (y > cy + H * 0.3 && c === o.coat ? o.dark : undefined));
   parts.body = { vox: bv, origin: [cx + 0.5, cy + 0.5, cz + 0.5] };
   const s = o.size;
-  // legs: hips sit inside the body
-  const hx = W / 2 - 1.3 - (o.legW > 2 ? 0.2 : 0);
-  const hipF = [hx, -H * 0.2, L * 0.3], hipH = [hx, -H * 0.15, -L * 0.3];
+  // legs: the hips are buried in the body, found from its voxels (below), and the thigh reaches
+  // down from there to a knee at the height the leg was drawn with, so the stance is unchanged
   const legW = o.legW || 2;
-  const upper = (hind) => leg(o.legU + 1, legW + (hind && o.thigh ? 1 : 0), (t, x, z) => (o.legHi && t > 0.6 ? o.legHi : t < 0.4 ? o.coat : o.legC || o.coat), true);
-  const lower = leg(o.legL, Math.min(2, legW), (t) => (t > 0.86 ? o.hoof : o.sock && t > (o.sockHi ?? 0.25) ? o.sock : o.legLo || o.legC || o.coat));
-  parts.FLu = parts.FRu = upper(false);
-  parts.HLu = parts.HRu = upper(true);
+  const hipF = hipIn(bv, cx, cy, cz, L * 0.3, legW, W, H), hipH = hipIn(bv, cx, cy, cz, -L * 0.3, legW, W, H, 0.05);
+  const uF = Math.round(o.legU + hipF[1] + H * 0.2), uH = Math.round(o.legU + hipH[1] + H * 0.15); // hip to knee (whole voxels), per pair
+  const upper = (u, hy) => leg(u + 1, legW, (t, x, z) => (o.legHi && t > 0.6 ? o.legHi : t < 0.4 ? o.coat : o.legC || o.coat), true, Math.max(1, Math.min(3, Math.floor(H / 2 - hy - 2.5))));
+  const lower = leg(o.legL, Math.min(2, legW), (t) => (t > 0.86 ? o.hoof : o.sock && t > (o.sockHi ?? 0.25) ? o.sock : o.legLo || o.legC || o.coat), false, 1);
+  parts.FLu = parts.FRu = upper(uF, hipF[1]);
+  parts.HLu = parts.HRu = upper(uH, hipH[1]);
   parts.FLl = parts.FRl = parts.HLl = parts.HRl = lower;
   at.FLu = [hipF[0], hipF[1], hipF[2]]; at.FRu = [-hipF[0], hipF[1], hipF[2]];
   at.HLu = [hipH[0], hipH[1], hipH[2]]; at.HRu = [-hipH[0], hipH[1], hipH[2]];
-  for (const k of ['FLl', 'FRl', 'HLl', 'HRl']) at[k] = [0, -o.legU, 0];
+  at.FLl = at.FRl = [0, -uF, 0];
+  at.HLl = at.HRl = [0, -uH, 0];
   // neck: rises up and forward from the shoulders
   const nl = o.neck, nr = o.neckR;
   const nv = new Vox(Math.ceil(nr * 2) + 3, nl + Math.ceil(nr * 2) + 3, nl + Math.ceil(nr * 2) + 3);
@@ -201,7 +232,8 @@ function quad(o) {
   return {
     arch: 'quad', size: s, parts, at,
     meta: {
-      kind: o.kind, L1: o.legU * s, L2: o.legL * s, legLen: (o.legU + o.legL) * s, standH: standV * s,
+      // L1 hip to knee (front, hind), L2 knee to hoof; legLen the leg as drawn below the body (gait sizes)
+      kind: o.kind, L1: uF * s, L1h: uH * s, L2: o.legL * s, legLen: (o.legU + o.legL) * s, standH: standV * s,
       hipF: hipF.map((v) => v * s), hipH: hipH.map((v) => v * s), bodyLen: L * s, bodyH: H * s,
       earSplay: o.earSplay ?? 0.55, earTilt: o.earTilt ?? 0, tailDroop: o.tailDroop ?? 1.2, headH: (standV + H * 0.3 + nl) * s,
       radius: Math.max(L, standV + nl) * 0.6 * s,
