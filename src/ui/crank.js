@@ -7,10 +7,13 @@
 //                  down the crank winds on half a turn. Holding a key does nothing.
 //   gamepad        turn the right stick in circles, or alternate RT and LT
 //
-// Nothing turns it but you (see core/pedal.js): stop spinning and Bessie coasts. It also shows
-// what the drivetrain is doing: the chain hops across three rear cogs as the gears change, the
-// spokes behind them run with the real back wheel (so you can see the pedals catch it, or
-// freewheel), and how winded Hank is: the brass heats up red, the chain sags, sweat flicks off.
+// Nothing turns it but you (see core/pedal.js), as fast as you like (spun hard the crank arm
+// smears round in pixel ghosts): stop spinning and Bessie coasts. It also shows what the
+// drivetrain is doing: the chain hops across three rear cogs as the gears change (the gear
+// number sits top left, with an A while the box is automatic), the spokes behind them run with
+// the real back wheel (so you can see the pedals catch it, or freewheel), and how winded Hank
+// is: the bone along the bottom is his wind (it burns red once he's puffed and cracks when
+// he's spent), the brass heats up red, the chain sags, sweat flicks off.
 //
 // Drawn on a small canvas at art resolution and shown at the kit's whole-number scale. The
 // pixels are painted straight into one reused buffer, and only when something visible moved.
@@ -25,6 +28,9 @@ const TEETH = 24, R_TIP = 23.2, R_ROOT = 20.5, R_BODY = 15, R_HUB = 5.5, R_PITCH
 const ARM = 16; // crank arm length
 const COGS = [{ r: 9, n: 13 }, { r: 6.8, n: 10 }, { r: 4.8, n: 7 }]; // gears 1..3 (big to small)
 const RIM0 = 14.5, RIM1 = 16.2;
+const BONE = [2, 60, 44]; // the stamina bone: left end x, top y, length
+// 3x5 digits (and an A) for the gear number
+const DIG = { 1: '010110010010111', 2: '111001111100111', 3: '111001111001111', A: '010101111101101' };
 const TAU = Math.PI * 2;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const wrap = (a) => a - TAU * Math.floor((a + Math.PI) / TAU);
@@ -120,8 +126,12 @@ export class CrankHUD {
     this.drops = Array.from({ length: 6 }, () => ({ x: 0, y: 0, vx: 0, vy: 0, t: 0 }));
     this.dropT = 0;
     // what was drawn last (redraw only on change)
-    this.last = { a: 1e9, w: 1e9, heat: -1, gear: -1, sag: -1, hint: -1, held: -1 };
+    this.last = { a: 1e9, w: 1e9, heat: -1, gear: -1, sag: -1, hint: -1, held: -1, st: -1, smear: -1, auto: -1 };
     this.t = 0;
+    this.angPrev = 0;
+    this.rate = 0; // how fast the crank is going round (rad/s, smoothed): fast, the arm smears
+    this.flash = 0; // a moment of white on the gear number after a shift
+    this.shownGear = 0;
     this.idleT = 0;
     this.wheelPrev = 0;
     this.wheelRate = 0;
@@ -185,10 +195,14 @@ export class CrankHUD {
       this.root.classList.toggle('on', show);
       if (!show) this.letGo();
       this.last.a = 1e9;
+      this.angPrev = input.pedal.angle;
+      this.rate = 0;
     }
     if (!show || dt <= 0) return;
     this.t += dt;
     const a = input.pedal.angle;
+    this.rate += ((a - this.angPrev) / dt - this.rate) * Math.min(1, dt * 12);
+    this.angPrev = a;
     // the key hints: which foot goes down next (hidden on touch screens, and once you've got it)
     const tm = input.lastDevice === 'touch';
     const mode = tm ? 'touch' : input.lastDevice === 'gamepad' ? 'pad' : 'kb';
@@ -222,6 +236,13 @@ export class CrankHUD {
     const heat = b.exhausted ? 4 : clamp(Math.round(tired * 4), 0, 4);
     const sag = Math.round((0.5 + tired * 4.5) * 2) / 2;
     const gear = clamp(b.gear || 1, 1, 3);
+    if (gear !== this.shownGear) { if (this.shownGear) this.flash = 0.3; this.shownGear = gear; }
+    this.flash = Math.max(0, this.flash - dt);
+    const auto = (b.autoGear !== false ? 1 : 0) + (this.flash > 0 ? 2 : 0);
+    // Hank's wind, in 1/40ths (blinking once it's low)
+    const stam = clamp(b.stamina ?? 1, 0, 1);
+    const st = Math.round(stam * 40) + (b.exhausted ? 100 : 0) + ((stam < 0.15 || b.exhausted) && this.t % 0.5 < 0.25 ? 200 : 0);
+    const smear = clamp(Math.floor((Math.abs(this.rate) - 8) / 9), 0, 3); // (an easy spin is ~11 rad/s)
     const hint = tm && this.idleT > 1.5 && b.speed < 1 && this.ptr == null ? (this.t % 1.2 < 0.85 ? 1 : 0) : 0;
     const held = this.ptr != null ? 1 : 0;
     // sweat flicks off the chainring once he's spent
@@ -247,9 +268,13 @@ export class CrankHUD {
     }
     const qa = Math.round((a * 96) / TAU), qw = Math.round((wa * 64) / TAU);
     const L = this.last;
-    if (!drops && qa === L.a && (qw === L.w || Math.abs(this.wheelRate) > 12) && heat === L.heat && gear === L.gear && sag === L.sag && hint === L.hint && held === L.held) return;
-    L.a = qa; L.w = qw; L.heat = heat; L.gear = gear; L.sag = sag; L.hint = hint; L.held = held;
+    if (!drops && qa === L.a && (qw === L.w || Math.abs(this.wheelRate) > 12) && heat === L.heat && gear === L.gear && sag === L.sag && hint === L.hint && held === L.held && st === L.st && smear === L.smear && auto === L.auto) return;
+    L.a = qa; L.w = qw; L.heat = heat; L.gear = gear; L.sag = sag; L.hint = hint; L.held = held; L.st = st; L.smear = smear; L.auto = auto;
     this.draw((qa * TAU) / 96, (qw * TAU) / 64, heat, gear, sag, hint, held, tired);
+    this.drawGear(gear, auto);
+    this.drawBone(stam, !!b.exhausted, st >= 200);
+    this.outline(this.C.ink);
+    this.ctx.putImageData(this.img, 0, 0);
   }
 
   // ---------------------------------------------------------------- painting
@@ -327,6 +352,16 @@ export class CrankHUD {
       this.put(x, y, col);
       this.put(x + O[2 * n], y + O[2 * n + 1], ph < 1 ? C.pin : ph < 3.5 ? C.plate : C.pin);
     }
+    // ---- spun hard, the arm smears round behind itself: a few dark pixel ghosts, sparser and
+    // darker the further back (no soft blur: it's pixel art)
+    const nS = this.last.smear, dir = this.rate < 0 ? -1 : 1;
+    for (let k = nS; k >= 1; k--) {
+      const ga = a - dir * k * 0.3 - Math.PI / 2, gx = Math.cos(ga), gy = Math.sin(ga);
+      const col = this.dsteel[Math.max(0, 3 - k)];
+      for (let s2 = 5; s2 <= ARM + 2; s2 += 1) if ((Math.round(s2) + k) % (k + 1) === 0 || k === 1) this.put(RC[0] + gx * s2, RC[1] + gy * s2, col);
+      const px0 = Math.round(RC[0] + gx * ARM), py0 = Math.round(RC[1] + gy * ARM);
+      for (let dx = -3; dx <= 3; dx += k) this.put(px0 + dx, py0 - 1, this.wood[Math.max(0, 2 - k)]);
+    }
     // ---- the crank arm and its pedal (the pedal stays level)
     const fa = a - Math.PI / 2;
     const ux = Math.cos(fa), uy = Math.sin(fa);
@@ -360,9 +395,41 @@ export class CrankHUD {
       this.put(d.x, d.y, C.dropHi);
       this.put(d.x, d.y + 1, C.drop);
     }
-    // ---- ink outline round everything, then out to the canvas
-    this.outline(this.C.ink);
-    this.ctx.putImageData(this.img, 0, 0);
+  }
+  // ---- the gear number, top left (white for a moment after a shift), with an A while automatic
+  drawGear(gear, auto) {
+    const g = DIG[gear], col = auto & 2 ? this.C.dropHi : this.gold[4], sh = this.gold[1];
+    for (let r = 0; r < 5; r++) for (let k = 0; k < 3; k++) {
+      if (g[r * 3 + k] !== '1') continue;
+      for (let yy = 0; yy < 2; yy++) for (let xx = 0; xx < 2; xx++) this.put(2 + k * 2 + xx, 2 + r * 2 + yy, yy && r === 4 ? sh : col);
+    }
+    if (auto & 1) for (let r = 0; r < 5; r++) for (let k = 0; k < 3; k++) if (DIG.A[r * 3 + k] === '1') this.put(10 + k, 7 + r, this.C.creamD);
+  }
+  // ---- Hank's wind: a bone along the bottom, full and white when he's fresh; puffed, what's left
+  // burns red (and blinks when nearly gone); spent, it's cracked
+  drawBone(stam, spent, blink) {
+    const [x0, y0, L] = BONE, B = this.C;
+    const x1 = x0 + L - 1;
+    const fill = Math.round((L - 6) * stam);
+    const hot = stam < 0.3 || spent;
+    const lit = hot ? this.ringPal[4] : null;
+    const boneC = [px(0x8a7a5e), px(0xd8caa8), px(0xf0e6cc), px(0xfaf4e2)];
+    // knobs: two little balls at each end
+    for (const ex of [x0 + 1, x1 - 1]) for (const ey of [y0 + 1, y0 + 5]) {
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if (dx * dx + dy * dy < 2) this.put(ex + dx, ey + dy, dy < 0 || dx < 0 ? boneC[3] : boneC[2]);
+      this.put(ex + 1, ey + 1, boneC[1]);
+    }
+    // the shaft: lit for the wind he has left, a dark groove for the rest
+    for (let i = 0; i < L - 6; i++) {
+      const x = x0 + 3 + i, on = i < fill && !(blink && hot);
+      for (let y = y0 + 1; y <= y0 + 5; y++) {
+        const edge = y === y0 + 1 ? 0 : y === y0 + 5 ? 2 : 1;
+        const c = on ? (lit ? lit[[4, 3, 1][edge]] : boneC[[3, 2, 1][edge]]) : edge === 0 ? this.dsteel[2] : this.dsteel[1];
+        this.put(x, y, c);
+      }
+    }
+    // spent: a crack across the middle
+    if (spent) for (let y = y0 + 1; y <= y0 + 5; y++) this.put(x0 + (L >> 1) + ((y & 1) ? 1 : 0), y, B.ink);
   }
   put(x, y, c) {
     x = Math.round(x);

@@ -850,6 +850,55 @@ const ICONS = {
     c.ball(12.6, 14.6, 1.4, 2, R.black, { t: 1 }); c.ball(19.4, 14.6, 1.4, 2, R.black, { t: 1 });
     c.line(13, 19, 19, 19, 0x6e3a0e); c.dots([[12, 18], [20, 18]], 0x6e3a0e);
   },
+  // the TRICK button: Hank (skull, red toque, bones) pulling a wheelie on Bessie. Drawn on its
+  // own 32 grid (shown one design pixel to one art pixel on the button)
+  t_wheelie(c) {
+    // Bessie up on her back wheel (~30 degrees), drawn in her own frame: x along the bike, y down
+    const ca = Math.cos(-0.52), sa = Math.sin(-0.52), RH = [9.2, 25.2];
+    const P = (x, y) => [RH[0] + x * ca - y * sa, RH[1] + x * sa + y * ca];
+    const FH = P(14.2, 0), BB = P(6.2, 1.2), seat = P(4.4, -7), head = P(12, -7.2), bar = P(10.6, -10.4), grip = P(8.8, -10.2);
+    streaks(c, [[0.4, 13, 3], [0.6, 17, 2.6], [1.2, 21, 2]]);
+    c.ball(6, 30.8, 4.4, 1.1, R.cloud, { t: 3 });
+    for (const [hx, hy] of [RH, FH]) {
+      c.ring(hx, hy, 3.7, 5.7, R.rubber);
+      c.ring(hx, hy, 3.1, 3.9, R.silver, { spec: false });
+      c.line(hx - 2.6, hy, hx + 2.6, hy, 0x9aa2ae);
+      c.line(hx, hy - 2.6, hx, hy + 2.6, 0x9aa2ae);
+      c.ball(hx, hy, 1, 1, R.silver);
+    }
+    // (thin bones in one light tone: shaded, a pixel-wide bone goes muddy)
+    const hip = [9.4, 16.4], sh = [7.4, 11.2], bone = { t: 4 };
+    // the far leg, behind the frame
+    c.tube([hip, [13.8, 17], [BB[0] - 1.2, BB[1] - 1.8]], 0.7, R.bone, { t: 2 });
+    // the frame
+    c.tube([RH, seat, head, FH], 1.15, R.red, { lo: -0.6 });
+    c.tube([RH, BB, head], 1.15, R.red, { lo: -0.6 });
+    c.tube([seat, BB], 1.05, R.red, { lo: -0.6 });
+    c.tube([head, bar, grip], 0.8, R.silver);
+    c.ball(BB[0], BB[1], 1.5, 1.5, R.gold);
+    // pelvis on the saddle, spine and ribs leaning back
+    c.ball(hip[0], hip[1], 2.1, 1.3, R.bone, bone);
+    c.tube([hip, [8, 13.6], sh], 0.8, R.bone, bone);
+    c.pillow(inEll(8.3, 13.4, 2.5, 2.1), R.bone, { rad: 1.1, bias: 0.45 });
+    c.line(6.6, 12.6, 10, 12.6, 0xb8a684); c.line(6.8, 14.2, 9.8, 14.2, 0xb8a684);
+    // the near leg on its pedal, the arm out to the grip
+    c.tube([hip, [14.8, 15.6], [BB[0] + 1.4, BB[1] + 1.8]], 0.8, R.bone, { t: 4, line: 2 });
+    c.face(rrect(BB[0] + 0.2, BB[1] + 2.2, BB[0] + 3.4, BB[1] + 3.2, 0), R.black, { t: 2 });
+    c.tube([sh, [10.8, 13.4], grip], 0.7, R.bone, { t: 4, line: 2 });
+    // the skull (a big grin, looking ahead) under the red toque with its pompom
+    c.ball(7.8, 6.8, 4, 3.7, R.bone, { bias: 0.2 });
+    c.pillow(rrect(7.2, 8.4, 12, 11, 1), R.bone, { rad: 0.8, line: true, bias: 0.2 });
+    c.ball(10, 7, 1.15, 1.25, R.black, { t: 1 });
+    c.ball(6.9, 7, 0.9, 1.15, R.black, { t: 1 });
+    c.dots([[8, 9]], 0x3a2a24);
+    c.line(8.6, 10.2, 11.4, 10.2, 0x8a7a5e);
+    c.dots([[9, 10], [10, 10], [11, 10]], 0x5e4c3e);
+    c.ball(7.6, 4.2, 4.3, 3, R.red, { clip: (x, y) => y < 4.6 });
+    c.face(rrect(3.4, 3.8, 12, 5.2, 0.6), R.maroon, { t: 3, line: true });
+    c.ball(6.6, 1.6, 1.4, 1.3, R.cream);
+  },
+  t_up(c) { c.pillow(inPoly([[16, 3], [29, 18], [21, 18], [21, 28], [11, 28], [11, 18], [3, 18]]), R.yellow, { rad: 2.4 }); },
+  t_down(c) { c.pillow(inPoly([[16, 29], [29, 14], [21, 14], [21, 4], [11, 4], [11, 14], [3, 14]]), R.yellow, { rad: 2.4 }); },
   t_kick(c) {
     // a skeleton foot booting
     c.tube([[9, 3], [11.6, 15]], 2.2, R.bone);
