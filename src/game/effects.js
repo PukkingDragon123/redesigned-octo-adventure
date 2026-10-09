@@ -224,7 +224,9 @@ export class Effects {
       if (d > 2.5) { L.x = x; L.z = z; continue; } // (a reset or a teleport)
       // the locked wheel skids: the rear under the coaster brake or in a drift, the front in a stoppie
       const sk = skidding && (front ? this.stoppie : !this.stoppie);
-      if (d < (sk ? 0.22 : 0.36)) continue;
+      if (d < (sk ? 0.22 : 0.4)) continue;
+      // riding straight, the back tyre runs in the front one's track: one line will do
+      if (!front && !sk && this.wheelLast[0] && Math.abs(b.yawRate || 0) < 0.25) { L.x = x; L.z = z; continue; }
       const mx = (x + L.x) / 2, mz = (z + L.z) / 2;
       const kind = this.groundKind(mx, mz, b.surface);
       const mk = this.marks(kind);

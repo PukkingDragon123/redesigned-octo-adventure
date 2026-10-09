@@ -106,9 +106,9 @@ void main() {
   }
   bool framed = across < 50.0;
   float ad = abs(across);
-  float h1 = hash12(floor(texel / 2.0) + 7.0), h2 = hash12(texel + 1.7);
   if (re > 0.0) {
     bare = 1.0;
+    float h1 = hash12(floor(texel / 2.0) + 7.0), h2 = hash12(texel + 1.7);
     vec3 dirt = tex(tDirt, uv);
     // gravel in the village and on the country roads, dirt on the trails, pale grit on footpaths
     col = (village || style > 0.9) ? tex(tGravel, uv) : dirt;
@@ -164,7 +164,7 @@ void main() {
       if (framed) {
         float tc = min(abs(ad - 1.15), abs(ad - 2.85));
         if (tc < 0.4) col *= 0.9;
-        if (abs(ad - 2.0) < 0.12 && h1 > 0.82) col *= 0.7;
+        if (abs(ad - 2.0) < 0.12 && hash12(floor(texel / 2.0) + 7.0) > 0.82) col *= 0.7;
         rut = 0.6 * (1.0 - step(0.45, abs(ad - 3.6))); // (puddles gather along the gutters)
       }
     }
