@@ -735,6 +735,25 @@ export class Crowd {
   friendly() {
     return this.contest.round?.isDone?.() ?? true;
   }
+  // Hank strolls (or rolls slowly) past someone who knows him: a wave, a hello
+  greet() {
+    const g = this.g;
+    if (g.mode !== 'ride' || !this.friendly()) return;
+    const p = g.playerPos, slow = g.onFoot || g.bike.speed < 4;
+    if (!slow || g.time < (this.greetT || 0)) return;
+    for (const m of this.list) {
+      if (!m.shown || m.frozen || m.thawing || !m.a || m.path || g.time < (m.helloT || 0)) continue;
+      const d = hyp(m.a.pos.x - p.x, m.a.pos.z - p.z);
+      if (d > 4.5 || d < 1.2) continue;
+      m.helloT = g.time + rand(40, 70);
+      this.greetT = g.time + rand(1.5, 3);
+      m.a.lookAt(g.playerChar);
+      m.a.react(m.kid ? 'yay' : 'hi');
+      if (Math.random() < 0.6) this.say(m, pick(m.kid ? LINES.kidHello : LINES.hello), 1800);
+      g.wait(3).then(() => { if (!m.frozen && m.a.lookTarget === g.playerChar) m.a.lookAt(null); });
+      return;
+    }
+  }
 
   // ------------------------------------------------------------ per frame
   update(dt, near) {
@@ -772,6 +791,7 @@ export class Crowd {
         if (m.d < 30 && m.inView) cands.push(m);
       }
       cands.sort((p, q) => p.d - (p.tier === 'rig' ? 2 : 0) - (q.d - (q.tier === 'rig' ? 2 : 0)));
+      this.greet();
       const rigs = new Set(cands.slice(0, K));
       for (const m of this.list) if (m.a) this.setTier(m, rigs.has(m) ? 'rig' : 'imp');
     }
