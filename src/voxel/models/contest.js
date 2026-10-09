@@ -544,3 +544,131 @@ export function prizeRosette({ color = 0xc8382e } = {}) {
   }
   return { vox: v, size: FINE, origin: [cx + 0.5, 0, cz + 0.5], jitter: 0 };
 }
+
+// ---------------------------------------------------------------- the crowd's things (src/game/crowd.js)
+// cane() — a walking stick with a crook handle (a stick-like prop held by the crook:
+// the grip at the origin, the shaft running down the hand's -y to the rubber tip)
+export function cane({ color = 0x6a4224 } = {}) {
+  const v = new Vox(5, 22, 2);
+  v.fill(1, 0, 0, 1, 18, 0, color);
+  v.fill(1, 0, 0, 1, 0, 0, 0x2a2a30);
+  v.fill(1, 19, 0, 3, 19, 0, tone(color, 0.1));
+  v.fill(4, 17, 0, 4, 18, 0, tone(color, 0.1));
+  v.set(2, 20, 0, tone(color, -0.1));
+  return { vox: v, size: 0.045, origin: [1.5, 19, 0.5] };
+}
+
+// stroller({ color, hat }) — a pram on four wheels with a folding hood, and a baby in a
+// little toque peeking out (stands on the ground; the handle at the back, -z)
+export function stroller({ color = 0x3a5a9a, hat = 0xd8361f, skin = 0xf2c8a2 } = {}) {
+  const v = new Vox(13, 20, 22);
+  const D = tone(color, -0.2), L = tone(color, 0.12), TYRE = 0x24222a, CHROME = 0xb8bec8;
+  // wheels
+  for (const [x, z] of [[1, 4], [11, 4], [1, 17], [11, 17]]) v.fill(x, 0, z - 1, x, 2, z + 1, (xx, y, zz) => (y === 1 && zz === z ? CHROME : TYRE));
+  v.fill(2, 2, 4, 10, 2, 4, CHROME);
+  v.fill(2, 2, 17, 10, 2, 17, CHROME);
+  // the basket: a deep tub with a rolled rim
+  v.fill(2, 4, 3, 10, 10, 18, (x, y, z) => {
+    const edge = x === 2 || x === 10 || z === 3 || z === 18 || y === 4;
+    if (!edge) return 0;
+    return y === 10 ? L : y === 4 ? D : (z + y) % 4 === 0 ? D : color;
+  });
+  v.fill(3, 5, 4, 9, 7, 17, 0xf2ece0); // the blanket inside
+  v.fill(3, 8, 9, 9, 8, 17, (x, y, z) => ((x + z) % 2 ? 0xf2c8d8 : 0xf6ecf0));
+  // the hood, folded up over the head end (+z)
+  for (let k = 0; k < 6; k++) {
+    const z = 18 - k, h = 10 + Math.round(Math.sin(((k + 1) / 7) * Math.PI) * 6);
+    v.fill(2, 10, z, 2, h, z, k % 2 ? color : D);
+    v.fill(10, 10, z, 10, h, z, k % 2 ? color : D);
+    v.fill(2, h, z, 10, h, z, k % 2 ? L : color);
+  }
+  // the baby, tucked in: a round little face and a pompom toque
+  v.ellipsoid(6, 10.5, 14.5, 2.2, 2.2, 2.2, skin);
+  v.set(5, 11, 16, 0x2a1a14); v.set(7, 11, 16, 0x2a1a14); // eyes
+  v.set(6, 10, 17, 0xe89090);
+  v.ellipsoid(6, 12.5, 14.2, 2.4, 1.5, 2.4, (x, y, z) => (y >= 12 ? ((x + y) % 2 ? hat : tone(hat, -0.1)) : 0));
+  v.ellipsoid(6, 14.4, 13.8, 1, 1, 1, 0xfff4e0);
+  // the handle bar at the back
+  v.fill(3, 10, 2, 3, 15, 2, CHROME);
+  v.fill(9, 10, 2, 9, 15, 2, CHROME);
+  v.fill(3, 15, 1, 9, 15, 1, 0x2a2a30);
+  return { vox: v, size: 0.05, origin: [6.5, 0, 1.5], jitter: 0.02, meta: { handle: [0, 0.75, 0] } };
+}
+
+// leashDog({ color, spot }) — a scruffy little dog for the crowd: the body and head, the
+// tail and the two pairs of legs are separate pieces (src/game/crowd.js trots them)
+export function leashDog({ color = 0xb8844a, spot = 0xf2e6cc, collar = 0xc8382e } = {}) {
+  const S = 0.035, NOSE = 0x24181a;
+  const body = new Vox(9, 12, 20);
+  const fur = (x, y, z) => ((x + y * 2 + z) % 5 === 0 ? tone(color, -0.1) : y > 8 ? tone(color, 0.06) : color);
+  body.ellipsoid(4, 6, 8, 3.2, 2.8, 6, fur);
+  body.fill(2, 4, 3, 6, 6, 6, (x, y, z) => (y < 6 ? spot : fur(x, y, z))); // a pale belly patch
+  body.ellipsoid(4, 8.5, 15, 2.8, 2.6, 2.8, fur); // the head
+  body.fill(3, 7, 17, 5, 8, 19, spot); // muzzle
+  body.set(4, 8, 19, NOSE);
+  body.set(3, 9, 17, NOSE); body.set(5, 9, 17, NOSE); // eyes
+  body.fill(1, 8, 13, 1, 11, 15, tone(color, -0.25)); // floppy ears
+  body.fill(7, 8, 13, 7, 11, 15, tone(color, -0.25));
+  body.fill(2, 6, 12, 6, 6, 13, collar);
+  const tail = new Vox(3, 7, 3);
+  tail.fill(1, 0, 1, 1, 6, 1, (x, y) => (y > 4 ? spot : color));
+  const legs = new Vox(9, 5, 3);
+  legs.fill(1, 0, 1, 2, 4, 1, fur);
+  legs.fill(6, 0, 1, 7, 4, 1, fur);
+  legs.set(1, 0, 1, spot); legs.set(7, 0, 1, spot);
+  return {
+    size: S,
+    body: { vox: body, size: S, origin: [4.5, 0, 8.5] },
+    tail: { vox: tail, size: S, origin: [1.5, 0, 1.5] },
+    legs: { vox: legs, size: S, origin: [4.5, 4.5, 1.5] },
+    meta: { tail: [0, 0.27, -0.2], front: [0, 0.18, 0.14], back: [0, 0.18, -0.11], collar: [0, 0.24, 0.17] },
+  };
+}
+
+// pumpkinLid() — the lid a carver had just lifted off (dropped when Hank rides in)
+export function pumpkinLid({ r = 0.12 } = {}) {
+  const rx = r / FINE;
+  const W = Math.ceil(rx) * 2 + 3, c = (W - 1) / 2;
+  const v = new Vox(W, 8, W);
+  v.ellipsoid(c, 0, c, rx, 3.2, rx, (x, y, z) => (y < 1 ? 0xf8b452 : Math.floor(((Math.atan2(z - c, x - c) + Math.PI) / (Math.PI * 2)) * 10) % 2 ? 0xe0701e : 0xc85a14));
+  v.fill(Math.round(c), 3, Math.round(c), Math.round(c), 6, Math.round(c), 0x6a5a2a);
+  return { vox: v, size: FINE, origin: [c + 0.5, 0, c + 0.5] };
+}
+
+// cocoaCarrier({ cups }) — the cardboard carrier of extra cocoa Nana sent along, with a
+// rope handle (hangs level from a hand by the handle, or rides in Bessie's crate)
+export function cocoaCarrier({ cups = 8 } = {}) {
+  const v = new Vox(20, 22, 10);
+  const KRAFT = 0xb88a58, KD = 0x8a6238, PAPER = 0xf2ece0, LID = 0xe8e2d4, BAND = 0xf08a2a;
+  v.fill(0, 0, 0, 19, 4, 9, (x, y, z) => (x === 0 || x === 19 || z === 0 || z === 9 || y === 0 ? ((x + y) % 3 === 0 ? KD : KRAFT) : 0));
+  v.fill(1, 1, 1, 18, 1, 8, KD);
+  for (let i = 0; i < Math.min(8, cups); i++) {
+    const cx = 2.5 + (i % 4) * 4.6, cz = i < 4 ? 2.5 : 6.6;
+    for (let y = 2; y <= 9; y++) {
+      const r = 1.3 + (y - 2) * 0.08;
+      for (let z = 0; z < 10; z++) for (let x = 0; x < 20; x++) {
+        if (Math.hypot(x + 0.5 - cx - 0.5, z + 0.5 - cz - 0.5) > r) continue;
+        v.set(x, y, z, y === 9 ? LID : y >= 5 && y <= 6 ? BAND : PAPER);
+      }
+    }
+  }
+  // the rope handle, arching over the cups
+  for (let k = 0; k <= 18; k++) {
+    const x = 1 + k, y = 10 + Math.round(Math.sin((k / 18) * Math.PI) * 10);
+    v.set(x, y, 4, ROPE);
+    v.set(x, y, 5, ROPE);
+  }
+  return { vox: v, size: 0.02, origin: [10, 20, 5], meta: { steam: [[-0.15, -0.2, -0.05], [0.12, -0.2, 0.04]] } };
+}
+
+// ciderCup() — a paper cup of hot apple cider (a little cinnamon stick poking out)
+export function ciderCup() {
+  const v = new Vox(5, 9, 5);
+  for (let y = 0; y <= 6; y++) for (let z = 0; z < 5; z++) for (let x = 0; x < 5; x++) {
+    if (Math.hypot(x - 2, z - 2) > 1.7 + y * 0.08) continue;
+    if (y === 6 && Math.hypot(x - 2, z - 2) < 1.2) { v.set(x, y, z, 0xb8601e); continue; }
+    v.set(x, y, z, y >= 2 && y <= 4 ? 0xc8382e : 0xf2ece0);
+  }
+  v.fill(3, 6, 2, 3, 8, 2, 0x7a3a1a);
+  return { vox: v, size: 0.025, origin: [2.5, 0, 2.5] };
+}
