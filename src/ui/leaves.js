@@ -466,7 +466,8 @@ class Wipe {
     if (this.mode === 'reveal' && !reduced) {
       // the trailing edge sheds leaves that are left behind fluttering over the scene
       const L = this.L, e = this.edge(), sp = this.speed();
-      const n = Math.random() < dt * L.H * 0.35 ? 1 + ((L.H / 120) | 0) : 0;
+      // (about a leaf a frame: enough to feel blown off the pile, few enough not to bury the dialogue)
+      const n = Math.random() < dt * 32 ? 1 + ((L.H / 320) | 0) : 0;
       for (let i = 0; i < n; i++) {
         const y = rnd(0, L.H), s = e + this.jag(y) + rnd(-2, 8);
         if (s < -10 || s > L.W + 10) continue;
