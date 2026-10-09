@@ -50,6 +50,10 @@ export function applyScale() {
   const r = document.documentElement.style;
   r.setProperty('--u', `${s.u}px`);
   r.setProperty('--S', `${s.S}`);
+  // a half-size grid for small print (credits): still whole device pixels per pixel
+  const us = Math.max(1, Math.floor(s.S / 2)) / s.dpr;
+  r.setProperty('--us', `${us}px`);
+  r.setProperty('--tfs', `${us * 16}px`);
   // the 48px food sprites sit in 24-art-pixel spots: show them at the biggest WHOLE
   // multiple of their own pixels that fits (24u is only a whole multiple when S is even)
   r.setProperty('--food', `${(s.S >= 2 ? Math.floor(s.S / 2) * 48 : 24) / s.dpr}px`);

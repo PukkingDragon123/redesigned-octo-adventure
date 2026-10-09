@@ -224,7 +224,7 @@ export class TitleScreen {
     });
     this.buttons = buttons;
     this.menuEl = menu;
-    const foot = el('div', `position:absolute;right:calc(var(--u) * 3);bottom:calc(var(--u) * 2);font-size:var(--tf);line-height:calc(var(--u) * 12);text-align:right;color:#e8d0b0;text-shadow:var(--u) var(--u) 0 ${INK};`,
+    const foot = el('div', `position:absolute;right:calc(var(--u) * 3);bottom:calc(var(--u) * 2);font-size:var(--tfs);line-height:calc(var(--us) * 12);text-align:right;color:#e8d0b0;text-shadow:var(--us) var(--us) 0 ${INK};`,
       'Autumn in Maple Cove<br>fonts: monogram by datagoblin (CC0) &middot; BoldPixels by YukiPixels (CC BY-SA 4.0)');
     root.append(this.shadeEl, logoBox, menu, foot);
     document.body.appendChild(root);
