@@ -505,9 +505,10 @@ export class Game {
     const swallowed = this.ui.inputSwallowed();
     const lean = input.lean();
     // gears by hand (Z / X, the d-pad, the touch shifter): the first shift takes them off automatic
+    // (picked as Automatic in Settings, a hand shift only holds for a moment: bike.js)
     const shift = swallowed ? 0 : (input.pressed('shiftUp') ? 1 : 0) - (input.pressed('shiftDown') ? 1 : 0);
     if (shift) this.bike.queueShift(shift);
-    if (shift && this.settings.gears !== 'manual') {
+    if (shift && this.settings.gears === undefined) {
       this.settings.gears = 'manual';
       this.saveSettings();
       this.ui.pop('Gears by hand now: low gear to get going and climb, top gear to fly. (Settings has them on automatic again.)', { expr: 'happy' });
