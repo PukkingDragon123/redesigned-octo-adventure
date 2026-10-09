@@ -194,9 +194,18 @@ its heat, more the harder the crash.
   gulls, ducks, owls, bats, frogs, fish, butterflies...) built from parts and
   animated procedurally: gaits picked from speed, feet placed on the ground,
   heads that follow Hank, flapping and gliding, all blended. Each species is
-  one instanced draw (`src/render/voxelRig.js`). Particles are instanced: outlined toon
-  smoke, impact stars, bouncing debris, skid marks, splash crowns and anime
-  speed lines.
+  one instanced draw (`src/render/voxelRig.js`); legs hang from hips buried in
+  the body and `node tools/legcheck.mjs` checks every quadruped's legs stay
+  attached in every gait, on slopes too. Particles are instanced: outlined toon
+  smoke, impact stars, bouncing debris, splash crowns and anime speed lines,
+  and the tyres throw up whatever they ride on (grit, gravel chips, leaves,
+  sand, rain spray, snow). Ground decals (`src/render/decals.js`, one instanced
+  draw) press tyre tracks, skid streaks, Hank's bony footprints, villagers'
+  boot prints and hoof and paw prints into soft ground and crumble away.
+- **Roads** (`src/world/terrainMesh.js`): the terrain shader reads a small road
+  frame (distance across the nearest road and its style) to draw wheel ruts,
+  tyre grooves, worn centre lines, grassy crowns, ragged grass edges, leaves
+  blown in from the forest and puddles that gather in the ruts when it rains.
 - **UI** (`src/ui`): a pixel kit of carved wood panels with brass nails, buttons,
   slots, books and bezels (`kit.js`, `kitart.js`), shaded 32 px icons
   (`src/art/icons.js`), and black-and-white speech bubbles over the real 3D
