@@ -188,7 +188,7 @@ function quad(o) {
   // down from there to a knee at the height the leg was drawn with, so the stance is unchanged
   const legW = o.legW || 2;
   const hipF = hipIn(bv, cx, cy, cz, L * 0.3, legW, W, H), hipH = hipIn(bv, cx, cy, cz, -L * 0.3, legW, W, H, 0.05);
-  const uF = o.legU + hipF[1] + H * 0.2, uH = o.legU + hipH[1] + H * 0.15; // hip to knee, per pair
+  const uF = Math.round(o.legU + hipF[1] + H * 0.2), uH = Math.round(o.legU + hipH[1] + H * 0.15); // hip to knee (whole voxels), per pair
   const upper = (u, hy) => leg(u + 1, legW, (t, x, z) => (o.legHi && t > 0.6 ? o.legHi : t < 0.4 ? o.coat : o.legC || o.coat), true, Math.max(1, Math.min(3, Math.floor(H / 2 - hy - 2.5))));
   const lower = leg(o.legL, Math.min(2, legW), (t) => (t > 0.86 ? o.hoof : o.sock && t > (o.sockHi ?? 0.25) ? o.sock : o.legLo || o.legC || o.coat), false, 1);
   parts.FLu = parts.FRu = upper(uF, hipF[1]);
