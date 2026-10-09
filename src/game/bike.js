@@ -3,10 +3,10 @@
 // turning himself (it drives through the gears only while the pedals outrun the back
 // wheel; the faster he spins the harder he pushes and the quicker he gets winded; the
 // gears change by themselves or by hand: bottom gear spins up easily and pulls hard but
-// tops out early, top gear is slow to wind up and flies), rubbery lean, tyres that let go when you corner too hard
-// on loose ground, wheelies and manuals, stoppies and nose manuals, crouch-and-pop
-// bunny hops, spins and flips, landings that have to match the slope, foot dabs, curb
-// bumps and comic bails. Nothing moves her but the rider: stopped on a gentle slope
+// tops out early, top gear is slow to wind up and flies), rubbery lean, tyres that let go
+// when you corner too hard on loose ground, wheelies and manuals, stoppies and nose
+// manuals, crouch-and-pop bunny hops, spins and flips, landings that have to match the
+// slope, foot dabs, curb bumps and comic bails. Nothing moves her but the rider: stopped on a gentle slope
 // she stays put.
 import * as THREE from 'three';
 import { clamp, damp, lerp, wrapAngle, Spring } from '../core/math.js';
