@@ -697,86 +697,83 @@ export function tipTailArt() {
   return p;
 }
 
-// ---------------------------------------------------------------- speech bubbles (9-slice 32x32, slice 10)
-// Comic bubbles: cream fill, ink outline, a lit inner rim and a hard shadow.
-// Edge patterns repeat every 4 or 6 px so the 12 px middle segments tile cleanly.
-export const BUBBLE_SLICE = 10;
+// ---------------------------------------------------------------- speech bubbles (9-slice 24x24, slice 8)
+// Plain, classic, cosy: a cream bubble with pixel-stepped round corners, a one-pixel
+// warm brown outline, a soft cushion line along the bottom and a hard drop shadow
+// (one pixel right, two down: rows 22-23 and column 23 are shadow only).
+// Mood variants stay simple: a zigzag edge for shouts, a dotted outline for
+// whispers, a cool tint for thoughts, butter yellow for a picked reply and dark
+// cocoa for narration.
+export const BUBBLE_SLICE = 8;
+export const BUB_OUT = 0x3e2218; // the outline (and the text) brown
+const BUB_SHADOW = 0x3a1a14, BUB_SHADOW_A = 110;
 const BUB = {
-  round: { fill: [0xffffff, 0xfffaf0, 0xf2e8d8, 0xd8ccb8], out: C.ink },
-  shout: { fill: [0xffffff, 0xfff8dc, 0xf4e4b4, 0xd8c08a], out: C.ink },
-  shaky: { fill: [0xffffff, 0xf8f6f2, 0xe4e0e8, 0xc4c0d0], out: 0x2a2440 },
-  think: { fill: [0xffffff, 0xf8fafe, 0xe2e8f2, 0xc2cada], out: 0x2a3250 },
-  whisper: { fill: [0xffffff, 0xf4f2ee, 0xe2ded8, 0xc8c2b8], out: 0x5a5260 },
-  sel: { fill: [0xffffff, 0xfff0b8, 0xf6d878, 0xd8a840], out: C.ink },
-  dark: { fill: [0x5a3e34, 0x3a2622, 0x2a1a18, 0x1e1210], out: C.ink },
+  round: { fill: 0xfff8ea, low: 0xf2e2c8, out: BUB_OUT },
+  shout: { fill: 0xfffbe0, low: 0xf6e0a8, out: BUB_OUT },
+  shaky: { fill: 0xfff8ea, low: 0xf2e2c8, out: BUB_OUT },
+  think: { fill: 0xf6f6fc, low: 0xdcdcee, out: 0x34304c },
+  whisper: { fill: 0xfbf6ee, low: 0xebe2d4, out: 0x6a5a58 },
+  sel: { fill: 0xfff0b0, low: 0xf2d27a, out: BUB_OUT },
+  dark: { fill: 0x4a2e26, low: 0x3a221c, out: 0x1e1012, hi: 0x6a463a },
 };
+// round corners: how far each of the first rows is cut in
+const BUB_STEPS = [3, 1, 1];
 export function bubbleArt(style = 'round') {
-  const S = 32;
+  const S = 24, R = S - 1, B = S - 2; // silhouette: x 0..22, y 0..21
   const P = BUB[style] || BUB.round;
   const p = new Pix(S, S);
-  const e = 3; // room for spikes and the shadow
   const per = (t, n) => ((t % n) + n) % n;
-  const bot = S - 3; // last row of the silhouette's box (the 2 rows below are shadow)
+  // little 2 px spikes every 8 px (the 9-slice middles are 8 px, so they tile)
+  const spike = (t) => { const q = per(t, 8); return q === 7 || q === 0 ? 2 : q === 6 || q === 1 ? 1 : 0; };
   const inside = (x, y) => {
-    if (x < 0 || y < 0 || x >= S || y > bot) return false;
-    const ex = Math.min(x - e, S - 1 - e - x), ey = Math.min(y - e, bot - e - y);
+    if (x < 0 || y < 0 || x >= R || y >= B) return false;
     if (style === 'shout') {
-      // triangular spikes every 6px, 3px tall
-      const tx = per(x, 6), ty = per(y, 6);
-      const sx = 3 - Math.abs(tx - 3), sy = 3 - Math.abs(ty - 3);
-      return ex >= -sy && ey >= -sx && ex + ey >= -1;
+      // the box sits 2 px in, its spikes reach out to the edge
+      const ex = Math.min(x - 2, R - 3 - x), ey = Math.min(y - 2, B - 3 - y);
+      if (ex >= 0 && ey >= 0) return !(ey < 2 && ex < [2, 1][ey]);
+      if (ex < 0 && ey < 0) return false;
+      return ex < 0 ? -ex <= spike(y) && ey >= 2 : -ey <= spike(x) && ex >= 2;
     }
-    if (style === 'think') {
-      // scalloped cloud edge: half-discs every 6px
-      const bx = per(x, 6) + 0.5 - 3, by = per(y, 6) + 0.5 - 3;
-      const hx = Math.sqrt(Math.max(0, 9 - bx * bx)), hy = Math.sqrt(Math.max(0, 9 - by * by));
-      return ex >= 2 - hy && ey >= 2 - hx && ex + ey >= 0;
-    }
-    if (style === 'shaky') {
-      const wy = per(x, 6) < 3 ? 0 : 1, wx = per(y, 6) < 3 ? 0 : 1;
-      return ex >= wx - 1 && ey >= wy - 1 && ex + ey >= 1;
-    }
-    return ex >= -1 && ey >= -1 && ex + ey >= 1 && !(ex === -1 && ey < 2) && !(ey === -1 && ex < 2);
+    const ix = Math.min(x, R - 1 - x), iy = Math.min(y, B - 1 - y);
+    return !(iy < BUB_STEPS.length && ix < BUB_STEPS[iy]);
   };
-  const f = field(S, S, inside, 4);
-  // hard shadow one pixel right, two down
-  for (let y = 2; y < S; y++) for (let x = 1; x < S; x++) if (!f.ins[y * S + x] && f.ins[(y - 2) * S + x - 1]) p.set(x, y, C.shadow, 96);
+  // the hard shadow
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) if (!inside(x, y) && inside(x - 1, y - 2)) p.put(x, y, BUB_SHADOW, BUB_SHADOW_A);
   for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
-    const d = f.D[y * S + x];
-    if (!d) continue;
-    const b = band(d), l = f.L[y * S + x];
-    let c;
-    if (b === 0) c = style === 'whisper' && per(x + y, 4) === 0 ? P.fill[2] : P.out;
-    else if (b === 1) c = l > 0.3 ? P.fill[0] : l < -0.35 ? P.fill[2] : P.fill[1];
-    else c = P.fill[1];
+    if (!inside(x, y)) continue;
+    const edge = !inside(x - 1, y) || !inside(x + 1, y) || !inside(x, y - 1) || !inside(x, y + 1);
+    let c = P.fill;
+    if (edge) c = style === 'whisper' && per(x + y, 3) === 0 ? P.low : P.out;
+    else if (!inside(x, y + 2)) c = P.low; // the cushion line above the bottom edge
+    else if (P.hi && !inside(x, y - 2)) c = P.hi;
     p.set(x, y, c);
   }
   return p;
 }
-// a tail goes this many px above the bottom of the bubble frame (its top rows cover the outline)
-export const BUBBLE_JOIN = 7;
-// tails that point down at the speaker (16x14); the first 3 rows sit over the
-// bubble's bottom edge and erase its outline so the two join up
-export function bubbleTailArt(style = 'round') {
-  const W = 16, H = 14;
+// the tail's first rows sit over the bubble's bottom outline and shadow (so the two join up)
+export const BUBBLE_JOIN = 3;
+export const BUBBLE_TAIL = [12, 10]; // w, h
+// a little tail pointing down at the speaker (tip at the bottom left; flip mirrors it)
+export function bubbleTailArt(style = 'round', flip = false) {
+  const [W, H] = BUBBLE_TAIL;
   const P = BUB[style] || BUB.round;
   const p = new Pix(W, H);
+  const fx = (x) => (flip ? W - 1 - x : x);
   if (style === 'think') {
-    for (const [cx, cy, r] of [[8, 6.5, 2.9], [5.5, 11.2, 1.9]]) {
+    // thought dots
+    for (const [cx, cy, r] of [[7, 4, 3], [3, 8, 1.8]]) {
+      const ins = (x, y) => Math.hypot(x + 0.5 - cx, y + 0.5 - cy) <= r;
       for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-        const d = Math.hypot(x + 0.5 - cx, y + 0.5 - cy);
-        if (d <= r) p.set(x, y, d > r - 1 ? P.out : x + y < cx + cy - 1.5 ? P.fill[0] : P.fill[1]);
-        else if (Math.hypot(x - 0.5 - cx, y - 1.5 - cy) <= r && !p.alpha(x, y)) p.set(x, y, C.shadow, 96);
+        if (ins(x, y)) p.set(fx(x), y, !ins(x - 1, y) || !ins(x + 1, y) || !ins(x, y - 1) || !ins(x, y + 1) ? P.out : P.fill);
+        else if (ins(x - 1, y - 2) && !p.alpha(fx(x), y)) p.put(fx(x), y, BUB_SHADOW, BUB_SHADOW_A);
       }
     }
     return p;
   }
   const pts = style === 'shout'
-    ? [[3, 0], [13, 0], [10, 4], [12, 4], [7, 9], [9, 9], [2, 14], [5, 8], [3, 8], [5, 4], [3, 4]]
-    : style === 'shaky'
-      ? [[3, 0], [12, 0], [10, 3], [10.5, 5], [8, 7], [8, 9], [5, 11], [1.5, 13.6], [3, 10], [3.5, 7], [3, 4]]
-      : [[3, 0], [12.5, 0], [9.5, 4.5], [6, 8.5], [1.5, 13.6], [3, 8], [3.4, 4]];
-  const inPolyF = (x, y) => {
+    ? [[2, 0], [10, 0], [7, 3], [9, 4], [3, 9.8], [4.5, 5], [2.5, 5]]
+    : [[2, 0], [10, 0], [8, 3], [5, 6.5], [1, 9.8], [2.5, 6], [2.5, 3]];
+  const inPoly = (x, y) => {
     let c = false;
     for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
       const [xi, yi] = pts[i], [xj, yj] = pts[j];
@@ -784,17 +781,60 @@ export function bubbleTailArt(style = 'round') {
     }
     return c;
   };
-  const inside = (x, y) => y >= 0 && x >= 0 && x < W && y < H && inPolyF(x + 0.5, y + 0.5);
+  const inside = (x, y) => y >= 0 && x >= 0 && x < W && y < H && inPoly(x + 0.5, y + 0.5);
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-    if (!inside(x, y)) { if (inside(x - 1, y - 2) && y > 3) p.set(x, y, C.shadow, 96); continue; }
+    if (!inside(x, y)) {
+      if (y > BUBBLE_JOIN - 1 && inside(x - 1, y - 2)) p.put(fx(x), y, BUB_SHADOW, BUB_SHADOW_A);
+      continue;
+    }
     const side = !inside(x - 1, y) || !inside(x + 1, y);
-    const under = !inside(x, y + 1);
-    let c = P.fill[1];
-    if (y < 3) c = side ? P.out : P.fill[1];
-    else if (side || under) c = style === 'whisper' && (x + y) % 3 === 0 ? P.fill[2] : P.out;
-    else if (!inside(x - 1, y - 1) || !inside(x - 2, y)) c = P.fill[0];
-    p.set(x, y, c);
+    let c = P.fill;
+    // the top row covers the bubble's outline: outline only where the tail's sides meet it
+    if (y === 0) c = side ? P.out : P.fill;
+    else if (side || !inside(x, y + 1)) c = style === 'whisper' && (x + y) % 3 === 0 ? P.low : P.out;
+    p.set(fx(x), y, c);
   }
+  return p;
+}
+// the speaker's name tab (9-slice 12x14, slice 4 5 4 5): a little coloured label with
+// round corners, a light top row and a darker bottom row, in the bubble's outline brown
+export function nameTabArt(color = 0xd0566a) {
+  const W = 12, H = 14;
+  const p = new Pix(W, H);
+  const hi = mixC(color, 0xffffff, 0.35), lo = mixC(color, 0x000000, 0.25);
+  const inside = (x, y) => {
+    if (x < 0 || y < 0 || x >= W || y >= H) return false;
+    const ix = Math.min(x, W - 1 - x), iy = Math.min(y, H - 1 - y);
+    return !(iy < 2 && ix < [2, 1][iy]);
+  };
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    if (!inside(x, y)) continue;
+    const edge = !inside(x - 1, y) || !inside(x + 1, y) || !inside(x, y - 1) || !inside(x, y + 1);
+    p.set(x, y, edge ? BUB_OUT : !inside(x, y - 2) ? hi : !inside(x, y + 2) ? lo : color);
+  }
+  return p;
+}
+// the bouncing "more to read" arrow (7x4) and the little leaf pinned to a bubble (9x9)
+export function nextArrowArt(color = 0xb8582a) {
+  const p = new Pix(7, 4);
+  for (let y = 0; y < 4; y++) for (let x = y; x < 7 - y; x++) p.set(x, y, color);
+  return p;
+}
+const LEAF9 = [
+  '....o....',
+  '..o.o.o..',
+  '..ooxoo..',
+  'o.oxxxo.o',
+  '.oxxxxxo.',
+  '..oxxxo..',
+  '.ooxsxoo.',
+  '....s....',
+  '....s....',
+];
+export function bubbleLeafArt() {
+  const p = new Pix(9, 9);
+  const col = { o: 0xb83a1c, x: 0xf08a2a, s: 0x6a3a1a };
+  LEAF9.forEach((r, y) => [...r].forEach((ch, x) => col[ch] && p.set(x, y, col[ch])));
   return p;
 }
 

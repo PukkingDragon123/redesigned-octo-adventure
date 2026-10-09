@@ -18,8 +18,7 @@
 // the HUD (Nana's list, the speedometer, the prompt).
 import { sound } from '../game/sound.js';
 import { LivePortrait } from './live3d.js';
-import { frame, tail, tokenize, layoutText } from './bubbles.js';
-import { BUBBLE_JOIN } from './kitart.js';
+import { frame, tail, tailJoin, nameTab, tokenize, layoutText, TAIL_W, TAIL_H } from './bubbles.js';
 import { el, scale, snap } from './kit.js';
 
 const ART = 56; // portrait size in art pixels
@@ -156,11 +155,12 @@ export class Popups {
   // (re)write the bubble for message m
   fill(m) {
     const style = m.shout ? 'shout' : m.expr === 'worried' || m.expr === 'scared' ? 'shaky' : 'round';
+    m.style = style;
     m.b.className = `bubble pop-bubble b-${style}${m.shout ? ' pop-shout' : ''}`;
     m.b.style.borderImageSource = `url(${frame(style)})`;
-    m.tl.style.backgroundImage = `url(${tail(style)})`;
     m.b.innerHTML = '';
-    if (m.name) m.b.appendChild(el('div', 'k-plate k-dark k-bold b-name', '')).textContent = m.name;
+    if (m.name) m.b.appendChild(nameTab(m.who, m.name));
+    if (!m.shout) m.b.appendChild(el('i', 'b-leaf'));
     const txt = el('div', 'b-text');
     m.b.appendChild(txt);
     // split out [key] caps; everything else goes through the bubble tokenizer
@@ -277,8 +277,9 @@ export class Popups {
     const u = scale.u, W = innerWidth, H = innerHeight, P = ART * u, m = 4 * u;
     c.b.style.maxWidth = `${Math.floor(Math.min(150 * u, W - P - 4 * m) / u) * u}px`;
     const bw = c.b.offsetWidth, bh = c.b.offsetHeight;
-    const tailH = (14 - BUBBLE_JOIN) * u;
-    const nameH = c.name ? 18 * u : 0;
+    const join = tailJoin(c.style);
+    const tailH = (TAIL_H - join) * u;
+    const nameH = c.name ? 12 * u : 0;
     const obs = [];
     for (const e of document.querySelectorAll(OBSTACLES)) {
       if (e.closest('.hidden, .off') || getComputedStyle(e).display === 'none') continue;
@@ -334,15 +335,17 @@ export class Popups {
     const bs = c.bub.style;
     bs.bottom = `${snap(H - Math.round((B.by + bh) / u) * u)}px`;
     if (B.right) { bs.left = 'auto'; bs.right = `${snap(W - Math.round((B.bx + bw) / u) * u)}px`; } else { bs.right = 'auto'; bs.left = `${snap(Math.round(B.bx / u) * u)}px`; }
-    // the tail hangs off the bubble's bottom edge, its tip just over Hank's hat
+    // the tail hangs off the bubble's bottom edge, its tip just over Hank's hat (on the
+    // right of the screen a mirrored tail: a second picture, never a CSS flip)
     const ts = c.tl.style;
-    ts.top = `calc(100% - ${BUBBLE_JOIN * u}px)`;
+    ts.top = `calc(100% - ${join * u}px)`;
+    ts.backgroundImage = `url(${tail(c.style, B.right)})`;
     if (B.right) {
-      const fromR = Math.max(8 * u, Math.min(bw - 24 * u, B.bx + bw - (c.cx - 5 * u)));
-      ts.left = 'auto'; ts.right = `${snap(Math.round(fromR / u) * u)}px`; ts.transform = 'scaleX(-1)';
+      const fromR = Math.max(4 * u, Math.min(bw - (TAIL_W + 4) * u, B.bx + bw - (c.cx - 5 * u)));
+      ts.left = 'auto'; ts.right = `${snap(Math.round(fromR / u) * u)}px`;
     } else {
-      const fromL = Math.max(8 * u, Math.min(bw - 24 * u, c.cx + 5 * u - B.bx));
-      ts.right = 'auto'; ts.left = `${snap(Math.round(fromL / u) * u)}px`; ts.transform = '';
+      const fromL = Math.max(4 * u, Math.min(bw - (TAIL_W + 4) * u, c.cx + 5 * u - B.bx));
+      ts.right = 'auto'; ts.left = `${snap(Math.round(fromL / u) * u)}px`;
     }
     if (raised) {
       // a little plank for him to lean on, so he isn't cut off in mid-air

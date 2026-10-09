@@ -247,6 +247,11 @@ export const KIT_IMAGES = {
   ...Object.fromEntries(A.DOODLES.map((d) => [`dd-${d}`, () => A.doodleArt(d)])),
   clipboard: () => A.clipboardArt(),
   clip: () => A.clipArt(),
+  // the cosy speech bubble (bubbles.js paints its mood variants itself)
+  bub: () => A.bubbleArt('round'),
+  'bub-tail': () => A.bubbleTailArt('round'),
+  'bub-next': () => A.nextArrowArt(),
+  'bub-leaf': () => A.bubbleLeafArt(),
 };
 const KIT_GLYPHS = ['box', 'boxOn', 'boxX', 'check', 'cross', 'hand', 'arrowR', 'arrowL', 'arrowU', 'arrowD', 'heart', 'lock', 'star', 'coin', 'pin', 'medalB', 'medalS', 'medalG', 'medalNone', 'dot'];
 const URLS = {};
@@ -254,7 +259,7 @@ export const kitURL = (name) => URLS[name] || (URLS[name] = url(KIT_IMAGES[name]
 
 // what the HUD needs on the first frame; everything else is painted in idle time
 // (or at once, the moment a menu opens: see kitReady)
-const FIRST = ['plate-leather', 'plate-dark', 'plate-parchment', 'paper-note', 'paper-news', 'key', 'tip', 'tip-tail', 'panel-dark', 'panel-leather', 'bar', 'btn', 'btn-hover', 'ribbon', 'clipboard', 'clip', 'nb-paper', 'nb-coil', 'nb-box', 'nb-check', 'nb-tick'];
+const FIRST = ['plate-leather', 'plate-dark', 'plate-parchment', 'paper-note', 'paper-news', 'key', 'tip', 'tip-tail', 'panel-dark', 'panel-leather', 'bar', 'btn', 'btn-hover', 'ribbon', 'clipboard', 'clip', 'nb-paper', 'nb-coil', 'nb-box', 'nb-check', 'nb-tick', 'bub', 'bub-tail', 'bub-next', 'bub-leaf'];
 let installed = false, pending = [];
 const put = (name) => document.documentElement.style.setProperty(`--k-${name}`, `url(${kitURL(name)})`);
 export function kitReady() {

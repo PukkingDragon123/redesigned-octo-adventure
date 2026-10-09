@@ -85,21 +85,22 @@
 .wtag { position: absolute; left: 0; top: 0; pointer-events: none; z-index: 2; }
 
 /* ---------------------------------------------------------------- classic dialogue box (unused by default) */
-#dialogue { position: absolute; left: 0; right: 0; margin: 0 auto; bottom: calc(var(--u) * 4 + var(--safe-b)); width: min(calc(var(--u) * 260), 94vw); display: none; z-index: 3; pointer-events: auto; }
+/* the speech bubble's look (paper.css), docked along the bottom with a portrait */
+#dialogue { position: absolute; left: 0; right: 0; margin: 0 auto; bottom: calc(var(--u) * 6 + var(--safe-b)); width: min(calc(var(--u) * 260), calc(100% - var(--u) * 8)); display: none; z-index: 3; pointer-events: auto; }
 #dialogue.on { display: block; }
-.dlg-box { display: flex; gap: calc(var(--u) * 4); align-items: flex-start; min-height: calc(var(--u) * 56); }
-.dlg-portrait { flex: none; width: calc(var(--u) * 48); height: calc(var(--u) * 48); background: #2a1a14 center / 100% no-repeat; }
+#dialogue .dlg-box { display: flex; gap: calc(var(--u) * 4); align-items: flex-start; width: auto; max-width: none; min-height: calc(var(--u) * 40); padding-top: calc(var(--u) * 2); }
+.dlg-box.narr { color: #fff4dc; }
+.dlg-portrait { flex: none; width: calc(var(--u) * 48); height: calc(var(--u) * 48); margin: var(--u); background: #f2e2c8; box-shadow: 0 0 0 var(--u) #3e2218; }
 .dlg-portrait.empty { display: none; }
 .dlg-main { flex: 1; min-width: 0; }
-.dlg-name { color: var(--k-gold); }
 .dlg-text { min-height: calc(var(--u) * 24); white-space: pre-wrap; }
-.dlg-text em { color: var(--k-gold); }
+.dlg-text em { color: #c0452a; }
+.dlg-box.narr .dlg-text em { color: #ffd84a; }
 .dlg-text .w { display: inline-block; position: relative; animation: k-hopr 0.6s steps(1) infinite; }
-.dlg-next { position: absolute; right: calc(var(--u) * 4); bottom: calc(var(--u) * 2); width: calc(var(--u) * 16); height: calc(var(--u) * 16); background: var(--g-arrowD) 0 0 / 100% 100%; animation: k-hopb 0.7s steps(1) infinite; }
 .dlg-choices { display: flex; flex-direction: column; margin-top: calc(var(--u) * 2); }
 .choice { cursor: pointer; padding-left: calc(var(--u) * 18); position: relative; }
-.choice.sel { color: var(--k-gold); }
-.choice.sel::before { content: ''; position: absolute; left: 0; top: calc(var(--u) * -2); width: calc(var(--u) * 16); height: calc(var(--u) * 16); background: var(--g-hand) 0 0 / 100% 100%; }
+.choice.sel { color: #c0452a; }
+.choice.sel::before { content: ''; position: absolute; left: 0; top: calc(var(--u) * -2); width: calc(var(--u) * 16); height: calc(var(--u) * 16); background: var(--g-hand) 0 0 / 100% 100% no-repeat; }
 
 /* ---------------------------------------------------------------- overlays */
 .overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(16, 9, 8, 0.66); pointer-events: auto; z-index: 4; animation: k-fade 0.2s steps(2); }

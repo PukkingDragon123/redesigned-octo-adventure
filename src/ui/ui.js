@@ -5,7 +5,7 @@ import './ui.css';
 import './paper.css';
 import './menus.css';
 import './notebook.css';
-import { Bubbles } from './bubbles.js';
+import { Bubbles, nameTab, frame } from './bubbles.js';
 import { Popups, htmlToMarkup } from './popup.js';
 import { buildPaperHUD, updatePaperHUD, Gauge } from './paperhud.js';
 import { installKit, kitReady, kButton, kPanel, el, snap, snapBox, scale } from './kit.js';
@@ -150,11 +150,12 @@ export class UI {
   }
 
   // ---------------------------------------------------------------- dialogue (the classic box; speech bubbles are the default)
+  // the same cosy bubble as the speech bubbles, docked at the bottom with a portrait
   buildDialogue() {
     const d = el('div');
     d.id = 'dialogue';
-    const box = kPanel('leather', 'dlg-box');
-    box.innerHTML = '<div class="dlg-portrait"></div><div class="dlg-main"><div class="dlg-name k-bold"></div><div class="dlg-text"></div><div class="dlg-choices"></div></div><div class="dlg-next"></div>';
+    const box = el('div', 'bubble dlg-box');
+    box.innerHTML = '<div class="dlg-portrait"></div><div class="dlg-main"><div class="dlg-name"></div><div class="dlg-text"></div><div class="dlg-choices"></div></div><div class="b-next on dlg-next"></div><i class="b-leaf"></i>';
     d.appendChild(box);
     this.root.appendChild(d);
     d.addEventListener('pointerdown', () => (this._dlgClick = true));
@@ -170,12 +171,12 @@ export class UI {
     D.root.classList.add('on');
     const narr = !who && !opts.choices;
     D.box.classList.toggle('narr', narr);
-    D.box.classList.toggle('k-dark', narr);
+    D.box.style.borderImageSource = narr ? `url(${frame('dark')})` : '';
     D.portrait.classList.toggle('empty', !who);
     if (who) {
       // a live 3D head-and-shoulders of the real model, not a flat picture
       if (!this._dlgLive) {
-        this._dlgLive = new LivePortrait(this.game, { art: 48, bust: true, yaw: 0.3, outline: false, bg: '#2a1a14' });
+        this._dlgLive = new LivePortrait(this.game, { art: 48, bust: true, yaw: 0.3, outline: false, bg: '#f2e2c8' });
         this._dlgLive.canvas.style.cssText = 'width:100%;height:100%;display:block;image-rendering:pixelated';
       }
       if (this._dlgLive.canvas.parentNode !== D.portrait) D.portrait.appendChild(this._dlgLive.canvas);
@@ -183,7 +184,9 @@ export class UI {
       this._dlgLive.talk(true);
       setTimeout(() => this._dlgLive?.talk(false), Math.min(4000, 400 + text.length * 30));
     }
-    D.name.textContent = name;
+    const tab = nameTab(who, name, 'dlg-name');
+    D.name.replaceWith(tab);
+    D.name = tab;
     D.name.style.display = name ? '' : 'none';
     D.choices.innerHTML = '';
     D.next.style.display = 'none';

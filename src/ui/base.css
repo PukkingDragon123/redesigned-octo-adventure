@@ -1,18 +1,6 @@
-@import '@fontsource/pixelify-sans/400.css';
-@import '@fontsource/pixelify-sans/600.css';
-@import '@fontsource/pixelify-sans/700.css';
-@import '@fontsource/silkscreen/400.css';
-
-/* Pixelify Sans draws 5 like S and 2 like Z, which is no good for prices and clocks:
-   borrow Silkscreen's digits through a unicode-range face that sits first in the stack */
-@font-face {
-  font-family: 'Cove Digits';
-  src: url('../../node_modules/@fontsource/silkscreen/files/silkscreen-latin-400-normal.woff2') format('woff2');
-  unicode-range: U+0030-0039;
-  size-adjust: 84%;
-  font-weight: 100 900;
-  font-display: block;
-}
+/* Every word on screen is a bitmap-style pixel font (Monogram / BoldPixels, see kit.css)
+   drawn at a whole multiple of its 16 px design size, so glyph pixels land on device
+   pixels: no vector fonts anywhere. */
 
 :root {
   --ink: #2a1a14;
@@ -44,12 +32,15 @@ body {
   overflow: hidden;
   background: #120a10;
   color: var(--cream);
-  font-family: 'Cove Digits', 'Pixelify Sans', 'Silkscreen', monospace;
-  /* Pixelify Sans ships an "fi" ligature that reads like a capital A */
+  font-family: 'Monogram', monospace;
+  font-size: var(--tf, 16px);
+  line-height: calc(var(--u, 1px) * 12);
   font-variant-ligatures: none;
   font-feature-settings: 'liga' 0, 'clig' 0;
+  font-synthesis: none;
   -webkit-font-smoothing: none;
   font-smooth: never;
+  text-rendering: optimizeSpeed;
   user-select: none;
   -webkit-user-select: none;
   touch-action: none;

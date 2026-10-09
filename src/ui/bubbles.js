@@ -1,7 +1,11 @@
-// Pixel-art comic speech bubbles that float over the real 3D speaker, with
-// emotion-shaped outlines (shouts are spiky, fear is wobbly, thoughts are clouds,
-// whispers are dashed), little mood marks, per-letter text effects, name plates
-// and reply bubbles for choices. Narration appears on a framed caption plate.
+// Simple, classic, cosy speech bubbles that float over the real 3D speaker: a cream
+// bubble with round pixel corners, a one-pixel brown outline, a hard drop shadow
+// and a little tail pointing at whoever is talking, their name on a small tab in
+// their own colour, a tiny leaf pinned to the corner and a bouncing arrow when
+// there's more to read. Moods stay gentle: shouts get little spikes, thoughts a
+// cool tint and thought dots, whispers a dotted outline, plus small mood marks and
+// per-letter text effects. Reply bubbles for choices; narration on a dark cocoa
+// bubble across the top.
 //
 // Everything is drawn on the kit's pixel grid: frames are 9-slices at a whole
 // number of device pixels per art pixel, text is the pixel font at its native
@@ -9,7 +13,7 @@
 // pixels (steps()), so nothing is ever resampled or blurred.
 import { input } from '../core/input.js';
 import { sound } from '../game/sound.js';
-import { bubbleArt, bubbleTailArt, BUBBLE_JOIN } from './kitart.js';
+import { bubbleArt, bubbleTailArt, nameTabArt, BUBBLE_JOIN, BUBBLE_TAIL } from './kitart.js';
 import { glyphURL } from '../art/icons.js';
 import { el, scale, snap } from './kit.js';
 
@@ -22,8 +26,36 @@ function toURL(p) {
   c.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(p.data), p.w, p.h), 0, 0);
   return c.toDataURL();
 }
-export const frame = (style) => URLS.get(`f${style}`) || (URLS.set(`f${style}`, toURL(bubbleArt(style))), URLS.get(`f${style}`));
-export const tail = (style) => URLS.get(`t${style}`) || (URLS.set(`t${style}`, toURL(bubbleTailArt(style))), URLS.get(`t${style}`));
+const cached = (key, make) => URLS.get(key) || (URLS.set(key, toURL(make())), URLS.get(key));
+export const frame = (style) => cached(`f${style}`, () => bubbleArt(style));
+// flip: the tip on the right (a mirrored image, never a CSS flip)
+export const tail = (style, flip = false) => cached(`t${style}${flip ? 'r' : ''}`, () => bubbleTailArt(style, flip));
+// how many art px of the tail overlap the bubble's bottom edge (its outline row sits
+// higher on a spiky shout; thought dots float a little below)
+export const tailJoin = (style) => (style === 'shout' ? 5 : style === 'think' ? 1 : BUBBLE_JOIN);
+export const TAIL_W = BUBBLE_TAIL[0], TAIL_H = BUBBLE_TAIL[1];
+
+// ---------------------------------------------------------------- name tabs
+const TAB = {
+  hank: 0xe07a2a, hankBuried: 0xe07a2a, grandma: 0xd0566a, reaper: 0x6a4a8a, gus: 0x4f8a3a, marie: 0x3a78b8,
+  doug: 0x34548e, birdie: 0x2a8a86, ingrid: 0x8a5ab0, lou: 0xb0582a, agnes: 0xc0608a, pip: 0xc8902a, pop: 0x4a96bc,
+  ollie: 0x7a6a48, cat: 0x9a6a4a,
+};
+const TAB_ANY = [0xd0566a, 0x4f8a3a, 0x3a78b8, 0x8a5ab0, 0xe07a2a, 0x2a8a86, 0xc8902a];
+export function tabColor(who, name = '') {
+  if (TAB[who]) return TAB[who];
+  let h = 0;
+  for (const ch of String(name || who || '')) h = (h * 31 + ch.charCodeAt(0)) | 0;
+  return TAB_ANY[Math.abs(h) % TAB_ANY.length];
+}
+// the speaker's name on a little coloured tab riding the bubble's top edge
+export function nameTab(who, name, cls = '') {
+  const e = el('div', `b-name k-bold${cls ? ` ${cls}` : ''}`);
+  e.textContent = name;
+  const c = tabColor(who, name);
+  e.style.borderImageSource = `url(${cached(`n${c}`, () => nameTabArt(c))})`;
+  return e;
+}
 
 // emotion -> bubble look
 function moodOf(expr) {
@@ -113,14 +145,13 @@ export class Bubbles {
     const b = el('div', `bubble b-${mood.style}`);
     b.style.borderImageSource = `url(${frame(mood.style)})`;
     const tl = el('div', 'b-tail');
-    tl.style.backgroundImage = `url(${tail(mood.style)})`;
-    const nameEl = name ? el('div', 'k-plate k-dark k-bold b-name', '') : null;
-    if (nameEl) nameEl.textContent = name;
+    const nameEl = name ? nameTab(who, name) : null;
     const txt = el('div', 'b-text');
     const next = el('div', 'b-next');
     b.appendChild(txt);
     b.appendChild(next);
     if (nameEl) b.appendChild(nameEl);
+    if (mood.style !== 'shout') b.appendChild(el('i', 'b-leaf'));
     mood.marks.forEach((m, i) => {
       const e = el('img', `b-mark m${i}`);
       e.src = glyphURL(`mark_${m}`);
@@ -138,7 +169,7 @@ export class Bubbles {
       let i = 0, acc = 0, done = false, sel = 0;
       const speed = opts.speed ?? 40;
       const items = [];
-      const A = (this.active = { wrap, b, tl, speaker, resolve: null, choiceEls: items, hasName: !!nameEl });
+      const A = (this.active = { wrap, b, tl, style: mood.style, speaker, resolve: null, choiceEls: items, hasName: !!nameEl });
       const letters = layoutText(txt, parts);
       const addChar = () => letters[i - 1]?.classList.remove('hid');
       const finish = () => {
@@ -221,10 +252,11 @@ export class Bubbles {
     this.active.replySpeaker = this.findSpeaker('hank', {});
   }
 
-  // narration: a dark framed caption plate across the top
+  // narration: a dark cocoa bubble (no tail) across the top
   narrate(text, opts) {
     this.clear();
-    const p = el('div', 'k-panel k-dark narr-plate');
+    const p = el('div', 'bubble b-dark narr-plate');
+    p.style.borderImageSource = `url(${frame('dark')})`;
     const txt = el('div', 'n-text');
     const next = el('div', 'b-next');
     p.appendChild(txt);
@@ -305,10 +337,11 @@ export class Bubbles {
       }
     }
     const m = 6 * u;
-    // keep clear of the cutscene letterbox bars and leave room for the name plate
+    // keep clear of the cutscene letterbox bars and leave room for the name tab
     const box = this.ui.root.classList.contains('letterbox') ? H * 0.09 : 0;
-    const top = m + box + (A.hasName ? 16 * u : 0);
-    const tailBelow = (14 - BUBBLE_JOIN) * u; // how far the tail tip hangs below the bubble box
+    const top = m + box + (A.hasName ? 12 * u : 0);
+    const join = tailJoin(A.style);
+    const tailBelow = (TAIL_H - join) * u; // how far the tail tip hangs below the bubble box
     let bx = sx - bw * 0.3;
     let by = sy - bh - tailBelow;
     bx = Math.max(m, Math.min(W - bw - m, bx));
@@ -316,9 +349,18 @@ export class Bubbles {
     bx = snap(Math.round(bx / u) * u);
     by = snap(Math.round(by / u) * u);
     A.wrap.style.transform = `translate(${bx}px, ${by}px)`;
-    const tx = Math.max(10 * u, Math.min(bw - 26 * u, sx - bx - 2 * u));
+    // the tail's tip points at the speaker: tip at its left end, or (speaker right of
+    // the middle) a mirrored tail with the tip at its right end; kept on the flat of
+    // the bubble's bottom edge, clear of the round corners
+    const flip = sx - bx > bw / 2;
+    const want = flip ? sx - bx - (TAIL_W - 2) * u : sx - bx - u;
+    const tx = Math.max(3 * u, Math.min(bw - (TAIL_W + 4) * u, want));
+    if (A.flip !== flip) {
+      A.flip = flip;
+      A.tl.style.backgroundImage = `url(${tail(A.style, flip)})`;
+    }
     A.tl.style.left = `${snap(Math.round(tx / u) * u)}px`;
-    A.tl.style.top = `${snap(bh - BUBBLE_JOIN * u)}px`;
+    A.tl.style.top = `${snap(bh - join * u)}px`;
     A.tl.style.display = onScreen ? '' : 'none';
     if (A.replies) {
       // reply bubbles stack near Hank (or bottom right)
