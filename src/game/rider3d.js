@@ -58,12 +58,22 @@ export class VoxelRider {
     this.char = id;
     this.ch = new VoxelCharacter(this.game, id, { y: 0 });
     this.ch.groundSnap = false;
+    this.ch.onStep = (c, v, f) => this.footfall(v, f);
     this.ch.onReassembled = () => {
       this.reassembled = true;
       this.game.sound?.play('reassemble');
     };
     this.mounted = false;
     this.wantMount = true;
+  }
+
+  // on foot, flat out: every footfall kicks up a little puff of dust behind him
+  footfall(v, f) {
+    const W = this.game.walker;
+    if (!this.onFoot || !W?.sprinting || !W.grounded || W.wet || this.game.interior?.active) return;
+    const fx = Math.sin(W.yaw), fz = Math.cos(W.yaw);
+    const x = f ? f.x : W.pos.x, z = f ? f.z : W.pos.z, y = f ? f.y : W.pos.y;
+    this.game.effects?.dustKick?.(x - fx * 0.12, y + 0.05, z - fz * 0.12, { scale: 0.3 + Math.min(0.12, (v - 5) * 0.03), vx: -fx * 1.2, vz: -fz * 1.2 });
   }
 
   setOutfit(id) {
@@ -584,12 +594,15 @@ export class VoxelRider {
       ch.targetYaw = W.yaw;
       ch.speedOverride = W.speed;
       ch.groundSnap = false;
+      // sprinting: strides, arm pumps and lean blend in (and out) over a moment
+      ch.sprint = damp(ch.sprint || 0, W.sprinting ? 1 : 0, W.sprinting ? 6 : 4, dt);
       if (ch.anim !== 'kick' || ch.animT > 0.75) ch.play(W.grounded ? 'idle' : 'air');
-      ch.setExpr(W.speed > 4 ? 'happy' : 'neutral');
+      ch.setExpr(W.sprinting ? 'determined' : W.speed > 4 ? 'happy' : 'neutral');
       ch.update(dt, camPos);
       ch.speedOverride = null;
       return;
     }
+    if (ch.sprint) ch.sprint = 0;
     if (this.crashed) {
       if (ch.broken?.phase === 'scatter' && bike.crash < 1.15) ch.reassemble();
       if (this.flopping && bike.crash < 0.45 && ch.anim === 'lie') { ch.play('idle'); ch.kick('sq', 1.2); }

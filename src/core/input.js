@@ -74,7 +74,7 @@ class Input {
     this.pad = null;
     // touch: the left stick (steer + lean, or walk), the brake button, held buttons and the trick radial (rad*)
     this.touch = {
-      steer: 0, brake: 0, walkX: 0, walkY: 0, buttons: new Set(), run: false, trick: false,
+      steer: 0, brake: 0, walkX: 0, walkY: 0, buttons: new Set(), trick: false,
       leanBack: 0, leanFwd: 0, radSteer: 0, radUp: 0, radDown: 0,
     };
     this.tappedActions = new Set(); // on-screen button taps, latched like key taps
@@ -223,7 +223,7 @@ class Input {
     const T = this.touch, on = this.enabled;
     const kx = (this.now.has('right') ? 1 : 0) - (this.now.has('left') ? 1 : 0);
     const ky = (this.now.has('up') ? 1 : 0) - (this.now.has('down') ? 1 : 0);
-    let ax = 0, ay = 0, mx = 0, my = 0, padX = false, padY = false, padMove = false, padMag = 0;
+    let ax = 0, ay = 0, mx = 0, my = 0, padX = false, padY = false, padMove = false;
     if (this.pad) {
       ax = this.pad.axes[0] || 0;
       ay = this.pad.axes[1] || 0;
@@ -234,7 +234,6 @@ class Input {
       const m = Math.hypot(rx, ry);
       if (m > 0.18) {
         padMove = true;
-        padMag = m;
         const k = Math.min(1, (m - 0.18) / 0.72) / m;
         mx = rx * k;
         my = -ry * k;
@@ -262,10 +261,9 @@ class Input {
     else { this.moveXS = ramp(this.moveXS, kx, dt); this.moveYS = ramp(this.moveYS, padY ? ay : ky, dt); }
     if (Math.abs(this.moveXS) < 1e-4) this.moveXS = 0;
     if (Math.abs(this.moveYS) < 1e-4) this.moveYS = 0;
-    // ---- running on foot: Shift / RB held, or a stick pushed right out (with a little
-    // hysteresis so a wobbly thumb doesn't flicker between a walk and a run)
-    const stickRun = padMove && (this.runOn ? padMag > 0.82 : padMag > 0.93);
-    this.runOn = on && (this.now.has('drift') || !!T.run || stickRun);
+    // ---- sprinting on foot: Shift / RB or the touch SPRINT button held (a stick pushed right
+    // out jogs: see walker.js)
+    this.runOn = on && (this.now.has('drift') || this.now.has('sprint'));
     // ---- brakes bite in over a moment and let go quickly. S / LT held on its own is the brake:
     // pressed in the middle of pedalling it's a stroke, and only brakes if it's held on
     let b = footBHeld && (!this.brakeStroke || this.brakeT > BRAKE_HOLD) ? 1 : 0;
@@ -304,7 +302,7 @@ class Input {
   brake() {
     return this.enabled ? this.brakeS : 0;
   }
-  // running on foot
+  // sprinting on foot
   run() {
     return this.enabled && this.runOn;
   }

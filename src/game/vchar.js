@@ -574,6 +574,7 @@ export class VoxelCharacter {
     this.visible = true;
     this.speed = 0;
     this.speedOverride = null;
+    this.sprint = 0; // 0..1 flat out: quicker strides, pumping arms, leaning into it
     this.phase = 0;
     this.hop = 0;
     this.hopV = 0;
@@ -1213,7 +1214,8 @@ export class VoxelCharacter {
     const legL = P.hipH;
     const style = per.walk;
     const stepLen = legL * (style === 'waddle' ? 0.55 : style === 'lumber' ? 0.7 : 0.8);
-    const sps = clamp(v / stepLen, 0, style === 'waddle' ? 5.2 : 4.4);
+    const spr = this.sprint;
+    const sps = clamp(v / stepLen, 0, (style === 'waddle' ? 5.2 : 4.4) + spr * 2.4);
     if (ikW <= 0) this.phase += sps * Math.PI * dt;
     const ph = this.phase;
     const sn = S(ph), cs = C(ph);
@@ -1240,14 +1242,16 @@ export class VoxelCharacter {
     T.bodyRz += sn * sway * 0.3 * wk;
     T.twist += sn * (style === 'strut' ? 0.2 : 0.1) * wk;
     T.headZ -= sn * sway * 0.6 * wk;
-    T.lean += run * 0.28 + (style === 'lumber' ? 0.06 : 0) + (style === 'shamble' ? 0.25 : 0);
+    T.lean += run * 0.28 + spr * 0.16 + (style === 'lumber' ? 0.06 : 0) + (style === 'shamble' ? 0.25 : 0);
+    T.headX -= spr * 0.12;
     if (style === 'strut') T.headX -= 0.1;
     if (style === 'slow') T.lean += 0.12;
     // arms swing opposite to legs
     if (armsToo) {
-      const aa = (0.35 + run * 0.6) * wk * (style === 'march' ? 1.6 : 1);
-      T.aFL = -aa * sn; T.aFR = aa * sn;
-      T.eBL = 0.25 + run * 1.2 + Math.max(0, -sn) * 0.3 * wk; T.eBR = 0.25 + run * 1.2 + Math.max(0, sn) * 0.3 * wk;
+      // (sprinting: elbows locked near square, big pumps from the shoulder)
+      const aa = (0.35 + run * 0.6 + spr * 0.55) * wk * (style === 'march' ? 1.6 : 1);
+      T.aFL = -aa * sn + spr * 0.2; T.aFR = aa * sn + spr * 0.2;
+      T.eBL = 0.25 + run * 1.2 + spr * 0.25 + Math.max(0, -sn) * 0.3 * wk; T.eBR = 0.25 + run * 1.2 + spr * 0.25 + Math.max(0, sn) * 0.3 * wk;
       if (style === 'shamble') { T.aFL = T.aFR = 1.4; T.eBL = T.eBR = 0.1; T.aFL += sn * 0.1; T.aFR -= sn * 0.1; }
     }
     // footsteps (planted feet call it themselves)
@@ -1460,7 +1464,7 @@ export class VoxelCharacter {
     const run = clamp((v - 1.6) / 2, 0, 1);
     const duty = 0.53 - 0.21 * run;
     const style = this.persona.walk;
-    const cadence = clamp(2.4 + 0.85 * v, 2.4, 5.8) * Math.sqrt(0.6 / legLen) * (style === 'waddle' ? 1.2 : style === 'lumber' ? 0.9 : style === 'skip' ? 1.1 : 1);
+    const cadence = clamp(2.4 + 0.85 * v, 2.4, 5.8 + this.sprint * 2.6) * Math.sqrt(0.6 / legLen) * (style === 'waddle' ? 1.2 : style === 'lumber' ? 0.9 : style === 'skip' ? 1.1 : 1);
     const cycle = 2 / cadence;
     if (moving && !F.moving) {
       // setting off: the foot further forward is mid-stance (it's under him), the other
@@ -1569,7 +1573,7 @@ export class VoxelCharacter {
     f.lift = 0;
     f.t = 0;
     f.yaw = this.yaw;
-    this.onStep?.(this, v);
+    this.onStep?.(this, v, f);
   }
   // the ground (or deck) under a foot; something wildly off (a ledge, a boat, a stage the
   // physics doesn't know) counts as flat ground at the character's own height

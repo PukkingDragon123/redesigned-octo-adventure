@@ -415,6 +415,23 @@ const verbose = process.argv.includes('-v');
     check('runtime door: shut blocks, updateBox opens, removeBox clears', shut < 3 && open > 3.5 && shutAgain < 3 && W.pos.z > 3.5, `shut=${shut.toFixed(2)} open=${open.toFixed(2)} again=${shutAgain.toFixed(2)} removed=${W.pos.z.toFixed(2)}`);
   }
 }
+// --- 15. on foot: the push sets the pace (a phone thumb half way out walks briskly, all the way
+// out jogs), sprinting is properly fast, and indoors he keeps to a walk
+{
+  const pace = (c, T = 3, phys = null) => {
+    const W = new Walker({ physics: flat });
+    W.place(0, 0, 0, 0);
+    W.phys = phys;
+    for (let i = 0; i < T * 60; i++) W.update(1 / 60, c, 0);
+    return W;
+  };
+  const half = pace({ mx: 0, mz: 0.55 }), full = pace({ mx: 0, mz: 1 }), gentle = pace({ mx: 0, mz: 0.25 });
+  check('on foot: a half push walks briskly, all the way out jogs, a gentle push ambles', half.speed > 3.2 && half.speed < 3.6 && full.speed > 4.8 && full.speed < 5.2 && gentle.speed < 2 && gentle.speed > 1, `gentle=${gentle.speed.toFixed(2)} half=${half.speed.toFixed(2)} full=${full.speed.toFixed(2)}`);
+  const spr = pace({ mx: 0.4, mz: 0.6, run: true }), sprT = pace({ mx: 0, mz: 1, run: true }, 0.7);
+  check('on foot: sprinting runs flat out (~8 m/s) and gets there quickly', spr.speed > 7.8 && spr.sprinting && sprT.speed > 7.5, `sprint=${spr.speed.toFixed(2)} after 0.7 s=${sprT.speed.toFixed(2)}`);
+  const inside = pace({ mx: 0, mz: 1, run: true }, 3, flat);
+  check("on foot: indoors he doesn't charge about", inside.speed <= 5.01 && pace({ mx: 0, mz: 1 }, 3, flat).speed <= 3.41, `sprint indoors=${inside.speed.toFixed(2)}`);
+}
 const fails = results.filter((r) => !r.ok);
 console.log(`\n${results.length - fails.length}/${results.length} passed`);
 process.exit(fails.length ? 1 : 0);

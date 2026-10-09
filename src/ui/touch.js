@@ -6,9 +6,9 @@
 // crank (ui/crank.js: drag round the chainring; backwards is a coaster brake), with the
 // brake, hop, the bell and one TRICK button round it: hold TRICK to drift (or strike a
 // pose in the air) and slide your thumb off it to pick a direction from the little radial.
-// On foot the stick walks (a gentle push ambles, all the way out runs) and there's a JUMP
-// button; a paper tag shows whatever Hank can do right here (talk, hop on, kick the
-// pumpkin...): tap it.
+// On foot the stick walks (a gentle push ambles, half way walks briskly, all the way out
+// jogs), with JUMP and a SPRINT button to hold for a flat-out run; a paper tag shows whatever
+// Hank can do right here (talk, hop on, kick the pumpkin...): tap it.
 //
 // Buttons are hit-tested from every finger on the screen, and neighbouring buttons'
 // hit circles overlap a little, so a thumb can roll from one onto the next without lifting.
@@ -147,10 +147,13 @@ const BUTTONS = [
   ['trick', 'TRICK', 'drift', 't_trick', 'purple', 38, 66, 76, 'ride'],
   ['bell', '', 'bell', 't_bell', 'cream', 26, 8, 146, 'ride'],
   ['fjump', 'JUMP', 'jump', 't_hop', 'blue', 50, 12, 18, 'foot'],
-  ['photo', 'SNAP', 'camera', 't_photo', 'cream', 32, 76, 22, 'foot'],
+  ['sprint', 'SPRINT', 'sprint', 't_run', 'gold', 44, 68, 18, 'foot'],
+  ['photo', 'SNAP', 'camera', 't_photo', 'cream', 32, 74, 84, 'foot'],
 ];
 const DEAD = 0.08; // riding stick dead zone (fraction of its throw)
-const WALK_DEAD = 0.12; // walking stick dead zone (round)
+const KNOB = 22; // how far (art pixels) the walking knob travels before it sits on the ring
+const WALK_DEAD = 0.1; // walking stick dead zone (round, a fraction of the knob's throw)
+const WALK_FULL = 0.94; // ...and where the push counts as all the way out (a jog)
 const LEAN_AT = 0.55; // how far up / down the stick goes before Hank leans
 const PETAL_AT = 12; // art pixels the thumb slides off TRICK to pick a direction
 
@@ -359,16 +362,18 @@ export class TouchControls {
     const u = scale.u;
     const T = input.touch;
     if (this.game.onFoot) {
-      // a free stick for walking: a round dead zone, then the push sets the pace (full walk at
-      // ~80%); all the way out runs, and keeps running down to ~75% so a wobbly thumb doesn't
-      // flicker between a walk and a run
-      this.knob.style.transform = `translate(${Math.round(dx * 22) * u}px, ${Math.round(dy * 22) * u}px)`;
-      const m = Math.hypot(dx, dy);
-      const k = m < WALK_DEAD ? 0 : Math.min(1, (m - WALK_DEAD) / (0.8 - WALK_DEAD)) / m;
-      T.walkX = dx * k;
-      T.walkY = -dy * k;
+      // a free stick for walking. The knob follows the thumb one to one out to its stop on the
+      // ring (KNOB art pixels) and the push is measured against that same throw, so what you
+      // see is what you get: about half way walks briskly, the knob against the ring jogs
+      // (walker.js), a round dead zone in the middle. Sprinting is the SPRINT button.
+      let wx = (e.clientX - C0.x) / (KNOB * u), wy = (e.clientY - C0.y) / (KNOB * u);
+      const m = Math.hypot(wx, wy);
+      if (m > 1) { wx /= m; wy /= m; }
+      this.knob.style.transform = `translate(${Math.round(wx * KNOB) * u}px, ${Math.round(wy * KNOB) * u}px)`;
+      const k = m < WALK_DEAD ? 0 : Math.min(1, (m - WALK_DEAD) / (WALK_FULL - WALK_DEAD)) / Math.min(1, m);
+      T.walkX = wx * k;
+      T.walkY = -wy * k;
       T.steer = T.walkX;
-      T.run = T.run ? m > 0.75 : m > 0.88;
       T.leanBack = T.leanFwd = 0;
       return;
     }
@@ -393,7 +398,6 @@ export class TouchControls {
     T.steer = 0;
     T.walkX = T.walkY = 0;
     T.leanBack = T.leanFwd = 0;
-    T.run = false;
     this.knob.style.transform = '';
     this.stick.style.transform = '';
     this.shift = null;
@@ -418,7 +422,6 @@ export class TouchControls {
     const T = input.touch;
     T.steer = T.walkX = T.walkY = 0;
     T.leanBack = T.leanFwd = 0;
-    T.run = false;
     T.brake = 0;
     T.radSteer = T.radUp = T.radDown = 0;
     if (this.pointers?.size) this.pointers.clear();
