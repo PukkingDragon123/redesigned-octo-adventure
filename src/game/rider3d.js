@@ -58,12 +58,22 @@ export class VoxelRider {
     this.char = id;
     this.ch = new VoxelCharacter(this.game, id, { y: 0 });
     this.ch.groundSnap = false;
+    this.ch.onStep = (c, v, f) => this.footfall(v, f);
     this.ch.onReassembled = () => {
       this.reassembled = true;
       this.game.sound?.play('reassemble');
     };
     this.mounted = false;
     this.wantMount = true;
+  }
+
+  // on foot, flat out: every footfall kicks up a little puff of dust behind him
+  footfall(v, f) {
+    const W = this.game.walker;
+    if (!this.onFoot || !W?.sprinting || !W.grounded || W.wet || this.game.interior?.active) return;
+    const fx = Math.sin(W.yaw), fz = Math.cos(W.yaw);
+    const x = f ? f.x : W.pos.x, z = f ? f.z : W.pos.z, y = f ? f.y : W.pos.y;
+    this.game.effects?.dustKick?.(x - fx * 0.12, y + 0.05, z - fz * 0.12, { scale: 0.3 + Math.min(0.12, (v - 5) * 0.03), vx: -fx * 1.2, vz: -fz * 1.2 });
   }
 
   setOutfit(id) {
@@ -300,7 +310,7 @@ export class VoxelRider {
         }
         // a friendly villager close by: let go of the bars and wave
         const mood = best.ref?.brain?.mood;
-        if (best.kind === 'person' && best.d < 11 && bike.speed < 9 && !L.waveCool && (!mood || mood === 'friendly' || mood === 'fan')) {
+        if (best.kind === 'person' && best.d < 11 && bike.speed < 11 && !L.waveCool && (!mood || mood === 'friendly' || mood === 'fan')) {
           L.waveCool = 22 + Math.random() * 12;
           L.waveT = 1.5;
           ch.tempExpr(Math.random() < 0.5 ? 'excited' : 'happy', 1.8);
@@ -318,7 +328,7 @@ export class VoxelRider {
       ch.tempExpr(q < 35 ? 'worried' : q < 65 ? 'confused' : 'happy', 1.1);
     }
     // ---- humming while cruising along
-    const cruising = bike.grounded && bike.speed > 2 && bike.speed < 10 && !bike.drifting && bike.wheelie < 0.1 && bike.wobble < 0.2;
+    const cruising = bike.grounded && bike.speed > 2 && bike.speed < 12.5 && !bike.drifting && bike.wheelie < 0.1 && bike.wobble < 0.2;
     L.cruise = cruising ? L.cruise + dt : 0;
     if (L.cruise > 4 && !L.humCool && !L.humT) { L.humT = 2.5 + Math.random() * 2; L.humCool = 12 + Math.random() * 14; }
     if (L.humT > 0) {
@@ -584,12 +594,15 @@ export class VoxelRider {
       ch.targetYaw = W.yaw;
       ch.speedOverride = W.speed;
       ch.groundSnap = false;
+      // sprinting: strides, arm pumps and lean blend in (and out) over a moment
+      ch.sprint = damp(ch.sprint || 0, W.sprinting ? 1 : 0, W.sprinting ? 6 : 4, dt);
       if (ch.anim !== 'kick' || ch.animT > 0.75) ch.play(W.grounded ? 'idle' : 'air');
-      ch.setExpr(W.speed > 4 ? 'happy' : 'neutral');
+      ch.setExpr(W.sprinting ? 'determined' : W.speed > 4 ? 'happy' : 'neutral');
       ch.update(dt, camPos);
       ch.speedOverride = null;
       return;
     }
+    if (ch.sprint) ch.sprint = 0;
     if (this.crashed) {
       if (ch.broken?.phase === 'scatter' && bike.crash < 1.15) ch.reassemble();
       if (this.flopping && bike.crash < 0.45 && ch.anim === 'lie') { ch.play('idle'); ch.kick('sq', 1.2); }
@@ -641,8 +654,8 @@ export class VoxelRider {
       else if (bike.exhausted) ch.setExpr('dizzy');
       else if (bike.tired > 0.5) ch.setExpr('worried');
       else if (Lf.effort > 0.4 || (bike.tired > 0.2 && bike.pushing)) ch.setExpr('determined');
-      else if (bike.speed > 13) ch.setExpr('excited');
-      else if (bike.speed > 9) ch.setExpr('happy');
+      else if (bike.speed > 16) ch.setExpr('excited');
+      else if (bike.speed > 11.5) ch.setExpr('happy');
       else if (Lf.humT > 0) ch.setExpr('happy');
       else if (Lf.still > 12) ch.setExpr('sleepy');
       else ch.setExpr('neutral');

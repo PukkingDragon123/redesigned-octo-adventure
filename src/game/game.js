@@ -490,6 +490,7 @@ export class Game {
     // the crank only takes strokes on the bike (input resets it otherwise: nothing banks up)
     input.riding = !(this.mode !== 'ride' || this.ui.dialogueTick || this.ui.menuStack.length || this.onFoot);
     if (!input.riding) return zero;
+    this.bike.autoGear = this.settings.gears !== 'manual';
     // riding assists on touch screens: steadier balance, forgiving landings, no slide-outs
     const assist = this.assist ?? (!!this.touch?.on || input.lastDevice === 'touch');
     if (this.auto) {
@@ -503,6 +504,15 @@ export class Game {
     }
     const swallowed = this.ui.inputSwallowed();
     const lean = input.lean();
+    // gears by hand (Z / X, the d-pad, the touch shifter): the first shift takes them off automatic
+    // (picked as Automatic in Settings, a hand shift only holds for a moment: bike.js)
+    const shift = swallowed ? 0 : (input.pressed('shiftUp') ? 1 : 0) - (input.pressed('shiftDown') ? 1 : 0);
+    if (shift) this.bike.queueShift(shift);
+    if (shift && this.settings.gears === undefined) {
+      this.settings.gears = 'manual';
+      this.saveSettings();
+      this.ui.pop('Gears by hand now: low gear to get going and climb, top gear to fly. (Settings has them on automatic again.)', { expr: 'happy' });
+    }
     return {
       turn: input.crankTurn(),
       brake: input.brake(),
@@ -899,7 +909,7 @@ export class Game {
   updateSpeedLines() {
     const b = this.bike;
     const riding = this.mode === 'ride' && !this.onFoot && b.crash <= 0;
-    const k = riding ? clamp((b.speed - 8.5) / 4, 0, 1) + (b.boostTime > 0 ? 0.35 : 0) + (!b.grounded && Math.abs(b.airPitchVel) > 3 ? 0.4 : 0) : 0;
+    const k = riding ? clamp((b.speed - 12.5) / 5, 0, 1) + (b.boostTime > 0 ? 0.35 : 0) + (!b.grounded && Math.abs(b.airPitchVel) > 3 ? 0.4 : 0) : 0;
     const on = k > 0.04;
     if (on || this._lines) this.effects.speedLines?.(on, clamp(k, 0, 1));
     this._lines = on;

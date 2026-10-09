@@ -33,8 +33,8 @@ export const SKILLS = [
   },
   {
     id: 'cadence', name: 'Smooth Spinning', icon: 'skill_cadence', unit: 's',
-    how: 'Turn the crank in smooth, brisk circles: alternate W and S in a steady beat, or keep a thumb (or the right stick) going round. No stalls, no flailing. Spin too hard for too long and Hank runs out of puff.',
-    desc: 'Bessie has three gears and one speed: whatever your legs can keep up.',
+    how: 'Turn the crank in smooth, brisk circles: alternate W and S in a steady beat, or keep a thumb (or the right stick) going round. No stalls, no flailing. Pick a gear your legs can keep turning (Z / X). Spin flat out and Hank is puffed in a few seconds.',
+    desc: 'Bessie has three gears and one speed: whatever your legs can keep up. Low gear climbs, top gear flies.',
     tiers: [['cadence', 4, 'Spin smoothly for 4 seconds'], ['cadence', 10, 'Spin smoothly for 10 seconds'], ['cadence', 25, 'Spin smoothly for 25 seconds']],
     notes: ['"Hum a waltz. One, two, three, one, two, three."', '"Downhill, let her roll. Uphill, dance on the pedals."', '"Beat the mail van to the lighthouse. Don\'t tell the postman."'],
   },

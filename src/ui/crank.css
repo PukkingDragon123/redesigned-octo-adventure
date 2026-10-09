@@ -33,7 +33,7 @@
 /* phones held upright: up off the home bar, like the buttons */
 .k-portrait .touchmode .crank-hud { bottom: calc(var(--u) * 26 + var(--safe-b, 0px)); }
 /* which key (or trigger) goes down next */
-.crank-hud .ck { position: absolute; left: calc(var(--u) * 1); top: calc(var(--u) * 1); display: none; gap: calc(var(--u) * 2); pointer-events: none; }
+.crank-hud .ck { position: absolute; left: calc(var(--u) * 17); top: calc(var(--u) * 1); display: none; gap: calc(var(--u) * 2); pointer-events: none; }
 .crank-hud .ck.on { display: flex; }
 .crank-hud .ck .k-key { opacity: 0.75; }
 .crank-hud .ck .k-key.hot { opacity: 1; }

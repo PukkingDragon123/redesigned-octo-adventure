@@ -8,17 +8,20 @@
 // walls and corners slide him along instead of sticking. Kerbs and steps snap the
 // physics height but the body eases over them (stepOffset) so it doesn't pop.
 //
-// The stick sets the pace (a gentle push ambles, a full one walks, Shift / RB / the stick
-// pushed right out runs). Jumps are forgiving: a press just before landing still jumps when
-// he touches down, a press just after stepping off an edge still counts, and letting go early
-// makes a smaller hop.
+// The stick sets the pace: a gentle push ambles, a normal one (about half way out) walks
+// briskly, all the way out (or a key held) jogs. Sprinting (Shift / RB / the SPRINT button
+// held) runs flat out with any push. Indoors (Nana's cabin) he keeps to a walk. Jumps are
+// forgiving: a press just before landing still jumps when he touches down, a press just
+// after stepping off an edge still counts, and letting go early makes a smaller hop.
 import * as THREE from 'three';
 import { clamp, damp, wrapAngle } from '../core/math.js';
 
-const WALK = 2.6, RUN = 5.6; // top speeds (m/s)
+const WALK = 3.4, JOG = 5, SPRINT = 8.2; // top speeds (m/s): a brisk walk, a jog, flat out
+const BRISK = 0.55; // the push (0..1) that walks briskly; past it the pace rises to a jog
 const JUMP_V = 5.4;
 const BUFFER = 0.15, COYOTE = 0.12; // seconds
 const ACCEL = 14; // speeding up on the ground (m/s^2)
+const ACCEL_SPRINT = 18; // ...when he really goes for it
 const DECEL = 20; // slowing down or turning against his own momentum
 const AIR = 4.5; // a little steering in the air
 const TURN = 10.5; // fastest turn (rad/s)
@@ -42,6 +45,7 @@ export class Walker {
     this.drifting = false;
     this.airTime = 0;
     this.vy = 0;
+    this.sprinting = false; // flat out (the rider kicks up dust and pumps his arms)
     this.kickT = 0;
     this.jumpBuf = 0; // a jump pressed a moment ago, waiting to land
     this.offGround = 0; // seconds since he last stood on something
@@ -80,15 +84,18 @@ export class Walker {
     const len = Math.hypot(dx, dz);
     const mag = Math.min(1, len);
     if (len > 1e-4) { dx /= len; dz /= len; }
-    const top = (c.run ? RUN : WALK) * (this.surface === 'water' || this.wet ? 0.5 : 1);
-    const want = mag * top;
+    // the pace from the push (see the top); sprinting, a half push is already flat out
+    const indoor = !!this.phys;
+    let want = c.run ? SPRINT * Math.min(1, mag / 0.4) : mag <= BRISK ? (WALK * mag) / BRISK : WALK + ((JOG - WALK) * (mag - BRISK)) / (1 - BRISK);
+    if (indoor) want = Math.min(want, c.run ? JOG : WALK);
+    if (this.surface === 'water' || this.wet) want *= 0.5;
     // ---- accelerate towards the wanted velocity (braking and turning back bite harder)
     const sp0 = Math.hypot(this.vel.x, this.vel.z);
     const ex = dx * want - this.vel.x, ez = dz * want - this.vel.z;
     const el = Math.hypot(ex, ez);
     if (el > 1e-5) {
       const against = this.vel.x * ex + this.vel.z * ez < 0 || want < sp0;
-      const a = this.grounded ? (against ? DECEL : ACCEL) : AIR;
+      const a = this.grounded ? (against ? DECEL : c.run ? ACCEL_SPRINT : ACCEL) : AIR;
       const step = Math.min(el, a * dt);
       this.vel.x += (ex / el) * step;
       this.vel.z += (ez / el) * step;
@@ -168,6 +175,7 @@ export class Walker {
     if (g.water) { this.vel.multiplyScalar(Math.exp(-3 * dt)); }
     const fwdPrev = this.fwdSpeed;
     this.speed = Math.hypot(this.vel.x, this.vel.z);
+    this.sprinting = !!c.run && this.speed > JOG + 0.4;
     this.fwdSpeed = this.vel.x * Math.sin(this.yaw) + this.vel.z * Math.cos(this.yaw);
     this.accel = damp(this.accel, clamp((this.fwdSpeed - fwdPrev) / dt, -25, 25), 8, dt);
     return this.events;

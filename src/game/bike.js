@@ -1,10 +1,12 @@
 // Harold's old 3-speed roadster. Arcade-y and a bit janky on purpose, but every
 // move comes from input timing and balance: momentum and a crank Hank has to keep
 // turning himself (it drives through the gears only while the pedals outrun the back
-// wheel, and he gets winded), rubbery lean, tyres that let go when you corner too hard
-// on loose ground, wheelies and manuals, stoppies and nose manuals, crouch-and-pop
-// bunny hops, spins and flips, landings that have to match the slope, foot dabs, curb
-// bumps and comic bails. Nothing moves her but the rider: stopped on a gentle slope
+// wheel; the faster he spins the harder he pushes and the quicker he gets winded; the
+// gears change by themselves or by hand: bottom gear spins up easily and pulls hard but
+// tops out early, top gear is slow to wind up and flies), rubbery lean, tyres that let go
+// when you corner too hard on loose ground, wheelies and manuals, stoppies and nose
+// manuals, crouch-and-pop bunny hops, spins and flips, landings that have to match the
+// slope, foot dabs, curb bumps and comic bails. Nothing moves her but the rider: stopped on a gentle slope
 // she stays put.
 import * as THREE from 'three';
 import { clamp, damp, lerp, wrapAngle, Spring } from '../core/math.js';
@@ -14,9 +16,9 @@ const TAU = Math.PI * 2;
 
 // Bessie's fixed specs. There are no upgrades: progression is riding skill (skills.js).
 export const STATS = {
-  topSpeed: 10.2, // m/s, about flat out: a comfortable spin cruises ~8 m/s on a road, a frantic one ~9.5
-  power: 3.6, // pedal acceleration from a standstill (bottom gear)
-  pedalPower: 8, // sustained effort (accel x speed): hills slow you right down
+  topSpeed: 19, // m/s, about flat out: an easy spin cruises ~10.5 m/s on a road in top gear, a frantic one ~19
+  power: 4, // pedal acceleration from a standstill (x each gear's pull)
+  pedalPower: 8, // sustained effort at an easy spin (accel x speed; more the faster he spins): hills slow you right down
   gears: 3,
   grip: 1,
   jump: 4.3, // a perfectly timed bunny hop (m/s)
@@ -49,12 +51,21 @@ const ST_POINT = 0.72; // rear-up balance point
 const ST_ENDO = 1.08; // past this he goes over the bars
 
 // the drivetrain: metres of road per radian of crank in each gear, how hard each gear pulls
-// (bottom gear gets her going, top gear needs the pedals spun fast), and how far the pedals
-// have to outrun the wheel before the drive bites fully (m/s)
-const GEAR_K = [0.4, 0.6, 0.8];
-const GEAR_PULL = [1, 0.84, 0.7];
+// (bottom gear gets her going, top gear is a slog to wind up but needs the pedals spun fast
+// to keep up with it), and how far the pedals have to outrun the wheel before the drive
+// bites fully (m/s)
+const GEAR_K = [0.42, 0.7, 1];
+const GEAR_PULL = [1.2, 0.85, 0.62];
 const SLACK = 1.1;
 const COMFY = 11; // rad/s: an easy, steady spin (~1.75 turns a second)
+// No cap on how fast the crank can be spun, but past KNEE (~3 turns a second) the legs add
+// less and less (bike speed comes from the gear then), and the push grows with the spin
+const KNEE = 20;
+const SPIN_POW = 2.2;
+const AERO = 0.0024; // air drag (per (m/s)^2); past FAST it climbs steeply (she isn't a racer)
+const FAST = 22;
+// collisions: how hard (m/s into it) a tree trunk or a wall has to be hit before Hank comes off
+const TREE_CRASH = 5, WALL_CRASH = 8.5;
 
 // collision: the frame is a circle round the bottom bracket; each wheel is a smaller one
 const FRAME_R = 0.42;
@@ -130,6 +141,9 @@ export class Bike {
     this.strokes = 0;
     this.gear = 1;
     this.wantT = 0;
+    this.autoGear = this.autoGear ?? true; // false: the gears only change by hand (queueShift)
+    this.shiftQ = 0; // hand shifts waiting for the next step (+ up, - down)
+    this.holdAuto = 0; // seconds the automatic box leaves a hand-picked gear alone
     this.cadence = 0; // 0..1ish, for the sound
     this.shiftTimer = 0;
     this.stamina = this.stamina ?? 1; // Hank's wind (kept across resets)
@@ -220,6 +234,14 @@ export class Bike {
   gearTop(g = this.gear) {
     return this.gearK(g) * COMFY;
   }
+  get gears() {
+    return Math.min(this.stats.gears || 3, GEAR_K.length);
+  }
+  // a gear change by hand (Z / X, the d-pad, the touch shifter): +1 up, -1 down. Taken on the
+  // next physics step, so a press between steps is never lost
+  queueShift(dir) {
+    this.shiftQ = clamp(this.shiftQ + Math.sign(dir), -2, 2);
+  }
 
   emit(type, data = {}) {
     this.events.push({ type, ...data });
@@ -289,7 +311,7 @@ export class Bike {
         const v = Math.max(0, fwdSpeed);
         this.engage = clamp((this.roadCadence(surf) * this.gearK() - v) / SLACK, 0, 1);
         if (this.engage > 0) {
-          const effort = Math.min(s.power * GEAR_PULL[this.gear - 1], (s.pedalPower * this.powerK()) / Math.max(v, 0.5));
+          const effort = this.gearPull(this.gear, v);
           const hes = this.shiftTimer > 0 ? 0.35 : 1;
           const surge = 0.55 + 0.9 * Math.pow(Math.sin(this.crank), 2);
           const a = effort * this.engage * hes * surge * (this.wheelie > 0.1 ? 0.8 : 1);
@@ -326,7 +348,7 @@ export class Bike {
       // rolling resistance + air drag (a little less while the pedals are pushing)
       speed = Math.hypot(this.vel.x, this.vel.z);
       const manualDrag = this.wheelie > 0.1 && thr <= 0 ? 1.4 : this.stoppie > 0.1 && brake <= 0 ? 1.6 : 1;
-      const drag = surf.roll * manualDrag * (this.engage > 0.05 ? 0.7 : 1) + 0.0075 * speed * speed;
+      const drag = surf.roll * manualDrag * (this.engage > 0.05 ? 0.7 : 1) + AERO * speed * speed + (speed > FAST ? 0.03 * (speed - FAST) ** 2 : 0);
       if (speed > 1e-4) {
         const dec = Math.min(speed, drag * dt);
         this.vel.x -= (this.vel.x / speed) * dec;
@@ -337,7 +359,9 @@ export class Bike {
       speed = Math.hypot(this.vel.x, this.vel.z);
       fwdSpeed = this.vel.x * fx + this.vel.z * fz;
       const sp = Math.abs(fwdSpeed);
-      const maxRate = lerp(2.3, 0.95, clamp(sp / 12, 0, 1));
+      // (quick at walking pace, calmer and calmer as she flies: full lock at ~20 m/s is right at
+      // the edge of what the tyres hold on a road)
+      const maxRate = sp < 12 ? lerp(2.3, 0.95, sp / 12) : lerp(0.95, 0.5, clamp((sp - 12) / 8, 0, 1));
       let target = -c.steer * maxRate * clamp(sp / 1.0, 0, 1) * (fwdSpeed < -0.2 ? -1 : 1);
       if (this.wheelie > 0.15) target *= 0.5;
       if (this.stoppie > 0.1) target *= 0.3;
@@ -532,7 +556,7 @@ export class Bike {
             this.squash.value = 0.78;
             this.emit('bump', { size: 0.3, kind: hit.obj.kind });
           }
-        } else if (hit.obj.tree && impact > 3) {
+        } else if (hit.obj.tree && impact > TREE_CRASH) {
           // tree trunks don't give: Bessie stops dead, bounces back a little and Hank comes off
           this.vel.x -= hit.nx * vn * 1.15;
           this.vel.z -= hit.nz * vn * 1.15;
@@ -544,7 +568,9 @@ export class Bike {
           this.vel.x -= hit.nx * vn * 1.35;
           this.vel.z -= hit.nz * vn * 1.35;
           if (hit.obj.tree && impact > 0.5 && impact <= 1.8) this.emit('treeBump', { impact, tree: hit.obj.tree });
-          if (impact > 6.6 && hit.obj.kind !== 'boundary') {
+          // a glancing knock at speed scrubs some speed off along with the wobble
+          if (impact > 1.8) { const k = 1 - Math.min(0.25, impact * 0.03); this.vel.x *= k; this.vel.z *= k; }
+          if (impact > WALL_CRASH && hit.obj.kind !== 'boundary') {
             this.startCrash(impact, 'wall');
             return;
           } else if (impact > 1.8) {
@@ -598,11 +624,24 @@ export class Bike {
       this.lastSafe = { x: this.pos.x, z: this.pos.z, yaw: this.yaw };
     }
 
-    // gears: automatic, with a derailleur hiccup. Pedalling, she settles into whichever gear
-    // pulls hardest at this cadence and speed (bottom gear to get going, top gear once the
-    // pedals have to spin fast); coasting, she drops back down as she slows
+    // gears, with a derailleur hiccup. By hand: one gear per press (queueShift). Automatic:
+    // pedalling, she settles into whichever gear pulls hardest at this cadence and speed (bottom
+    // gear to get going, top gear once the pedals have to spin fast); coasting, she drops back
+    // down as she slows. A gear picked by hand is left alone for a few seconds either way
     if (this.shiftTimer > 0) this.shiftTimer -= dt;
-    else {
+    if (this.holdAuto > 0) this.holdAuto -= dt;
+    if (this.shiftQ) {
+      const dir = Math.sign(this.shiftQ);
+      this.shiftQ -= dir;
+      const g = clamp(this.gear + dir, 1, this.gears);
+      if (g !== this.gear) {
+        this.gear = g;
+        this.wantT = 0;
+        this.shiftTimer = dir > 0 ? 0.16 : 0.1;
+        this.holdAuto = 3;
+        this.emit('gear', { dir, manual: true });
+      } else this.emit('gearStop', { dir });
+    } else if (this.shiftTimer <= 0 && this.autoGear && this.holdAuto <= 0) {
       let want = this.gear;
       if (this.pushing && this.grounded) want = this.bestGear(fwdSpeed, surf);
       else if (this.gear > 1 && fwdSpeed < 0.62 * this.gearTop(this.gear - 1)) want = this.gear - 1;
@@ -625,7 +664,7 @@ export class Bike {
 
     // ---- visual attitude: a rubbery spring lean, pitch from slope / balance / air
     const leanTarget = this.grounded
-      ? clamp(Math.atan((-this.yawRate * clamp(Math.abs(fwdSpeed), 0, 14)) / GRAV) * 1.15, -0.72, 0.72) * (fwdSpeed < 0 ? -1 : 1) + (this.drifting ? -this.driftDir * 0.14 : 0) + this.dab * this.dabSide * 0.22 + this.balance * 0.35
+      ? clamp(Math.atan((-this.yawRate * clamp(Math.abs(fwdSpeed), 0, 20)) / GRAV) * 1.15, -0.72, 0.72) * (fwdSpeed < 0 ? -1 : 1) + (this.drifting ? -this.driftDir * 0.14 : 0) + this.dab * this.dabSide * 0.22 + this.balance * 0.35
       : clamp(c.steer * 0.15, -0.2, 0.2);
     this.leanVel += (95 * (leanTarget - this.lean) - 11 * this.leanVel) * dt;
     this.lean += this.leanVel * dt;
@@ -684,7 +723,7 @@ export class Bike {
       lag = Math.sign(lag) * 8;
       this.crankGoal = this.crank + lag;
     }
-    this.crankRate = clamp(lag * 32, -40, 40);
+    this.crankRate = clamp(lag * 32, -90, 90);
     this.crank += this.crankRate * dt;
     this.spinRate = damp(this.spinRate, this.crankRate, 9, dt);
     this.cadence = clamp(Math.abs(this.spinRate) / 12, 0, 1.2);
@@ -705,40 +744,51 @@ export class Bike {
     this.throttleIn = this.engage;
   }
 
-  // how much of the spinning reaches the road: all of it fresh, less and less as Hank tires
+  // how much of the spinning reaches the road: all of it until he's winded, then less and less
   cadenceK() {
-    return this.exhausted ? 0.5 : 0.62 + 0.38 * clamp(this.stamina / 0.45, 0, 1);
+    return this.exhausted ? 0.5 : 0.62 + 0.38 * clamp(this.stamina / 0.25, 0, 1);
   }
   powerK() {
-    return this.exhausted ? 0.55 : 0.7 + 0.3 * clamp(this.stamina / 0.45, 0, 1);
+    return this.exhausted ? 0.55 : 0.7 + 0.3 * clamp(this.stamina / 0.25, 0, 1);
   }
-  // the cadence the road sees (rad/s): tiredness and soft ground eat into it
+  // the cadence the road sees (rad/s): past the knee the legs add less and less, and
+  // tiredness and soft ground eat into it
   roadCadence(surf) {
-    return Math.max(0, this.spinRate) * this.cadenceK() * surf.top;
+    const w = Math.max(0, this.spinRate);
+    return (w > KNEE ? KNEE + (w - KNEE) * 0.55 : w) * this.cadenceK() * surf.top;
+  }
+  // how hard a gear can push at speed v (m/s^2): its pull off the line, then the power Hank
+  // puts out (spinning harder is pushing harder)
+  gearPull(g, v) {
+    const s = this.stats;
+    const spin = clamp(this.spinRate / COMFY, 0.6, 2.8) ** SPIN_POW;
+    return Math.min(s.power * GEAR_PULL[g - 1], (s.pedalPower * spin * this.powerK()) / Math.max(v, 0.5));
   }
   // the gear that pulls hardest right now (the current one on a tie; top gear if none bite)
   bestGear(fwdSpeed, surf) {
-    const s = this.stats, v = Math.max(0, fwdSpeed), cad = this.roadCadence(surf);
-    const top = Math.min(s.gears, GEAR_K.length);
+    const v = Math.max(0, fwdSpeed), cad = this.roadCadence(surf);
+    const top = this.gears;
     let best = this.gear, bestA = 0;
     for (let g = 1; g <= top; g++) {
       const eng = clamp((cad * GEAR_K[g - 1] - v) / SLACK, 0, 1);
       // (the gear she's in gets a little loyalty, so she doesn't hunt between two)
-      const a = eng * Math.min(s.power * GEAR_PULL[g - 1], s.pedalPower / Math.max(v, 0.5)) * (g === this.gear ? 1.08 : 1);
+      const a = eng * this.gearPull(g, v) * (g === this.gear ? 1.08 : 1);
       if (a > bestA + 1e-6) { bestA = a; best = g; }
     }
     return bestA > 0 ? best : top;
   }
 
-  // Hank's wind: hard, fast pedalling drains it; coasting and stopping for a breather bring it
-  // back. Spent, he's slow and wobbly until he's caught his breath.
+  // Hank's wind: spinning faster than an easy pace drains it quickly (flat out, he's spent in
+  // ten or fifteen seconds), and so does grinding a big push; coasting, spinning lightly and
+  // stopping for a breather bring it back. Spent, he's slow and wobbly until he's caught his breath.
   updateStamina(dt, fwdSpeed) {
     const P = this.drive * Math.max(fwdSpeed, 1); // how hard he's pushing (power per kilo)
-    const fast = clamp((this.spinRate - 12) / 6, 0, 1.6); // spinning faster than an easy pace
+    const fast = clamp((this.spinRate - 12) / 10, 0, 2.5); // spinning faster than an easy pace
+    const sprint = 0.07 * fast ** 1.5;
     let d;
     if (this.crash > 0) d = 0.05;
-    else if (this.pushing && this.engage > 0.02) d = -(0.002 + 0.006 * Math.pow(P / 5.4, 3) + 0.03 * fast * fast);
-    else d = (this.speed < 0.4 ? 0.17 : 0.09) * (this.pushing ? 0.5 : 1) - 0.03 * fast * fast;
+    else if (this.pushing && this.engage > 0.02) d = -(0.003 + sprint + 0.008 * Math.max(0, P / 12 - 0.8) ** 2) + (this.spinRate < 9 ? 0.03 : 0);
+    else d = (this.speed < 0.4 ? 0.17 : 0.1) * (this.pushing ? 0.5 : 1) - sprint;
     this.stamina = clamp(this.stamina + d * dt, 0, 1);
     if (!this.winded && this.stamina < 0.3) {
       this.winded = true;
@@ -927,7 +977,7 @@ export class Bike {
     this.roughT -= dt * speed;
     if (this.roughT > 0) return;
     this.roughT = 1.5 + Math.abs(Math.sin(this.pos.x * 12.9898 + this.pos.z * 78.233) * 43758.5) % 4;
-    const size = 0.04 + (speed / 10) * 0.05 * surf.loose;
+    const size = 0.04 + (Math.min(speed, 12) / 10) * 0.05 * surf.loose;
     this.squash.value = Math.min(this.squash.value, 1 - size * 1.6);
     if (this.wheelie < 0.2) this.wobble = Math.min(0.4, this.wobble + size * 0.8);
     this.emit('bump', { size, rough: true });
@@ -1034,14 +1084,14 @@ export class Bike {
     if (this.dab > 0.5) return 'dab';
     if (this.drifting) return 'drift';
     if (this.brakeIn > 0 && fwdSpeed > 1) return 'brake';
-    if (thr > 0 && !this.exhausted && this.tired < 0.6 && (this.spinRate > 15 || this.slopePitch > 0.1 || fwdSpeed < 2)) return 'stand';
+    if (thr > 0 && !this.exhausted && this.tired < 0.6 && (this.spinRate > 19 || this.slopePitch > 0.1 || fwdSpeed < 2)) return 'stand';
     if (thr > 0) return 'pedal';
     return this.speed > 0.5 ? 'coast' : 'idle';
   }
 
   startCrash(impact, why, extra = {}) {
     // trees only burst Hank into bones when he hits one really fast; otherwise he just falls off
-    const soft = why === 'tree' ? impact < 9 : impact < 6.5 && ['loopout', 'endo', 'slideout', 'nose', 'looped', 'sideways', 'fakie', 'trick', 'kerb'].includes(why);
+    const soft = why === 'tree' ? impact < 10 : why === 'wall' ? impact < 10.5 : impact < 6.5 && ['loopout', 'endo', 'slideout', 'nose', 'looped', 'sideways', 'fakie', 'trick', 'kerb'].includes(why);
     this.crashKind = why === 'loopout' || why === 'looped' ? 'loopout' : why === 'endo' || why === 'nose' || why === 'kerb' ? 'endo' : 'tumble';
     this.crash = soft ? 1.5 : 1.9;
     this.crashT = 0;
