@@ -24,7 +24,8 @@
 #ui .key { display: inline-block; box-sizing: border-box; min-width: calc(var(--u) * 16); height: calc(var(--u) * 16); border-style: solid; border-color: transparent; border-width: calc(var(--u) * 1) calc(var(--u) * 4) calc(var(--u) * 3); border-image: var(--k-key) 5 5 7 5 fill / calc(var(--u) * 5) calc(var(--u) * 5) calc(var(--u) * 7) / 0 repeat; color: var(--k-ink); text-shadow: none; text-align: center; vertical-align: top; }
 
 /* ---------------------------------------------------------------- HUD */
-#hud { position: absolute; inset: 0; transition: opacity 0.4s steps(4); }
+/* its own stacking context, so nothing inside it pokes through a leaf wipe (leaves.js) */
+#hud { position: absolute; inset: 0; z-index: 0; transition: opacity 0.4s steps(4); }
 #hud.hidden { opacity: 0; }
 
 .hud-tl { position: absolute; left: calc(var(--u) * 3 + var(--safe-l)); top: calc(var(--u) * 2 + var(--safe-t)); display: flex; align-items: flex-start; gap: calc(var(--u) * 1); }
