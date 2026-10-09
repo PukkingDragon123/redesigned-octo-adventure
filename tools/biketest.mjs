@@ -339,6 +339,14 @@ const verbose = process.argv.includes('-v');
   const r = run(log, () => C({ throttle: 1 }), { T: 9 });
   check("low log: bump over it, keep going", ev(r, "bump").some((e) => e.kind === "log") && !ev(r, "bail").length && r.b.pos.z > 32, `z=${r.b.pos.z.toFixed(1)} bumps=${JSON.stringify(ev(r, "bump"))} bonks=${JSON.stringify(ev(r, "bonk"))}`);
 }
+// --- 10c. trees at speed: clipping one glances off (a bonk, some speed lost), riding into one
+// still sends Hank flying
+{
+  const tw = (x) => world({ solids: [{ x, z: 30, r: 0.3, y0: -1, y1: 6, tree: { id: 1 } }] });
+  const glance = run(tw(0.69), () => C({ pedal: 18 }), { T: 6, setup: (b) => b.vel.set(0, 0, 16) });
+  const head = run(tw(0), () => C({ pedal: 11 }), { T: 6, setup: (b) => b.vel.set(0, 0, 8) });
+  check('clipping a tree at 16 m/s glances off; riding into one crashes', !ev(glance, 'crash').length && ev(glance, 'bonk').length > 0 && glance.b.pos.z > 32 && ev(head, 'crash')[0]?.why === 'tree', `glance: bonks=${ev(glance, 'bonk').length} crash=${ev(glance, 'crash').length} z=${glance.b.pos.z.toFixed(1)}; head-on: ${ev(head, 'crash')[0]?.why}`);
+}
 // --- 11. drift
 {
   const r = run(flat, (t) => C({ throttle: 1, steer: t > 5 ? 1 : 0, drift: t > 5 && t < 6.8 }), { T: 8 });
