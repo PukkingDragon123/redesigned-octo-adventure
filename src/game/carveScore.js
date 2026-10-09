@@ -1,6 +1,7 @@
 // The pumpkin carving mini-game's rules, with no DOM or three.js (so node can check
 // them): the face grid, the carve mask and how it is saved, the bits that fall in, the
-// stencils, and how the judges score a face.
+// stencils, how the judges score a face, and Gus's requests: a spooky, funny or cute
+// face for a style bonus, or a copy of his own design for a likeness bonus.
 //
 // The pumpkin is a 32 x 32 grid seen from the front (row 0 at the top). BODY is the
 // pumpkin's silhouette, CARVABLE the face inside its rim. A mask is a Uint8Array(N * N)
@@ -103,9 +104,11 @@ function holes(m) {
     const stack = [i];
     seen[i] = 1;
     let n = 0, sx = 0, sy = 0, x0 = N, x1 = -1, y0 = N, y1 = -1;
+    const cells = [];
     while (stack.length) {
       const j = stack.pop();
       const x = j % N, y = (j / N) | 0;
+      cells.push(j);
       n++; sx += x + 0.5; sy += y + 0.5;
       x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y);
       for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
@@ -115,9 +118,28 @@ function holes(m) {
         if (m[k] && CARVABLE[k] && !seen[k]) { seen[k] = 1; stack.push(k); }
       }
     }
-    out.push({ n, cx: sx / n, cy: sy / n, x0, x1, y0, y1, w: x1 - x0 + 1, h: y1 - y0 + 1 });
+    out.push({ n, cx: sx / n, cy: sy / n, x0, x1, y0, y1, w: x1 - x0 + 1, h: y1 - y0 + 1, cells });
   }
   return out;
+}
+
+function teethIn(c) {
+  const own = new Uint8Array(N * N);
+  for (const j of c.cells) own[j] = 1;
+  let n = 0;
+  const run = (len, at) => {
+    // walk a line of cells: count solid runs of 1-2 between two of the mouth's own cuts
+    let lastCut = -1;
+    for (let k = 0; k < len; k++) {
+      if (!own[at(k)]) continue;
+      const gap = k - lastCut - 1;
+      if (lastCut >= 0 && gap >= 1 && gap <= 2) n++;
+      lastCut = k;
+    }
+  };
+  for (let y = c.y0; y <= c.y1; y++) run(c.x1 - c.x0 + 1, (k) => y * N + c.x0 + k);
+  for (let x = c.x0; x <= c.x1; x++) run(c.y1 - c.y0 + 1, (k) => (c.y0 + k) * N + x);
+  return n;
 }
 
 export function analyze(m) {
@@ -131,10 +153,17 @@ export function analyze(m) {
   let right = upper.filter((c) => c.cx > CX + 1).sort((a, b) => b.n - a.n)[0];
   const band = upper.find((c) => c.x0 < CX - 2 && c.x1 > CX + 1 && c.w >= 8);
   if (band && (!left || !right)) { left = left || band; right = right || band; }
+  // a thin slit opposite a proper eye is a wink, not an eye
+  const slit = (c) => c && c.h <= 1 && c.n <= 6;
+  let winkSlit = false;
+  if (left && right && left !== right) {
+    if (slit(right) && !slit(left) && left.n >= 6) { right = null; winkSlit = true; }
+    else if (slit(left) && !slit(right) && right.n >= 6) { left = null; winkSlit = true; }
+  }
   for (const c of [left, right]) if (c) used.add(c);
   let eyes = (left ? 1 : 0) + (right ? 1 : 0);
   // a wink: one eye, and a little slit on the other side
-  const wink = eyes === 1 && comps.some((c) => !used.has(c) && c.cy < CY - 0.5 && c.n <= 6 && c.h <= 2 && (left ? c.cx > CX + 1 : c.cx < CX - 1));
+  const wink = eyes === 1 && (winkSlit || comps.some((c) => !used.has(c) && c.cy < CY - 0.5 && c.n <= 6 && c.h <= 2 && (left ? c.cx > CX + 1 : c.cx < CX - 1)));
   // the mouth: the widest cut low down
   const mouth = comps.filter((c) => !used.has(c) && c.cy > CY + 1.5 && c.w >= 5).sort((a, b) => b.w - a.w)[0] || null;
   if (mouth) used.add(mouth);
@@ -142,8 +171,9 @@ export function analyze(m) {
   const nose = comps.find((c) => !used.has(c) && Math.abs(c.cx - CX) < 2.6 && c.cy > CY - 3 && c.cy < CY + 2.8 && c.n <= 16) || null;
   if (nose) used.add(nose);
   const extras = comps.filter((c) => !used.has(c) && c.n >= 2).length;
-  // teeth: a wide mouth that isn't one solid slot
-  const teeth = !!mouth && mouth.w >= 7 && mouth.h >= 3 && mouth.n / (mouth.w * mouth.h) < 0.72;
+  // teeth: a wide mouth with little notches of pumpkin left standing in it (a solid run
+  // of one or two cells with the mouth's cuts on both sides, across a row or down a column)
+  const teeth = !!mouth && mouth.w >= 7 && teethIn(mouth) > 0;
   // symmetry: the face against its mirror image (overlap / union)
   const mir = mirrorX(m);
   let both = 0, any = 0;
@@ -155,7 +185,15 @@ export function analyze(m) {
   }
   const sym = any ? both / any : 0;
   const split = isSplit(m);
-  return { carved, area, comps: comps.length, eyes, wink, mouth: !!mouth, lowBits, nose: !!nose, teeth, extras, sym, split, collapse: split || area > 0.5, empty: area < 0.01 };
+  // shapes, for Gus's requests: how full each eye's box is (round ~0.75, a triangle or a
+  // slant ~0.5), how big the mouth is and how open (an "O" fills its box)
+  const eyeFill = [left, right].filter(Boolean).map((c) => c.n / (c.w * c.h));
+  const eyeRound = eyeFill.length ? eyeFill.reduce((a, b) => a + b, 0) / eyeFill.length : 0;
+  const eyeSize = [left, right].filter(Boolean).reduce((a, c) => Math.max(a, c.n), 0);
+  const mouthW = mouth ? mouth.w : 0, mouthH = mouth ? mouth.h : 0;
+  const mouthFill = mouth ? mouth.n / (mouth.w * mouth.h) : 0;
+  const mouthOff = mouth ? Math.abs(mouth.cx - CX) : 0;
+  return { carved, area, comps: comps.length, eyes, wink, mouth: !!mouth, lowBits, nose: !!nose, teeth, extras, sym, split, collapse: split || area > 0.5, empty: area < 0.01, eyeRound, eyeSize, mouthW, mouthH, mouthFill, mouthOff };
 }
 
 const clamp01 = (v) => Math.max(0, Math.min(1, v));
@@ -172,8 +210,58 @@ export function ribbonFor(score) {
   return score >= RIBBON_AT.first ? 'first' : score >= RIBBON_AT.second ? 'second' : score >= RIBBON_AT.third ? 'third' : 'part';
 }
 
-// the judges' score: eyes 26, mouth 22, nose 6, symmetry 24, a sensible amount cut 12, style 10
-export function scoreCarving(m) {
+// ---------------------------------------------------------------- Gus's requests
+// theme: what he asked for; a style bonus of up to 12 when the face fits it, with a word on why
+export const THEMES = {
+  spooky: { name: 'Spooky' },
+  funny: { name: 'Funny' },
+  cute: { name: 'Cute' },
+};
+export function themeBonus(A, theme) {
+  if (!THEMES[theme] || A.empty || A.collapse) return { pts: 0, why: [] };
+  const why = [];
+  let pts = 0;
+  const add = (n, w) => { pts += n; why.push(w); };
+  if (theme === 'spooky') {
+    if (A.teeth) add(4, 'jagged teeth');
+    if (A.eyes >= 1 && A.eyeRound < 0.66) add(3, 'mean eyes');
+    if (A.mouthW >= 11) add(2, 'a big wide grin');
+    if (A.extras >= 1) add(1.5, 'a scar or two');
+    if (A.area >= 0.16) add(1.5, 'lots of glow');
+  } else if (theme === 'funny') {
+    if (A.wink) add(4, 'a wink');
+    else if (A.eyes === 1) add(3, 'one eye');
+    else if (!A.eyes && A.mouth) add(2, 'no eyes at all');
+    if (A.eyes === 2 && A.sym < 0.6) add(2, 'goofy eyes');
+    if (A.mouth && A.mouthFill > 0.72 && A.mouthH >= 4) add(3, 'a big "O" mouth');
+    if (A.mouthOff >= 2.5) add(2, 'a lopsided grin');
+    if (A.extras >= 2) add(2, 'eyebrows or a moustache');
+  } else if (theme === 'cute') {
+    if (A.eyes === 2 && A.eyeRound >= 0.66) add(3.5, 'round eyes');
+    if (A.mouth && !A.teeth && A.mouthW <= 10) add(3, 'a little smile');
+    if (A.eyes === 2 && A.sym >= 0.6) add(2, 'neat and even');
+    if (A.nose) add(1, 'a button nose');
+    if (A.area <= 0.24 && A.area > 0.04) add(1.5, 'dainty');
+  }
+  return { pts: Math.min(12, Math.round(pts)), why };
+}
+// likeness to a target design: overlap over union of the cut cells (0..1)
+export function likeness(m, target) {
+  let both = 0, any = 0;
+  for (let i = 0; i < N * N; i++) {
+    if (!CARVABLE[i]) continue;
+    const a = m[i], b = target[i];
+    if (a && b) both++;
+    if (a || b) any++;
+  }
+  return any ? both / any : 0;
+}
+// up to 15 points for a good copy (a third of it right earns nothing; three quarters, the lot)
+export const copyBonus = (sim) => Math.round(15 * clamp01((sim - 0.33) / 0.42));
+
+// the judges' score: eyes 26, mouth 22, nose 6, symmetry 24, a sensible amount cut 12, style 10,
+// plus Gus's request when there was one (opts.theme: a style bonus; opts.target: a likeness bonus)
+export function scoreCarving(m, opts = {}) {
   const A = analyze(m);
   const parts = {};
   parts.eyes = A.eyes === 2 ? 26 : A.wink ? 20 : A.eyes === 1 ? 12 : 0;
@@ -183,11 +271,21 @@ export function scoreCarving(m) {
   const a = A.area;
   parts.area = Math.round(a < 0.02 ? 0 : a < 0.07 ? (12 * (a - 0.02)) / 0.05 : a <= 0.3 ? 12 : 12 * clamp01(1 - (a - 0.3) / 0.2));
   parts.style = Math.min(10, (A.teeth ? 4 : 0) + Math.min(2, A.extras) * 1.5 + (A.eyes === 2 && A.mouth && A.nose ? 3 : 0));
+  let request = null;
+  if (opts.theme && THEMES[opts.theme]) {
+    const t = themeBonus(A, opts.theme);
+    parts.theme = t.pts;
+    request = { kind: 'theme', theme: opts.theme, pts: t.pts, why: t.why };
+  } else if (opts.target) {
+    const sim = likeness(m, opts.target);
+    parts.copy = A.empty || A.collapse ? 0 : copyBonus(sim);
+    request = { kind: 'copy', sim, pts: parts.copy };
+  }
   let score = Object.values(parts).reduce((s, v) => s + v, 0);
   if (A.empty) score = 0;
   else if (A.collapse) score = Math.min(score, 12);
   score = Math.round(Math.max(0, Math.min(100, score)));
-  return { score, ribbon: A.collapse || A.empty ? 'part' : ribbonFor(score), parts, ...A };
+  return { score, ribbon: A.collapse || A.empty ? 'part' : ribbonFor(score), parts, request, ...A };
 }
 
 // ---------------------------------------------------------------- stencils (faint marker lines to follow)
@@ -231,3 +329,21 @@ export const STENCILS = {
   }),
 };
 export const STENCIL_NAMES = Object.keys(STENCILS);
+
+// Gus's own designs, for "copy my design" (shown on a little card, not as a stencil)
+export const DESIGNS = {
+  // a big walrus moustache under round eyes, a wide grin under it
+  walrus: sym((m) => {
+    for (let y = 8; y <= 12; y++) for (let x = 8; x <= 12; x++) if (Math.hypot(x + 0.5 - 10.5, y + 0.5 - 10.5) <= 2.3) cut(m, x, y);
+    for (let x = 9; x <= 15; x++) for (let y = 16; y <= 17; y++) cut(m, x, y + (x < 11 ? 1 : 0)); // the moustache
+    for (let x = 7; x <= 8; x++) cut(m, x, 19);
+    for (let x = 9; x <= 15; x++) for (let y = 21; y <= 22; y++) cut(m, x, y + (x < 11 ? 1 : 0)); // the grin
+  }),
+  // a lighthouse beam of an eye and a sly smirk (not mirrored: Gus's own design)
+  owl: sym((m) => {
+    for (let y = 7; y <= 14; y++) for (let x = 6; x <= 14; x++) if (Math.hypot(x + 0.5 - 10.5, y + 0.5 - 11) <= 3.6 && Math.hypot(x + 0.5 - 10.5, y + 0.5 - 11) > 1.4) cut(m, x, y);
+    for (let r = 0; r < 3; r++) for (let x = 15 - r; x <= 15; x++) cut(m, x, 15 + r); // the beak
+    for (let x = 10; x <= 15; x++) cut(m, x, 22);
+  }),
+};
+export const DESIGN_NAMES = Object.keys(DESIGNS);

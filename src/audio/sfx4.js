@@ -1,7 +1,10 @@
 // One-shot SFX, part 4: Hank's prologue. Axe bites, a creaking, crashing tree,
 // shovels of dirt, a coffin settling, the cemetery bell and a mighty snore. Plus the
 // pumpkin carving contest: a hip-hip-hooray crowd, kids' yays, Gus's tin megaphone,
-// a judge's "hmm", knife cuts into a pumpkin and the countdown's clock tick.
+// a judge's "hmm", knife cuts into a pumpkin and the countdown's clock tick; the
+// crickets in the silence when the contest freezes at the sight of Hank, the crowd's
+// "ooooh" when a carved face lights up, the knife's "shhk" (pitched by how fast it saws),
+// a squelchy scoop of pumpkin guts and a match struck for the candle.
 // Every entry is fn(c) with c = { k, ctx, out, wet, t, p, end } (see synth.js).
 import { T, N, vox, rand, pick } from './synth.js';
 import { setWet, creak } from './sfx.js';
@@ -184,5 +187,49 @@ export const SFX4 = {
     N(c, { dur: 0.018, bp: 3600, q: 3, v: 0.3, a: 0.0008 });
     T(c, { dur: 0.03, f: 1900, f2: 1500, v: 0.05 });
     upto(c, 0.06);
+  },
+  // the silence when everyone freezes: a few crickets, chirping away
+  crickets(c) {
+    for (let k = 0; k < 3; k++) {
+      const f = rand(3900, 4800), t0 = rand(0, 0.7);
+      for (let r = 0; r < 2; r++) for (let i = 0; i < 4; i++) T(c, { t: t0 + r * 0.36 + i * 0.034, dur: 0.02, f, f2: f * 0.97, v: 0.035, a: 0.003 });
+    }
+    setWet(c, 0.4);
+    upto(c, 1.6);
+  },
+  // the whole crowd, as a carved face lights up: "Ooooooh!"
+  crowd_ooh(c) {
+    for (let i = 0; i < 7; i++) {
+      const f = pick([150, 175, 200, 230, 260, 300, 340]) * rand(0.96, 1.04), t = rand(0, 0.15), d = rand(1.2, 1.6);
+      vox(c, { t, dur: d, fc: [f, f * 1.12, f * 1.18, f * 1.12, f * 0.98, f * 0.9], vib: rand(4.5, 6), vd: 18, a: 0.15, h: d * 0.5, v: 0.08, F: [[[330, 320, 310, 300], 4, 1.4], [[700, 680, 660], 5, 0.5], [2500, 7, 0.12]], br: 0.04, lp: 2400 });
+    }
+    N(c, { dur: 1.5, a: 0.3, h: 0.6, bp: 600, q: 0.6, v: 0.05 });
+    setWet(c, 0.3);
+    upto(c, 1.9);
+  },
+  // the knife sawing through the rind: "shhk" (c.p sets how fast it's going)
+  carve_shhk(c) {
+    const d = rand(0.06, 0.1);
+    N(c, { dur: d, bp: rand(2600, 3600), q: 1.2, v: 0.28, a: 0.004, h: d * 0.3 });
+    N(c, { t: 0.005, dur: d * 0.8, buf: 'brown', lp: 900, v: 0.22, a: 0.004 });
+    T(c, { dur: 0.03, type: 'triangle', f: rand(500, 640), f2: 340, v: 0.04 });
+    setWet(c, 0.04);
+    upto(c, 0.16);
+  },
+  // a scoop of guts: squelch, and seeds pattering into the bowl
+  goo_scoop(c) {
+    N(c, { dur: 0.16, buf: 'brown', lp: 520, v: 0.45, a: 0.01, h: 0.05 });
+    T(c, { dur: 0.12, f: rand(150, 190), f2: 90, v: 0.12, a: 0.005, type: 'sine' });
+    for (let i = 0; i < 5; i++) N(c, { t: 0.14 + i * rand(0.03, 0.06), dur: 0.012, bp: rand(2800, 4200), q: 3, v: 0.12, a: 0.001 });
+    setWet(c, 0.08);
+    upto(c, 0.5);
+  },
+  // a match struck and the candle catching
+  match_strike(c) {
+    N(c, { dur: 0.12, bp: 3200, q: 0.8, v: 0.3, a: 0.004, h: 0.03 });
+    N(c, { t: 0.1, dur: 0.5, bp: 900, q: 0.7, v: 0.12, a: 0.03, h: 0.2 });
+    T(c, { t: 0.1, dur: 0.35, f: 120, f2: 70, v: 0.05, a: 0.02 });
+    setWet(c, 0.15);
+    upto(c, 0.7);
   },
 };

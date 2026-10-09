@@ -1,7 +1,9 @@
 /* The pumpkin carving mini-game (src/game/carving.js): a kit sheet with the clock on
    top, the pumpkin on a wooden board (a canvas shown at a whole number of device pixels
    per art pixel, so it stays crisp) and the tools beside it, or under it on a phone held
-   upright. All sizes in whole art pixels. */
+   upright; Gus's design on a little card under the tools when he wants a copy. The knife,
+   gouge and scoop are drawn on the board itself (pixel sprites), so the pointer hides
+   there. All sizes in whole art pixels. */
 .menu.carve-sheet { width: auto; max-width: calc(100% - var(--u) * 6); max-height: calc(100% - var(--u) * 26); }
 .m-body.carve-body { display: flex; flex-direction: column; align-items: stretch; gap: calc(var(--u) * 3); overflow: hidden; }
 .carve-top { display: flex; align-items: center; gap: calc(var(--u) * 3); width: 0; min-width: 100%; }
@@ -31,7 +33,18 @@
   -webkit-touch-callout: none;
   cursor: crosshair;
 }
+.carve-board.tooled .carve-cv { cursor: none; }
 .carve-board.lit { background: #0e0806; }
+/* the face lit: the frame catches the candlelight, flickering in whole steps */
+.carve-board.glow {
+  box-shadow: inset 0 0 0 var(--u) #120a06, 0 0 0 var(--u) #e8862a, 0 0 0 calc(var(--u) * 2) #8a4a22, 0 calc(var(--u) * 2) 0 calc(var(--u) * 2) #5a3a20;
+  animation: carve-flicker 0.6s steps(1) infinite;
+}
+@keyframes carve-flicker {
+  0% { box-shadow: inset 0 0 0 var(--u) #120a06, 0 0 0 var(--u) #e8862a, 0 0 0 calc(var(--u) * 2) #8a4a22, 0 calc(var(--u) * 2) 0 calc(var(--u) * 2) #5a3a20; }
+  45% { box-shadow: inset 0 0 0 var(--u) #120a06, 0 0 0 var(--u) #f8b452, 0 0 0 calc(var(--u) * 2) #a85a26, 0 calc(var(--u) * 2) 0 calc(var(--u) * 2) #5a3a20; }
+  70% { box-shadow: inset 0 0 0 var(--u) #120a06, 0 0 0 var(--u) #d8701e, 0 0 0 calc(var(--u) * 2) #8a4a22, 0 calc(var(--u) * 2) 0 calc(var(--u) * 2) #5a3a20; }
+}
 .carve-board.shake { animation: carve-shake 0.42s step-end; } /* holds each whole-pixel offset */
 @keyframes carve-shake {
   0% { transform: translate(0, 0); }
@@ -56,7 +69,13 @@
 .carve-msg.on { opacity: 1; animation: carve-pop 0.3s steps(4); }
 @keyframes carve-pop { 0% { transform: translateY(calc(var(--u) * 4)); } 100% { transform: translateY(0); } }
 
+.carve-side { display: flex; flex-direction: column; align-items: center; gap: calc(var(--u) * 3); flex: none; }
+.k-portrait .carve-side { flex-direction: row; align-items: flex-start; justify-content: center; }
 .carve-tools { display: flex; flex-direction: column; gap: calc(var(--u) * 2); flex: none; }
+/* Gus's design, on a little card */
+.carve-card { display: flex; flex-direction: column; align-items: center; gap: var(--u); padding: calc(var(--u) * 2) calc(var(--u) * 3); }
+.carve-card-t { color: #3a1608; white-space: nowrap; }
+.carve-card-cv { display: block; image-rendering: pixelated; image-rendering: crisp-edges; }
 .k-portrait .carve-tools { flex-direction: row; flex-wrap: wrap; justify-content: center; max-width: calc(var(--u) * 220); }
 .carve-tools .k-btn { min-width: calc(var(--u) * 64); }
 .carve-tools .k-btn.on { border-image-source: var(--k-btn-green); color: #fffbea; }
@@ -80,4 +99,5 @@
   animation: carve-award 0.45s steps(5);
 }
 .carve-score { padding: 0 calc(var(--u) * 6); }
+.carve-bonus { padding: 0 calc(var(--u) * 4); color: #fff4c0; }
 @keyframes carve-award { 0% { transform: translateY(calc(var(--u) * -30)); } 100% { transform: translateY(0); } }

@@ -1,7 +1,8 @@
 // node tools/carvetest.mjs [-v]
 // Headless checks for the pumpkin carving mini-game (src/game/carveScore.js): the judges'
 // scoring (stencils win, empty and over-cut pumpkins don't, a cut across the face caves it
-// in, bits ringed by a cut drop in), the saved 32 x 32 bit mask round trip, and that the
+// in, bits ringed by a cut drop in), Gus's requests (spooky / funny / cute style bonuses, a
+// likeness bonus for copying his design), the saved 32 x 32 bit mask round trip, and that the
 // contest's voxel models (the carved pumpkin, Gus's megaphone, pennants, the rosette) build
 // and mesh.
 import * as C from '../src/game/carveScore.js';
@@ -50,6 +51,40 @@ check('a bit ringed by a cut drops in', fell > 20 && C.countCarved(ring) === bef
 check('nothing drops from an open face', C.dropLoose(C.STENCILS.happy.slice()) === 0);
 check('scores stay within 0-100', [C.STENCILS.classic, full, half, oneEye, lop, ring].every((m) => { const s = C.scoreCarving(m).score; return s >= 0 && s <= 100; }));
 
+// ---- teeth: notches left standing in a wide mouth (a smooth U smile has none)
+check('the classic grin has teeth', C.scoreCarving(C.STENCILS.classic).teeth);
+check('a smooth happy U has no teeth', !C.scoreCarving(C.STENCILS.happy).teeth);
+
+// ---- Gus's requests: a spooky, funny or cute face earns a style bonus
+const bonus = (m, t) => C.themeBonus(C.analyze(m), t).pts;
+check('the classic toothy grin is spooky (more spooky than cute)', bonus(C.STENCILS.classic, 'spooky') >= 8 && bonus(C.STENCILS.classic, 'spooky') > bonus(C.STENCILS.classic, 'cute'), `spooky=${bonus(C.STENCILS.classic, 'spooky')} cute=${bonus(C.STENCILS.classic, 'cute')}`);
+check('the round-eyed happy face is cute (more cute than spooky)', bonus(C.STENCILS.happy, 'cute') >= 6 && bonus(C.STENCILS.happy, 'cute') > bonus(C.STENCILS.happy, 'spooky'), `cute=${bonus(C.STENCILS.happy, 'cute')} spooky=${bonus(C.STENCILS.happy, 'spooky')}`);
+// a wink and a big "O" mouth off to one side: funny
+const silly = mask((cut) => {
+  for (let y = 9; y <= 12; y++) for (let x = 8; x <= 11; x++) cut(x, y); // one eye
+  for (let x = 20; x <= 23; x++) cut(x, 11); // ...and a wink
+  for (let y = 19; y <= 24; y++) for (let x = 17; x <= 22; x++) if (Math.hypot(x + 0.5 - 20, y + 0.5 - 21.5) <= 3.1) cut(x, y); // an "O"
+});
+const sa = C.analyze(silly);
+check('a winking face with a lopsided "O" mouth is funny', bonus(silly, 'funny') >= 6 && bonus(silly, 'funny') > bonus(silly, 'cute') && bonus(silly, 'funny') > bonus(silly, 'spooky'), `funny=${bonus(silly, 'funny')} cute=${bonus(silly, 'cute')} spooky=${bonus(silly, 'spooky')} wink=${sa.wink} O=${sa.mouthFill.toFixed(2)}x${sa.mouthH} off=${sa.mouthOff.toFixed(1)}`);
+check('no style bonus for an empty or caved-in pumpkin', bonus(C.emptyMask(), 'spooky') === 0 && bonus(full, 'funny') === 0 && bonus(half, 'cute') === 0);
+const themed = C.scoreCarving(C.STENCILS.classic, { theme: 'spooky' });
+check('a request adds its bonus to the score (never past 100)', themed.request?.kind === 'theme' && themed.parts.theme > 0 && themed.score <= 100 && themed.score >= C.scoreCarving(C.STENCILS.classic).score, `score=${themed.score} bonus=${themed.parts.theme} (${themed.request?.why?.join(', ')})`);
+check('no request, no bonus (and the same score as ever)', C.scoreCarving(C.STENCILS.cat).request === null && C.scoreCarving(C.STENCILS.cat).parts.theme === undefined);
+// copying Gus's design: the closer the copy, the bigger the bonus
+for (const k of C.DESIGN_NAMES) {
+  const r = C.scoreCarving(C.DESIGNS[k]);
+  check(`Gus's design "${k}" takes a ribbon`, r.ribbon === 'first' || r.ribbon === 'second', `score=${r.score}`);
+}
+const D = C.DESIGNS.walrus;
+const halfCopy = D.slice();
+for (let i = 0; i < N * N; i++) if (halfCopy[i] && (i % N) >= 16) halfCopy[i] = 0;
+const exact = C.scoreCarving(D, { target: D }), part = C.scoreCarving(halfCopy, { target: D }), other = C.scoreCarving(C.STENCILS.happy, { target: D });
+check('an exact copy of the design earns the full likeness bonus', exact.request?.kind === 'copy' && exact.parts.copy === 15 && Math.abs(exact.request.sim - 1) < 1e-9);
+check('half a copy earns some', part.parts.copy > 0 && part.parts.copy < 15, `sim=${part.request.sim.toFixed(2)} pts=${part.parts.copy}`);
+check('a different face earns none', other.parts.copy === 0, `sim=${other.request.sim.toFixed(2)}`);
+check('likeness is symmetric and 1 for itself', Math.abs(C.likeness(D, halfCopy) - C.likeness(halfCopy, D)) < 1e-9 && C.likeness(D, D) === 1);
+
 // ---- the save: 32 x 32 bits, base64
 for (const [name, m] of [['classic', C.STENCILS.classic], ['ring', ring], ['empty', C.emptyMask()]]) {
   const s = C.encodeMask(m);
@@ -79,6 +114,7 @@ build('carvedPumpkin (collapsed, every cell cut)', CM.carvedPumpkin({ mask: full
 build('tinMegaphone', CM.tinMegaphone());
 build('pennant', CM.pennant({ color: 0xe8b830 }));
 build('prizeRosette', CM.prizeRosette({ color: 0x3a6ad0 }));
+build('carvedPumpkin (Gus\'s walrus design)', CM.carvedPumpkin({ mask: C.DESIGNS.walrus }));
 build('contestTable (one place)', CM.contestTable({ len: 1.8, places: 1, cloth: 'orange', seed: 5 }));
 if (carved) {
   // the face shows through to the glowing inside: each cut cell's front is open or glows

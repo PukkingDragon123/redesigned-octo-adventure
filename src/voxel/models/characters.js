@@ -9,6 +9,8 @@ export const VS = 0.05; // metres per voxel for characters
 const SKIN = {
   fair: 0xf2c8a2, rosy: 0xf4c2a6, tan: 0xd8a274, brown: 0x9c6844, deep: 0x6e4630, bone: 0xe4d6b6,
 };
+// the village's skin tones (the contest crowd's townsfolk are dressed from these: src/game/crowdGen.js)
+export const SKIN_TONES = { ...SKIN, pale: 0xf6d6bc, olive: 0xc8986a, golden: 0xe0b080, umber: 0xb07a50, mahogany: 0x845234 };
 
 // ---------------------------------------------------------------- character specs
 // Units are voxels (0.05 m). head/torso: w,h,d. arm/leg: len (shoulder->wrist, hip->ankle), t (thickness)
@@ -326,6 +328,22 @@ function hair(spec, v, x0, y0, z0, x1, y1, z1) {
       helmet(5, y1, 1.2);
       for (let x = x0 - 1; x <= x1 + 1; x += 2) v.set(x, y1 + 2, z0 + ((x * 3) % d), strand(x, y1, 0));
       break;
+    // (the townsfolk's: src/game/crowdGen.js) long hair down the back to the shoulders
+    case 'long':
+      helmet(1, y1, 1.4, 1);
+      v.fill(x0 - 1, -3, z0 - 2, x1 + 1, 3, z0 + 1, (x, y, z) => ((x + y) % 4 === 0 ? dark(c, 0.1) : c));
+      for (let x = x0; x <= x1; x += 2) v.set(x, y1, z1 + 1, strand(x, y1, z1));
+      break;
+    // pulled back in a ponytail that bobs out behind
+    case 'pony':
+      helmet(4, y1, 1.1);
+      v.ellipsoid(cx, y1 - 1, z0 - 2.2, 1.6, 1.6, 1.4, strand);
+      for (let k = 0; k < 5; k++) v.ellipsoid(cx, y1 - 2.5 - k * 1.1, z0 - 2.6 - k * 0.15, 1.2 - k * 0.12, 0.8, 1.1, (k & 1) ? dark(c, 0.1) : c);
+      break;
+    // a shiny dome with a fringe round the back and sides
+    case 'bald':
+      v.ellipsoid(cx, cy + 0.6, cz - 0.6, w / 2 + 1, h / 2 + 0.7, d / 2 + 1, (x, y, z) => (y < 3 || y > 6 || z > z1 - 3 ? 0 : strand(x, y, z)));
+      break;
     default:
       break;
   }
@@ -428,6 +446,24 @@ function hat(spec, v, x0, y0, z0, x1, y1, z1) {
       v.fill(x0 - 1, y1, z0 - 1, x1 + 1, y1 + 1, z1, (x, y, z) => ((x + z) % 3 ? c : dark(c, 0.12)));
       v.fill(x0, y1, z1, x1, y1, z1 + 2, dark(c, 0.08));
       break;
+    // (the townsfolk's) fluffy earmuffs on a band over the top
+    case 'earmuffs': {
+      v.fill(x0, y1 + 1, Math.round(cz), x1, y1 + 1, Math.round(cz), H.band ?? dark(c, 0.2));
+      v.fill(x0 - 1, y1 - 1, Math.round(cz), x0 - 1, y1, Math.round(cz), H.band ?? dark(c, 0.2));
+      v.fill(x1 + 1, y1 - 1, Math.round(cz), x1 + 1, y1, Math.round(cz), H.band ?? dark(c, 0.2));
+      for (const ex of [x0 - 2, x1 + 2]) v.ellipsoid(ex, 4, cz, 1.2, 2.2, 2.2, (x, y, z) => ((x + y + z) % 2 ? c : lite(c, 0.12)));
+      break;
+    }
+    // a ball cap, peak to the front
+    case 'cap':
+      v.ellipsoid(cx, y1, cz - 0.3, w / 2 + 0.8, 3.2, (z1 - z0) / 2 + 0.9, (x, y, z) => (y >= y1 - 1 ? ((x + z) % 5 === 0 ? dark(c, 0.1) : c) : 0));
+      v.fill(x0, y1 - 1, z1 + 1, x1, y1 - 1, z1 + 4, H.band ?? dark(c, 0.15));
+      v.set(Math.round(cx), y1 + 3, Math.round(cz), H.band ?? dark(c, 0.15));
+      break;
+    // a knitted ear-warmer band
+    case 'headband':
+      v.fill(x0 - 1, y1 - 3, z0 - 1, x1 + 1, y1 - 1, z1 + 1, (x, y, z) => (Math.abs(x - cx) < w / 2 - 0.5 && Math.abs(z - cz) < (z1 - z0) / 2 - 0.5 ? 0 : (x + y) % 2 ? c : dark(c, 0.1)));
+      break;
     case 'witch':
       v.fill(x0 - 4, y1, z0 - 4, x1 + 4, y1, z1 + 4, (x, y, z) => (Math.hypot(x - cx, z - cz) < w / 2 + 4 ? c : 0));
       for (let k = 0; k < 10; k++) v.ellipsoid(cx - k * 0.25, y1 + 1 + k, cz - k * 0.2, w / 2 - k * 0.5, 0.6, w / 2 - k * 0.5, c);
@@ -477,6 +513,8 @@ export function buildTorso(spec) {
   if (T.type === 'serge' || T.type === 'coat' || T.type === 'labcoat' || T.type === 'cardigan') {
     v.fill(Math.round(cx) - 2, h - 1, z1 + 1, Math.round(cx) + 1, h - 1, z1 + 1, dark(T.color, 0.12)); // lapels
   }
+  if (T.type === 'hoodie') v.fill(Math.round(cx) - 3, h - 2, z0 - 1, Math.round(cx) + 2 + (w % 2 ? 1 : 0), h, z0, dark(T.color, 0.08)); // the hood, down
+  if (T.type === 'puffy') v.fill(Math.round(cx) - 2, h, z0, Math.round(cx) + 1 + (w % 2 ? 1 : 0), h, z1, dark(T.color, 0.1)); // the collar
   if (T.belt) v.fill(x0, 2, z0, x1, 2, z1 + belly, (x, y, z) => (Math.abs(x - cx) < 1 && z >= z1 ? 0xf2c443 : T.belt));
   if (T.suspenders) for (const sx of [x0 + 2, x1 - 2]) v.fill(sx, 2, z1 + belly, sx, h - 1, z1 + belly, T.suspenders), v.fill(sx, 2, z0, sx, h - 1, z0, T.suspenders);
   if (spec.apron) {
@@ -538,6 +576,15 @@ function topPattern(T, lx, y, z, w, h, x, cx, z1) {
       return y === 3 || y === h - 4 ? a : Math.abs(x - cx) < 1.6 ? T.under ?? c : c;
     case 'jersey':
       return y === h - 3 ? a : y === 3 ? a : c;
+    // (the townsfolk's) a quilted puffy vest over a shirt (the sleeves are T.under)
+    case 'puffy':
+      return Math.abs(x - cx) < 0.6 ? a : y % 3 === 0 ? dark(c, 0.14) : y % 3 === 2 ? lite(c, 0.08) : c;
+    // a hoodie: the kangaroo pocket and the drawstrings
+    case 'hoodie':
+      return y >= 2 && y <= 4 && Math.abs(x - cx) < w / 2 - 2 ? dark(c, 0.1) : y >= h - 4 && y < h - 1 && Math.abs(Math.abs(x - cx) - 1.5) < 0.6 ? a : c;
+    // a zip-up fleece
+    case 'fleece':
+      return Math.abs(x - cx) < 0.6 ? a : (x * 3 + y * 5) % 7 === 0 ? lite(c, 0.06) : c;
     default:
       return y === h - 1 ? lite(c, 0.06) : c;
   }
@@ -671,7 +718,8 @@ export function buildLimb(spec, part) {
   if (isArm) {
     const T = spec.top || {};
     sleeve = T.type === 'robe' ? T.color : T.color ?? spec.skin;
-    if (T.type === 'hivis') sleeve = T.under ?? sleeve;
+    if (T.type === 'hivis' || T.type === 'puffy') sleeve = T.under ?? sleeve;
+    if (T.type === 'puffy' && T.underPlaid) { const u = T.under; sleeve = (y) => ((top - y) % 4 < 2 ? dark(u, 0.22) : u); }
     if (T.type === 'stripes') sleeve = (y) => ((top - y) % 3 === 0 ? T.accent : T.color);
     cuff = T.type === 'labcoat' ? dark(T.color, 0.06) : null;
   } else {

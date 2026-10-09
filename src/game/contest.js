@@ -2,28 +2,40 @@
 // come here in their day plans ({ k: 'contest' } in npcRoutines.js): carvers saw away
 // at their pumpkins, scoop out guts, stand back to admire, giggle with the neighbour;
 // the kids scoop and bounce; Dr. Ingrid judges with her clipboard and does the rounds;
-// Constable Doug keeps order with a coffee; Josée cheers her two on. Gus hosts: he
-// makes announcements through a dented tin megaphone from the middle of the street,
-// then strolls along the tables for a close look at every entry (leans in, hums, nods,
-// points, has his say), calls the finished ones and hands out the hourly ribbons.
+// Constable Doug keeps order with a coffee; Josée cheers her two on. Gus hosts, in the
+// game itself (not just in scenes): he makes announcements through a dented tin
+// megaphone from the middle of the street, then strolls along the tables (the
+// townsfolk's too) for a close look at every entry (leans in, hums, nods, points, has
+// his say), calls the finished ones and hands out the hourly ribbons. Around them, two
+// dozen and more townsfolk (src/game/crowd.js) carve, chat, sip cider, take photos,
+// play tag, stroll hand in hand, walk a dog and push a stroller.
 //
 // The crowd cheers (arms up, pennants waved, kids jumping, "Hooray!", a hip-hip-hooray
 // and applause: cheer()) when Gus announces, when a pumpkin is judged or finished, when
 // a winner is named and when Hank's own carving gets its ribbon (src/game/carving.js,
 // the mini-game at Hank's table).
 //
-// The first time Hank rides in, the whole crowd freezes, stares and SCREAMS (the
-// story's first-arrival scene, or groupScream() below for saves from before the
-// contest), then scatters behind the tables and hay bales; as they get used to him
-// (npcBrain.js) they drift back to their pumpkins.
+// The first time Hank rides in, the whole contest FREEZES mid-action and stares at him:
+// no screams, no running, just silence, crickets, heads turning to follow him, a lid
+// dropped on a table and a kid peeking out from behind a parent. Nana sent a carrier of
+// extra cocoa along: Hank offers everyone a cup, and one by one they hesitate, take it,
+// sip, soften and go back to their pumpkins (the neighbours thaw with them). Once the
+// eight regulars have a cup, Gus comes over and invites him to carve (the cocoa round:
+// cocoaRound.js keeps the rules and flags; Story.contestInvite the invitation). Ever
+// after, anyone at the contest who is still frightened of Hank just freezes and watches.
 import * as THREE from 'three';
-import { extendVChar, POSE_KIT } from './vchar.js';
+import { extendVChar, POSE_KIT, REACT } from './vchar.js';
 import { CONTEST } from '../world/contest.js';
 import * as CM from '../voxel/models/contest.js';
 import * as PR from '../voxel/models/props.js';
 import { P } from '../render/particles.js';
 import { Carving } from './carving.js';
 import { RIBBONS } from './carveScore.js';
+import { Crowd } from './crowd.js';
+import { CocoaRound, ROUND_KEYS, NEED } from './cocoaRound.js';
+import { meshVox } from '../voxel/mesh.js';
+import { voxMesh, sharedVoxelMaterial } from '../render/voxelMaterial.js';
+import * as FOOD from '../voxel/models/food.js';
 
 const { arm, leg, POSES } = POSE_KIT;
 const S = Math.sin;
@@ -101,6 +113,14 @@ extendVChar({
       leg(T, 'L', 0.08 * k, 0.1, 0.2 * k); leg(T, 'R', 0.08 * k, 0.1, 0.2 * k);
     },
     cheerFlag2(c, t, T) { POSES.cheerFlag(c, t + 0.4, T); },
+    // frozen mid-action: whatever they were doing when Hank rode up, held stock still
+    // (Contest.freezeActor keeps the pose and the moment), a little stiff and wide-eyed
+    frozen(c, t, T) {
+      const f = c._freeze;
+      const fn = f && f.anim !== 'frozen' && POSES[f.anim];
+      (fn || POSES.idle)(c, f ? f.t : 0, T);
+      T.shUp += 0.035; T.lean -= 0.05; T.headX -= 0.06;
+    },
   },
   held: {
     carve: { fn: CM.carvingKnife, scale: 1 },
@@ -114,6 +134,30 @@ extendVChar({
     cheerFlag2: { fn: () => CM.pennant({ color: 0xe8b830 }), scale: 1 },
   },
   loco: ['hostWalk'],
+});
+
+// Hank holds out a cup of cocoa (a reaction layered over whatever he's doing, so it
+// works on foot, where the walk owns his pose)
+const CUP = { geo: null };
+function cupMesh() {
+  if (!CUP.geo) { const r = FOOD.cocoaTakeaway(); CUP.geo = meshVox(r.vox, { size: r.size, origin: r.origin, jitter: 0.02 }); }
+  const m = voxMesh(CUP.geo, sharedVoxelMaterial());
+  m.userData.upright = true;
+  m.userData.cup = true;
+  return m;
+}
+Object.assign(REACT, {
+  offerCup: {
+    d: 1.5, expr: 'happy',
+    start(c) { if (!c.held.R) c.hold(cupMesh(), 'R'); },
+    f(c, t, T) {
+      const k = Math.min(1, t / 0.25) * (t > 1.2 ? Math.max(0, 1 - (t - 1.2) / 0.3) : 1);
+      const mix = (key, v) => { T[key] += (v - T[key]) * k; };
+      mix('aFR', 1.35); mix('aOR', 0.12); mix('eBR', 0.35); mix('eIR', -0.1);
+      T.lean += 0.1 * k; T.headX += 0.1 * k;
+      if (t > 0.95 && c.held.R?.userData.cup) c.hold(null, 'R'); // handed over
+    },
+  },
 });
 
 const LINES = {
@@ -141,8 +185,8 @@ const HOST_ROUND = (() => {
   const out = [];
   const T = CONTEST.tables;
   const front = (t, lx) => (t.yaw ? { x: t.x - lx, z: t.z - 0.98, yaw: 0 } : { x: t.x + lx, z: t.z + 0.98, yaw: PI });
-  for (const t of [T[0], T[1]]) for (const lx of [-0.9, 0.9]) out.push(front(t, lx));
-  for (const t of [T[3], T[2]]) for (const lx of [-0.9, 0.9]) out.push(front(t, lx));
+  for (const t of [T[0], T[1], T[5]]) for (const lx of [-0.9, 0.9]) out.push(front(t, lx));
+  for (const t of [T[4], T[3], T[2]]) for (const lx of [-0.9, 0.9]) out.push(front(t, lx));
   out.push({ ...front(CONTEST.hank, 0), hank: true });
   return out;
 })();
@@ -155,6 +199,11 @@ export class Contest {
     this.C = CONTEST;
     this.carving = new Carving(game, this);
     this._cheerT = -99;
+    this.crowd = new Crowd(game, this);
+    this.round = new CocoaRound(() => game.state);
+    this.served = new Set(); // (others at the contest given a cup this round: Lou, say)
+    this.carrier = null;
+    this.cricketT = 0;
   }
   spotFor(key) {
     return CONTEST.spots[key] || null;
@@ -288,7 +337,7 @@ export class Contest {
       if (!stillOn()) break;
       for (const r of HOST_ROUND) {
         if (!stillOn()) break;
-        if (r.hank && !this.carving.hasCarving() && Math.random() < 0.5) continue;
+        if (r.hank ? !this.carving.hasCarving() && Math.random() < 0.5 : Math.random() < 0.3) continue;
         await w.walk([{ x: r.x, z: r.z }], 0.85, 'hostWalk');
         a.face(r.yaw);
         await this.inspect(b, w, r);
@@ -308,16 +357,19 @@ export class Contest {
     await w(0.45);
     const carvers = this.present().filter((o) => ['carve', 'kid'].includes(CONTEST.spots[o.key]?.role) && o.mode === 'routine');
     const st = g.state?.carving;
-    if (n % 3 === 2 && carvers.length) {
+    const folk = this.crowd.present().filter((m) => m.role === 'carve' && !m.frozen);
+    if (n % 3 === 2 && (carvers.length || folk.length)) {
       // this hour's ribbon: a drum roll... and the winner
-      const win = pick(carvers);
+      const win = carvers.length && (Math.random() < 0.6 || !folk.length) ? pick(carvers) : null;
+      const wf = win ? null : pick(folk);
       b.say(`And this hour's ribbon for ${pick(CATEGORIES)} goes to...`, 2600);
       a.say(2);
       await w(2.6);
-      b.say(`${g.villagerName(win.char).toUpperCase()}!`, 2200);
+      b.say(`${(win ? g.villagerName(win.char) : wf.name).toUpperCase()}!`, 2200);
       a.say(1);
-      win.a.play('present', 'proud');
-      win.a.react(win.cfg.kid ? 'yay' : 'love');
+      const wa = (win || wf).a;
+      wa.play('present', 'proud');
+      wa.react((win ? win.cfg.kid : wf.kid) ? 'yay' : 'love');
       this.cheer(2, { except: win });
       await w(3);
     } else if (st?.day === g.state.day && st.ribbon && st.ribbon !== 'part' && Math.random() < 0.5) {
@@ -341,6 +393,7 @@ export class Contest {
     a.play('inspect', 'neutral');
     const who = this.present().filter((o) => o !== b && hyp(o.a.pos.x - r.x, o.a.pos.z - r.z) < 2.4);
     for (const o of who) { o.a.lookAt(a); o.a.tempExpr(pick(['worried', 'proud', 'sheepish']), 3); }
+    const folk = this.crowd.watchHost(r.x, r.z, a);
     if (Math.random() < 0.6) {
       this.g.emotes?.show(a, 'note', 1.8);
       this.sfx('hum_hmm', a.pos, 0.35);
@@ -358,15 +411,17 @@ export class Contest {
     a.say(1);
     await w(rand(1.3, 2));
     for (const o of who) { o.a.lookAt(null); o.a.react(o.cfg.kid ? 'yay' : 'bounce'); }
+    this.crowd.doneWatching(folk);
     // now and then that one's done: Gus calls it, and the street cheers
-    if (!r.hank && who.length && Math.random() < 0.3) {
-      const o = pick(who);
+    if (!r.hank && (who.length || folk.length) && Math.random() < 0.3) {
+      const o = who.length && (Math.random() < 0.5 || !folk.length) ? pick(who) : null;
+      const f = o ? null : pick(folk);
       a.play('announce', 'laugh');
       this.sfx('megaphone', a.pos, 0.5);
-      b.say(`${this.g.villagerName(o.char)}'s pumpkin is DONE! Let's hear it!`, 2600);
+      b.say(`${o ? this.g.villagerName(o.char) : f.name}'s pumpkin is DONE! Let's hear it!`, 2600);
       a.say(1.5);
       await w(0.7);
-      o.a.play('present', 'proud');
+      (o || f).a.play('present', 'proud');
       this.cheer(1, { except: o, force: true });
       await w(2.4);
     }
@@ -395,7 +450,9 @@ export class Contest {
       if (kid) kids++;
       this.cheerOne(a, { kid, level, say: (t, ms) => g.ui.tag(`cheer:${a.char}`, t, a.pos.clone().setY(a.pos.y + a.P.height + 0.45), ms) });
     }
-    const n = crowd.length + actors.length;
+    const folk = this.crowd.cheer(level);
+    kids += folk.kids;
+    const n = crowd.length + actors.length + folk.n;
     if (!n) return 0;
     const at = _v.set(CONTEST.x - 4, (g.playerPos?.y ?? 0) + 1, CONTEST.z);
     this.sfx('crowd_hooray', at, 0.65 + level * 0.15);
@@ -436,52 +493,264 @@ export class Contest {
     this.g.villagers?.sfx(name, pos, vol);
   }
 
-  // the "Carve a pumpkin" prompt at Hank's table (game.interactions)
+  // the prompts: "Offer cocoa to ..." during the cocoa round, "Carve a pumpkin" at Hank's table
   action(p, slow) {
-    return this.carving.action(p, slow);
+    return this.offerAction(p) || this.carving.action(p, slow);
   }
 
-  // ------------------------------------------------------------ the big scream (saves from before the contest)
-  // Everyone at the contest who is still nervous of Hank stares, screams, drops their
-  // tools and scatters; the friendly ones just wave.
-  groupScream() {
-    const g = this.g, V = g.villagers, X = V.ctx;
-    g.state.flags.contestScream = true;
-    let n = 0;
-    for (const b of this.present()) {
-      if (b.mode !== 'routine') { if (['startle', 'flee', 'hide', 'standoff', 'cowerOpen'].includes(b.mode)) n++; continue; }
-      if (b.mood === 'terrified') { b.startle(X); n++; }
-      else if (b.mood === 'wary') { this.yelp(b, X); n++; }
-      else { b.a.faceTowards(X.p.x, X.p.z); b.a.react('hi'); }
+  // ------------------------------------------------------------ frozen mid-action
+  // hold whatever pose they were in (and what's in their hand), wide-eyed
+  freezeActor(a) {
+    if (a.anim === 'frozen') return;
+    a._freeze = { anim: a.anim, t: a.animT };
+    const h = a.held.R;
+    if (h?.userData.held) h.userData.held = 'frozen';
+    a.reaction = null;
+    a.play('frozen', pick(['surprised', 'shock', 'awe']));
+  }
+  // the brains at the contest, frozen or not
+  atContest() {
+    return (this.g.villagers?.brains || []).filter((b) => b._act?.k === 'contest' && !b.a.scripted && b.shown && hyp(b.a.pos.x - CONTEST.x, b.a.pos.z - CONTEST.z) < CONTEST.r + 4 && !b.path);
+  }
+  servedBrain(b) {
+    return this.round.has(b.key) || this.served.has(b.key);
+  }
+
+  // ------------------------------------------------------------ the cocoa round (cocoaRound.js)
+  // Hank rides in for the first time: everyone freezes and stares. Silence; crickets.
+  beginRound() {
+    const g = this.g, R = this.round;
+    const here = this.atContest();
+    // (an old save: regulars who already like him just wave; they count as served)
+    const already = here.filter((b) => b.mood === 'friendly' || b.mood === 'fan').map((b) => b.key);
+    R.start(already);
+    this.served.clear();
+    for (const b of here) {
+      if (R.has(b.key)) { b.a.faceTowards(g.playerPos.x, g.playerPos.z); b.a.react('hi'); continue; }
+      b.freeze(b.key === 'pop' ? g.villagers.get('josee') : null);
     }
-    if (n >= 2) {
-      g.sound.play('scream', { volume: 0.5, pitch: 1.2 });
-      g.chase?.shake?.(0.25);
-      g.wait(2.4).then(() => g.ui.pop('...Was it something I said?', { expr: 'sheepish', key: 'contestScream' }));
-    }
+    for (const m of this.crowd.present()) this.crowd.freeze(m);
+    this.dropLid();
+    this.cricketT = 1.2;
+    g.chase?.shake?.(0.08);
+    g.wait(1.4).then(() => g.ui.pop('...Uh. Hi?', { expr: 'sheepish', key: 'freeze1', ms: 2600 }));
+    g.wait(4.4).then(() => g.ui.pop("They're frozen stiff! ...Wait. Nana sent a carrier of *extra cocoa* along in Bessie's crate. Nothing thaws a body like a warm cup!", { expr: 'sparkle', key: 'freeze2', ms: 6000 }));
+    g.wait(10.5).then(() => { if (R.isActive() && !R.progress().count) g.ui.pop(`Walk up to them and *offer cocoa* ${g.touch?.on ? '' : '[E] '}to everyone. Slow and friendly, Hank.`, { expr: 'happy', key: 'freeze3', ms: 5500 }); });
     g.save();
   }
-  // a wary villager's version: a shriek and dropped tools, then a sheepish "oh, it's you"
-  yelp(b, X) {
-    b.seq(async (w) => {
-      const a = b.a;
-      b.mode = 'keepAway';
-      a.faceTowards(X.p.x, X.p.z);
-      a.lookAt(this.g.playerChar);
-      a.react('doubletake');
-      await w(0.75);
-      b.dropHeld();
-      b.scream(0.8);
-      b.say(pick(b.cfg.scare || ['AAAH!']), 2000, true);
-      a.react('scream');
-      await w(1.4);
-      a.play('idle', 'sheepish');
-      a.react('shake');
-      b.say(pick(b.cfg.wary || ["...Oh. It's you."]), 2200, true);
-      await w(2.6);
-      b.mode = 'routine';
-      b.busy = false;
-    });
+  // somebody had just lifted the lid off their pumpkin: it slips out of their hand
+  dropLid() {
+    const g = this.g, V = g.villagers;
+    const m = this.crowd.list.find((q) => q.role === 'carve' && q.shown && q.a && q.tier === 'rig') || this.crowd.list.find((q) => q.role === 'carve' && q.shown && q.a);
+    const a = m?.a || V?.get('agnes');
+    if (!a || !V) return;
+    const r = CM.pumpkinLid();
+    const lid = voxMesh(meshVox(r.vox, { size: r.size, origin: r.origin, jitter: 0.02 }), sharedVoxelMaterial());
+    a.root.updateMatrixWorld(true);
+    a.arms.L.hand.getWorldPosition(lid.position);
+    if (a.root.visible === false) lid.position.set(a.pos.x + Math.sin(a.yaw) * 0.4, a.pos.y + 1.0, a.pos.z + Math.cos(a.yaw) * 0.4);
+    g.scene.add(lid);
+    g.wait(0.35).then(() => { V.litter.drop(lid); g.wait(0.45).then(() => this.sfx('pumpkin_bonk', lid.position, 0.4)); });
+  }
+
+  // the "Offer cocoa" prompt: the nearest frozen soul in reach
+  offerAction(p) {
+    const g = this.g, R = this.round;
+    if (!R.isActive() || this.offering || g.interior?.active) return null;
+    if (!g.onFoot && g.bike.speed > 1.6) return null;
+    const reach = g.onFoot ? 2.3 : 2.9;
+    let best = null, bd = reach;
+    for (const b of this.atContest()) {
+      if (b.mode !== 'frozen' || b.thawing) continue;
+      const d = hyp(b.a.pos.x - p.x, b.a.pos.z - p.z);
+      if (d < bd && Math.abs(b.a.pos.y - p.y) < 2.5) { bd = d; best = { b }; }
+    }
+    const m = this.crowd.nearestFrozen(p, bd);
+    if (m) best = { m };
+    if (!best) return null;
+    const name = best.b ? (best.b.char === 'pip' ? 'Pip' : g.villagerName(best.b.char)) : best.m.name;
+    return { text: `Offer cocoa to ${name}`, fn: () => this.offer(best) };
+  }
+  async offer(t) {
+    const g = this.g, R = this.round;
+    if (this.offering) return;
+    this.offering = true;
+    const a = t.b ? t.b.a : t.m.a;
+    try {
+      // Hank turns to them and holds out a cup from the carrier
+      const p = g.playerPos;
+      if (g.onFoot) g.walker.yaw = Math.atan2(a.pos.x - p.x, a.pos.z - p.z);
+      g.playerChar?.react('offerCup');
+      g.sound.play('cup', { volume: 0.6 });
+      // (the cup leaves his hand even if something else interrupts the reaching out)
+      g.wait(1.6).then(() => { const ch = g.playerChar; if (ch?.held.R?.userData.cup) ch.hold(null, 'R'); });
+      if (t.b) {
+        await Promise.race([t.b.acceptCocoa(), g.wait(7)]);
+        if (R.isKey(t.b.key)) {
+          const r = R.give(t.b.key);
+          if (r.fresh) this.onServed(t.b.a, r);
+        } else {
+          this.served.add(t.b.key);
+          this.crowd.thawNear(a.pos.x, a.pos.z, 1);
+        }
+      } else {
+        await Promise.race([this.crowd.thaw(t.m, true), g.wait(7)]);
+        R.giveCrowd();
+        this.crowd.thawNear(a.pos.x, a.pos.z, 1);
+      }
+      g.save();
+    } finally {
+      this.offering = false;
+    }
+  }
+  // a regular took a cup: the people round them thaw too, and Hank keeps count
+  onServed(a, r) {
+    const g = this.g;
+    const share = Math.ceil(this.crowd.list.length / NEED);
+    this.crowd.thawNear(a.pos.x, a.pos.z, share);
+    g.sound.play(r.complete ? 'quest_done' : 'item_get', { volume: 0.5 });
+    const say = {
+      1: ['One warmed up! Cocoa works on *everybody*.', 'happy'],
+      4: ["Halfway! Even the music's thawing out.", 'sparkle'],
+      7: ['Just one more frozen face...', 'determined'],
+    }[r.count];
+    if (say && !r.complete) g.ui.pop(say[0], { expr: say[1], key: `cocoa${r.count}`, ms: 3400 });
+    if (r.complete) this.finishRound();
+  }
+  // everyone has a cup: the last of the crowd thaws, the music comes back... and Gus comes over
+  finishRound() {
+    const g = this.g, V = g.villagers, R = this.round;
+    R.finish();
+    for (const b of this.atContest()) {
+      if (b.key === 'gus') continue;
+      V.force(b.char, Math.max(V.trustOf(b.char), b.cfg.kid ? 60 : 30));
+      if (b.mode === 'frozen') b.unfreeze();
+    }
+    V.force('gus', Math.max(V.trustOf('gus'), 46));
+    this.crowd.thawNear(CONTEST.x, CONTEST.z, 99);
+    this.showCarrier(false);
+    g.wait(1.0).then(() => this.cheer(1, { force: true }));
+    g.ui.pop('Everybody has a cup! Look at them. All warm and smiley.', { expr: 'love', key: 'cocoaDone', ms: 3400 });
+    g.save();
+    g.wait(2.6).then(() => this.inviteGus());
+  }
+  // Gus thaws last: "...Well I'll be." He marches over (no megaphone at Hank, just a look),
+  // and the invitation (Story.contestInvite) opens the carving
+  async inviteGus() {
+    const g = this.g;
+    if (this.inviting) return;
+    this.inviting = true;
+    try {
+      while (g.mode !== 'ride') await g.wait(0.5);
+      const gus = g.villagers.get('gus');
+      const b = gus?.brain;
+      if (b && gus.visible && !gus.scripted) await Promise.race([b.approachHank(1.8), g.wait(9)]);
+      await g.story.contestInvite();
+    } finally {
+      this.inviting = false;
+    }
+  }
+  // the carrier of extra cocoa: in Bessie's crate, or in Hank's hand when he's walking
+  showCarrier(on) {
+    const g = this.g;
+    const want = on ? Math.max(1, NEED - this.round.progress().count) : 0;
+    const c = this.carrier;
+    if (c && c.n === want && (want ? c.parent === (g.onFoot ? g.playerChar?.arms.L.hand : g.bikeModel?.crateAnchor) : !c.mesh.parent)) return;
+    if (c) {
+      if (c.parent === g.playerChar?.arms.L.hand) g.playerChar.hold(null, 'L');
+      else c.mesh.parent?.remove(c.mesh);
+    }
+    if (!want) { this.carrier = null; return; }
+    let mesh = c?.n === want ? c.mesh : null;
+    if (!mesh) {
+      const r = CM.cocoaCarrier({ cups: want });
+      mesh = voxMesh(meshVox(r.vox, { size: r.size, origin: r.origin, jitter: 0.02 }), sharedVoxelMaterial());
+      mesh.userData.upright = true;
+      mesh.userData.held = 'carrier';
+    }
+    let parent;
+    if (g.onFoot && g.playerChar) {
+      parent = g.playerChar.arms.L.hand;
+      mesh.position.set(0, -0.02, 0.02);
+      mesh.scale.setScalar(0.85);
+      g.playerChar.hold(mesh, 'L');
+    } else {
+      parent = g.bikeModel?.crateAnchor;
+      if (!parent) return;
+      mesh.position.set(0, 0.32, 0.02);
+      mesh.quaternion.identity();
+      mesh.scale.setScalar(0.7);
+      parent.add(mesh);
+    }
+    this.carrier = { mesh, n: want, parent };
+  }
+  // the clipboard line while the round is on
+  objective() {
+    return this.round.objective();
+  }
+  // a cocoa cup on the compass: the nearest regular still waiting for one
+  markers() {
+    const R = this.round;
+    if (!R.isActive()) return [];
+    const p = this.g.playerPos;
+    let best = null, bd = 1e9;
+    for (const b of this.atContest()) {
+      if (this.servedBrain(b) || !R.isKey(b.key)) continue;
+      const d = hyp(b.a.pos.x - p.x, b.a.pos.z - p.z);
+      if (d < bd) { bd = d; best = b; }
+    }
+    if (!best) return [{ id: 'cocoaRound', x: CONTEST.x, z: CONTEST.z, icon: 'cocoa' }];
+    return [{ id: 'cocoaRound', x: best.a.pos.x, z: best.a.pos.z, icon: 'cocoa' }];
+  }
+  // the music hushes while the street stands frozen (until half of them have a cup)
+  hush() {
+    const g = this.g, R = this.round;
+    if (!R.isActive() || g.mode !== 'ride') return false;
+    const p = g.playerPos;
+    return hyp(p.x - CONTEST.x, p.z - CONTEST.z) < 58 && R.progress().count < NEED / 2;
+  }
+
+  // who should stand frozen this frame: during the round everyone at the contest who
+  // hasn't had a cup, while Hank is about; afterwards anyone still terrified of him,
+  // while he's close (they freeze and watch: nobody screams or runs off at the contest)
+  roundUpdate(dt) {
+    const g = this.g, R = this.round;
+    if (!g.state) return;
+    R.migrate();
+    const p = g.playerPos;
+    const dC = hyp(p.x - CONTEST.x, p.z - CONTEST.z);
+    const live = (g.mode === 'ride' || g.mode === 'menu') && !g.interior?.active;
+    if (R.needsStart()) {
+      if (g.mode === 'ride' && live && dC < CONTEST.r + 4 && (this.atContest().length || this.crowd.present().length)) this.beginRound();
+      return;
+    }
+    const active = R.isActive();
+    for (const b of this.atContest()) {
+      if (b.thawing || b.mode === 'cocoa') continue;
+      const want = live && (active ? dC < 60 && !this.servedBrain(b) : b.mood === 'terrified' && b.d < 15 && b.key !== 'gus');
+      if (want && b.mode === 'routine') b.freeze(b.key === 'pop' && active ? g.villagers.get('josee') : null);
+      else if (!want && b.mode === 'frozen') b.unfreeze();
+    }
+    if (active) {
+      const near = live && dC < 60;
+      for (const m of this.crowd.list) {
+        if (!m.shown || m.thawed || m.thawing) continue;
+        if (near && !m.frozen) this.crowd.freeze(m);
+        else if (!near && m.frozen) this.crowd.unfreeze(m);
+      }
+      this.showCarrier(live);
+      // crickets in the silence
+      if (this.hush() && (this.cricketT -= dt) <= 0) {
+        this.cricketT = rand(2.2, 3.6);
+        g.sound.play('crickets', { volume: 0.55, pitch: rand(0.95, 1.05) });
+      }
+      // a frozen face that Hank walks right up to: a little gulp
+      if (g.onFoot && (this.gulpT = (this.gulpT || 0) - dt) <= 0) {
+        this.gulpT = 1.5;
+        const m = this.crowd.nearestFrozen(p, 1.6);
+        if (m && Math.random() < 0.5) { m.a.react('flinch'); g.emotes?.show(m.a, 'sweat', 1.2); }
+      }
+    } else if (this.carrier) this.showCarrier(false);
   }
 
   // ------------------------------------------------------------ per frame
@@ -493,13 +762,12 @@ export class Contest {
     const near = hyp(cam.x - CONTEST.x, cam.z - CONTEST.z) < (g.settings?.quality === 'high' ? 95 : 70);
     if (m) m.visible = near;
     this.carving.update(dt, near);
-    const st = g.state;
-    if (g.mode !== 'ride' || !st?.flags?.village1 || st.flags.contestScream) return;
-    const p = g.playerPos;
-    if (hyp(p.x - CONTEST.x, p.z - CONTEST.z) < CONTEST.r + 12 && this.present().length) this.groupScream();
+    this.crowd.update(dt, near);
+    this.roundUpdate(dt);
   }
 }
 
-// how the contest crowd feels after the first-arrival scene (still terrified; the
-// kids think he's the coolest thing ever)
-export const AFTER_SCREAM = { marie: 14, doug: 16, ingrid: 18, agnes: 6, birdie: 8, josee: 10, pip: 62, pop: 55 };
+// how the regulars feel about Hank once they've had a cup (the kids think he's the
+// coolest thing ever; Gus has been won over by Marguerite's cocoa)
+export const AFTER_COCOA = { gus: 46, marie: 32, doug: 30, ingrid: 34, agnes: 32, birdie: 30, josee: 30, pip: 62, pop: 58 };
+export { ROUND_KEYS };
