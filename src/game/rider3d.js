@@ -310,7 +310,7 @@ export class VoxelRider {
         }
         // a friendly villager close by: let go of the bars and wave
         const mood = best.ref?.brain?.mood;
-        if (best.kind === 'person' && best.d < 11 && bike.speed < 9 && !L.waveCool && (!mood || mood === 'friendly' || mood === 'fan')) {
+        if (best.kind === 'person' && best.d < 11 && bike.speed < 11 && !L.waveCool && (!mood || mood === 'friendly' || mood === 'fan')) {
           L.waveCool = 22 + Math.random() * 12;
           L.waveT = 1.5;
           ch.tempExpr(Math.random() < 0.5 ? 'excited' : 'happy', 1.8);
@@ -328,7 +328,7 @@ export class VoxelRider {
       ch.tempExpr(q < 35 ? 'worried' : q < 65 ? 'confused' : 'happy', 1.1);
     }
     // ---- humming while cruising along
-    const cruising = bike.grounded && bike.speed > 2 && bike.speed < 10 && !bike.drifting && bike.wheelie < 0.1 && bike.wobble < 0.2;
+    const cruising = bike.grounded && bike.speed > 2 && bike.speed < 12.5 && !bike.drifting && bike.wheelie < 0.1 && bike.wobble < 0.2;
     L.cruise = cruising ? L.cruise + dt : 0;
     if (L.cruise > 4 && !L.humCool && !L.humT) { L.humT = 2.5 + Math.random() * 2; L.humCool = 12 + Math.random() * 14; }
     if (L.humT > 0) {
@@ -654,8 +654,8 @@ export class VoxelRider {
       else if (bike.exhausted) ch.setExpr('dizzy');
       else if (bike.tired > 0.5) ch.setExpr('worried');
       else if (Lf.effort > 0.4 || (bike.tired > 0.2 && bike.pushing)) ch.setExpr('determined');
-      else if (bike.speed > 13) ch.setExpr('excited');
-      else if (bike.speed > 9) ch.setExpr('happy');
+      else if (bike.speed > 16) ch.setExpr('excited');
+      else if (bike.speed > 11.5) ch.setExpr('happy');
       else if (Lf.humT > 0) ch.setExpr('happy');
       else if (Lf.still > 12) ch.setExpr('sleepy');
       else ch.setExpr('neutral');

@@ -9,9 +9,12 @@
 //
 // update(dt) returns how far the crank was wound this frame (radians, + forward) and keeps
 // a running total (angle) that the on-screen crank draws. When the strokes stop, the last
-// half turn finishes and the crank stops.
+// half turn finishes and the crank stops. There's no speed limit worth the name: the faster
+// the feet come down (or the thumb goes round) the faster it spins; what that's worth on the
+// road is up to the gear and Hank's legs (bike.js).
 const HALF = Math.PI;
 const SEQ = 1.1; // seconds: a stroke this soon after the last one keeps the rhythm going
+const MAX_RATE = 90; // rad/s (~14 turns a second): only there so a glitchy key repeat can't fling it
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 export class PedalFeed {
@@ -54,9 +57,9 @@ export class PedalFeed {
     }
     if (!seq && foot !== 1) return false;
     // the cadence: a half turn per stroke interval (a deliberate first push from rest)
-    this.rate = seq ? clamp(HALF / Math.max(iv, 0.08), 3, 36) : HALF / 0.3;
-    // strokes can bank a little ahead, never more than one and a half
-    this.pending = Math.min(this.pending + HALF, HALF * 1.5);
+    this.rate = seq ? clamp(HALF / Math.max(iv, 0.03), 3, MAX_RATE) : HALF / 0.3;
+    // strokes can bank a little ahead, never more than two halves
+    this.pending = Math.min(this.pending + HALF, HALF * 2);
     this.lastFoot = foot;
     this.lastT = this.t;
     this.strokes++;
@@ -65,7 +68,7 @@ export class PedalFeed {
 
   // touch / mouse / stick went round the chainring by dA radians
   turn(dA) {
-    if (Number.isFinite(dA)) this.drag += clamp(dA, -2.5, 2.5);
+    if (Number.isFinite(dA)) this.drag += clamp(dA, -3, 3);
   }
 
   update(dt) {

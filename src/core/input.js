@@ -9,6 +9,8 @@
 // on half a turn; the right stick turned in circles, or a thumb or the mouse dragged round
 // the on-screen chainring (ui/crank.js), turns it directly. Nothing pedals by itself.
 // S / Down held on its own (not in the middle of pedalling) is the brake, and so is LT.
+// The gears change by hand with Z / X (or , / .), the d-pad (up / down, LB down) or the touch
+// shifter; on foot Shift / RB / the SPRINT button sprints.
 import { PedalFeed } from './pedal.js';
 
 const RAMP_IN = 6.5; // keys: 0 -> full lock in ~0.15 s
@@ -43,8 +45,9 @@ const BINDINGS = {
   camera: ['KeyC'],
   confirm: ['Space', 'Enter', 'KeyE'],
   back: ['Escape', 'Backspace'],
-  shiftUp: ['KeyX'],
-  shiftDown: ['KeyZ'],
+  // the gears by hand (on the bike): X / . up, Z / , down
+  shiftUp: ['KeyX', 'Period'],
+  shiftDown: ['KeyZ', 'Comma'],
 };
 const FOOT_A = ['KeyW', 'ArrowUp'], FOOT_B = ['KeyS', 'ArrowDown'];
 
@@ -60,8 +63,8 @@ const PAD = {
   keepsakes: [8],
   confirm: [0],
   back: [1],
-  shiftUp: [5],
-  shiftDown: [4],
+  shiftUp: [12], // d-pad up / down change gear on the bike (LB drops one too)
+  shiftDown: [13, 4],
   camera: [11],
 };
 

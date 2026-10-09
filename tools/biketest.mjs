@@ -2,7 +2,8 @@
 // Headless checks for Bessie: drives the real Bike class (src/game/bike.js) over a mock
 // world with scripted inputs at 120 Hz physics / 60 Hz input, and checks the crank (spinning
 // makes speed, nothing moves her by itself, she coasts when the spinning stops, back-pedal
-// brake, alternating keys), Hank's stamina, crashes cooling the cocoa, hills, wheelies and
+// brake, alternating keys, no cadence cap), the gears (automatic and by hand) and top speeds,
+// Hank's stamina, crashes cooling the cocoa, hills, wheelies and
 // loop-outs, stoppies and endos, bunny-hop timing, ramp flips and spins, landings and bails,
 // slides, foot dabs, kerbs, drifts and touch assists.
 import { Bike } from '../src/game/bike.js';
@@ -86,7 +87,7 @@ const verbose = process.argv.includes('-v');
 {
   const r = run(flat, () => C({ throttle: 1 }), { T: 12 });
   const r4 = run(flat, () => C({ throttle: 1 }), { T: 4 });
-  check('easy spin on the flat cruises 7-9 m/s in top gear', r.b.speed > 7 && r.b.speed < 9 && r.b.gear === 3, `v12=${r.b.speed.toFixed(2)} v4=${r4.b.speed.toFixed(2)} gear=${r.b.gear}`);
+  check('easy spin on the flat cruises 10-11 m/s in top gear', r.b.speed > 10 && r.b.speed < 11 && r.b.gear === 3, `v12=${r.b.speed.toFixed(2)} v4=${r4.b.speed.toFixed(2)} gear=${r.b.gear}`);
   check('pedal strokes emitted', ev(r, 'pedalStroke').length > 20, `${ev(r, 'pedalStroke').length}`);
   const slow = run(flat, () => C({ pedal: 7 }), { T: 10 }), fast = run(flat, () => C({ pedal: 15 }), { T: 10 });
   check('spinning faster goes faster (the gears want a quicker spin at speed)', fast.b.speed > slow.b.speed + 1.5 && slow.b.speed > 3, `spin7=${slow.b.speed.toFixed(2)} spin15=${fast.b.speed.toFixed(2)}`);
@@ -109,7 +110,7 @@ const verbose = process.argv.includes('-v');
     return C({ throttle: t < 10 ? 1 : 0 });
   }, { T: 60 });
   const at14 = run(flat, (t) => C({ throttle: t < 10 ? 1 : 0 }), { T: 14 });
-  check('stop spinning: the pedals stop and she coasts down to a halt', worst <= 1e-9 && at14.b.speed < peak * 0.8 && co.b.speed < 0.01 && Math.abs(crankEnd - crankAt) < 0.05, `peak=${peak.toFixed(2)} v14=${at14.b.speed.toFixed(2)} v60=${co.b.speed.toFixed(3)} speedup=${worst.toExponential(1)} crank drift=${(crankEnd - crankAt).toFixed(3)}`);
+  check('stop spinning: the pedals stop and she coasts down to a halt', worst <= 1e-9 && at14.b.speed < peak - 1.4 && co.b.speed < 0.01 && Math.abs(crankEnd - crankAt) < 0.05, `peak=${peak.toFixed(2)} v14=${at14.b.speed.toFixed(2)} v60=${co.b.speed.toFixed(3)} speedup=${worst.toExponential(1)} crank drift=${(crankEnd - crankAt).toFixed(3)}`);
   const bp = run(flat, (t) => C({ pedal: t < 8 ? SPIN : -8 }), { T: 11 });
   check('back-pedalling is a coaster brake', bp.b.speed < 0.6, `v=${bp.b.speed.toFixed(2)}`);
 }
@@ -117,10 +118,13 @@ const verbose = process.argv.includes('-v');
 {
   const up = world({ h: (x, z) => z * 0.12 });
   const r = run(up, () => C({ throttle: 1 }), { T: 14 });
-  check('uphill 12% top speed < 5.5', r.b.speed < 5.5 && r.b.speed > 2.5, `v=${r.b.speed.toFixed(2)}`);
+  check('uphill 12% at an easy spin: barely more than half the flat speed (< 6 m/s)', r.b.speed < 6 && r.b.speed > 2.5, `v=${r.b.speed.toFixed(2)}`);
   const down = world({ h: (x, z) => -z * 0.14 });
   const r2 = run(down, () => C({}), { T: 14, setup: (b) => b.vel.set(0, 0, 3) });
-  check('downhill 14% coast > 10 m/s', r2.b.speed > 10, `v=${r2.b.speed.toFixed(2)}`);
+  check('downhill 14% coast > 12 m/s', r2.b.speed > 12, `v=${r2.b.speed.toFixed(2)}`);
+  let fast = 0;
+  const r3 = run(world({ h: (x, z) => -z * 0.08 }), (t, b) => { fast = Math.max(fast, b.speed); return C({ pedal: 22 }); }, { T: 12 });
+  check('downhill 8% spinning flat out: faster still (> 19.5 m/s)', fast > 19.5, `peak=${fast.toFixed(2)} gear=${r3.b.gear}`);
 }
 // --- 3. keys: W and S are the two feet; each change of foot winds the crank half a turn
 {
@@ -152,14 +156,53 @@ const verbose = process.argv.includes('-v');
   check('alternating keys ride Bessie up to speed', kb.b.speed > 6.5, `v=${kb.b.speed.toFixed(2)} gear=${kb.b.gear}`);
   const f2 = new PedalFeed();
   const kh = run(flat, (t) => { if (t < 1e-9) f2.stroke(1); return C({ turn: f2.update(1 / 60) }); }, { T: 8 });
-  check('one key held: a nudge, then she coasts to a stop', kh.b.speed < 0.05 && kh.b.pos.z < 5, `v=${kh.b.speed.toFixed(3)} z=${kh.b.pos.z.toFixed(2)}`);
+  check('one key held: a nudge, then she coasts to a stop', kh.b.speed < 0.05 && kh.b.pos.z < 6.5, `v=${kh.b.speed.toFixed(3)} z=${kh.b.pos.z.toFixed(2)}`);
+  // no cadence cap: frantic alternation (14 strokes a second) still winds faster, and Bessie's
+  // crank keeps up with whatever it's given
+  const fr = feed((f, i) => { if (i % 4 === 0) f.stroke((i / 4) % 2 ? -1 : 1); }, 4);
+  check('frantic W / S (15 strokes a second) spins ~7 turns a second: no cap at the old 36 rad/s', fr.out / 4 > 42, `rate=${(fr.out / 4).toFixed(1)} rad/s`);
+  const cr = run(flat, () => C({ pedal: 60 }), { T: 2 });
+  check('the crank keeps up with a super-fast spin (60 rad/s)', cr.b.spinRate > 58, `spin=${cr.b.spinRate.toFixed(1)}`);
+}
+// --- 3a. top speed and the gears: a frantic spin flies; bottom gear spins up easily but tops
+// out early, top gear is a slog to wind up but goes; shifting by hand, one gear a press
+{
+  let peak = 0;
+  const fl = run(flat, (t, b) => { peak = Math.max(peak, b.speed); return C({ pedal: 22 }); }, { T: 14 });
+  const ex = ev(fl, 'exhausted')[0];
+  check('flat out (3.5 turns a second) on the flat: 18-20 m/s, then Hank is spent after 10-15 s', peak > 17.8 && peak < 21 && ex && ex.t > 10 && ex.t < 15, `peak=${peak.toFixed(2)} exhausted at ${ex?.t}s`);
+  // presses at given times (each once, on the first frame at or after it)
+  const presses = (list) => { const left = [...list]; return (t, b) => { while (left.length && t >= left[0][0] - 1e-9) b.queueShift(left.shift()[1]); }; };
+  const man = (gear, ctl, T, setup) => run(flat, ctl, { T, setup: (b) => { b.autoGear = false; b.gear = gear; setup?.(b); } });
+  const g1 = man(1, () => C({ pedal: 22 }), 8), g3 = man(3, () => C({ pedal: 22 }), 2), g1s = man(1, () => C({ pedal: 22 }), 2);
+  check('manual bottom gear: frantic spinning tops out early (< 9.5 m/s)', g1.b.speed < 9.5 && g1.b.gear === 1, `v=${g1.b.speed.toFixed(2)}`);
+  check('manual top gear: slow to wind up from a stop (2 s: well behind bottom gear)', g3.b.speed < g1s.b.speed * 0.65 && g3.b.gear === 3, `top gear=${g3.b.speed.toFixed(2)} bottom=${g1s.b.speed.toFixed(2)}`);
+  // up through the box by hand: 1 -> 2 -> 3, then coasting she stays in 3 (no automatic box)
+  const pu = presses([[2, 1], [4, 1], [6, 1]]);
+  const hand = man(1, (t, b) => { pu(t, b); return C({ pedal: t < 10 ? 22 : 0 }); }, 14);
+  const gears = ev(hand, 'gear');
+  check('shifting by hand: one gear a press, a click each, never past top, no auto shifts', gears.length === 2 && gears.every((e) => e.manual && e.dir === 1) && ev(hand, 'gearStop').length === 1 && hand.b.gear === 3, `gears=${JSON.stringify(gears)} final=${hand.b.gear}`);
+  let top3 = 0;
+  const pf = presses([[2.2, 1], [4.4, 1]]);
+  man(1, (t, b) => { pf(t, b); top3 = Math.max(top3, b.speed); return C({ pedal: 22 }); }, 12);
+  check('shifting up by hand at the right moments flies (> 18 m/s)', top3 > 18, `peak=${top3.toFixed(2)}`);
+  const pd = presses([[0.5, -1], [0.5, -1]]);
+  const down = man(3, (t, b) => { pd(t, b); return C({ pedal: 11 }); }, 3);
+  check('two quick presses down drop two gears (none lost between steps)', down.b.gear === 1 && ev(down, 'gear').filter((e) => e.dir === -1).length === 2, `gear=${down.b.gear}`);
+  // automatic, a hand shift is left alone for a moment before the box takes over again
+  const ph = presses([[8, -1]]), pb = presses([[8, -1]]);
+  const held = run(flat, (t, b) => { ph(t, b); return C({ throttle: 1 }); }, { T: 9.5 });
+  const back = run(flat, (t, b) => { pb(t, b); return C({ throttle: 1 }); }, { T: 13 });
+  check('automatic: a hand shift holds for a moment, then the box picks again', held.b.gear === 2 && back.b.gear === 3, `held=${held.b.gear} later=${back.b.gear}`);
 }
 // --- 3b. Hank's wind: flat-out spinning tires him (slower, wobblier); coasting brings it back
 {
   const r = run(flat, (t) => C({ pedal: t < 30 ? 18 : 0 }), { T: 46 });
   const ex = ev(r, 'exhausted')[0], rec = ev(r, 'recovered')[0];
-  check('sprinting drains stamina until Hank is spent', !!ex && ex.t > 8 && ex.t < 30 && ev(r, 'winded').length > 0, `exhausted at ${ex?.t}s`);
+  check('a hard spin drains stamina until Hank is spent', !!ex && ex.t > 15 && ex.t < 30 && ev(r, 'winded').length > 0, `exhausted at ${ex?.t}s`);
   check('coasting and resting bring his wind back', !!rec && rec.t > 30 && r.b.stamina > 0.6 && !r.b.exhausted, `recovered at ${rec?.t}s stamina=${r.b.stamina.toFixed(2)}`);
+  const mad = run(flat, () => C({ pedal: 30 }), { T: 10 });
+  check('cranking like mad (~5 turns a second) empties him in well under 10 s', ev(mad, 'exhausted')[0]?.t < 7, `exhausted at ${ev(mad, 'exhausted')[0]?.t}s`);
   const cruise = run(flat, () => C({ throttle: 1 }), { T: 60 });
   check('an easy spin can be kept up for a good minute', cruise.b.stamina > 0.3 && !ev(cruise, 'exhausted').length, `stamina after 60 s=${cruise.b.stamina.toFixed(2)}`);
   const fresh = run(flat, () => C({ pedal: 14 }), { T: 6 });
