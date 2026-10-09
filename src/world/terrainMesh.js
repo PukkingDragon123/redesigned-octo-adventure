@@ -224,7 +224,22 @@ function buildPaintTexture() {
   const tex = new THREE.DataTexture(d, w, h, THREE.RGBAFormat);
   tex.magFilter = tex.minFilter = THREE.NearestFilter;
   tex.needsUpdate = true;
+  PAINT_DATA = { d, w, h };
   return tex;
+}
+let PAINT_DATA = null;
+const K_PAINT = 4;
+// Main Street's (and its side streets') asphalt at (x, z), as the terrain shader paints it
+export function isAsphalt(x, z) {
+  const P = PAINT_DATA;
+  if (!P) return false;
+  const i = Math.floor((x - PAINT_RECT[0]) * K_PAINT), j = Math.floor((z - PAINT_RECT[1]) * K_PAINT);
+  return i >= 0 && j >= 0 && i < P.w && j < P.h && P.d[(j * P.w + i) * 4 + 2] > 127;
+}
+// inside the village, where the roads are gravel lanes rather than dirt
+const VBOX = [VILLAGE_FLAT.x0 - 10, VILLAGE_FLAT.x1 + 10, VILLAGE_FLAT.z0 - 12, VILLAGE_FLAT.z1 + 10];
+export function inVillage(x, z) {
+  return x > VBOX[0] && x < VBOX[1] && z > VBOX[2] && z < VBOX[3];
 }
 
 export function createTerrainMaterial() {
@@ -240,7 +255,7 @@ export function createTerrainMaterial() {
     uPaint: PAINT,
     uPaintRect: { value: new THREE.Vector4(...PAINT_RECT) },
     uRoadTex: ROADTEX,
-    uVillage: { value: new THREE.Vector4(VILLAGE_FLAT.x0 - 10, VILLAGE_FLAT.x1 + 10, VILLAGE_FLAT.z0 - 12, VILLAGE_FLAT.z1 + 10) },
+    uVillage: { value: new THREE.Vector4(...VBOX) },
     ...SEA,
   });
   return new THREE.ShaderMaterial({ uniforms, vertexShader: VERT, fragmentShader: FRAG, lights: true });

@@ -8,9 +8,15 @@
 //   chimneySmoke(x,y,z,{color,scale})          one rising toon puff
 //   splashCrown(x,y,z,scale), splashDrops(x,y,z,n), glint(x,y,z,o), feathers(x,y,z,n),
 //   leafBurst(x,y,z,n,power), skid(x,z,yaw,o), dustKick(x,y,z,o), sweat(x,y,z), dizzy(x,y,z)
+//   groundKind(x,z)                            what's underfoot: asphalt, gravel, dirt, mud, sand, litter, grass, snow...
+// Ground decals (render/decals.js): the bike's tyre tracks and skid streaks, Hank's bony
+// footprints, the villagers' boot prints and the wild animals' hoof and paw prints, pressed
+// into soft ground and crumbling away over a minute or so.
 // Existing helpers (burst, magic, dirtBurst, frost, hearts, coins, confetti, ps.spawn) keep working.
 import * as THREE from 'three';
 import { Particles, P } from '../render/particles.js';
+import { Decals, DECAL } from '../render/decals.js';
+import { isAsphalt, inVillage } from '../world/terrainMesh.js';
 import { LEAF_COLORS } from '../art/groundtex.js';
 import { forestNoise } from '../world/terrain.js';
 import { G, LIGHT_PARS_VERT, LIGHT_PARS_FRAG, SHADOW_VERT, worldUniforms } from '../render/shaderlib.js';
@@ -20,6 +26,25 @@ const LEAF_SPRITES = [P.leaf0, P.leaf1, P.leaf2, P.leaf3, P.maple, P.maple];
 const _v = new THREE.Vector3();
 const SMOKE = [0.86, 0.84, 0.88];
 const DUST = [0.82, 0.7, 0.54];
+const WHEEL_X = 0.46; // the bike's half wheelbase (as in bike.js)
+const HOOF = ['FLl', 'FRl', 'HLl', 'HRl'];
+const SIDES = ['L', 'R'];
+// marks left in each kind of ground: track (tyres) and print (feet) depth 0..1+, and their life (s)
+const GROUND = {
+  dirt: { track: 0.72, print: 0.62, life: 45 },
+  mud: { track: 1.0, print: 0.95, life: 50 },
+  sand: { track: 0.9, print: 1.0, life: 60 },
+  snow: { track: 1.1, print: 1.1, life: 70 },
+  litter: { track: 0.62, print: 0.4, life: 35 },
+  gravel: { track: 0.3, print: 0, life: 30 },
+  grass: { track: 0, print: 0, life: 25 },
+  asphalt: { track: 0, print: 0, life: 10 },
+  rock: { track: 0, print: 0, life: 10 },
+  wood: { track: 0, print: 0, life: 10 },
+  water: { track: 0, print: 0, life: 0 },
+};
+// what the tyres throw up off each ground (particles a second for each m/s)
+const SPRAY = { dirt: 1.3, mud: 0.9, sand: 1.8, snow: 1.4, litter: 1.4, gravel: 0.9, rock: 0.4, grass: 0.25, asphalt: 0, wood: 0, water: 0 };
 
 export class Effects {
   constructor(game) {
@@ -39,11 +64,16 @@ export class Effects {
     this.lineKick = 0;
     this.lineExt = { strength: 0, until: -1 };
     this.skidT = 0;
-    this.lastSkid = null;
     this.wheelie = false;
     this.stoppie = false;
     this.leafPiles = []; // optional { x, z, r } spots that burst into leaves when ridden through
     this.cauldron = null;
+    this.decals = new Decals(game);
+    game.scene.add(this.decals.mesh);
+    this.wheelLast = [null, null]; // the last point each tyre (front, rear) laid track to
+    this.steps = new WeakMap(); // character -> which feet were planted last frame
+    this.hooves = new WeakMap(); // critter -> which hooves were down last frame
+    this.printBudget = 0; // villagers' and animals' prints a second (Hank's are never skipped)
   }
 
   leafColor() {
@@ -143,10 +173,215 @@ export class Effects {
     const r = this.rng;
     for (let k = 0; k < n; k++) this.spawnLeaf(x + r.range(-0.3, 0.3), y + 0.1, z + r.range(-0.3, 0.3), { vx: r.range(-2.2, 2.2) * power, vy: r.range(2, 4.5) * power, vz: r.range(-2.2, 2.2) * power, gravity: 2.6, life: 6, rest: 2.5 });
   }
-  // a flat skid streak on the ground, aligned with yaw
-  skid(x, z, yaw, { width = 0.11, length = 0.32, color = [0.22, 0.18, 0.16], life = 7 } = {}) {
-    const y = this.game.physics.groundAt(x, z, 1e9, 0).h + 0.025;
-    return this.ps.spawn({ x, y, z, life, size: width, stretch: length / width, sprite: P.skid, color, alpha: 0.85, phase: yaw, fadeIn: 0.01 });
+  // a skid streak pressed into the ground, aligned with yaw (a ground decal; rubber on asphalt)
+  skid(x, z, yaw, { width = 0.125, length = 0.32, strength = 1, life = 40 } = {}) {
+    return this.decals.add(DECAL.skid, x, z, yaw, { width, length, strength, life });
+  }
+
+  // ---------------------------------------------------------------- the ground underfoot
+  // what (x, z) is, for tracks, prints and what the tyres throw up:
+  // water, wood, asphalt, gravel, dirt, mud, sand, rock, litter, grass, snow
+  groundKind(x, z, surface = null) {
+    if (surface === 'water') return 'water';
+    if (surface === 'wood') return 'wood';
+    const T = this.terrain;
+    if (T.heightAt(x, z) < -0.12) return 'water';
+    if (isAsphalt(x, z)) return 'asphalt';
+    const s = T.splatAt(x, z);
+    const snow = G.uSnow.value > 0.45, village = inVillage(x, z);
+    if (s.road > 0.45) return village ? 'gravel' : snow ? 'snow' : G.uWet.value > 0.35 ? 'mud' : 'dirt';
+    if (s.rock > 0.5) return 'rock';
+    if (snow) return 'snow';
+    if (s.sand > 0.5) return 'sand';
+    if (s.litter > 0.5) return 'litter';
+    return 'grass';
+  }
+  // how deep a tyre (track) and a foot (print) sink into it, and how long the marks last
+  marks(kind) {
+    const wet = G.uWet.value, rain = this.game.world.atmosphere?.weather?.rain || 0;
+    const m = GROUND[kind] || GROUND.rock;
+    let track = m.track, print = m.print, life = m.life;
+    if (kind === 'grass' && wet > 0.4) { track = 0.32; print = 0.26; life = 25; }
+    if (kind === 'asphalt' && wet > 0.3) { track = 0.22 * wet; life = 9; }
+    return { track, print, life: life * (1 - 0.4 * rain) };
+  }
+
+  // the bike's two tyres lay track behind them on soft ground, skid streaks where they slide
+  updateTracks(skidding) {
+    const g = this.game, b = g.bike, D = this.decals;
+    const live = !!b && !g.onFoot && b.grounded && b.crash <= 0 && !(b.sinking > 0) && g.bikeModel?.root?.visible !== false;
+    const fx = b ? Math.sin(b.yaw) : 0, fz = b ? Math.cos(b.yaw) : 1;
+    for (let w = 0; w < 2; w++) {
+      const front = w === 0;
+      // (a wheel up in a wheelie or a stoppie leaves nothing)
+      const down = live && (front ? b.wheelie < 0.08 : b.stoppie < 0.08);
+      if (!down) { this.wheelLast[w] = null; continue; }
+      const off = front ? WHEEL_X : -WHEEL_X;
+      const x = b.pos.x + fx * off, z = b.pos.z + fz * off;
+      const L = this.wheelLast[w];
+      if (!L) { this.wheelLast[w] = { x, z }; continue; }
+      const dx = x - L.x, dz = z - L.z, d = Math.hypot(dx, dz);
+      if (d > 2.5) { L.x = x; L.z = z; continue; } // (a reset or a teleport)
+      // the locked wheel skids: the rear under the coaster brake or in a drift, the front in a stoppie
+      const sk = skidding && (front ? this.stoppie : !this.stoppie);
+      if (d < (sk ? 0.22 : 0.36)) continue;
+      const mx = (x + L.x) / 2, mz = (z + L.z) / 2;
+      const kind = this.groundKind(mx, mz, b.surface);
+      const mk = this.marks(kind);
+      let k = mk.track, life = mk.life;
+      // dragged rubber marks even asphalt and packed gravel
+      if (sk) { k = Math.max(k * 1.2, kind === 'water' ? 0 : 0.55); life = Math.max(life, 30); }
+      if (k > 0.02) D.add(sk ? DECAL.skid : DECAL.tread, mx, mz, Math.atan2(dx, dz), { width: sk && b.drifting ? 0.16 : 0.125, length: d + 0.03, strength: k, life });
+      L.x = x; L.z = z;
+    }
+  }
+
+  // footprints: Hank's skeleton feet (bony toes!) and the villagers' boots, wherever a foot is
+  // set down on soft ground (read from each character's planted feet)
+  updatePrints(dt, cam) {
+    const g = this.game;
+    this.printBudget = Math.min(8, this.printBudget + dt * 8);
+    if (g.onFoot && g.rider?.ch) this.stepsOf(g.rider.ch, true);
+    const L = g.npcs?.list;
+    if (L) for (let i = 0; i < L.length; i++) {
+      const a = L[i];
+      if (!a.feet?.on || a.root?.visible === false) continue;
+      if ((a.pos.x - cam.position.x) ** 2 + (a.pos.z - cam.position.z) ** 2 > 45 * 45) continue;
+      this.stepsOf(a, false);
+    }
+  }
+  stepsOf(ch, hank) {
+    const F = ch.feet;
+    if (!F?.on) { this.steps.delete(ch); return; }
+    let was = this.steps.get(ch);
+    if (!was) this.steps.set(ch, (was = { L: true, R: true }));
+    for (const side of SIDES) {
+      const f = F[side];
+      const down = f.planted && f.w > 0.5;
+      if (down && !was[side] && (hank || this.printBudget >= 1)) {
+        const mk = this.marks(this.groundKind(f.x, f.z));
+        if (mk.print > 0.02) {
+          if (!hank) this.printBudget -= 1;
+          const bony = hank || ch.spec?.kind === 'skeleton';
+          const sx = Math.sin(f.yaw), sz = Math.cos(f.yaw), fwd = 0.06;
+          // (the sprite lays down as a left foot, f.s > 0; mirrored, a right one)
+          const sc = bony ? 0.84 : 0.92;
+          const w = ((bony ? 13 : 10) / 64) * sc * (f.s > 0 ? 1 : -1), l = ((bony ? 21 : 18) / 64) * sc;
+          this.decals.add(bony ? DECAL.bones : DECAL.boot, f.x + sx * fwd, f.z + sz * fwd, f.yaw, { width: w, length: l, strength: mk.print, life: mk.life * 1.1 });
+        }
+      }
+      was[side] = down;
+    }
+  }
+
+  // hoof and paw prints of the deer, moose, foxes and pets near the camera: one where a foot comes down
+  updateHooves(cam) {
+    const C = this.game.critters;
+    if (!C?.list || this.printBudget < 1) return;
+    const D = this.decals;
+    for (const c of C.list) {
+      if (c.dead || c.hidden || !c.near || !c.posed || c.pdt !== 0 || c.sp?.arch !== 'quad' || c.air) continue; // (posed this frame)
+      if ((c.x - cam.position.x) ** 2 + (c.z - cam.position.z) ** 2 > 30 * 30) continue;
+      const m = c.sp.meta, M = c.M, sp = c.sp;
+      let was = this.hooves.get(c);
+      if (!was) this.hooves.set(c, (was = [true, true, true, true]));
+      const yaw = c.ry ?? c.yaw, cy = Math.cos(yaw), sy = Math.sin(yaw), s = c.sx || 1;
+      for (let i = 0; i < 4; i++) {
+        const o = sp.index[HOOF[i]] * 12;
+        // the bottom of the shin: its matrix applied to (0, -L2, 0), then the creature's place
+        const ax = M[o + 3] - M[o + 1] * m.L2, ay = M[o + 7] - M[o + 5] * m.L2, az = M[o + 11] - M[o + 9] * m.L2;
+        const x = c.x + (ax * cy + az * sy) * s, z = c.z + (-ax * sy + az * cy) * s;
+        const down = c.y + c.bob + ay * s - D.ground(x, z) < 0.035;
+        if (down && !was[i] && this.printBudget >= 1) {
+          const mk = this.marks(this.groundKind(x, z));
+          if (mk.print > 0.02) {
+            this.printBudget -= 1;
+            const hoof = m.kind === 'deer' || m.kind === 'fawn' || m.kind === 'buck' || m.kind === 'moose';
+            const size = m.L2 * s * (hoof ? 0.3 : 0.42);
+            D.add(hoof ? DECAL.hoof : DECAL.paw, x, z, yaw, { width: size * (hoof ? 0.9 : 1), length: size, strength: mk.print * 0.9, life: mk.life * 0.8 });
+          }
+        }
+        was[i] = down;
+      }
+    }
+  }
+
+  // what the tyres throw up behind them, by the ground: grit and dust off dirt, stone chips off
+  // gravel, leaves out of the litter, sand off the beach, spray off wet ground and puddles,
+  // snow; a skid or a drift throws a lot more. Pooled like every particle, and it backs off
+  // when the pool is busy.
+  tyreSpray(dt, b, rx, rz, fx, fz, skid) {
+    const ps = this.ps, r = this.rng;
+    const kind = this.groundKind(rx, rz, b.surface);
+    const wet = G.uWet.value;
+    const spray = wet > 0.28 && (kind === 'asphalt' || kind === 'gravel' || kind === 'dirt' || kind === 'mud' || kind === 'wood' || kind === 'rock');
+    let rate = (b.speed - 1.5) * (skid ? 4 : 1) * ((SPRAY[kind] ?? 0) + (spray ? 1.6 * wet : 0));
+    const free = ps.free.length;
+    if (free < 900) rate *= Math.max(0, (free - 300) / 600);
+    this.acc.dust = Math.min(6, this.acc.dust + dt * rate);
+    const y = b.pos.y + 0.06, sp = b.speed;
+    while (this.acc.dust > 1) {
+      this.acc.dust -= 1;
+      const k = r.range(0.1, 0.3);
+      const vx = -fx * sp * k + r.range(-0.6, 0.6), vz = -fz * sp * k + r.range(-0.6, 0.6);
+      if (spray && r.next() < 0.75) {
+        // a rooster tail off the back tyre and a little mist
+        ps.spawn({ x: rx, y: y + 0.12, z: rz, vx, vy: r.range(2.2, 4.2) * (skid ? 0.8 : 1), vz, life: 0.7, size: r.range(0.06, 0.1), sprite: P.drop, color: [0.82, 0.9, 1], gravity: 9.8, drag: 0.6, ground: true, rest: 0.05 });
+        if (r.next() < 0.3) ps.spawn({ x: rx, y: y + 0.1, z: rz, vx: vx * 0.3, vy: r.range(0.4, 0.9), vz: vz * 0.3, life: 0.45, size: 0.2, size1: 0.5, sprite: P.steam, color: [0.9, 0.94, 1], alpha: 0.45, drag: 2.5 });
+        if (kind === 'mud' || kind === 'dirt') this.grit(rx, y, rz, fx, fz, sp, [0.32, 0.22, 0.15], skid);
+        continue;
+      }
+      if (kind === 'litter') {
+        if (r.next() < 0.65) this.spawnLeaf(rx, y + 0.05, rz, { vx, vy: r.range(1.4, 3), vz, gravity: 3, life: 4, rest: 1.5, size: r.range(0.16, 0.3) });
+        else this.grit(rx, y, rz, fx, fz, sp, [0.36, 0.24, 0.15], skid);
+      } else if (kind === 'sand') {
+        for (let n = 0; n < 2; n++) this.grit(rx, y, rz, fx, fz, sp, r.next() < 0.5 ? [1.0, 0.88, 0.66] : [0.86, 0.74, 0.54], skid);
+        if (r.next() < 0.35) this.dustKick(rx, y + 0.04, rz, { color: [0.92, 0.84, 0.66], scale: 0.4, vx: -fx * 0.6, vz: -fz * 0.6 });
+      } else if (kind === 'snow') {
+        ps.spawn({ x: rx, y: y + 0.08, z: rz, vx, vy: r.range(1.2, 2.6), vz, life: 0.9, size: 0.08, sprite: P.snow, color: [1, 1, 1], gravity: 6, drag: 1.2, emissive: 0.2 });
+        if (r.next() < 0.4) this.dustKick(rx, y + 0.05, rz, { color: [0.95, 0.97, 1], scale: 0.45, vx: -fx * 0.6, vz: -fz * 0.6 });
+      } else if (kind === 'gravel' || kind === 'rock') {
+        const grey = r.range(0.42, 0.62);
+        ps.spawn({ x: rx, y: y + 0.04, z: rz, vx: vx * 0.7, vy: r.range(0.8, 2.2) * (skid ? 1.3 : 1), vz: vz * 0.7, life: 0.9, size: r.range(0.04, 0.065), sprite: P.chunk, color: [grey, grey * 0.97, grey * 0.92], gravity: 11, drag: 0.3, spin: r.range(-10, 10), ground: true, rest: 0.5 });
+        if (r.next() < (skid ? 0.5 : 0.18)) this.dustKick(rx, y + 0.04, rz, { color: [0.78, 0.76, 0.72], scale: 0.38, vx: -fx * 0.6, vz: -fz * 0.6 });
+      } else if (kind === 'grass') {
+        ps.spawn({ x: rx, y: y + 0.06, z: rz, vx: vx * 0.5, vy: r.range(1, 2), vz: vz * 0.5, life: 0.8, size: 0.09, sprite: P.needle, color: [0.55, 0.7, 0.3], gravity: 5, drag: 1.5, spin: r.range(-6, 6), ground: true, rest: 0.6 });
+      } else if (kind === 'asphalt' || kind === 'wood') {
+        // (only a skid scuffs anything up here: a whiff of rubber)
+        if (skid) this.dustKick(rx, y + 0.04, rz, { color: [0.8, 0.8, 0.82], scale: 0.4, vx: -fx * 0.5, vz: -fz * 0.5 });
+      } else {
+        // dirt (and mud): pixel grit flying off the tread and a low curl of dust
+        this.grit(rx, y, rz, fx, fz, sp, kind === 'mud' ? [0.3, 0.21, 0.14] : r.next() < 0.5 ? [0.62, 0.48, 0.34] : [0.5, 0.38, 0.27], skid);
+        if (kind !== 'mud' && r.next() < 0.45) this.dustKick(rx, y + 0.06, rz, { color: DUST, scale: 0.42 + Math.min(0.3, sp * 0.02), vx: -fx * 0.8, vz: -fz * 0.8 });
+      }
+    }
+  }
+  // a pixel of grit flung back off the tyre (sideways too, in a skid)
+  grit(x, y, z, fx, fz, sp, color, skid) {
+    const r = this.rng;
+    const k = r.range(0.08, 0.24) * (skid ? 0.6 : 1);
+    const side = skid ? r.range(-1.6, 1.6) : r.range(-0.5, 0.5);
+    this.ps.spawn({ x, y: y + 0.03, z, vx: -fx * sp * k + fz * side, vy: r.range(0.9, 2.4), vz: -fz * sp * k - fx * side, life: 0.8, size: r.range(0.045, 0.075), sprite: P.confetti, color, gravity: 10, drag: 0.5, spin: r.range(-6, 6), ground: true, rest: 0.35 });
+  }
+  // a landing (or a hard hop) puffs up whatever the ground is made of
+  landPuff(x, y, z, k) {
+    const kind = this.groundKind(x, z, this.game.bike?.surface);
+    const r = this.rng;
+    if (kind === 'water') return;
+    const n = Math.min(10, Math.round(2 + k * 1.1));
+    const col = { sand: [0.92, 0.84, 0.66], snow: [0.95, 0.97, 1], gravel: [0.78, 0.76, 0.72], rock: [0.78, 0.76, 0.72], asphalt: [0.8, 0.8, 0.82], grass: [0.7, 0.72, 0.5], mud: [0.5, 0.4, 0.3] }[kind] || DUST;
+    if (kind !== 'asphalt' || k > 5) for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2 + r.range(-0.2, 0.2);
+      this.dustKick(x + Math.cos(a) * 0.35, y + 0.08, z + Math.sin(a) * 0.35, { color: col, scale: 0.4 + Math.min(0.4, k * 0.035), vx: Math.cos(a) * 2.2, vz: Math.sin(a) * 2.2 });
+    }
+    const bits = Math.round(Math.min(14, k * 1.4));
+    const grit = { sand: [0.95, 0.84, 0.62], snow: [1, 1, 1], gravel: [0.55, 0.53, 0.5], mud: [0.3, 0.21, 0.14], dirt: [0.56, 0.43, 0.3], litter: [0.4, 0.27, 0.16] }[kind];
+    if (grit) for (let i = 0; i < bits; i++) {
+      const a = r.range(0, Math.PI * 2), s = r.range(1, 2.6);
+      this.ps.spawn({ x, y: y + 0.05, z, vx: Math.cos(a) * s, vy: r.range(1.6, 3.4), vz: Math.sin(a) * s, life: 0.9, size: r.range(0.045, 0.075), sprite: kind === 'snow' ? P.snow : kind === 'gravel' ? P.chunk : P.confetti, color: grit, gravity: 10, drag: 0.5, spin: r.range(-8, 8), ground: true, rest: 0.4 });
+    }
+    if (G.uWet.value > 0.3 && kind !== 'sand' && kind !== 'snow') this.splashDrops(x, y + 0.05, z, Math.round(3 + k * 0.6), 0.5);
+    if (kind === 'litter' && k > 2) this.leafBurst(x, y, z, Math.round(6 + k), 0.8);
   }
   dustKick(x, y, z, { color = DUST, scale = 0.5, vx = 0, vz = 0 } = {}) {
     const r = this.rng;
@@ -258,6 +493,9 @@ export class Effects {
       }
     }
     this.updateBike(dt);
+    this.updatePrints(dt, cam);
+    this.updateHooves(cam);
+    this.decals.update();
     this.updateSpeedLines(dt);
     this.debris.update(dt);
     ps.update(dt);
@@ -289,21 +527,17 @@ export class Effects {
     const frontX = b.pos.x + fx * 0.55, frontZ = b.pos.z + fz * 0.55;
     const visible = g.bikeModel?.root?.visible !== false && !g.onFoot;
     const surf = b.surface;
-    // dust & kicked-up leaves behind the rear wheel
-    if (visible && b.grounded && b.crash <= 0 && b.speed > 2.5 && surf !== 'water') {
-      const rate = (b.speed - 2) * (b.drifting ? 5 : 1.2) * (surf === 'road' ? 0.5 : 1);
-      this.acc.dust += dt * rate;
+    // skidding, drifting, braking hard or nose-wheeling: the locked tyre drags
+    this.skidT = Math.max(0, this.skidT - dt);
+    const braking = b.skidding ?? (b.brakeIn > 0.6 && b.fwdSpeed > 4);
+    const skidding = visible && b.grounded && b.crash <= 0 && surf !== 'water' && (b.drifting || this.skidT > 0 || braking || this.stoppie);
+    // tyre tracks (and skid streaks) pressed into the ground behind both wheels
+    this.updateTracks(skidding);
+    // whatever the back tyre throws up (the front one in a stoppie)
+    if (visible && b.grounded && b.crash <= 0 && b.speed > 1.8 && surf !== 'water') {
+      const sx = this.stoppie ? frontX : rearX, sz = this.stoppie ? frontZ : rearZ;
+      this.tyreSpray(dt, b, sx, sz, fx, fz, skidding);
       const litter = this.terrain.splatAt(b.pos.x, b.pos.z).litter;
-      while (this.acc.dust > 1) {
-        this.acc.dust -= 1;
-        if (litter > 0.5 && rng.next() < 0.6) {
-          this.spawnLeaf(rearX, b.pos.y + 0.1, rearZ, { vx: -fx * rng.range(1, 3) + rng.range(-1, 1), vy: rng.range(1.5, 3.2), vz: -fz * rng.range(1, 3) + rng.range(-1, 1), gravity: 3, life: 5, rest: 2 });
-          continue;
-        }
-        const col = surf === 'grass' ? [0.66, 0.66, 0.46] : surf === 'wood' ? [0.78, 0.68, 0.54] : DUST;
-        this.dustKick(rearX, b.pos.y + 0.12, rearZ, { color: col, scale: 0.42 + Math.min(0.3, b.speed * 0.02), vx: -fx * 0.8, vz: -fz * 0.8 });
-        if (b.drifting && rng.next() < 0.4) ps.spawn({ x: rearX, y: b.pos.y + 0.1, z: rearZ, vx: rng.range(-2, 2), vy: rng.range(1.5, 3), vz: rng.range(-2, 2), life: 1.2, size: 0.09, sprite: P.dirt, color: [1, 1, 1], gravity: 9, drag: 0.5, ground: true, rest: 0.3 });
-      }
       // leaf piles: big leafy explosions
       if (litter > 0.75 && b.speed > 6 && rng.next() < dt * 2.5) this.leafBurst(b.pos.x, b.pos.y, b.pos.z, 8, 0.8 + b.speed * 0.03);
       for (const pile of this.leafPiles) {
@@ -311,24 +545,6 @@ export class Effects {
         if (d < (pile.r || 1.5) && (g.time || 0) - (pile.last || -9) > 2) { pile.last = g.time || 0; this.leafBurst(pile.x, b.pos.y, pile.z, 26, 1 + b.speed * 0.05); }
       }
     }
-    // skid marks while drifting, skidding, braking hard or nose-wheeling
-    this.skidT = Math.max(0, this.skidT - dt);
-    const braking = b.skidding ?? (b.brakeIn > 0.6 && b.fwdSpeed > 4);
-    const skidding = visible && b.grounded && b.crash <= 0 && surf !== 'water' && (b.drifting || this.skidT > 0 || braking || this.stoppie);
-    if (skidding) {
-      const wx = this.stoppie ? frontX : rearX, wz = this.stoppie ? frontZ : rearZ;
-      const last = this.lastSkid;
-      if (!last) this.lastSkid = { x: wx, z: wz };
-      else {
-        const dx = wx - last.x, dz = wz - last.z, d = Math.hypot(dx, dz);
-        if (d > 0.22) {
-          this.skid((wx + last.x) / 2, (wz + last.z) / 2, Math.atan2(dx, dz), { length: d + 0.06, color: surf === 'grass' ? [0.2, 0.24, 0.12] : [0.2, 0.16, 0.14] });
-          this.lastSkid = { x: wx, z: wz };
-          if (rng.next() < 0.5) this.dustKick(wx, b.pos.y + 0.1, wz, { color: surf === 'road' ? [0.78, 0.74, 0.7] : DUST, scale: 0.55 });
-        }
-        if (d > 2) this.lastSkid = { x: wx, z: wz };
-      }
-    } else this.lastSkid = null;
     // splashing through shallow water
     if (visible && b.inWater > 0 && b.speed > 2) {
       this.acc.splash += dt * b.speed * 1.5;
@@ -391,21 +607,15 @@ export class Effects {
     const water = b.surface === 'water' || b.inWater > 0;
     switch (e.type) {
       case 'jump':
-        if (!water) this.poof(b.pos.x - fx * 0.5, y + 0.1, b.pos.z - fz * 0.5, { scale: 0.5, color: DUST, count: 3 });
+        if (!water) this.landPuff(b.pos.x - fx * 0.5, y, b.pos.z - fz * 0.5, 1.5);
         break;
       case 'launch':
         this.lineKick = Math.max(this.lineKick, 0.5);
         break;
       case 'land': {
         const k = e.impact ?? 0;
-        if (k > 2.5 && !water) {
-          const n = Math.min(10, Math.round(k * 1.2));
-          for (let i = 0; i < n; i++) {
-            const a = (i / n) * Math.PI * 2;
-            this.dustKick(b.pos.x + Math.cos(a) * 0.35, y + 0.08, b.pos.z + Math.sin(a) * 0.35, { scale: 0.45 + k * 0.03, vx: Math.cos(a) * 2.2, vz: Math.sin(a) * 2.2 });
-          }
-          if (this.terrain.splatAt(b.pos.x, b.pos.z).litter > 0.4) this.leafBurst(b.pos.x, y, b.pos.z, 10, 0.9);
-        }
+        // a puff of whatever it came down on: dust, sand, chips, snow, leaves, spray
+        if (k > 1.2 && !water) this.landPuff(b.pos.x, y, b.pos.z, k);
         if (k > 8) this.impact(b.pos.x, y + 0.25, b.pos.z, 0.55 + (k - 8) * 0.05);
         break;
       }
