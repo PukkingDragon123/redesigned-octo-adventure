@@ -9,6 +9,8 @@ const sx2 = new Simplex(4242);
 
 export const H_RES = 2; // metres per height cell
 export const S_RES = 0.5; // metres per splat texel
+export const R_RES = 1; // metres per road-frame texel (see Terrain.buildRoadInfo)
+export const ROAD_SPAN = 6; // the road frame's signed distance runs +-6 m
 const HALF = L.WORLD_HALF;
 
 const gauss = (d, s) => Math.exp(-(d * d) / (2 * s * s));
@@ -556,6 +558,45 @@ export class Terrain {
         S[id * 4 + 1] = Math.round(rock * 255);
         S[id * 4 + 2] = Math.round(sand * 255);
         S[id * 4 + 3] = Math.round(litter * 255);
+      }
+    }
+    this.buildRoadInfo();
+  }
+
+  // Road frame for the terrain shader, at R_RES metres a texel (two bytes each):
+  // r = signed distance across the nearest road (centre 128, +-ROAD_SPAN m), g = its style
+  // (0 footpath, 85 trail, 170 village lane, 255 country road; the shader draws worn centres,
+  // wheel ruts and tyre grooves from these). Far from any road r saturates.
+  buildRoadInfo() {
+    const rn = (this.rn = Math.round((HALF * 2) / R_RES));
+    const info = (this.roadInfo = new Uint8Array(rn * rn * 2));
+    const best = new Float32Array(rn * rn).fill(1e9);
+    for (let i = 0; i < rn * rn; i++) info[i * 2] = 255;
+    const STYLE = { trail: 85, street: 170, road: 255 };
+    for (const { road, samples } of this.roadProfiles) {
+      const style = road.path ? 0 : STYLE[road.type] ?? 85;
+      const reach = road.w * 0.5 + 2.5;
+      for (let k = 0; k < samples.length - 1; k++) {
+        const a = samples[k], b = samples[k + 1];
+        const i0 = Math.max(0, Math.floor((Math.min(a.x, b.x) - reach + HALF) / R_RES)), i1 = Math.min(rn - 1, Math.ceil((Math.max(a.x, b.x) + reach + HALF) / R_RES));
+        const j0 = Math.max(0, Math.floor((Math.min(a.z, b.z) - reach + HALF) / R_RES)), j1 = Math.min(rn - 1, Math.ceil((Math.max(a.z, b.z) + reach + HALF) / R_RES));
+        const abx = b.x - a.x, abz = b.z - a.z;
+        const l2 = abx * abx + abz * abz || 1e-6, l = Math.sqrt(l2);
+        for (let j = j0; j <= j1; j++) {
+          const z = -HALF + (j + 0.5) * R_RES;
+          for (let i = i0; i <= i1; i++) {
+            const x = -HALF + (i + 0.5) * R_RES;
+            const t = clamp(((x - a.x) * abx + (z - a.z) * abz) / l2, 0, 1);
+            const d = Math.hypot(x - (a.x + abx * t), z - (a.z + abz * t));
+            const id = j * rn + i;
+            if (d >= best[id] || d > reach) continue;
+            best[id] = d;
+            // signed: + on the left of the road's direction (so it runs on smoothly through bends)
+            const side = (abx * (z - a.z) - abz * (x - a.x)) / l;
+            info[id * 2] = Math.round(clamp(128 + (side / ROAD_SPAN) * 127, 0, 255));
+            info[id * 2 + 1] = style;
+          }
+        }
       }
     }
   }
