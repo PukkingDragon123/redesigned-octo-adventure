@@ -31,6 +31,10 @@ export const CONTEST = {
     { x: 130.2, z: NK + 1.05, yaw: 0, cloth: 'orange', seed: 2, wip: [['sketch', 'wink', 'medium', 11], ['lid', 'maple', 'medium', 12]] },
     { x: 126.4, z: SK - 1.05, yaw: PI, cloth: 'green', seed: 3, wip: [['half', 'owl', 'medium', 15], ['lid', 'wink', 'medium', 16]] },
     { x: 132.4, z: SK - 1.05, yaw: PI, cloth: 'blue', seed: 4, wip: [['sketch', 'heart', 'medium', 19], ['half', 'happy', 'medium', 20]] },
+    // the townsfolk's tables at the east end (src/game/crowd.js): a long one on the south
+    // side, and the kids' table across the street
+    { x: 147.4, z: SK - 1.05, yaw: PI, cloth: 'green', seed: 6, wip: [['half', 'maple', 'medium', 23], ['lid', 'owl', 'medium', 24]] },
+    { x: 149.8, z: NK + 1.05, yaw: 0, cloth: 'red', seed: 7, wip: [['sketch', 'cat', 'medium', 27], ['lid', 'happy', 'medium', 28]] },
   ],
   // Hank's table (an empty place for him to carve at; he stands on the kerb side)
   hank: { x: 121.6, z: SK - 1.05, yaw: PI, cloth: 'orange', seed: 5, stand: { x: 121.6, z: SK + 0.05, yaw: PI } },
@@ -55,6 +59,51 @@ export const CONTEST = {
   },
   // the judge's round: in front of each north table, looking at the work
   round: [{ x: 130.2, z: NK - 0.1, yaw: 0.25 }, { x: 125, z: NK - 0.1, yaw: 0.25 }],
+  // the townsfolk (src/game/crowd.js): where each part of the crowd stands and walks
+  crowd: {
+    // carving: the spare places at the tables (south ones face north, yaw PI)
+    carve: [
+      { x: 125.5, z: SK - 0.12, yaw: PI, table: 2 },
+      { x: 133.3, z: SK - 0.12, yaw: PI, table: 3 },
+      { x: 146.5, z: SK - 0.12, yaw: PI, table: 4 },
+      { x: 148.3, z: SK - 0.12, yaw: PI, table: 4 },
+      { x: 148.9, z: NK + 0.12, yaw: 0, table: 5 },
+      { x: 150.7, z: NK + 0.12, yaw: 0, table: 5 },
+    ],
+    // two little circles chatting on the sidewalks (out of the walkers' lanes)
+    chat: [{ x: 128.2, z: NK - 2.0, r: 0.55 }, { x: 136.4, z: SK + 2.1, r: 0.55 }],
+    // hot cider by the judges' table
+    cider: [{ x: 139.2, z: NK - 2.0, yaw: PI / 2 + 0.3 }, { x: 140.1, z: NK - 2.05, yaw: -PI / 2 + 0.2 }],
+    // things worth a look: (x, z) to stand, (lx, lz) what they look at
+    exhibits: [
+      { x: 136.6, z: NK + 2.5, lx: 136.6, lz: NK + 1 }, // the giant pumpkin
+      { x: 143.3, z: NK + 2.4, lx: 143.3, lz: NK + 1 }, // the finished entries
+      { x: 144.8, z: NK + 2.4, lx: 144.8, lz: NK + 1 },
+      { x: 124.4, z: NK + 2.3, lx: 124.6, lz: NK + 1 }, // table 0 from the street side
+      { x: 130.6, z: NK + 2.3, lx: 130.4, lz: NK + 1 },
+      { x: 126.0, z: SK - 2.3, lx: 126.2, lz: SK - 1 },
+      { x: 132.8, z: SK - 2.3, lx: 132.6, lz: SK - 1 },
+      { x: 147.0, z: SK - 2.3, lx: 147.2, lz: SK - 1 },
+      { x: 149.6, z: NK + 2.3, lx: 149.8, lz: NK + 1 },
+      { x: 138.4, z: SK - 2.4, lx: 138.4, lz: SK - 0.95 }, // the pile to pick from
+    ],
+    // where the photographer stands for a shot, and of what
+    photo: [
+      { x: 134.4, z: M.z - 0.6, lx: 136.6, lz: NK + 1 },
+      { x: 142.0, z: M.z - 0.8, lx: 144, lz: NK + 1 },
+      { x: 127.6, z: M.z + 0.4, lx: 125, lz: NK + 1.2 },
+      { x: 129.6, z: M.z + 0.9, lx: 132.4, lz: SK - 1.2 },
+      { x: 148.6, z: M.z, lx: 149.8, lz: NK + 1.2 },
+    ],
+    // walking lanes along both sidewalks (behind the carvers) and the road's edges
+    laneN: NK - 1.0, laneS: SK + 0.95, stripN: NK + 2.5, stripS: SK - 2.5,
+    x0: 122.6, x1: 152,
+    // the kids' game of tag: on the south sidewalk, through the leaf pile
+    tag: { x0: 134.5, x1: 146, z0: SK + 0.55, z1: SK + 1.7 },
+    leaves: [{ x: 135.6, z: M.z + 6.0 }, { x: 128.8, z: M.z - 6.1 }, { x: 148, z: M.z - 5.8 }],
+    // the elders' favourite spots
+    elder: [{ x: 125.2, z: NK - 1.8, yaw: 0.1 }, { x: 140.4, z: SK + 2.1, yaw: PI - 0.1 }],
+  },
 };
 
 export function dressContest(vw, physprops) {
@@ -87,7 +136,7 @@ export function dressContest(vw, physprops) {
 
   // ---- bunting poles and strings: across the street, and along both sidewalks
   const poleH = 4.4;
-  for (const x of [bx, 133.6, 146.3]) for (const z of [M.z - 6, M.z + 6]) {
+  for (const x of [bx, 133.6, 146.3, 158.9]) for (const z of [M.z - 6, M.z + 6]) {
     S('contest:pole', () => CM.pole({ h: poleH }), x, z);
     SD('contest:finial', () => CM.simplePumpkin({ r: 0.13, seed: 3 }), x, z, 0, poleH + 0.1);
     post(x, z, 0.1, poleH);
@@ -99,8 +148,8 @@ export function dressContest(vw, physprops) {
     vw.addStatic(vw.model(`contest:bunting:${Math.round(len * 2)}:${seed}`, () => CM.bunting({ len, sag: len * 0.045, seed })), ax, y, az, Math.atan2(-dz, dx));
   };
   let k = 0;
-  for (const x of [133.6, 146.3]) string(x, M.z - 6, x, M.z + 6, k++);
-  for (const z of [M.z - 6, M.z + 6]) { string(bx, z, 133.6, z, k++); string(133.6, z, 146.3, z, k++); }
+  for (const x of [133.6, 146.3, 158.9]) string(x, M.z - 6, x, M.z + 6, k++);
+  for (const z of [M.z - 6, M.z + 6]) { string(bx, z, 133.6, z, k++); string(133.6, z, 146.3, z, k++); string(146.3, z, 158.9, z, k++); }
 
   // ---- carving tables: each with its two pumpkins in progress and a spare or two
   C.tables.forEach((t, i) => {

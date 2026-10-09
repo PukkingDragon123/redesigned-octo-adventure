@@ -16,6 +16,7 @@
 import * as THREE from 'three';
 import { PEOPLE, MEETS } from './npcRoutines.js';
 import { UMBRELLA_COLORS } from './npcPoses.js';
+import { P as PX } from '../render/particles.js';
 
 export const TRUST = { WARY: 20, FRIENDLY: 45, FAN: 75 };
 export const moodOf = (t) => (t < TRUST.WARY ? 'terrified' : t < TRUST.FRIENDLY ? 'wary' : t < TRUST.FAN ? 'friendly' : 'fan');
@@ -26,6 +27,20 @@ const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
 const STAND_POSES = new Set(['idle', 'clipboard', 'knit', 'sip', 'lookout', 'paper']);
 const BODY_R = 0.22;
 const _probe = { x: 0, y: 0, z: 0 };
+const _hv = new THREE.Vector3();
+// what each regular says over Hank's cocoa, and how they feel about him after it
+const COCOA_THANKS = {
+  marie: "Mon dieu... it is Marguerite's cocoa! Merci, monsieur le squelette.",
+  agnes: "Oh! Oh, how lovely. You poor dear, you're all bones. Have a biscuit.",
+  kids: 'SKELETON COCOA!!! You are the COOLEST!',
+  pop: "...Pip, he's nice. I KNEW he was nice.",
+  birdie: "Arr... hot as a ship's boiler. Welcome aboard, bones.",
+  ingrid: 'Warm. Sweet. Delivered by a skeleton. I need to sit down.',
+  doug: "Is this a bribe? ...It's an excellent bribe. Carry on, citizen.",
+  josee: "...Thank you. The kids won't stop staring at you. Neither will I, honestly.",
+  lou: "Big Lou is NOT scared! ...Big Lou is having COCOA!",
+};
+const AFTER_COCOA_TRUST = { marie: 32, doug: 30, ingrid: 34, agnes: 32, birdie: 30, josee: 30, kids: 62, pop: 58, lou: 28, gus: 46 };
 const _ropt = { px: 0, pz: 0 };
 
 export class NpcBrain {
@@ -337,6 +352,8 @@ export class NpcBrain {
   perceive(dt, X) {
     // until the village has met him (the first-arrival scene at the contest), nobody bolts early
     if (!this.g.state?.flags?.village1) return;
+    // at the contest nobody screams or runs: they freeze and watch (contest.js decides)
+    if (this.atContest()) return;
     const a = this.a, d = this.d, sp = X.speed, mood = this.mood;
     const calm = sp < 1.7 && d < 24 && d > 2.4 && !X.crashed;
     const seen = this.shown && this.hankVisible();
@@ -377,6 +394,14 @@ export class NpcBrain {
       a.tempExpr(pick(['excited', 'happy', 'giggle']), 2);
     }
     if (mood === 'fan' && sp < 0.6 && d < 11 && d > 3 && !(this.cool.fan > 0)) { this.cool.fan = rand(50, 80); return this.fanChat(X); }
+  }
+
+  // out at the pumpkin carving contest (doing their part there)
+  atContest() {
+    const C = this.g.contest;
+    if (!C || this._act?.k !== 'contest') return false;
+    const c = C.C;
+    return Math.hypot(this.a.pos.x - c.x, this.a.pos.z - c.z) < c.r + 6;
   }
 
   // pick up the day's plan again
@@ -1130,6 +1155,110 @@ export class NpcBrain {
     const back = { x: a.pos.x + (dx / d) * 1.2, z: a.pos.z + (dz / d) * 1.2 };
     a.pos.x += (back.x - a.pos.x) * 0.5;
     a.pos.z += (back.z - a.pos.z) * 0.5;
+  }
+
+  // ------------------------------------------------------------ the contest's first look at Hank (contest.js)
+  // Frozen mid-action, staring at him: no screams, no running. Heads follow him about.
+  // hideBehind: a parent to duck behind and peek round (Pop, behind Josée)
+  freeze(hideBehind = null) {
+    if (this.mode === 'frozen') return;
+    const C = this.g.contest;
+    this.seq(async (w) => {
+      const a = this.a, g = this.g;
+      this.mode = 'frozen';
+      if (hideBehind && hideBehind.visible) {
+        // scurry round behind them, then peek out
+        const P = g.playerPos;
+        const dx = hideBehind.pos.x - P.x, dz = hideBehind.pos.z - P.z, d = Math.hypot(dx, dz) || 1;
+        a.play('idle', 'surprised');
+        await w.walk([{ x: hideBehind.pos.x + (dx / d) * 0.6, z: hideBehind.pos.z + (dz / d) * 0.6 }], 2.4, 'idle').catch((e) => { if (!w.alive()) throw e; });
+        a.faceTowards(P.x, P.z);
+        a.peekSide = Math.random() < 0.5 ? 1 : -1;
+        a.play('peek', 'worried');
+      } else C?.freezeActor(a);
+      a.lookAt(g.playerChar);
+      a.tempExpr('shock', rand(0.6, 1.2));
+      for (;;) {
+        await w(rand(2.5, 5));
+        // (a nervous gulp when he comes right up close)
+        if (this.d < 2 && Math.random() < 0.5) { a.react('flinch'); g.emotes?.show(a, 'sweat', 1.2); }
+        if (hideBehind && Math.random() < 0.4) { a.peekSide = -a.peekSide; }
+      }
+    });
+    this.mode = 'frozen';
+  }
+  unfreeze() {
+    if (this.mode !== 'frozen') return;
+    this.cancel();
+    this.mode = 'routine';
+    this.busy = false;
+    this.a.lookAt(null);
+    this.a.peekSide = 0;
+    this.a.play('idle', 'neutral');
+  }
+  // Hank holds out a cup: a hesitant look, they take it, sip, and warm right up
+  acceptCocoa() {
+    return new Promise((res) => {
+      this.thawing = true;
+      this.seq(async (w) => {
+        const a = this.a, g = this.g, V = this.V;
+        try {
+          this.mode = 'cocoa';
+          const P = g.playerPos;
+          a.peekSide = 0;
+          a.lookAt(g.playerChar);
+          a.faceTowards(P.x, P.z);
+          a.play('idle', 'worried');
+          a.react('flinch');
+          await w(0.8);
+          a.play('offer', 'surprised');
+          await w(0.6);
+          a.play('sipCup', 'happy');
+          V.sfx('sip', a.pos, 0.6);
+          await w(1.0);
+          a.headWorld(_hv);
+          g.effects?.ps.spawn({ x: _hv.x, y: _hv.y - 0.25, z: _hv.z, vx: 0, vy: 0.35, vz: 0, life: 1.4, size: 0.05, size1: 0.18, sprite: PX.steam, color: [1, 1, 1], alpha: 0.5, drag: 0.6, flutter: 0.4 });
+          a.tempExpr('love', 1.6);
+          a.showEmote('heart', 1.5);
+          g.effects?.hearts(a.pos.x, a.pos.y + a.P.height + 0.2, a.pos.z, 4);
+          this.say(COCOA_THANKS[this.key] || pick(['...Oh. That is lovely.', 'Thank you, Hank.']), 3000, true);
+          a.say(2.2);
+          const want = AFTER_COCOA_TRUST[this.key] ?? 28;
+          if (this.trust < want) this.rec.trust = want;
+          this.rec.met = true;
+          await w(2.0);
+          a.lookAt(null);
+        } finally {
+          this.thawing = false;
+          res();
+        }
+        this.mode = 'routine';
+        this.busy = false;
+      });
+    });
+  }
+  // walk up to Hank and stop a step away, facing him (Gus, coming over to invite him)
+  approachHank(dist = 1.8) {
+    return new Promise((res) => {
+      this.seq(async (w) => {
+        const a = this.a, g = this.g;
+        try {
+          this.mode = 'script';
+          a.lookAt(g.playerChar);
+          a.react('shake');
+          this.say("...Well I'll be.", 2200, true);
+          await w(1.6);
+          const P = g.playerPos;
+          const dx = a.pos.x - P.x, dz = a.pos.z - P.z, d = Math.hypot(dx, dz) || 1;
+          if (d > dist + 0.3) await w.walk(this.V.nav.route(a.pos, { x: P.x + (dx / d) * dist, z: P.z + (dz / d) * dist }), 1.4, 'hostWalk', { faceHank: true, stop: 0.3 });
+          a.faceTowards(g.playerPos.x, g.playerPos.z);
+        } finally {
+          res();
+        }
+        this.mode = 'routine';
+        this.busy = false;
+      });
+    });
   }
 
   // ------------------------------------------------------------ story & housekeeping

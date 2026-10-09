@@ -148,6 +148,7 @@ export class Villagers {
   // ------------------------------------------------------------ the day plan
   blockOf(b) {
     const g = this.game;
+    if (g.contest?.round?.pinned(b.key)) return 'pinned';
     const h = g.world.atmosphere.hour;
     const day = b.cfg.day;
     let idx = -1;
@@ -156,6 +157,12 @@ export class Villagers {
     return `${idx}|${expect}|${this.raining ? 1 : 0}`;
   }
   activityFor(b) {
+    // the regulars and the host are all out at the contest for Hank's first ride in and
+    // until everyone has had a cup of his cocoa (contest.js / cocoaRound.js)
+    if (this.game.contest?.round?.pinned(b.key)) {
+      if (b._act?.k !== 'contest' || b._act.block !== 'pinned') b._act = { k: 'contest', block: 'pinned' };
+      return b._act;
+    }
     const key = this.blockOf(b);
     if (b._act?.block === key) return b._act;
     const [idx, expect, rain] = key.split('|').map(Number);
@@ -486,6 +493,7 @@ export class Villagers {
     const X = this.ctx;
     for (const b of this.brains) if (b.d < 26 && !b.a.scripted && b.mode !== 'engaged') b.onBell(X);
     if (this.game.onFoot) this.game.playerChar?.react?.('hi');
+    this.game.contest?.crowd?.onBell();
     const n = this.actors.grandma;
     if (n && X.dist(n) < 22) { n.react('hi'); n.showEmote('heart', 1.6); }
   }
@@ -510,7 +518,7 @@ export class Villagers {
     const name = a.char === 'pip' ? 'Pip & Pop' : g.villagerName(a.char);
     const near = (x, z, y, r) => hyp(p.x - x, p.z - z) < r && Math.abs(y - p.y) < 2.5;
     const mood = b ? b.mood : 'friendly';
-    const busy = b && ['script'].includes(b.mode);
+    const busy = b && ['script', 'frozen', 'cocoa'].includes(b.mode);
     if (busy) return null;
     if (mood !== 'terrified' || !b) {
       if (a.visible && near(a.pos.x, a.pos.z, a.pos.y, 4.5)) return { text: `Deliver ${o.label} to ${name}`, fn: () => this.deliver(o, a) };
@@ -568,7 +576,7 @@ export class Villagers {
     const b = a.brain;
     if (!b) return true;
     if (b.mood === 'terrified') return false;
-    return !['flee', 'hide', 'indoors', 'startle', 'script', 'cowerOpen', 'standoff'].includes(b.mode) && a.visible;
+    return !['flee', 'hide', 'indoors', 'startle', 'script', 'cowerOpen', 'standoff', 'frozen', 'cocoa'].includes(b.mode) && a.visible;
   }
   // a gentle nudge the first couple of times a frightened villager peeks at Hank
   hint() {

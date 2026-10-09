@@ -127,7 +127,7 @@ export class Game {
     else this.showTitle();
   }
 
-  // test entry: jump straight into one story beat (?scene=cabinNight|morning|garageReveal|villagePanic|contestScream|carve|catRescue|strayCat|ending)
+  // test entry: jump straight into one story beat (?scene=cabinNight|morning|garageReveal|villagePanic|cocoaRound|carveInvite|contestScream|carve|catRescue|strayCat|ending)
   async debugScene(name) {
     this.debugRide();
     if (name === 'villagePanic') {
@@ -585,6 +585,7 @@ export class Game {
     const cat = this.catEventActive && this.story.stray;
     if (cat) m.push({ id: 'cat', x: cat.pos.x, z: cat.pos.z, icon: 'cat' });
     for (const q of this.quests?.markers() || []) m.push(q);
+    for (const q of this.contest?.markers() || []) m.push(q); // (the cocoa round's next frozen regular)
     const k = this.keepsakes.nearest(this.playerPos);
     if (k && k.d < 80) m.push({ id: 'ks', x: k.it.x, z: k.it.z, icon: 'star' });
     return m;
@@ -592,6 +593,8 @@ export class Game {
 
   objective() {
     if (this.interior?.hint) return this.interior.hint;
+    const co = this.contest?.objective(); // (the cocoa round at the contest)
+    if (co) return co;
     const carried = this.orders.carried().length;
     const board = this.orders.board().length;
     if (this.catEventActive) return this.story.stray?.friendly ? 'The little cat likes me! Scoop her up' : 'A little stray cat is wandering the road home...';
@@ -948,8 +951,11 @@ export class Game {
       if (A.weather.rain > 0.5) mood = 'rain';
       if (night > 0.6) mood = 'night';
       if (Math.hypot(p.x - L.POI.cabin.x, p.z - L.POI.cabin.z) < 40) mood = night > 0.6 ? 'night' : 'cabin';
+      // (the contest standing frozen at the sight of Hank: the music stops dead)
+      const hush = this.contest?.hush();
+      if (hush) mood = 'none';
       if (mood !== this.mood) {
-        this.moodT = (this.moodT || 0) + dt;
+        this.moodT = (this.moodT || 0) + dt + (hush ? 3 : 0);
         if (this.moodT > 2.5 || !this.mood) {
           this.mood = mood;
           this.moodT = 0;

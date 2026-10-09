@@ -1,5 +1,6 @@
-// The tale of Hank: intro, cabin night, breakfasts, the village panic, Poutine,
-// deliveries, keepsakes and the ending. Plus world triggers.
+// The tale of Hank: intro, cabin night, breakfasts, the contest's frozen welcome and
+// Gus's invitation to carve, Poutine, deliveries, keepsakes and the ending. Plus world
+// triggers.
 import * as THREE from 'three';
 import { Scene } from './cutscene.js';
 import { runPrologue, PROLOGUE } from './prologue.js';
@@ -10,7 +11,7 @@ import { P } from '../render/particles.js';
 import { charForSpot } from './npcs.js';
 import { voxelPoutine } from './quests.js';
 import { StrayCat } from './strayCat.js';
-import { AFTER_SCREAM } from './contest.js';
+import { AFTER_COCOA, ROUND_KEYS } from './contest.js';
 import { CONTEST } from '../world/contest.js';
 import { nearestRoad } from '../world/terrain.js';
 import * as FOOD from '../voxel/models/food.js';
@@ -483,166 +484,103 @@ export class Story {
     });
   }
 
-  // ---------------------------------------------------------------- 4. the village panics
+  // ---------------------------------------------------------------- 4. the contest freezes
   // Hank's first ride into Maple Cove: the pumpkin carving contest is on in the street,
-  // Gus is hosting through his tin megaphone and everyone is busy at their pumpkins...
-  // until they see who has come to visit. (Every shot is out in the open street.)
+  // packed, Gus hosting through his tin megaphone... and as Hank rides in, everyone
+  // freezes mid-action and stares. That all happens in the game itself, not a cutscene:
+  // contest.js runs the freeze and the cocoa round (Hank hands out cups from the carrier
+  // Nana sent along), and once the regulars are all warmed up Gus comes over and invites
+  // him to carve (contestInvite below).
+  //
+  // Test entry points: ?scene=villagePanic rides in from the bridge road for the first
+  // look; ?scene=cocoaRound starts at the contest, everyone already frozen;
+  // ?scene=carveInvite skips to Gus's invitation (then the carving); ?scene=contestScream
+  // (game.js) is a save from before the contest riding in.
+  firstArrival({ at = 'road' } = {}) {
+    const g = this.g, f = this.st.flags;
+    for (const k of ['village1', 'contestFreeze', 'cocoaRound', 'contestScream', 'carveIntro']) f[k] = false;
+    this.st.cocoaRound = { given: [], crowd: 0 };
+    const h = g.world.atmosphere.hour;
+    if (h < 9 || h > 16) g.world.atmosphere.hour = 10;
+    for (const b of g.villagers.brains) g.villagers.force(b.char, 0, false);
+    g.villagers.syncState();
+    if (g.onFoot) g.hopOn();
+    if (at === 'road') g.bike.reset(84, 46.5, Math.PI / 2 - 0.08);
+    else g.bike.reset(CONTEST.entry.x + 3, CONTEST.entry.z + 0.6, Math.PI / 2);
+    g.chase.snap(g.bike);
+    if (g.mode === 'cutscene') g.mode = 'ride';
+  }
   villagePanic() {
-    const g = this.g;
+    this.firstArrival({ at: 'road' });
+  }
+  cocoaRound() {
+    this.firstArrival({ at: 'contest' });
+  }
+  // (test entry point) every regular has a cup: Gus comes over
+  async carveInvite() {
+    const g = this.g, f = this.st.flags;
+    this.firstArrival({ at: 'contest' });
+    f.village1 = true;
+    f.contestFreeze = true;
+    f.cocoaRound = true;
+    this.st.cocoaRound = { given: ROUND_KEYS.slice(), crowd: 0 };
+    for (const [c, t] of Object.entries(AFTER_COCOA)) g.villagers.force(c, t);
+    if (g.onFoot) g.hopOn();
+    g.bike.reset(127, 49.4, Math.PI / 2);
+    g.chase.snap(g.bike);
+    await g.wait(1.5);
+    await g.contest.inviteGus();
+  }
+
+  // Gus, thawed last, has come over: "Well I'll be." He takes his own cup (the order Hank
+  // carries for him), announces the late entry and the carving opens
+  contestInvite() {
+    const g = this.g, C = CONTEST;
+    if (this.flag('carveIntro')) return Promise.resolve();
     return this.scene(async (S) => {
-      const V2 = g.villagers, X = V2.ctx;
-      const C = CONTEST, E = C.entry;
+      const V2 = g.villagers;
+      const gus = V2.get('gus');
+      const p = g.playerPos.clone();
+      // Hank stands where he is (beside Bessie if he's riding)
+      let hx = p.x, hz = p.z;
+      if (!g.onFoot) { const f = g.bike.forward(new THREE.Vector3()); hx = p.x + f.z * 0.9; hz = p.z - f.x * 0.9; }
       g.bike.vel.set(0, 0, 0);
-      // (coming in some other way than the road from Nana's? start him at the west end of Main Street)
-      const p0 = g.playerPos;
-      const moved = g.onFoot || p0.x > C.west - 4 || Math.abs(p0.z - E.z) > 7;
-      if (moved) {
-        await S.fade(1, 0.35);
-        if (g.onFoot) g.hopOn();
-        g.parkBike(E.x, E.z, E.yaw);
-      }
-      const bp = g.bike.pos.clone();
-      const fwd = g.bike.forward(new THREE.Vector3());
-      const y = bp.y;
       g.rider.visible = false;
-      const H = S.actor('hank', bp.x + fwd.z * 0.9, bp.z - fwd.x * 0.9, g.bike.yaw, 'idle');
-      S.music('village');
-      const crowd = ['kids', 'pop', 'marie', 'agnes', 'birdie', 'ingrid', 'doug', 'josee'].map((k) => V2.get(k)).filter(Boolean);
-      const kid = V2.get('kids'), marie = V2.get('marie'), doug = V2.get('doug'), ingrid = V2.get('ingrid'), gus = V2.get('gus');
-      const cast = [...crowd, gus].filter(Boolean);
-      for (const a of cast) {
-        a.scripted = true;
-        if (a.brain) { a.brain.scripted = true; a.brain.onScripted(); }
-      }
-      // whatever happens (even a skip), the cast goes back to their own lives afterwards
-      S.temp.push({ remove: () => { for (const a of cast) a.scripted = false; } });
-      // everyone busy at the contest
-      const POSE = { carve: 'carve', kid: 'scoop', judge: 'clipboard', watch: 'sip', cheer: 'idle' };
-      for (const a of crowd) {
-        const s = C.spots[a.spot];
-        if (!s) continue;
-        a.pos.set(s.x, g.physics.groundAt(s.x, s.z, y + 2).h, s.z);
-        a.yaw = a.targetYaw = s.yaw;
-        a.lookAt(null);
-        a.play(POSE[s.role] || 'idle', s.role === 'kid' || s.role === 'cheer' ? 'happy' : 'determined');
-      }
-      // Gus hosts: out in the street at the west end, megaphone in hand, greeting whoever comes in
-      const GS = { x: C.west + 1.4, z: E.z - 1.1 };
+      S.temp.push({ remove: () => { g.rider.visible = true; } });
+      const H = S.actor('hank', hx, hz, 0, 'idle');
+      const y = g.physics.groundAt(hx, hz, p.y + 1).h;
       if (gus) {
+        gus.scripted = true;
         gus.path = null;
-        gus.pos.set(GS.x, g.physics.groundAt(GS.x, GS.z, y + 2).h, GS.z);
-        gus.yaw = gus.targetYaw = -Math.PI / 2;
-        gus.lookAt(null);
-        gus.visible = true;
-        gus.play('hostWalk', 'neutral');
-      }
-      const shout = (a, text, ms = 2200) => a && g.ui.tag(`npc:${a.spot}`, text, V(a.pos.x, a.pos.y + a.P.height + 0.45, a.pos.z), ms);
-      const busy = S.every((dt) => {
-        for (const a of crowd) if (Math.random() < dt * 0.3) a.react(['nod', 'bounce', 'laugh'][Math.floor(Math.random() * 3)]);
-        return false;
-      });
-      // the first look: the bunting, the tables, the crowd, Gus out front
-      const look = V(125, y + 1.6, E.z);
-      await S.cam(V(bp.x - fwd.x * 5 - fwd.z * 1.6, y + 2.5, bp.z - fwd.z * 5 + fwd.x * 1.6), look, 0, 50);
-      if (moved) await S.fade(0, 0.4);
-      S.cam(V(bp.x - fwd.x * 1.5 - fwd.z * 1.2, y + 2.1, bp.z - fwd.z * 1.5 + fwd.x * 1.2), look, 3.2, 46);
-      await S.wait(1.4);
-      await S.say('hank', 'Ooh! A *pumpkin carving contest!*', { actor: H, expr: 'sparkle' });
-      // the host, through his tin megaphone; and the street cheers
-      if (gus) {
-        await S.cam(V(GS.x - 2.4, y + 1.55, GS.z + 1.1), V(GS.x + 0.6, y + 1.45, GS.z - 0.1), 0, 42);
-        gus.play('announce', 'happy');
-        S.sfx('megaphone', { volume: 0.7 });
-        await S.say('gus', 'TEN MINUTES, CARVERS! TEN MINUTES! ...And mind your fingers!', { actor: gus, expr: 'laugh' });
-        g.contest.cheer(1, { actors: crowd, force: true });
-        await S.wait(0.6);
-        gus.play('hostWalk', 'neutral');
-      }
-      await S.cam(V(128.2, y + 1.8, E.z + 1.2), V(125.4, y + 0.95, 46.4), 0, 44);
-      shout(marie, 'Non, non, the nose goes HERE...');
-      V2.get('agnes')?.react('laugh');
-      await S.wait(1.4);
-      shout(V2.get('pop'), 'EWWW, GUTS!', 1600);
-      kid?.react('yay');
-      await S.wait(1.4);
-      await S.frame(H, [2.6, 1.0, 1.2], 0, 45);
-      H.play('wave', 'happy');
-      await S.say('hank', 'Hi there! Cocoa delivery from Nana Marguerite!', { actor: H, expr: 'happy' });
-      H.play('idle', 'happy');
-      // ...they freeze, and turn, and stare (Gus too)
-      busy();
-      for (const a of [...crowd, gus].filter(Boolean)) {
-        if (a !== gus) a.play('idle', 'neutral');
-        a.faceTowards(H.pos.x, H.pos.z);
-        a.lookAt(H);
-        a.showEmote('dots', 1.6);
-      }
-      await S.cam(V(120.0, y + 2.2, E.z + 1.6), V(129, y + 1.1, 47.6), 0, 50);
-      await S.wait(1.5);
-      for (const a of crowd) a.tempExpr('shock', 3);
-      gus?.tempExpr('shock', 3);
-      S.sfx('gasp', { volume: 0.5 });
-      await S.wait(0.5);
-      if (kid) {
-        kid.react('shock');
-        S.sfx('scream', { pitch: 1.5 });
-        await S.frame(kid, [-2.5, 1.0, 3.0], 0.4, 45, 0.9);
-        await S.say('pip', "MOM?! THERE'S A SKELETON ON A BICYCLE!", { actor: kid, expr: 'shock' });
-      }
-      // EVERYBODY SCREAMS: tools fly, and they scatter behind the tables and the hay bales
-      await S.cam(V(115.5, y + 5.5, 57.5), V(128, y + 0.6, 49.5), 0, 55);
-      S.sfx('scream');
-      g.chase.shake(0.5);
-      H.play('handsup', 'scared');
-      H.showEmote('sweat', 3);
-      for (const a of crowd) {
-        a.scripted = false;
-        const b = a.brain;
-        if (!b) continue;
-        b.scripted = false;
-        b.mode = 'routine';
-        b.busy = false;
-        b._act = null;
-        b.startle(X);
-      }
-      // ...all but Gus, who has hosted forty-one of these and isn't about to stop now:
-      // he marches straight up the street to the intruder
-      const GT = { x: H.pos.x + fwd.x * 2.4 + fwd.z * 0.3, z: H.pos.z + fwd.z * 2.4 - fwd.x * 0.3 };
-      if (gus) {
-        gus.tempExpr('angry', 8);
-        gus.walkTo([[GT.x, GT.z]], 1.7, 'hostWalk').then(() => gus.faceTowards(H.pos.x, H.pos.z));
-      }
-      await S.wait(3.6);
-      await S.say('marie', 'Mon dieu! Un mort-vivant!', { actor: marie, expr: 'scared' });
-      await S.say('doug', 'Everybody stay calm! I am a trained professional!', { actor: doug, expr: 'scared' });
-      await S.say('ingrid', 'Clinically speaking... that is extremely interesting.', { actor: ingrid, expr: 'surprised' });
-      H.play('idle', 'sheepish');
-      if (gus) {
-        // (still on his way? he's there now)
-        gus.path = null;
-        gus.pos.set(GT.x, g.physics.groundAt(GT.x, GT.z, y + 2).h, GT.z);
-        gus.faceTowards(H.pos.x, H.pos.z);
-        H.faceTowards(GT.x, GT.z);
-        gus.play('announce', 'angry');
-        S.sfx('megaphone', { volume: 0.9, pitch: 0.9 });
-        g.chase.shake(0.3);
-        // out in the street, in front of Gus: his face, the contest behind him
-        await S.cam(V(GT.x - 1.9, y + 1.6, GT.z + 1.7), V(GT.x, y + 1.45, GT.z), 0.5, 42);
-        await S.say('gus', 'STAY RIGHT THERE, YOU ROTTEN TURNIP!', { actor: gus, expr: 'angry' });
-        H.play('handsup', 'scared');
-        H.showEmote('sweat', 3);
-        await S.frame(H, [0.6, 1.0, 2.6], 0.4, 40, 1.0);
-        await S.say('hank', "WAIT! Don't... *megaphone* me! I'm just... I'm just *delivering cocoa!*", { actor: H, expr: 'scared' });
+        gus.brain?.onScripted?.();
+        S.temp.push({ remove: () => { gus.scripted = false; gus.lookAt(null); gus.play('hostWalk', 'neutral'); } });
+        const dx = gus.pos.x - hx, dz = gus.pos.z - hz, d = Math.hypot(dx, dz);
+        if (d > 2.6 || d < 1.2) {
+          // (still on his way over? he's here now)
+          const ux = d > 0.01 ? dx / d : 1, uz = d > 0.01 ? dz / d : 0;
+          gus.pos.set(hx + ux * 1.8, g.physics.groundAt(hx + ux * 1.8, hz + uz * 1.8, y + 1).h, hz + uz * 1.8);
+        }
+        gus.faceTowards(hx, hz);
+        gus.yaw = gus.targetYaw;
+        H.faceTowards(gus.pos.x, gus.pos.z);
+        H.yaw = H.targetYaw;
+        gus.lookAt(H);
+        H.lookAt(gus);
         gus.play('hostWalk', 'surprised');
-        await S.cam(V(GT.x - 1.9, y + 1.6, GT.z + 1.7), V(GT.x, y + 1.45, GT.z), 0.4, 40);
-        gus.showEmote('question', 2);
-        await S.say('gus', '...Cocoa?', { actor: gus, expr: 'surprised' });
-        await S.say('gus', 'Is that... *Marguerite\'s* cocoa?', { actor: gus, expr: 'surprised' });
-        await S.say('hank', 'Classic. Extra hot. For a... "Gus"?', { actor: H, expr: 'sheepish' });
-        await S.say('gus', "Well why in the blue blazes didn't ya say so!", { actor: gus, expr: 'laugh' });
-        await S.say('gus', 'Hand it over before it gets cold, ya rattling coat rack.', { actor: gus, expr: 'smug' });
-        H.play('offer', 'happy');
-        await S.wait(1.0);
+      }
+      const G = gus || H;
+      const mx = (hx + G.pos.x) / 2, mz = (hz + G.pos.z) / 2;
+      const ux = G.pos.x - hx, uz = G.pos.z - hz, ul = Math.hypot(ux, uz) || 1;
+      const sx = -uz / ul, sz = ux / ul; // across the pair
+      const side = Math.abs(mz + sz * 3 - C.z) < Math.abs(mz - sz * 3 - C.z) ? 1 : -1; // (the lens on the street side)
+      await S.cam(V(mx + sx * 3.2 * side, y + 1.7, mz + sz * 3.2 * side), V(mx, y + 1.2, mz), 0, 44);
+      if (gus) {
+        await S.say('gus', "...Well I'll be.", { actor: gus, expr: 'surprised' });
+        await S.faceShot(gus, { dist: 2.2, side: 0.7, dur: 0.5 });
+        await S.say('gus', "A skeleton. Handing out Marguerite's cocoa. At MY contest.", { actor: gus, expr: 'grumpy' });
+        await S.frame(H, [0.7 * side, 1.0, 2.4], 0.4, 40, 1.0);
+        H.play('offer', 'sheepish');
+        await S.say('hank', "Nana sent extra! And, uh... I think this one's yours. Extra hot?", { actor: H, expr: 'sheepish' });
         const o = g.orders.orderFor('gus');
         if (o) {
           const r = g.orders.deliver(o);
@@ -650,57 +588,34 @@ export class Story {
           S.sfx('cash');
           g.ui.pop(`*$${r.pay}*${r.tip ? ` and a *$${r.tip}* tip` : ''} from Gus! I think he almost smiled.`, { expr: 'happy' });
         }
+        H.play('idle', 'happy');
         gus.play('sip', 'happy');
         S.sfx('sip');
-        await S.wait(1.2);
-        // the all-clear, through the megaphone; the kids, at least, cheer
-        gus.faceTowards(C.x, C.z);
-        gus.play('announce', 'happy');
-        S.sfx('megaphone', { volume: 0.7 });
-        await S.cam(V(GT.x - 2.6, y + 1.8, GT.z + 2.2), V(GT.x + 6, y + 1.3, GT.z - 0.6), 0.6, 50);
-        await S.say('gus', "ALL CLEAR, FOLKS! IT'S JUST THE COCOA BOY! BACK TO YOUR PUMPKINS!", { actor: gus, expr: 'laugh' });
-        for (const k of [kid, V2.get('pop')]) if (k) { k.react('yay'); g.wait(0.9).then(() => k.react('yay')); }
-        S.sfx('kids_yay', { volume: 0.6 });
-        gus.play('hostWalk', 'neutral');
-      }
-      // the contest peeks out from behind its tables and hay bales
-      H.play('idle', 'sheepish');
-      await S.cam(V(bp.x - fwd.x * 1.5 - fwd.z * 4.5, y + 3.4, bp.z - fwd.z * 1.5 + fwd.x * 4.5), V(129, y + 0.8, 49.5), 0.8, 52);
-      await S.say('doug', '...Technically, being deceased isn\'t against any bylaw I\'m aware of.', { actor: doug, expr: 'sheepish' });
-      await S.say('ingrid', 'No pulse at all. Remarkable. I shall observe... from back here.', { actor: ingrid, expr: 'worried' });
-      await S.say('marie', "If he brings Marguerite's cocoa, he can be as dead as he likes! ...Mine goes on the café step, mon chou!", { actor: marie, expr: 'scared' });
-      await S.say('pip', 'MOM! Let go! I want to see him do a WHEELIE!', { actor: kid, expr: 'laugh' });
-      await S.wait(0.6);
-      // and the entry form, so to speak
-      if (gus) {
-        gus.faceTowards(H.pos.x, H.pos.z);
-        H.faceTowards(gus.pos.x, gus.pos.z);
-        const mx = (H.pos.x + gus.pos.x) / 2, mz = (H.pos.z + gus.pos.z) / 2;
-        await S.cam(V(mx + fwd.z * 3.2, y + 1.7, mz - fwd.x * 3.2), V(mx, y + 1.3, mz), 0.6, 44);
-        H.play('idle', 'happy');
-        await S.say('hank', 'So... can anybody enter?', { actor: H, expr: 'happy' });
-        gus.play('inspect', 'neutral');
-        gus.showEmote('question', 2);
-        await S.say('gus', 'A skeleton... carving a face?', { actor: gus, expr: 'surprised' });
-        gus.react('shake');
-        await S.say('gus', "Well, it IS a fair contest. Little table at the end's yours. One pumpkin a day.", { actor: gus, expr: 'smug' });
+        await S.wait(1.3);
+        await S.faceShot(gus, { dist: 2.2, side: 0.7, dur: 0.5 });
+        gus.play('hostPoint', 'smug');
+        await S.say('gus', "Hmph. Well I'll be. Any skeleton who brings cocoa can carve at my contest.", { actor: gus, expr: 'smug' });
+        await S.frame(H, [0.7 * side, 1.0, 2.4], 0.4, 40, 1.0);
         H.play('cheer', 'sparkle');
-        await S.say('hank', 'Yes! I used to whittle! Mostly canoe paddles!', { actor: H, expr: 'sparkle' });
-        this.flag('carveIntro', true);
-      }
-      // they've met him now, but only Gus (who got his cocoa) and the kids (who think he's
-      // the coolest) are anything like at ease; the rest drift back to their pumpkins as
-      // they get used to a skeleton on a bicycle (npcBrain.js). Gus goes back to hosting.
-      for (const [c, t] of Object.entries({ gus: 46, ...AFTER_SCREAM })) V2.force(c, t);
-      if (gus) {
-        gus.scripted = false;
+        S.sfx('bone_rattle', { volume: 0.5 });
+        await S.say('hank', 'Really?! I used to whittle! Mostly canoe paddles!', { actor: H, expr: 'sparkle' });
+        // through the megaphone, to the whole street: and the street cheers
+        gus.faceTowards(C.x, C.z);
+        gus.play('announce', 'laugh');
+        S.sfx('megaphone', { volume: 0.7 });
+        await S.cam(V(G.pos.x - 2.6 * side * sx + (C.x - G.pos.x) * 0.05, y + 1.9, G.pos.z - 2.6 * side * sz), V(C.x, y + 1.2, C.z), 0.6, 54);
+        await S.say('gus', 'FOLKS! WE GOT A LATE ENTRY! THE COCOA SKELETON!', { actor: gus, expr: 'laugh' });
+        g.contest.cheer(2, { force: true });
+        await S.wait(1.6);
+        gus.faceTowards(H.pos.x, H.pos.z);
         gus.play('hostWalk', 'neutral');
+        await S.faceShot(gus, { dist: 2.2, side: 0.7, dur: 0.5 });
+        await S.say('gus', 'Pumpkin, knife, ninety seconds. And I got a request for ya. Go on, bones. Impress me.', { actor: gus, expr: 'neutral' });
       }
-      g.rider.visible = true;
-      this.flag('village1', true);
-      this.flag('contestScream', true);
+      V2.force('gus', Math.max(V2.trustOf('gus'), AFTER_COCOA.gus));
+      this.flag('carveIntro', true);
       g.save();
-    }).then(() => g.ui.pop('...Was it something I said?', { expr: 'sheepish', ms: 3500 }));
+    }).then(() => g.contest.carving.start({ intro: false, invited: true }));
   }
 
   // (test entry point: ?scene=carve) straight into the pumpkin carving mini-game at Hank's
@@ -1205,8 +1120,7 @@ export class Story {
     if (g.mode !== 'ride') return;
     const st = this.st;
     const p = g.playerPos;
-    // first visit to Maple Cove
-    if (!st.flags.village1 && Math.hypot(p.x - CONTEST.x, p.z - CONTEST.z) < CONTEST.r) this.villagePanic();
+    // (the first visit to Maple Cove, the contest's frozen welcome: contest.js)
     // Poutine wanders the road home once the first day's deliveries are done (and every day after, until she's found)
     if (st.flags.village1 && !st.flags.catRescued && !g.catEventActive && (st.day > 1 || g.orders.pending().length === 0)) this.startCatEvent(st.day === 1);
     // Nana calls Hank home at night
