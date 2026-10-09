@@ -159,8 +159,10 @@ its heat, more the harder the crash.
 - **Leaves and transitions** (`src/ui/leaves.js`, `src/ui/leafart.js`): pixel
   maple, oak, birch and aspen leaves (pre-drawn turn and tumble frames, never
   smoothly rotated) shake off menus, burst from big buttons and deliveries and
-  drift over the title; short fades are leaf wipes (a gust covers the screen,
-  then blows away), long ones stay soft (`leafTransition`, `screenFade`).
+  drift over the title; short fades are leaf wipes (a gust blows a solid
+  two-depth pile of leaves over the screen, the scene changes under it, then
+  the pile blows away: leaves all the way through, never black), long ones stay
+  soft, into a warm dark plum (`leafTransition`, `screenFade`).
 - **See-through** (`SEE_GLSL` in `src/render/shaderlib.js`, `updateSee` in
   `src/game/camera.js`): whatever stands between the camera and Hank (or a
   cutscene's subject) dissolves in a pixel dither with a glowing ember edge.
@@ -235,8 +237,11 @@ its heat, more the harder the crash.
   blown in from the forest and puddles that gather in the ruts when it rains.
 - **UI** (`src/ui`): a pixel kit of carved wood panels with brass nails, buttons,
   slots, books and bezels (`kit.js`, `kitart.js`), shaded 32 px icons
-  (`src/art/icons.js`), and black-and-white speech bubbles over the real 3D
-  speaker. Everything is drawn on one integer pixel grid so it stays crisp.
+  (`src/art/icons.js`), and simple cosy speech bubbles over the real 3D
+  speaker (cream, round pixel corners, a brown outline, the speaker's name on a
+  coloured tab). Everything is drawn on one chunky integer pixel grid (5 device
+  pixels per art pixel on a 1080-wide phone, 4 at 1080p) with pixel fonts at
+  whole multiples of their size, so it stays crisp.
   Orders and customers live in a spiral notebook. Touch controls have a
   floating thumb stick (pull back to wheelie, push to stoppie), a pixel-art
   crank to spin as fast as you like (`crank.js`, with Hank's wind as a bone and

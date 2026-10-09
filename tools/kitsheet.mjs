@@ -117,7 +117,7 @@ if (what === 'icons' || what === 'all') {
 if (what === 'bubbles') {
   for (const s of ['round', 'shout', 'shaky', 'think', 'whisper', 'sel', 'dark']) {
     const [x, y] = place(76, 54);
-    nine(sheet, K.bubbleArt(s), x, y, 76, 40, [10, 10, 10, 10]);
+    nine(sheet, K.bubbleArt(s), x, y, 76, 40, [K.BUBBLE_SLICE, K.BUBBLE_SLICE, K.BUBBLE_SLICE, K.BUBBLE_SLICE]);
     sheet.blit(K.bubbleTailArt(s), x + 14, y + 40 - K.BUBBLE_JOIN);
   }
 }

@@ -60,7 +60,7 @@
 .k-item.quit { color: #8a2214; }
 
 /* ---------------------------------------------------------------- the journal */
-.menu.journal { width: min(calc(var(--u) * 312), calc(100% - var(--u) * 8)); }
+.menu.journal { width: min(calc(var(--u) * 336), calc(100% - var(--u) * 8)); }
 .jbook { min-height: calc(var(--u) * 150); }
 .jdate { display: flex; align-items: center; gap: calc(var(--u) * 2); flex-wrap: wrap; margin-bottom: calc(var(--u) * 3); color: #6e5038; }
 .jdate b { margin-right: calc(var(--u) * 4); }

@@ -287,7 +287,8 @@ export class Pipeline {
       uOutline: { value: 1 },
       uOutlineW: { value: 1 },
       uFade: { value: 0 },
-      uFadeColor: { value: new THREE.Color(0, 0, 0) },
+      // fades go to a warm dark plum-brown, never to pure black (sRGB hex, converted to linear)
+      uFadeColor: { value: new THREE.Color(0x2c141c) },
       uFlash: { value: 0 },
       uTime: G.uTime,
       uCold: { value: 0 },

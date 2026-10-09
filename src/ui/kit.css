@@ -41,8 +41,10 @@
   letter-spacing: 0;
   font-kerning: none;
   font-variant-ligatures: none;
+  font-synthesis: none;
   -webkit-font-smoothing: none;
   font-smooth: never;
+  text-rendering: optimizeSpeed;
 }
 .k-bold, .k-btn, .k-ribbon, .k-count, .k-tab, .k-h {
   font-family: 'BoldPixels', 'Monogram', monospace;

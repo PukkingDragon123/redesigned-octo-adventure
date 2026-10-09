@@ -224,7 +224,7 @@ export class TitleScreen {
     });
     this.buttons = buttons;
     this.menuEl = menu;
-    const foot = el('div', `position:absolute;right:8px;bottom:6px;font-size:16px;line-height:1;text-align:right;color:#e8d0b0;text-shadow:1px 1px 0 ${INK};`,
+    const foot = el('div', `position:absolute;right:calc(var(--u) * 3);bottom:calc(var(--u) * 2);font-size:var(--tfs);line-height:calc(var(--us) * 12);text-align:right;color:#e8d0b0;text-shadow:var(--us) var(--us) 0 ${INK};`,
       'Autumn in Maple Cove<br>fonts: monogram by datagoblin (CC0) &middot; BoldPixels by YukiPixels (CC BY-SA 4.0)');
     root.append(this.shadeEl, logoBox, menu, foot);
     document.body.appendChild(root);
@@ -244,16 +244,19 @@ export class TitleScreen {
     if (!this.root) return;
     const W = innerWidth, H = innerHeight, narrow = W < H;
     const logo = this.logo;
-    const ls = Math.max(1, Math.min(5, Math.floor(Math.min((W * 0.62) / logo.width, (H * 0.3) / logo.height))));
+    // a whole number of DEVICE pixels per logo pixel (ls is in CSS px), placed on whole
+    // device pixels, so the logo and the subtitle's pixel font stay crisp and even
+    const dpr = devicePixelRatio || 1;
+    const k = Math.max(1, Math.min(5 * Math.ceil(dpr), Math.floor(Math.min((W * dpr * 0.62) / logo.width, (H * dpr * 0.3) / logo.height))));
+    const ls = k / dpr;
     this.ls = ls;
     const lw = logo.width * ls, lh = logo.height * ls, bw = lw + 30 * ls;
-    Object.assign(this.logoBox.style, { top: `${Math.round(H * 0.05)}px`, width: `${bw}px`, marginLeft: `${-Math.round(bw / 2)}px`, height: `${lh}px` });
+    Object.assign(this.logoBox.style, { top: `${Math.round(H * 0.05 * dpr) / dpr}px`, width: `${bw}px`, left: `${Math.round(((W - bw) / 2) * dpr) / dpr}px`, marginLeft: '0px', height: `${lh}px` });
     Object.assign(this.logoEl.style, { width: `${lw}px`, height: `${lh}px` });
     Object.assign(this.mugEl.style, { left: `${lw - 2 * ls}px`, top: `${2 * ls}px`, width: `${28 * ls}px`, height: `${30 * ls}px` });
     Object.assign(this.subEl.style, { width: `${lw}px`, top: `${lh - 4 * ls}px`, fontSize: `${16 * ls}px`, textShadow: `${ls}px ${ls}px 0 ${INK}` });
     const ms = this.menuEl.style;
     // centred by its measured width on whole device pixels (a -50% transform blurs the pixel art)
-    const dpr = devicePixelRatio || 1;
     if (narrow) Object.assign(ms, { left: `${Math.round(((W - this.menuEl.offsetWidth) / 2) * dpr) / dpr}px`, transform: '', bottom: 'calc(var(--u) * 18)' });
     else Object.assign(ms, { left: `${Math.round(W * 0.07)}px`, transform: '', bottom: `${Math.round(H * 0.1)}px` });
     const ink = (a) => `rgba(24,14,20,${a})`;

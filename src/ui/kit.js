@@ -25,16 +25,21 @@ import { glyphURL } from '../art/icons.js';
 // ---------------------------------------------------------------- scale
 export const scale = { S: 2, u: 2, dpr: 1, offset: 0, cols: 0, rows: 0, compact: false, listeners: new Set() };
 
-// device pixels per art pixel: about 300 art rows on desktops, ~230 on phones
+// device pixels per art pixel: big, chunky art pixels like a classic 2D pixel game.
+// The short side of the screen is about 200-216 art pixels on phones (5 device
+// pixels per art pixel on a 1080-wide phone, 6 on the big ones) and about 260-300
+// on desktops (4 at 1080p, 5 at 1440p, 8 at 4K)
 function computeScale() {
   const dpr = window.devicePixelRatio || 1;
   const W = window.innerWidth, H = window.innerHeight;
   const small = Math.min(W, H) < 520;
-  const target = small ? 230 : 300;
-  let S = Math.max(1, Math.floor((Math.min(W, H) * dpr) / target + 0.3));
-  S = Math.max(1, S + scale.offset);
-  // never let the UI grid get smaller than ~200 x 230 art pixels
-  while (S > 1 && ((H * dpr) / S < 200 || (W * dpr) / S < 230)) S--;
+  const short = Math.min(W, H) * dpr;
+  let S = small ? Math.floor(short / 204) : Math.floor(short / 260 + 0.3);
+  S = Math.max(2, S + scale.offset);
+  // never let the UI grid get smaller than 200 art pixels across the short side
+  // (or 300 along a desktop's long side)
+  while (S > 1 && (short / S < 200 || (!small && Math.max(W, H) * dpr / S < 300))) S--;
+  S = Math.max(1, S);
   return { S, dpr, u: S / dpr, cols: Math.floor((W * dpr) / S), rows: Math.floor((H * dpr) / S), compact: small };
 }
 
@@ -45,6 +50,10 @@ export function applyScale() {
   const r = document.documentElement.style;
   r.setProperty('--u', `${s.u}px`);
   r.setProperty('--S', `${s.S}`);
+  // a half-size grid for small print (credits): still whole device pixels per pixel
+  const us = Math.max(1, Math.floor(s.S / 2)) / s.dpr;
+  r.setProperty('--us', `${us}px`);
+  r.setProperty('--tfs', `${us * 16}px`);
   // the 48px food sprites sit in 24-art-pixel spots: show them at the biggest WHOLE
   // multiple of their own pixels that fits (24u is only a whole multiple when S is even)
   r.setProperty('--food', `${(s.S >= 2 ? Math.floor(s.S / 2) * 48 : 24) / s.dpr}px`);
@@ -242,6 +251,11 @@ export const KIT_IMAGES = {
   ...Object.fromEntries(A.DOODLES.map((d) => [`dd-${d}`, () => A.doodleArt(d)])),
   clipboard: () => A.clipboardArt(),
   clip: () => A.clipArt(),
+  // the cosy speech bubble (bubbles.js paints its mood variants itself)
+  bub: () => A.bubbleArt('round'),
+  'bub-tail': () => A.bubbleTailArt('round'),
+  'bub-next': () => A.nextArrowArt(),
+  'bub-leaf': () => A.bubbleLeafArt(),
 };
 const KIT_GLYPHS = ['box', 'boxOn', 'boxX', 'check', 'cross', 'hand', 'arrowR', 'arrowL', 'arrowU', 'arrowD', 'heart', 'lock', 'star', 'coin', 'pin', 'medalB', 'medalS', 'medalG', 'medalNone', 'dot'];
 const URLS = {};
@@ -249,7 +263,7 @@ export const kitURL = (name) => URLS[name] || (URLS[name] = url(KIT_IMAGES[name]
 
 // what the HUD needs on the first frame; everything else is painted in idle time
 // (or at once, the moment a menu opens: see kitReady)
-const FIRST = ['plate-leather', 'plate-dark', 'plate-parchment', 'paper-note', 'paper-news', 'key', 'tip', 'tip-tail', 'panel-dark', 'panel-leather', 'bar', 'btn', 'btn-hover', 'ribbon', 'clipboard', 'clip', 'nb-paper', 'nb-coil', 'nb-box', 'nb-check', 'nb-tick'];
+const FIRST = ['plate-leather', 'plate-dark', 'plate-parchment', 'paper-note', 'paper-news', 'key', 'tip', 'tip-tail', 'panel-dark', 'panel-leather', 'bar', 'btn', 'btn-hover', 'ribbon', 'clipboard', 'clip', 'nb-paper', 'nb-coil', 'nb-box', 'nb-check', 'nb-tick', 'bub', 'bub-tail', 'bub-next', 'bub-leaf'];
 let installed = false, pending = [];
 const put = (name) => document.documentElement.style.setProperty(`--k-${name}`, `url(${kitURL(name)})`);
 export function kitReady() {
