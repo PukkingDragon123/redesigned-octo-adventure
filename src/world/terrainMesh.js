@@ -178,7 +178,7 @@ void main() {
     float pn = vnoise(wq * 0.85 + 3.3) * 0.62 + vnoise(wq * 2.6 - 1.1) * 0.38;
     float thr = 1.0 - uWet * (0.2 + 0.24 * rut);
     if (pn > thr) {
-      col = mix(col * 0.32, uSkyAmb * 0.75 + vec3(0.05, 0.06, 0.08), 0.6);
+      col = mix(col * 0.3, uSkyAmb * 0.45 + vec3(0.02, 0.025, 0.035), 0.6);
       if (pn < thr + 0.02) col *= 0.75;
       else if (hash12(texel + floor(uTime * 7.0) * 1.31) > 0.994) col += vec3(0.25, 0.27, 0.3);
       col /= mix(1.0, 0.62, uWet); // (the wet darkening below is already in the water's colour)
