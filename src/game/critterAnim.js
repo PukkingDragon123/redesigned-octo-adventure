@@ -105,7 +105,7 @@ function leg2(P, bu, bl, dy, dz, L1, L2, front) {
 
 function poseQuad(c, dt, W) {
   const P = c.P, m = c.sp.meta, A = c.A, kind = m.kind;
-  const L = m.legLen, L1 = m.L1, L2 = m.L2;
+  const L = m.legLen, L1 = m.L1, L1h = m.L1h ?? m.L1, L2 = m.L2;
   const anim = c.anim;
   // ---- state weights
   A.graze = damp(A.graze || 0, anim === 'graze' ? 1 : 0, 3.5, dt);
@@ -135,13 +135,27 @@ function poseQuad(c, dt, W) {
   twitch(c, dt);
   const calm = 1 - Math.max(wGal, A.pounce, A.crouch);
   look(c, W, dt, interest(c, W, kind === 'moose' ? 35 : 28) * calm * (1 - A.graze * 0.8) * (anim === 'walk' ? 0.4 : 1), kind === 'raccoon' ? 1.1 : 1.3, m.headH, 3.5);
-  // ---- ground under each foot (near creatures only)
+  // ---- where each foot is in its step (animal space), and the ground right under it (near creatures only)
   const hipF = m.hipF, hipH = m.hipH;
   const cy = Math.cos(c.yaw), sy = Math.sin(c.yaw);
+  const stomp = c.stompK ? bump(c.stompK) : 0;
   for (let i = 0; i < 4; i++) {
-    const hx = i & 1 ? -hipF[0] : hipF[0], hz = i < 2 ? hipF[2] : hipH[2];
+    const isF = i < 2, hip = isF ? hipF : hipH;
+    const hx = i & 1 ? -hip[0] : hip[0];
+    const u = frac(ph + _g[i]);
+    let fz, fy;
+    if (u < duty) { fz = sl * (0.5 - u / duty); fy = 0; }
+    else { const k = (u - duty) / (1 - duty); fz = sl * (-0.5 + sstep(0, 1, k)); fy = lift * Math.sin(k * PI) * mv; }
+    // sitting tucks the hind feet forward under the hips; crouching gathers all four
+    if (!isF) fz += L * 0.32 * A.sit + L * 0.12 * A.crouch;
+    else fz -= L * 0.08 * A.crouch;
+    if (isF && i === 0) fy += L * 0.22 * stomp;
+    const z = hip[2] + fz;
+    _ft[i * 3] = hx; _ft[i * 3 + 1] = fy; _ft[i * 3 + 2] = z;
     if (c.near && W.h) {
-      const wx = c.x + hx * cy + hz * sy, wz = c.z - hx * sy + hz * cy;
+      // (a body rolled on a side slope swings its hanging feet sideways, downhill)
+      const fx = hx + (m.standH + hip[1]) * Math.sin(A.sr || 0);
+      const wx = c.x + fx * cy + z * sy, wz = c.z - fx * sy + z * cy;
       _go[i] = clamp(W.h(wx, wz) - c.y, -0.45 * L, 0.45 * L);
     } else _go[i] = 0;
   }
@@ -185,34 +199,19 @@ function poseQuad(c, dt, W) {
   T(P, Q.body, 0, by, bz);
   R(P, Q.body, bp, bw, br);
   S(P, Q.body, 1 + breathe * 0.012 - arch * 0.06, 1 + breathe * 0.02 + arch * 0.16, stretch - arch * 0.06);
-  // ---- legs: foot targets in animal space, then IK in the body frame
-  const cp = Math.cos(bp), sp2 = Math.sin(bp), cr = Math.cos(br);
-  const stomp = c.stompK ? bump(c.stompK) : 0;
-  for (let i = 0; i < 4; i++) {
-    const isF = i < 2, hip = isF ? hipF : hipH;
-    const hx = i & 1 ? -hip[0] : hip[0];
-    const u = frac(ph + _g[i]);
-    let fz, fy;
-    if (u < duty) { fz = sl * (0.5 - u / duty); fy = 0; }
-    else { const k = (u - duty) / (1 - duty); fz = sl * (-0.5 + sstep(0, 1, k)); fy = lift * Math.sin(k * PI) * mv; }
-    fy += _go[i];
-    // sitting tucks the hind feet forward under the hips; crouching gathers all four
-    if (!isF) fz += L * 0.32 * A.sit + L * 0.12 * A.crouch;
-    else fz -= L * 0.08 * A.crouch;
-    if (isF && i === 0) fy += L * 0.22 * stomp;
-    _ft[i * 3] = hx; _ft[i * 3 + 1] = fy; _ft[i * 3 + 2] = hip[2] + fz;
-  }
+  // ---- legs: IK in the body frame from each hip to its foot target (on the ground under it)
+  const cp = Math.cos(bp), sp2 = Math.sin(bp), cr = Math.cos(br), sr = Math.sin(br);
   for (let i = 0; i < 4; i++) {
     const [bu, bl, , isF] = LEGS[i];
     const hip = isF ? hipF : hipH;
-    // hip in animal space: body origin + R(bp, br) * hip
+    // hip in animal space: body origin + R(bp, br) * hip (rolling lifts one side's hips)
     const hy0 = hip[1], hz0 = hip[2];
-    const hy = m.standH + by + hy0 * cp - hz0 * sp2, hz = bz + hy0 * sp2 + hz0 * cp;
+    const hy = m.standH + by + (hy0 * cp - hz0 * sp2) * cr + _ft[i * 3] * sr * cp, hz = bz + hy0 * sp2 + hz0 * cp;
     // foot relative to hip, rotated back into the body frame (undo pitch, then roll)
-    let dy = _ft[i * 3 + 1] - hy, dz = _ft[i * 3 + 2] - hz;
+    let dy = _ft[i * 3 + 1] + _go[i] - hy, dz = _ft[i * 3 + 2] - hz;
     const ry = dy * cp + dz * sp2, rz = -dy * sp2 + dz * cp;
-    dy = ry * cr; dz = rz;
-    leg2(P, bu, bl, dy, dz, L1, L2, isF);
+    dy = ry / cr; dz = rz; // (rolled, the leg hangs aslant: a longer reach for the same drop)
+    leg2(P, bu, bl, dy, dz, isF ? L1 : L1h, L2, isF);
   }
   // pounce and rummage override the legs: reach out with the front paws
   if (A.pounce > 0.01) {
