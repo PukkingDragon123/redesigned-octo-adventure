@@ -128,7 +128,7 @@
 
 /* ---------------------------------------------------------------- touch layout tweaks */
 .touchmode .hud-gauge { bottom: calc(var(--u) * 74 + var(--safe-b)); transform: none; }
-.touchmode .hud-gauge.away { transform: translateY(calc(var(--u) * 200)); }
+.touchmode .hud-gauge.away { transform: translateY(calc(var(--u) * 201)); }
 .touchmode .hud-speedo { width: calc(var(--u) * 72); height: calc(var(--u) * 72); }
 .touchmode .hud-prompt { display: none !important; }
 .touchmode .hud-note .obj { display: none; }
