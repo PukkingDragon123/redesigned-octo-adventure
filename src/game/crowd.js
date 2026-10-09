@@ -509,6 +509,16 @@ export class Crowd {
       yield rand(0.5, 1.5);
     }
   }
+  // closing time: off up or down the street, and gone
+  *leave(m) {
+    const a = m.a;
+    if (m.follows || m.parent) { for (;;) { if ((m.follows || m.parent).gone) { m.gone = true; return; } yield 0.5; } }
+    const east = a.pos.x > 137, sd = side(a.pos.z);
+    this.pose(m, m.role === 'stroller' ? 'stroll' : m.role === 'dog' ? 'leash' : m.role === 'elder' ? 'cane' : m.role === 'couple' ? 'handR' : 'idle', 'happy');
+    if (Math.random() < 0.3) this.say(m, pick(['See ya tomorrow!', 'Bye now!', 'What a day!', 'Night, all!']), 1600);
+    yield { walk: route(a.pos, { x: east ? 162 : 114, z: sd < 0 ? C.laneN : sd > 0 ? C.laneS : C.stripN }), speed: m.elder ? 0.6 : rand(1.0, 1.4) };
+    m.gone = true;
+  }
   // the partner (hand in hand) and the toddler behind the stroller just keep up
   *follow(m) {
     for (;;) yield 5;
@@ -761,6 +771,15 @@ export class Crowd {
     const g = this.g;
     this.frame++;
     const want = this.wanted();
+    // closing time with the contest in view: everyone heads off up or down the street; and
+    // at opening time (in view) they turn up the same way
+    if (!want && this.on && !this.leaving) {
+      this.leaving = true;
+      for (const m of this.list) if (m.shown && !m.frozen && !m.thawing) { m.path = null; m.gen = this.leave(m); m.waitT = rand(0, 5); }
+    }
+    if (want && this.leaving) { this.leaving = false; for (const m of this.list) if (m.gone) { m.gone = false; m.shown = false; } }
+    this.arriving = want && !this.wasWant && this.on;
+    this.wasWant = want;
     // build the bodies a couple at a time while the browser idles (once the contest is in reach)
     const cam = g.camera.position;
     const camD = hyp(cam.x - CONTEST.x, cam.z - CONTEST.z);
@@ -773,8 +792,11 @@ export class Crowd {
         while (this.building < this.list.length && performance.now() - t0 < 8) this.build(this.list[this.building++]);
       }, { timeout: 500 });
     }
-    const vis = near && want;
+    if (this.arriving) this.arrivingT = 3;
+    else if (this.arrivingT > 0) this.arrivingT -= dt;
+    const vis = near && (want || this.leaving);
     if (!vis && this.on) this.hideAll();
+    if (this.leaving && this.list.every((m) => !m.a || !m.shown || m.gone)) { this.leaving = false; this.hideAll(); }
     this.on = vis;
     if (!vis) return;
     const camF = g.camera.getWorldDirection(_f);
@@ -799,11 +821,14 @@ export class Crowd {
     for (const m of this.list) if (m.a) this.tick(m, dt, cam);
   }
   setTier(m, tier) {
+    if (m.gone) return;
     if (!m.shown) {
+      if (this.leaving) return;
       m.shown = true;
       m.a.visible = true;
-      // back after a while away: straight to where they'd be
-      this.snapHome(m);
+      // back after a while away: straight to where they'd be (or, as the contest opens
+      // in front of Hank, in from the end of the street)
+      this.snapHome(m, this.arriving || this.arrivingT > 0);
     }
     if (m.tier === tier) return;
     m.tier = tier;
@@ -817,6 +842,7 @@ export class Crowd {
     for (const m of this.list) {
       if (!m.a) continue;
       m.shown = false;
+      m.gone = false;
       m.tier = 'none';
       m.a.visible = false;
       m.a.root.visible = false;
@@ -824,9 +850,14 @@ export class Crowd {
       if (m.dog) m.dog.grp.visible = m.dog.line.visible = false;
     }
   }
-  snapHome(m) {
+  snapHome(m, arrive = false) {
     if (m.frozen) return;
-    const s = this.startSpot(m);
+    let s = this.startSpot(m);
+    if (arrive && !m.follows && !m.parent) {
+      // (walking in from whichever end of the street is nearer their spot)
+      const sd = side(s.z);
+      s = { x: s.x > 137 ? 162 : 114 - rand(0, 3), z: sd < 0 ? C.laneN : sd > 0 ? C.laneS : C.stripN, yaw: s.x > 137 ? -PI / 2 : PI / 2 };
+    }
     m.a.pos.set(s.x, this.g.physics.groundAt(s.x, s.z, m.a.pos.y + 2).h, s.z);
     if (s.yaw != null) m.a.yaw = m.a.targetYaw = s.yaw;
     m.path = null;
@@ -837,6 +868,10 @@ export class Crowd {
 
   tick(m, dt, cam) {
     const a = m.a, g = this.g;
+    if (m.gone) {
+      if (m.shown) { m.shown = false; m.tier = 'none'; a.visible = false; a.root.visible = false; m.base.visible = false; if (m.dog) m.dog.grp.visible = m.dog.line.visible = false; }
+      return;
+    }
     // the plan
     if (!m.frozen && !m.thawing) {
       if (m.cool > 0) m.cool -= dt;
