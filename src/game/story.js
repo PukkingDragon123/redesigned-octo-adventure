@@ -39,25 +39,25 @@ const FOOD_FOR = { pancakes: 'pancakes', egg: 'eggsToast', bacon: 'eggsToast', t
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 
 const LORE = {
-  cane: "Harold's cane! He carved that handle from a moose antler he found. Took him eleven winters. He never needed a cane — he just liked pointing at things with it.",
-  spyglass: 'His spyglass! He told everyone it was for spotting deer. I caught him using it to watch for the bakery van every Tuesday.',
-  pack: "Oh, his hunting pack. Three granola bars and not a single bullet. That was my Harold — he'd go 'hunting' and come back with mushrooms and a sunburn.",
-  clock: "The mantel clock... it stopped at 4:12. That's the minute he proposed. On this very porch, with a ring made of birch bark.",
-  coat: 'His plaid coat. It still smells of pipe smoke and pine. Would you mind if I kept it on the rocking chair?',
-  medbag: "Dr. Ingrid's bag! He 'borrowed' it in 1987 to splint a raccoon's leg. Return it to her someday, would you? Actually... let's keep it a little longer.",
-  suitcase: 'Our honeymoon suitcase. We were going to see Niagara Falls. Then the roof needed fixing. Then the boat. Then... well. Life is what happens, dear.',
-  keys: 'His ring of keys. Opens every door in Maple Cove. Including, it turns out, the sawmill. Big Lou never found out who kept leaving him muffins.',
-  books: 'His pressed-flower books... every page has a maple leaf from a different autumn. Fifty-one autumns. Fifty-one leaves.',
-  map: 'Harold\'s map! "X marks the best blueberries." The X is right on the beaver dam. The beavers never did let him have any.',
-  lantern: 'The brass lantern. Harold walked me home with it every night we were courting. Even after we were married. Even though we lived together.',
-  bottles: 'Maple syrup, vintage 1979. Do not drink. ...Hank, did you drink some? Your face is doing a thing.',
+  cane: "Harold's cane! Moose antler handle. He just liked pointing with it.",
+  spyglass: 'His spyglass! "For deer," he said. It was for the bakery van.',
+  pack: 'His hunting pack. Granola bars, no bullets. That was Harold.',
+  clock: 'The mantel clock. Stopped at 4:12, the minute he proposed.',
+  coat: 'His plaid coat. Still smells of pipe smoke and pine.',
+  medbag: "Dr. Ingrid's bag! He 'borrowed' it in 1987. Let's keep it a while.",
+  suitcase: 'Our honeymoon suitcase. We never did see Niagara Falls.',
+  keys: 'His keys. So HE left Big Lou those muffins!',
+  books: 'His pressed leaves. Fifty-one autumns of them.',
+  map: 'Harold\'s blueberry map. X marks the beaver dam. Of course.',
+  lantern: 'The brass lantern. He walked me home with it every night.',
+  bottles: 'Maple syrup, 1979. Do not drink. ...Hank?',
 };
 
 const BREAKFAST = {
-  1: { food: 'pancakes', lines: [['grandma', 'Breakfast! Buttermilk pancakes, the way Harold liked them.', 'happy'], ['hank', 'Oh, I could eat a moose.', 'happy']], after: [['grandma', '...Hm.', 'surprised'], ['hank', 'Sorry, Nana. I think there\'s a hole in me somewhere.', 'sheepish'], ['grandma', 'Never you mind. The squirrels will be delighted.', 'laugh']] },
-  2: { food: 'egg', lines: [['grandma', 'I thought — maybe something smaller? A nice soft egg.', 'neutral']], after: [['hank', '...It went about as well as the pancakes.', 'sheepish'], ['grandma', 'Soup tomorrow, then.', 'smug'], ['hank', 'Soup goes faster, Nana.', 'sad']] },
-  3: { food: 'bacon', lines: [['grandma', 'Bacon! Nobody says no to bacon.', 'happy']], after: [['hank', 'I said yes. My stomach said "next floor down".', 'sheepish'], ['cat', 'Mrrrp!', 'happy'], ['grandma', 'Well, Poutine has never been happier.', 'laugh']] },
-  4: { food: 'toast', lines: [['grandma', 'Plain toast. Very solid. Nothing can go wrong with toast.', 'determined']], after: [['grandma', 'Something went wrong with the toast.', 'sad'], ['hank', 'It\'s the thought that counts. And I thought about it a lot.', 'happy']] },
+  1: { food: 'pancakes', lines: [['grandma', "Pancakes! Harold's favourite.", 'happy']], after: [['hank', "Sorry, Nana. There's a hole in me somewhere.", 'sheepish']] },
+  2: { food: 'egg', lines: [['grandma', 'Something smaller? A soft egg.', 'neutral']], after: [['hank', 'Same as the pancakes.', 'sheepish']] },
+  3: { food: 'bacon', lines: [['grandma', 'Bacon! Nobody says no to bacon.', 'happy']], after: [['cat', 'Mrrp!', 'happy']] },
+  4: { food: 'toast', lines: [['grandma', 'Plain toast. What could go wrong?', 'determined']], after: [['grandma', 'Something went wrong with the toast.', 'sad']] },
 };
 
 export class Story {
@@ -159,7 +159,7 @@ export class Story {
       const nw = N.walkTo([L(-0.45, 0, 7.8), L(-0.2, 0, 5.3)], 1.0, 'walk+lantern');
       const hw = H.walkTo([L(0.5, 0, 8.6), L(0.3, 0, 6.2)], 0.85, 'walk+shiver');
       await S.wait(2.2);
-      await S.say('grandma', 'Here we are. Mind the step, dear, it creaks. So does the next one. So do I.', { actor: N, expr: 'happy' });
+      await S.say('grandma', 'Mind the step, dear. It creaks. So do I.', { actor: N, expr: 'happy' });
       await nw;
       N.faceTowards(L(0, 0, 4.4).x, L(0, 0, 4.4).z);
       N.play('lantern');
@@ -180,7 +180,7 @@ export class Story {
       const n2 = N.walkTo([L(-0.95, 0, 2.6)], 1.0, 'walk+lantern');
       await S.wait(0.6);
       const h2 = H.walkTo([L(0.25, 0, 3.1)], 0.7, 'walk+shiver');
-      await S.say('grandma', 'Come in, come in, out of that cold.', { actor: N, expr: 'happy' });
+      await S.say('grandma', 'Come in, out of the cold.', { actor: N, expr: 'happy' });
       await h2;
       await n2;
       R.setDoor(0);
@@ -193,9 +193,9 @@ export class Story {
       g.effects.frost(H.pos.x, H.pos.y + 0.3, H.pos.z, 6);
       await S.cam(L(-0.35, 1.65, 0.4), L(-0.35, 1.15, 2.8), 0.8, 46);
       await S.faceShot(H, { dist: 2.3, side: -0.6, dur: 0.8 });
-      await S.say('hankBuried', "Oh... it's *warm* in here. And it smells like... cinnamon? I think? I can't actually smell.", { actor: H, expr: 'happy' });
+      await S.say('hankBuried', "Oh... it's *warm* in here.", { actor: H, expr: 'happy' });
       await S.faceShot(N, { dist: 2.3, side: 0.6, dur: 0.8 });
-      await S.say('grandma', "Make yourself at home, dear. Have a look around. Then sit yourself down on the sofa by the fire, and I'll fix you something warm.", { actor: N, expr: 'happy' });
+      await S.say('grandma', 'Look around, dear. Then sit by the fire.', { actor: N, expr: 'happy' });
       // she heads for the stove; a look across the room at the fire
       const nk = N.walkTo([L(-1.9, 0, 0.2), L(-3.75, 0, -2.35)], 1.1, 'walk');
       await S.cam(L(-1.05, 2.35, 3.35), L(3.0, 0.9, -1.4), 3.2, 52);
@@ -211,7 +211,6 @@ export class Story {
     return I.freeRoam({
       at: { x: 0.25, z: 3.1, yaw: Math.PI },
       hint: 'Sit on the sofa by the fire',
-      toast: "Nana's cabin! Smells like cocoa and wool. I'll have a look around, then sit on the sofa by the fire.",
     });
   }
   // 3. on the sofa, under Harold's quilt
@@ -242,7 +241,7 @@ export class Story {
       S.sfx('brrr', { volume: 0.5 });
       g.effects.frost(H.pos.x, H.pos.y + 0.6, H.pos.z, 6);
       const walk = N.walkTo([L(-1.6, 0, -2.9), L(0.4, 0, -3.15), L(2.6, 0, -3.05), L(2.75, 0, -2.6)], 1.15, 'carry');
-      await S.say('grandma', 'There we are. Now, let me get you properly warm.', { actor: N, expr: 'happy' });
+      await S.say('grandma', "Let's get you warm, dear.", { actor: N, expr: 'happy' });
       await walk;
       N.faceTowards(H.pos.x, H.pos.z);
       N.play('offer');
@@ -267,13 +266,13 @@ export class Story {
       H.play('sit', 'happy');
       N.play('idle');
       await S.faceShot(H, { dist: 2.5, side: -0.6, up: 0.3, dur: 0.7, fov: 42 });
-      await S.say('grandma', 'Harold\'s quilt. Forty-one patches, one for every winter we had together. Sit close, dear. Get that fire into you.', { actor: N, expr: 'happy' });
+      await S.say('grandma', "Harold's quilt. Forty-one winters of patches.", { actor: N, expr: 'happy' });
       H.play('sitShiver', 'scared');
       S.sfx('jaw_chatter', { volume: 0.6 });
-      await S.say('hankBuried', "Th-thank you, ma'am. My t-teeth won't stop chattering.", { actor: H, expr: 'scared' });
+      await S.say('hankBuried', "Th-thank you, ma'am.", { actor: H, expr: 'scared' });
       await S.cam(L(0.6, 2.0, -1.9), L(2.75, 1.25, -2.6), 0.8, 42);
       N.play('talk');
-      await S.say('grandma', "Marguerite, dear. Everyone calls me Nana. Here, these were my Harold's. His good sweater, and his lucky toque.", { actor: N, expr: 'neutral' });
+      await S.say('grandma', "Call me Nana. Here: Harold's sweater and his lucky toque.", { actor: N, expr: 'neutral' });
       N.play('hug');
       await S.wait(0.6);
       // outfit change, ta-da!
@@ -289,13 +288,11 @@ export class Story {
       N.play('idle');
       await S.wait(0.5);
       await S.faceShot(H, { dist: 2.5, side: -0.6, up: 0.3, dur: 0.6, fov: 42 });
-      await S.say('hank', "Oh... oh, that's *cozy.*", { actor: H, expr: 'happy' });
-      await S.cam(L(0.6, 2.0, -1.9), L(2.75, 1.25, -2.6), 0.7, 42);
-      await S.say('grandma', 'Harold was a hunter. A terrible one. Fifty years and he never hit a single thing. Too soft-hearted.', { actor: N, expr: 'laugh' });
+      await S.say('hank', "Oh... that's *cozy.*", { actor: H, expr: 'happy' });
       // the famous cocoa
       N.play('offer');
       await S.cam(L(4.05, 1.55, -0.55), L(2.35, 1.0, -1.95), 1.0, 44);
-      await S.say('grandma', 'And this... is my famous hot cocoa. Fifty years, and not one complaint.', { actor: N, expr: 'smug' });
+      await S.say('grandma', 'And this is my famous hot cocoa.', { actor: N, expr: 'smug' });
       N.play('idle');
       // the first sip... straight through the ribs
       H.play('sitSip');
@@ -306,22 +303,15 @@ export class Story {
       for (let k = 0; k < 18; k++) g.effects.ps.spawn({ x: H.pos.x + (Math.random() - 0.5) * 0.12, y: H.pos.y + 0.8, z: H.pos.z + (Math.random() - 0.5) * 0.12, vy: -0.4, life: 0.9, size: 0.06, sprite: P.drop, color: [0.45, 0.24, 0.12], gravity: 9, drag: 0.2, ground: true, rest: 0.6 });
       await S.wait(1.0);
       N.react('gasp');
-      await S.say('grandma', '...Oh. Oh dear. That quilt has seen worse. Harold once spilled a whole moose stew on it.', { actor: N, expr: 'surprised' });
       H.play('sit', 'happy');
-      await S.say('hank', "...I can't taste a thing. But it's *warm.* I can feel it all the way down.", { actor: H, expr: 'happy' });
-      await S.say('hank', '...And all the way out, apparently.', { actor: H, expr: 'sheepish' });
+      await S.say('hank', "...Can't taste it. But it's *warm.* All the way through.", { actor: H, expr: 'sheepish' });
       N.react('laugh');
-      await S.cam(L(4.05, 1.55, -0.55), L(2.35, 1.0, -1.95), 0.8, 44);
-      await S.say('grandma', 'Now then. Tell me: can you feel the cold, dear?', { actor: N, expr: 'neutral' });
-      await S.say('hank', 'Not anymore. Not... really anything, actually.', { actor: H, expr: 'neutral' });
       await S.cam(L(0.6, 2.0, -1.9), L(2.75, 1.25, -2.6), 0.8, 40);
-      await S.say('grandma', 'Perfect. Then I have a proposition for you.', { actor: N, expr: 'smug' });
-      await S.say('grandma', "My cocoa keeps half of Maple Cove going through the autumn, and my knees aren't what they used to be.", { actor: N, expr: 'neutral' });
-      const c = await S.say('grandma', "How would you like a job? Delivering cocoa. Harold's old bicycle is just sitting in the garage.", { actor: N, expr: 'happy', choices: ["I'd love to!", 'Do I get paid?', 'Will people scream at me?'] });
-      if (c === 1) await S.say('grandma', 'Of course you do! And tips, if it arrives hot.', { actor: N, expr: 'laugh' });
-      else if (c === 2) await S.say('grandma', "...Probably. At first. They'll come around. Everybody loves cocoa.", { actor: N, expr: 'sheepish' });
+      const c = await S.say('grandma', "Fancy a job, dear? Delivering my cocoa on Harold's old bike.", { actor: N, expr: 'happy', choices: ["I'd love to!", 'Do I get paid?', 'Will people scream?'] });
+      if (c === 1) await S.say('grandma', 'Of course! Tips if it arrives hot.', { actor: N, expr: 'laugh' });
+      else if (c === 2) await S.say('grandma', "...At first. Then they'll love you.", { actor: N, expr: 'sheepish' });
       else await S.say('grandma', 'Wonderful!', { actor: N, expr: 'laugh' });
-      await S.say('grandma', 'We start at sunrise. Sleep well, dear. ...Do you sleep?', { actor: N, expr: 'surprised' });
+      await S.say('grandma', 'We start at sunrise. ...Do you sleep?', { actor: N, expr: 'surprised' });
       H.react('headpop');
       await S.faceShot(H, { dist: 2.5, side: -0.6, up: 0.3, dur: 0.6, fov: 42 });
       await S.say('hank', "Oh, I *sleep.* That's how I got into this mess.", { actor: H, expr: 'sheepish' });
@@ -355,7 +345,6 @@ export class Story {
       g.parkBike();
       g.rider.visible = false;
       S.music('cabin');
-      g.ui.pop(`Day ${day}! ${weatherLine(g.state.weather, day)}`, { expr: 'happy', key: 'day' });
       S.sfx('day_start');
       const b = BREAKFAST[day];
       // breakfast on the table by the front windows, steaming hot (Hank's plate and Nana's cocoa)
@@ -422,20 +411,19 @@ export class Story {
         }
       } else {
         const gags = [
-          ['grandma', 'I made soup. Through a straw. Into a thermos. Taped to your chest.', 'determined'],
-          ['grandma', "I've given up on breakfast, dear. Have a hug instead.", 'happy'],
-          ['hank', 'Morning, Nana! I dreamt I could taste things. It was terrifying.', 'happy'],
-          ['grandma', 'The raccoons have started lining up outside at breakfast time. They know.', 'smug'],
-          ['grandma', 'Mrs. Agnes asked if you were seeing anyone. I told her you were seeing *everyone*. Twice. Through your stomach.', 'laugh'],
+          ['grandma', 'Soup. Through a straw. Taped to your chest.', 'determined'],
+          ['grandma', 'No breakfast today, dear. Have a hug.', 'happy'],
+          ['hank', 'I dreamt I could taste things. Terrifying.', 'happy'],
+          ['grandma', 'The raccoons line up at breakfast now. They know.', 'smug'],
         ];
         const gg = gags[day % gags.length];
         await S.say(gg[0], gg[1], { expr: gg[2], actor: gg[0] === 'hank' ? H : N });
       }
       if (day === 2) {
         await S.faceShot(N, { dist: 2.0, side: 0.6, dur: 0.6 });
-        await S.say('grandma', 'Oh! Harold kept his riding notes in the garage, dear. Wheelies, hops, all sorts of nonsense. Have a read when you pass by.', { actor: N, expr: 'happy' });
+        await S.say('grandma', "Harold's riding notes are in the garage, dear.", { actor: N, expr: 'happy' });
       }
-      await S.say('grandma', day === 1 ? 'Now, the orders are pinned on the board. Two to start — Gus and Marie-Claude, down in Maple Cove.' : "Today's orders are on the board, dear. Bundle up! ...Out of habit.", { actor: N, expr: 'neutral' });
+      if (day === 1) await S.say('grandma', 'Two orders to start: Gus and Marie-Claude, in Maple Cove.', { actor: N, expr: 'neutral' });
       await S.fade(1, 0.5);
       I.stage(false);
       g.villagers.setVisible('grandma', true);
@@ -461,16 +449,15 @@ export class Story {
       await S.cam(V(-139.3, y + 1.6, 91.5), V(-144.8, y + 0.8, 94.5), 0, 45);
       await S.say('grandma', "Ta-da! Harold's old roadster. He called her *Bessie.*", { actor: N, expr: 'happy' });
       await S.say('hank', "She's... beautiful.", { actor: H, expr: 'happy' });
-      await S.say('grandma', 'She\'s held together with hope and duct tape. Harold always said: "just pedal, and don\'t think about it."', { actor: N, expr: 'laugh' });
-      await S.say('grandma', "Maple Cove is down the road to the east, past the covered bridge. Gus is hosting the pumpkin carving contest on Main Street. Mind his temper.", { actor: N, expr: 'neutral' });
+      await S.say('grandma', 'Maple Cove is east, past the bridge. Mind Gus\'s temper.', { actor: N, expr: 'neutral' });
       await S.say('hank', 'Got it. East. Bridge. Temper.', { actor: H, expr: 'determined' });
       g.villagers.setVisible('grandma', true);
       g.rider.visible = true;
       this.flag('bike', true);
     }).then(() => {
-      if (g.touch?.on) g.ui.pop('Right! Left thumb steers. Right thumb goes round and round the *crank* to pedal: no spinning, no going. *HOP* to hop, *TRICK* to show off.', { expr: 'happy', ms: 8000 });
-      else g.ui.pop('Right! [W] [S] [W] [S]: one foot then the other turns the pedals. [A][D] steer, hold [Space] and let go to hop, [Q] wheelie, [Shift] drift.', { expr: 'happy', ms: 9000 });
-      g.ui.pop('And I just follow the little cocoa cups on the compass. Easy!', { expr: 'sparkle' });
+      // (the one riding lesson, once)
+      if (g.touch?.on) g.ui.pop('Left thumb steers, right thumb spins the *crank*. Follow the cups!', { expr: 'happy', ms: 6000, prio: 'high' });
+      else g.ui.pop('[W] [S] in turn to pedal, [A][D] steer, [Space] hop. Follow the cups!', { expr: 'happy', ms: 7000, prio: 'high' });
     });
   }
 
@@ -723,16 +710,15 @@ export class Story {
       if (gus) {
         await S.say('gus', "...Well I'll be.", { actor: gus, expr: 'surprised' });
         await S.faceShot(gus, { dist: 2.2, side: 0.7, dur: 0.5 });
-        await S.say('gus', "A skeleton. Handing out Marguerite's cocoa. At MY contest.", { actor: gus, expr: 'grumpy' });
+        await S.say('gus', 'A skeleton. At MY contest.', { actor: gus, expr: 'grumpy' });
         await S.frame(H, [0.7 * side, 1.0, 2.4], 0.4, 40, 1.0);
         H.play('offer', 'sheepish');
-        await S.say('hank', "Nana sent extra! And, uh... I think this one's yours. Extra hot?", { actor: H, expr: 'sheepish' });
         const o = g.orders.orderFor('gus');
+        if (o) await S.say('hank', "This one's yours. Extra hot.", { actor: H, expr: 'sheepish' });
         if (o) {
-          const r = g.orders.deliver(o);
+          g.orders.deliver(o);
           g.effects.coins(H.pos.x, H.pos.y + 1.2, H.pos.z, 10);
           S.sfx('cash');
-          g.ui.pop(`*$${r.pay}*${r.tip ? ` and a *$${r.tip}* tip` : ''} from Gus! I think he almost smiled.`, { expr: 'happy' });
         }
         H.play('idle', 'happy');
         gus.play('sip', 'happy');
@@ -740,11 +726,11 @@ export class Story {
         await S.wait(1.3);
         await S.faceShot(gus, { dist: 2.2, side: 0.7, dur: 0.5 });
         gus.play('hostPoint', 'smug');
-        await S.say('gus', "Hmph. Well I'll be. Any skeleton who brings cocoa can carve at my contest.", { actor: gus, expr: 'smug' });
+        await S.say('gus', 'Hmph. Any skeleton who brings cocoa can carve.', { actor: gus, expr: 'smug' });
         await S.frame(H, [0.7 * side, 1.0, 2.4], 0.4, 40, 1.0);
         H.play('cheer', 'sparkle');
         S.sfx('bone_rattle', { volume: 0.5 });
-        await S.say('hank', 'Really?! I used to whittle! Mostly canoe paddles!', { actor: H, expr: 'sparkle' });
+        await S.say('hank', 'Really?! I used to whittle!', { actor: H, expr: 'sparkle' });
         // through the megaphone, to the whole street: and the street cheers
         gus.faceTowards(C.x, C.z);
         gus.play('announce', 'laugh');
@@ -756,7 +742,7 @@ export class Story {
         gus.faceTowards(H.pos.x, H.pos.z);
         gus.play('hostWalk', 'neutral');
         await S.faceShot(gus, { dist: 2.2, side: 0.7, dur: 0.5 });
-        await S.say('gus', 'Pumpkin, knife, ninety seconds. And I got a request for ya. Go on, bones. Impress me.', { actor: gus, expr: 'neutral' });
+        await S.say('gus', 'Ninety seconds, bones. Impress me.', { actor: gus, expr: 'neutral' });
       }
       V2.force('gus', Math.max(V2.trustOf('gus'), AFTER_COCOA.gus));
       this.flag('carveIntro', true);
@@ -778,8 +764,8 @@ export class Story {
     this.spawnStray();
     if (rain) {
       g.world.atmosphere.setWeather('rain');
-      g.ui.pop('Is that drizzle? ...And is that a little *cat* trotting along the road home?', { expr: 'worried', ms: 4500 });
-    } else g.ui.pop('That little stray cat is still wandering by the road home...', { expr: 'worried', ms: 4000 });
+      g.ui.pop('Is that a little *cat* on the road home?', { expr: 'worried', ms: 3600 });
+    }
   }
   spawnStray(at) {
     this.stray?.remove();
@@ -827,16 +813,15 @@ export class Story {
         cat.pose('sit', 'blink');
         S.sfx('purr');
         await S.wait(0.6);
-        await S.say('hank', "Well, hello again, little shadow. You've been following me, huh?", { actor: H, expr: 'happy' });
+        await S.say('hank', 'Hello again, little shadow.', { actor: H, expr: 'happy' });
         S.sfx('meow', { pitch: 1.2 });
         cat.pose('sit', 'meow');
         await S.say('cat', 'Mrrp!', { expr: 'happy' });
-        await S.say('hank', 'Lost too? Yeah. I know the feeling.', { actor: H, expr: 'neutral' });
       } else {
         cat.pose('sit');
         S.sfx('meow_sad');
         await S.wait(0.8);
-        await S.say('hank', 'Hey there, little buddy. You lost too?', { actor: H, expr: 'neutral' });
+        await S.say('hank', 'Hey, little buddy. Lost too?', { actor: H, expr: 'neutral' });
         cat.pose('arch', 'meow');
         cat.hopT = 0.4;
         S.sfx('cat_hiss');
@@ -844,7 +829,7 @@ export class Story {
         await S.say('cat', 'HSSSSSSS!', { expr: 'scared' });
         await S.say('hank', 'Yeah... I get that a lot.', { actor: H, expr: 'sheepish' });
         H.play('offer', 'happy');
-        await S.say('hank', "I've got one marshmallow. Nana packed an extra. Just in case I... figured out eating.", { actor: H, expr: 'happy' });
+        await S.say('hank', 'Marshmallow?', { actor: H, expr: 'happy' });
         cat.pose('sit');
         S.emote('question', V(c.x, cy + 0.75, c.z), 1.4);
         await S.wait(1.4);
@@ -874,7 +859,7 @@ export class Story {
       this.despawnStray();
       g.world.atmosphere.setWeather('overcast');
       g.save();
-    }).then(() => g.ui.pop("*Poutine* is riding in my basket now. Purr-fect!", { expr: 'love' }));
+    });
   }
 
   // ---------------------------------------------------------------- deliveries
@@ -893,28 +878,25 @@ export class Story {
       // homecoming after the first day's rescue
       if (st.flags.catRescued && !st.flags.catIntro) {
         st.flags.catIntro = true;
-        await g.ui.say('grandma', 'Oh! You brought a friend! Poor little thing, she\'s soaked through.', { expr: 'surprised' });
-        await g.ui.say('hank', "Her name's Poutine.", { expr: 'happy' });
+        await g.ui.say('hank', "Nana, meet Poutine.", { expr: 'happy' });
         await g.ui.say('grandma', 'Of course it is. Welcome home, Poutine.', { expr: 'laugh' });
-        await g.ui.say('cat', 'Mrrp!', { expr: 'happy' });
       }
       const found = KEEPSAKES.filter((k) => st.keepsakes[k.id] === 'found');
       if (found.length) {
-        await g.ui.say('hank', `Nana, I found ${found.length > 1 ? 'some things' : 'something'} of Harold's out there...`, { expr: 'happy' });
         for (const k of found) {
           st.keepsakes[k.id] = 'given';
           st.money += 20;
           g.sound.play('collect');
+          g.effects.coins(N.pos.x, N.pos.y + 1.2, N.pos.z, 6);
           await g.ui.say('grandma', LORE[k.id], { expr: 'happy' });
-          g.ui.pop(`Nana gave me *$20* for the ${k.name}. I'd blush if I had cheeks.`, { expr: 'sheepish' });
         }
         const given = KEEPSAKES.filter((k) => st.keepsakes[k.id] === 'given').length;
         if (given === KEEPSAKES.length && !st.flags.allKeepsakes) {
           st.flags.allKeepsakes = true;
-          await g.ui.say('grandma', "That's... all of them. Every last thing he wandered off with.", { expr: 'cry' });
-          await g.ui.say('grandma', 'He would have liked you, Hank. Very much.', { expr: 'happy' });
+          await g.ui.say('grandma', "That's all of them. He'd have liked you, Hank.", { expr: 'cry' });
           st.money += 100;
-          g.ui.pop('Nana slipped me *$100* and a very long hug. My ribs creaked.', { expr: 'love' });
+          g.effects.hearts(N.pos.x, N.pos.y + 1.8, N.pos.z, 8);
+          g.effects.coins(N.pos.x, N.pos.y + 1.2, N.pos.z, 12);
         }
         g.save();
       }
@@ -926,7 +908,7 @@ export class Story {
       opts.push(['Need anything from the store?', 'shop']);
       opts.push(['How are you, Nana?', 'chat']);
       opts.push(['See you later!', 'bye']);
-      const greet = pending === 0 && board === 0 ? 'All done for today? Wonderful work, dear.' : board > 0 ? 'Back for more? There are still orders on the board.' : 'Hello, dear! Remember — hot cocoa makes happy customers.';
+      const greet = pending === 0 && board === 0 ? 'All done? Well done, dear.' : board > 0 ? 'More orders on the board.' : 'Hello, dear!';
       const ch = await g.ui.say('grandma', greet, { expr: 'happy', choices: opts.map((o) => o[0]) });
       const what = opts[ch][1];
       if (what === 'board') {
@@ -934,7 +916,6 @@ export class Story {
         // the cups go out to Bessie's crate, so out of the cabin first
         if (g.orders.carried().length && g.interior?.active) await g.interior.leave();
         await g.loadCargo?.();
-        if (g.orders.carried().length) g.ui.pop(`${g.orders.carried().length} hot cocoa${g.orders.carried().length > 1 ? 's' : ''} packed. Go go go!`, { expr: 'sparkle', key: 'packed' });
         g.refillBoosts();
       } else if (what === 'sleep') {
         await this.endDay();
@@ -942,21 +923,18 @@ export class Story {
       } else if (what === 'shop') {
         const low = Object.entries(st.pantry || {}).filter(([, n]) => n < 2).map(([k]) => k);
         const names = { milk_bottle: 'milk', cocoa_powder: 'cocoa powder', sugar: 'sugar', marshmallows: 'marshmallows', maple_syrup: 'maple syrup', cinnamon: 'cinnamon', mint: 'fresh mint', pumpkin: 'a pumpkin', nutmeg: 'nutmeg', cream: 'cream', coffee_beans: 'coffee beans', dark_chocolate: 'dark chocolate' };
-        if (!low.length) await g.ui.say('grandma', "The pantry's full, dear! But thank you for asking.", { expr: 'happy' });
+        if (!low.length) await g.ui.say('grandma', "The pantry's full, dear!", { expr: 'happy' });
         else {
-          await g.ui.say('grandma', `Oh, would you? We're low on ${low.slice(0, 4).map((k) => names[k] || k).join(', ')}. Mo at Moose & Goose will sort you out. Here's my list!`, { expr: 'happy' });
+          await g.ui.say('grandma', `We're low on ${low.slice(0, 4).map((k) => names[k] || k).join(', ')}. Mo will sort you out!`, { expr: 'happy' });
           g.quests.q('groceries').state = 'active';
           g.sound.play('quest_new');
-          g.ui.pop("Nana's list is pinned to my note. Moose & Goose is down on the boardwalk!", { expr: 'happy' });
         }
       } else if (what === 'chat') {
         const chats = [
-          ['grandma', 'My knees are singing the song of their people today. Thank you for running about for me.', 'happy'],
-          ['grandma', 'Harold used to ride that bike to the lookout every evening to watch the sunset. Take a look sometime.', 'neutral'],
-          ['grandma', 'If you find anything of Harold\'s out there, bring it home, would you? He was forever losing things.', 'sad'],
-          ['grandma', 'Big Lou at the sawmill swears you owe him five dollars. I swear you don\'t. Let\'s not tell him you\'re back... oh, too late.', 'laugh'],
-          ['grandma', 'There\'s a covered bridge, a beaver dam, a lighthouse... Maple Hollow is small, but it\'s full of corners.', 'happy'],
-          ['grandma', 'The ramps in the woods? Harold built those. "For the deer," he said. The deer have never used them.', 'smug'],
+          ['grandma', 'My knees are singing today. Thank you, dear.', 'happy'],
+          ['grandma', 'Harold watched the sunset from the lookout. Go see.', 'neutral'],
+          ['grandma', "Find anything of Harold's out there? Bring it home.", 'sad'],
+          ['grandma', 'The ramps in the woods? Harold built them. "For the deer."', 'smug'],
         ];
         const c = chats[Math.floor(Math.random() * chats.length)];
         await g.ui.say(c[0], c[1], { expr: c[2] });
@@ -1032,7 +1010,7 @@ export class Story {
       H.play('yawn', 'sleepy');
       S.sfx('bone_rattle', { volume: 0.3 });
       await S.faceShot(H, { dist: 2.4, side: 0.5, dur: 0.8, fov: 42 });
-      await S.say('hank', first ? "*Yaaawn.* ...Huh. I didn't know skeletons could get sleepy. My bones feel all heavy." : pick(['*Yaaawn.* Bedtime already? My knees are clacking.', '*Yaaawn.* I pedalled so much today my femurs are humming.', '*Yaaawn.* ...Sorry, Nana. My jaw nearly came off that time.']), { actor: H, expr: 'sleepy' });
+      await S.say('hank', first ? '*Yaaawn.* Skeletons get sleepy?' : pick(['*Yaaawn.*', '*Yaaawn.* My femurs are humming.']), { actor: H, expr: 'sleepy' });
       H.play('idle');
       await Promise.race([nw, S.wait(3)]);
       if (N.path) { N.path = null; N.pos.copy(L(2.75, 0, 0.1)); }
@@ -1041,7 +1019,7 @@ export class Story {
       H.lookAt(N);
       N.lookAt(H);
       await S.cam(L(1.0, 1.75, -0.3), L(2.85, 1.05, -0.45), 0.8, 44);
-      await S.say('grandma', first ? "Of course you're sleepy, dear, you've been up and down every hill in Maple Cove. Here: Harold's old flannel pajamas. Freshly washed. Mostly." : 'Your pajamas have been warming by the fire, dear. In you go.', { actor: N, expr: 'happy' });
+      await S.say('grandma', first ? "Harold's flannel pajamas, dear. Freshly washed. Mostly." : 'In you go, dear.', { actor: N, expr: 'happy' });
       // she hands them over...
       N.play('offer');
       await S.wait(0.4);
@@ -1049,8 +1027,7 @@ export class Story {
       H.hold(bundle, 'R');
       H.play('hold', 'surprised');
       N.play('idle');
-      if (first) await S.say('hank', "Pajamas? For me? I haven't worn pajamas since... well, since I had skin.", { actor: H, expr: 'surprised' });
-      else await S.wait(0.5);
+      await S.wait(0.5);
       // ...and *poof*: striped flannel, a nightcap and slippers
       S.sfx('flash_pop');
       S.sfx('magic', { volume: 0.6 });
@@ -1065,14 +1042,11 @@ export class Story {
       g.effects.confetti?.(H.pos.x, H.pos.y + 1.4, H.pos.z, 12);
       await S.wait(0.8);
       await S.faceShot(H, { dist: 2.4, side: 0.5, up: 0.2, dur: 0.6, fov: 42 });
-      await S.say('hank', first ? 'Ooh! Striped flannel! And a nightcap with a pompom! I look like a very distinguished candy cane.' : pick(['Ahh, flannel. Best part of the day.', 'Nightcap: on. Pompom: magnificent.', "Snug as a bug in a... well, a bug's skeleton."]), { actor: H, expr: 'happy' });
-      if (first) {
-        N.react('laugh');
-        await S.cam(L(1.0, 1.75, -0.3), L(2.85, 1.05, -0.45), 0.6, 44);
-        await S.say('grandma', "Harold wore those every winter for forty years. He'd be tickled they're keeping somebody's bones warm again.", { actor: N, expr: 'laugh' });
-      }
+      if (first) await S.say('hank', 'A nightcap with a pompom!', { actor: H, expr: 'happy' });
+      else await S.wait(0.6);
+      if (first) N.react('laugh');
       await S.faceShot(H, { dist: 2.3, side: 0.5, up: 0.2, dur: 0.5, fov: 42 });
-      await S.say('hank', first ? 'Goodnight, Nana. And... thank you. For all of it.' : 'Goodnight, Nana.', { actor: H, expr: 'happy' });
+      await S.say('hank', first ? 'Goodnight, Nana. Thank you.' : 'Goodnight, Nana.', { actor: H, expr: 'happy' });
       this.flag('pajamas', true);
       // he stretches out on the sofa, head on the armrest by the lamp
       await S.cam(L(3.95, 1.85, -0.35), L(2.15, 0.62, -1.45), 0, 46);
@@ -1113,7 +1087,8 @@ export class Story {
       const qt0 = g.time;
       S.every(() => void (quilt.scale.y = 1 + Math.sin((g.time - qt0) * 1.4) * 0.015));
       await S.wait(0.6);
-      await S.say('grandma', first ? "Sleep tight, dear. Don't let the bedbugs bite. ...Not that there's much left to bite." : pick(['Sleep tight, dear. Sweet dreams.', "Night night. I'll have breakfast waiting. For the squirrels, mostly.", 'Goodnight, Hank. Mind you wake up this time.']), { actor: N, expr: first ? 'laugh' : 'happy' });
+      if (first) await S.say('grandma', 'Sleep tight, dear. Mind you wake up.', { actor: N, expr: 'laugh' });
+      else await S.wait(0.6);
       // and the lamps go down
       N.play('idle');
       const nl = N.walkTo([L(2.5, 0, -0.1)], 0.8, 'walk');
@@ -1149,33 +1124,31 @@ export class Story {
       g.villagers.setVisible('grandma', false);
       const y = g.bike.pos.y;
       await S.cam(V(-138.8, y + 1.8, 91), V(-144.3, y + 0.9, 95), 0, 46);
-      await S.say('grandma', "Look at you two. Bessie hasn't been ridden like that since Harold was courting me. He'd be so proud of you, dear.", { actor: N, expr: 'cry' });
+      await S.say('grandma', 'Look at you two. Harold would be so proud.', { actor: N, expr: 'cry' });
       const R = S.actor('reaper', -141.3, 92.5, -0.8, 'float');
       R.floatY = 0.25;
       S.sfx('reaper');
       g.effects.magic(R.pos.x, R.pos.y + 1, R.pos.z, 20, [0.5, 0.4, 0.8]);
       await S.frame(R, [2.4, 0.8, -3], 1, 42, 1.1);
-      await S.say('reaper', 'Knock knock! Good news, Hank! The paperwork finally came through.', { actor: R, expr: 'happy' });
+      await S.say('reaper', 'Knock knock! Your paperwork came through, Hank.', { actor: R, expr: 'happy' });
       R.play('clipboard');
-      await S.say('reaper', "You can rest in peace now. Properly. Lovely pine box, soft pillow, the works.", { actor: R, expr: 'smug' });
+      await S.say('reaper', 'You can rest in peace now. Properly.', { actor: R, expr: 'smug' });
       await S.frame(H, [1.6, 1, 2.6], 0.6, 40, 1);
-      await S.say('hank', "That's... very kind. But...", { actor: H, expr: 'neutral' });
-      const c = await S.say('hank', 'Could I maybe get an extension? I\'ve got deliveries.', { actor: H, expr: 'sheepish', choices: ['"I\'ve got deliveries."', '"Poutine would miss me."', '"Nana needs me."'] });
+      const c = await S.say('hank', 'Could I get an extension?', { actor: H, expr: 'sheepish', choices: ['"I\'ve got deliveries."', '"Poutine would miss me."', '"Nana needs me."'] });
       void c;
       await S.frame(R, [2.2, 0.8, -2.6], 0.5, 40, 1.1);
       R.showEmote('question', 2);
-      await S.say('reaper', '...Is that Marguerite\'s cocoa I smell?', { actor: R, expr: 'surprised' });
+      await S.say('reaper', "...Is that Marguerite's cocoa?", { actor: R, expr: 'surprised' });
       N.play('offer', 'happy');
       await S.say('grandma', 'Fresh pot. Maple marshmallow.', { actor: N, expr: 'smug' });
       R.play('sip');
       S.sfx('sip');
       await S.wait(1.4);
-      await S.say('reaper', '...Fine. FINE. Extension granted. Indefinitely.', { actor: R, expr: 'happy' });
-      await S.say('reaper', 'But put me down for a cup every Friday. Extra hot.', { actor: R, expr: 'laugh' });
+      await S.say('reaper', '...Fine. Extension granted. A cup every Friday!', { actor: R, expr: 'happy' });
       g.effects.confetti(H.pos.x, H.pos.y + 2, H.pos.z, 60);
       S.sfx('upgrade');
       await S.cam(V(-133.8, y + 6, 86), V(-144.8, y + 1, 95), 3, 50);
-      await S.say('hank', 'The end? Nah. The end... *of the beginning!* Keep the cocoa coming!', { actor: H, expr: 'laugh' });
+      await S.say('hank', 'The end? Nah. Keep the cocoa coming!', { actor: H, expr: 'laugh' });
       await S.wait(1.5);
       g.villagers.setVisible('grandma', true);
       g.rider.visible = true;
@@ -1189,7 +1162,7 @@ export class Story {
   onMastery(total, max, need = 20) {
     if (total < need || this.flag('ending') || this.flag('masteryReady')) return;
     this.flag('masteryReady', true);
-    this.g.ui.pop('Hank, dear! Come round to the garage, I want to see you *ride*!', { who: 'grandma', expr: 'happy', ms: 5000 });
+    this.g.ui.pop('Hank, dear! Come show me at the garage!', { who: 'grandma', expr: 'happy', ms: 4000, prio: 'high' });
   }
 
   // ---------------------------------------------------------------- world triggers
@@ -1250,15 +1223,11 @@ export class Story {
     const hr = g.world.atmosphere.hour;
     if (hr > 20.5 && !this.nanaCalled) {
       this.nanaCalled = true;
-      g.ui.pop("Haaank! It's getting dark, dear! Come home!", { who: 'grandma', expr: 'worried', ms: 4500 });
+      g.ui.pop('Haaank! Home before dark, dear!', { who: 'grandma', expr: 'worried', ms: 3600, prio: 'high' });
     }
     if (this.pendingEnding && g.mode === 'ride') {
       this.pendingEnding = false;
       this.ending();
     }
   }
-}
-
-function weatherLine(w, day) {
-  return { clear: 'Crisp and clear', breezy: 'Breezy — leaves everywhere', misty: 'Misty morning', overcast: 'Grey and gentle', rain: 'Rainy day — cocoa weather', snow: 'First snow!' }[w] || '';
 }

@@ -252,7 +252,7 @@ export class Contest {
           a.react(kid ? 'yay' : 'bounce');
           // ...and sometimes that one's finished: the whole street cheers
           if (Math.random() < 0.25) { b.say(pick(LINES.finished), 1800); this.cheer(1, { except: b }); }
-          else if (Math.random() < 0.5) b.say(pick(LINES[s.role]), 2000);
+          else if (Math.random() < 0.15) b.say(pick(LINES[s.role]), 2000);
           await w(rand(1.6, 2.4));
         } else if (r < 0.75) {
           // a word with the neighbour at the same table
@@ -269,7 +269,7 @@ export class Contest {
         } else {
           a.play('idle', 'happy');
           a.react(kid ? pick(['yay', 'spin', 'laugh']) : 'laugh');
-          if (kid && Math.random() < 0.4) b.say(pick(LINES.kid), 1800);
+          if (kid && Math.random() < 0.15) b.say(pick(LINES.kid), 1800);
           await w(1.4);
         }
       } else if (s.role === 'watch') {
@@ -278,7 +278,7 @@ export class Contest {
         const r = Math.random();
         if (r < 0.3) a.react('nod');
         else if (r < 0.5) { a.react('clap'); this.sfx('applause', a.pos, 0.18); }
-        else if (r < 0.65) b.say(pick(LINES.watch), 2200);
+        else if (r < 0.55) b.say(pick(LINES.watch), 2200);
         await w(1.2);
       } else {
         // cheering from the kerb
@@ -287,7 +287,7 @@ export class Contest {
         const r = Math.random();
         if (r < 0.35) { a.react('clap'); this.sfx('applause', a.pos, 0.15); }
         else if (r < 0.6) a.react('laugh');
-        else if (r < 0.75) b.say(pick(LINES.cheer), 2000);
+        else if (r < 0.68) b.say(pick(LINES.cheer), 2000);
         else a.react('hi');
         await w(1.4);
       }
@@ -309,7 +309,7 @@ export class Contest {
         a.face(r.yaw);
         a.play('judge', 'neutral');
         this.sfx('pencil_scribble', a.pos, 0.35);
-        if (Math.random() < 0.6) b.say(pick(LINES.judge), 2200);
+        if (Math.random() < 0.25) b.say(pick(LINES.judge), 2200);
         const near = this.present().filter((o) => o !== b && hyp(o.a.pos.x - r.x, o.a.pos.z - r.z) < 2.6);
         for (const o of near) {
           o.a.react('bounce');
@@ -415,7 +415,7 @@ export class Contest {
     } else {
       const roll = Math.random();
       if (roll < 0.4) { a.play('hostPoint', 'happy'); b.say(pick(LINES.look), 2400); }
-      else if (roll < 0.75) { a.react('nod'); b.say(pick(LINES.hum), 1800); }
+      else if (roll < 0.75) a.react('nod');
       else a.react('nod');
     }
     a.say(1);
@@ -476,15 +476,15 @@ export class Contest {
       if (kid) {
         a.react('yay');
         g.wait(0.95).then(() => a.react(level > 1 && Math.random() < 0.5 ? 'spin' : 'yay'));
-        if (Math.random() < 0.6) say(pick(KID_HOORAY), 1500);
+        if (Math.random() < 0.25) say(pick(KID_HOORAY), 1500);
         return;
       }
-      if (clap) { a.react('clap'); if (Math.random() < 0.3) say(pick(HOORAY), 1500); return; }
+      if (clap) { a.react('clap'); if (Math.random() < 0.12) say(pick(HOORAY), 1500); return; }
       const prev = a.anim, pose = pick(['cheerFlag', 'cheerFlag2', 'cheer', 'cheerFlag']);
       a.play(pose);
       a.tempExpr(pick(['excited', 'happy', 'laugh']), 2.4);
       g.wait(level > 1 ? 2.6 : 1.8).then(() => { if (a.anim === pose) a.play(prev); });
-      if (Math.random() < 0.45) say(pick(HOORAY), 1600);
+      if (Math.random() < 0.18) say(pick(HOORAY), 1600);
     });
   }
 

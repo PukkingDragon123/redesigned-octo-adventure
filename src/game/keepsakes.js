@@ -56,7 +56,7 @@ export class Keepsakes {
     g.effects.magic(it.x, it.y + 1, it.z, 26, [1, 0.9, 0.5]);
     g.effects.confetti(it.x, it.y + 1, it.z, 20);
     g.sound.play('collect');
-    g.ui.pop(`Harold's *${it.name}*! Nana's going to want this back home.`, { expr: 'sparkle', ms: 4000 });
+    g.ui.pop(`Harold's *${it.name}*! For Nana.`, { expr: 'sparkle', ms: 2800, prio: 'high' });
     g.save();
   }
 

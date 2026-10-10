@@ -602,7 +602,8 @@ export class Crowd {
   }
   say(m, text, ms = 2000) {
     const g = this.g;
-    if (!m.a || m.d > 24 || g.time - this.sayT < 1.6) return;
+    // (a word now and then, not a wall of chatter: one bubble every few seconds, nearby only)
+    if (!m.a || m.d > 20 || g.time - this.sayT < 4.5) return;
     this.sayT = g.time;
     g.ui?.tag(`crowd:${m.i}`, text, _w.set(m.a.pos.x, m.a.pos.y + m.a.P.height + 0.4, m.a.pos.z).clone(), ms);
     m.a.say(Math.min(2.5, ms / 1000));
@@ -739,7 +740,7 @@ export class Crowd {
           a.tempExpr(pick(['excited', 'happy', 'laugh']), 2.4);
           g.wait(m.cheerT).then(() => { if (a.anim === 'cheer' && !m.frozen) a.play(prev); });
         }
-        if (said < 3 && m.d < 20 && Math.random() < 0.3) { said++; this.say(m, pick(m.kid ? LINES.kidCheer : LINES.cheer), 1500); }
+        if (said < 1 && m.d < 20 && Math.random() < 0.3) { said++; this.say(m, pick(m.kid ? LINES.kidCheer : LINES.cheer), 1500); }
       });
     }
     return { n, kids };
@@ -781,7 +782,7 @@ export class Crowd {
       this.greetT = g.time + rand(1.5, 3);
       m.a.lookAt(g.playerChar);
       m.a.react(m.kid ? 'yay' : 'hi');
-      if (Math.random() < 0.6) this.say(m, pick(m.kid ? LINES.kidHello : LINES.hello), 1800);
+      if (Math.random() < 0.3) this.say(m, pick(m.kid ? LINES.kidHello : LINES.hello), 1800);
       g.wait(3).then(() => { if (!m.frozen && m.a.lookTarget === g.playerChar) m.a.lookAt(null); });
       return;
     }

@@ -394,7 +394,7 @@ export class NpcBrain {
     if (d < 9 && sp < 4 && seen && !(this.cool.wave > 0)) {
       this.cool.wave = rand(35, 55);
       a.react('hi');
-      if (Math.random() < 0.7) this.say(pick(this.cfg.hello || ['Hi, Hank!']));
+      if (Math.random() < 0.3) this.say(pick(this.cfg.hello || ['Hi, Hank!']));
       a.tempExpr(pick(['excited', 'happy', 'giggle']), 2);
     }
     if (mood === 'fan' && sp < 0.6 && d < 11 && d > 3 && !(this.cool.fan > 0)) { this.cool.fan = rand(50, 80); return this.fanChat(X); }
@@ -1027,7 +1027,7 @@ export class NpcBrain {
     a.faceTowards(X.p.x, X.p.z);
     a.react('hi');
     a.showEmote(Math.random() < 0.5 ? 'note' : 'heart', 1.6);
-    if (Math.random() < 0.4) this.say(pick(this.cfg.hello || ['Hi, Hank!']), 1800);
+    if (Math.random() < 0.2) this.say(pick(this.cfg.hello || ['Hi, Hank!']), 1800);
   }
   onCrash(X) {
     const a = this.a, mood = this.mood;
@@ -1045,7 +1045,7 @@ export class NpcBrain {
       await w(rand(0.9, 1.4));
       if (mood === 'wary') { a.tempExpr('worried', 2); if (Math.random() < 0.4) a.react('laugh'); await w(1); this.busy = false; return; }
       a.react('laugh');
-      if (Math.random() < 0.4) this.say(pick(['Ha! You okay, Hank?', 'Ooh, that one rattled!', 'Bones everywhere!', 'Ten out of ten!']), 1900);
+      if (Math.random() < 0.2) this.say(pick(['Ha! You okay, Hank?', 'Bones everywhere!']), 1900);
       await w(1.4);
       // friends come over to check he's all in one piece
       if (this.d < 11 && !(this.cool.help > 0)) {
@@ -1075,7 +1075,7 @@ export class NpcBrain {
     if (mood === 'friendly') { a.react(Math.random() < 0.5 ? 'gasp' : 'clap'); this.addTrust(0.4); return; }
     a.react(Math.random() < 0.5 ? 'yay' : 'clap');
     a.tempExpr(pick(['sparkle', 'awe', 'excited']), 1.8);
-    if (Math.random() < 0.5) this.say(pick(['WOOO!', 'Bravo!', 'Do it again!', 'HANK! HANK! HANK!', 'Magnifique!']), 1500);
+    if (Math.random() < 0.25) this.say(pick(['WOOO!', 'Bravo!', 'Do it again!']), 1500);
     this.addTrust(0.4);
   }
 

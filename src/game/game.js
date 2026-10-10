@@ -292,7 +292,6 @@ export class Game {
     this.world.atmosphere.setWeather(s.weather || 'clear', true);
     this.orders.syncCups();
     this.parkBike();
-    this.ui.pop(`Day ${s.day}! Back in the saddle. Well, back on the *bones*.`, { expr: 'happy' });
     this.beginRide();
   }
 
@@ -511,7 +510,7 @@ export class Game {
     if (shift && this.settings.gears === undefined) {
       this.settings.gears = 'manual';
       this.saveSettings();
-      this.ui.pop('Gears by hand now: low gear to get going and climb, top gear to fly. (Settings has them on automatic again.)', { expr: 'happy' });
+      this.ui.pop('Gears by hand now. (Settings to undo.)', { expr: 'happy', prio: 'high' });
     }
     return {
       turn: input.crankTurn(),
@@ -727,7 +726,7 @@ export class Game {
     pf.steps++;
     this.applySettings();
     this.saveSettings();
-    this.ui.pop('My bones were lagging, so I eased the graphics a bit. (Settings to change.)', { expr: 'sheepish' });
+    this.ui.pop('Eased the graphics a bit. (Settings to change.)', { expr: 'sheepish' });
   }
 
   // ---------------------------------------------------------------- per frame
@@ -887,7 +886,7 @@ export class Game {
     this.forcedHome = true;
     await this.story.scene(async (S) => {
       await S.fade(1, 1.2);
-      await S.narrate('Hank got a little lost in the dark... Nana found him by following the sound of rattling bones.');
+      await S.narrate('Lost in the dark... Nana followed the rattling bones.');
       this.parkBike();
       this.world.atmosphere.hour = 22;
     });

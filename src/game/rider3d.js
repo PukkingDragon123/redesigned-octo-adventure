@@ -513,29 +513,16 @@ export class VoxelRider {
     }
   }
 
-  // Hank says something about being winded: the first time it happens, then only now and then
+  // Hank says something about being winded: only the very first time, as the one hint that
+  // coasting gets his puff back (after that the huffing, the face and the crank say it)
   say(kind) {
     const g = this.game, st = g.state;
     const flags = st && (st.flags ||= {});
-    const now = g.time || 0;
-    const first = flags && !flags['puffed_' + kind];
-    if (!first && (now - this.popT < 150 || Math.random() < 0.6)) return;
-    if (kind === 'winded' && (flags?.puffed_exhausted || !first)) return; // (only ever once, as a warning)
-    const lines = {
-      winded: ['Huff... huff... I should coast for a bit before my bones give out.'],
-      exhausted: [
-        'My femurs are on fire... and I don\'t even have muscles.',
-        'Need... a breather. Skeletons aren\'t built for sprints.',
-        'Huff... huff... Nana makes this look easy and she\'s ninety-one.',
-        'If my jaw falls off again I\'m walking.',
-      ],
-      recovered: ['Ahh. Good as new. Well, good as old.', 'Bones back in business.'],
-    }[kind];
-    if (!lines) return;
-    const i = first ? 0 : 1 + Math.floor(Math.random() * Math.max(1, lines.length - 1));
-    if (flags) flags['puffed_' + kind] = true;
-    this.popT = now;
-    g.ui?.pop?.(lines[Math.min(i, lines.length - 1)], { expr: kind === 'recovered' ? 'happy' : kind === 'exhausted' ? 'dizzy' : 'worried', key: 'winded' });
+    if (!flags || flags.puffed_winded || flags.puffed_exhausted) return;
+    if (kind !== 'winded' && kind !== 'exhausted') return;
+    flags.puffed_winded = true;
+    this.popT = g.time || 0;
+    g.ui?.pop?.('Huff... coast a bit to get my puff back.', { expr: 'worried', key: 'winded', ms: 3400, prio: 'high' });
   }
 
   // Stopping: a foot swings off its pedal in a little arc and plants on the ground beside
