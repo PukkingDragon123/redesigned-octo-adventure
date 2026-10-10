@@ -397,6 +397,77 @@ export function carvingScoop() {
   return { vox: v, size: 0.018, origin: [1.5, 10, 1.5] };
 }
 
+// bonyHand({ tool }) — Hank's own hand for the carving close-up (src/game/carveStage.js):
+// finger bones curled round a carving knife, the gouge, the gut scoop or a candle, wrist
+// bones and the cuff of his cream sweater; tool 'open' is the other hand, laid flat on the
+// pumpkin to steady it. The tool's tip (or the fingertips) at the origin, the forearm
+// running up +y, the fingers' fronts facing +z. Fine voxels (8 mm).
+export function bonyHand({ tool = 'knife' } = {}) {
+  const v = new Vox(15, 54, 11);
+  const cx = 7, cz = 5;
+  const B = 0xf0e6cc, BD = 0xcbbd9c, BL = 0xfff4e0, HANDLE = 0x6a4224, HANDLE_D = 0x5a361c;
+  const CUFF = 0xe2d4b4, TEAL = 0x2f6e6a, RED = 0xc8361f;
+  const handle = (y0, y1) => v.fill(cx - 1, y0, cz - 1, cx + 1, y1, cz + 1, (x, y) => (y % 3 ? HANDLE : HANDLE_D));
+  let g0 = 15; // the fist's lowest finger
+  if (tool === 'knife') {
+    for (let y = 0; y < 14; y++) v.fill(cx, y, cz, y < 3 ? cx : cx + 1, y, cz, y === 13 ? METAL_D : y > 2 && y % 4 === 0 ? 0xdde2e8 : METAL);
+    handle(14, 27);
+  } else if (tool === 'gouge') {
+    v.fill(cx - 2, 0, cz, cx + 2, 0, cz, METAL);
+    v.fill(cx - 2, 1, cz, cx - 2, 5, cz, METAL);
+    v.fill(cx + 2, 1, cz, cx + 2, 5, cz, METAL_D);
+    v.fill(cx, 6, cz, cx, 13, cz, METAL_D);
+    handle(14, 27);
+  } else if (tool === 'scoop') {
+    for (let y = 0; y <= 4; y++) for (let z = cz - 3; z <= cz + 3; z++) for (let x = cx - 3; x <= cx + 3; x++) {
+      const d = Math.hypot(x - cx, (y - 4) * 1.3, z - cz);
+      if (d <= 3.4 && (d > 2.3 || y === 0 || z < cz)) v.set(x, y, z, d > 3 ? METAL_D : METAL);
+      else if (d <= 2.3 && y >= 2) v.set(x, y, z, GUTS[(x + y + z) % 3]); // a scoopful of guts
+    }
+    v.fill(cx, 5, cz - 2, cx, 13, cz - 2, METAL_D);
+    handle(14, 27);
+  } else if (tool === 'candle') {
+    v.fill(cx - 1, 0, cz - 1, cx + 1, 25, cz + 1, (x, y, z) => (x === cx + 1 || z === cz - 1 ? 0xd8ccae : 0xf6ecd0));
+    v.set(cx, 26, cz, 0x2a2420);
+  }
+  if (tool === 'open') {
+    // fingers spread and pointing down, the tips touching at y = 0
+    [cx - 3, cx - 1, cx + 1, cx + 3].forEach((x, f) => {
+      const len = f === 0 ? 8 : f === 3 ? 9 : 11;
+      for (let y = 11 - len; y <= 11; y++) v.set(x, y, cz + (y < 13 - len ? 1 : 0), (y - (11 - len)) % 4 === 3 ? BL : B);
+    });
+    v.fill(cx - 3, 12, cz - 1, cx + 3, 18, cz, (x, y) => ((x - cx + 3) % 2 ? 0 : y === 12 ? BL : B)); // the palm's long bones
+    v.fill(cx + 4, 13, cz + 1, cx + 5, 14, cz + 1, B); v.fill(cx + 5, 10, cz + 2, cx + 5, 12, cz + 2, BL); // the thumb
+    g0 = -1;
+  } else {
+    // a fist round the grip: four curled fingers, knuckles behind, the thumb over the top
+    for (let f = 0; f < 4; f++) {
+      const y = g0 + f * 2 + (tool === 'candle' ? 3 : 0);
+      v.fill(cx - 2, y, cz + 2, cx + 2, y, cz + 2, (x) => (x === cx + 2 ? BD : x === cx - 1 ? BL : B));
+      v.fill(cx - 2, y, cz - 1, cx - 2, y, cz + 1, B);
+      v.fill(cx + 2, y, cz, cx + 2, y, cz + 1, BD);
+      v.set(cx - 1, y, cz - 2, BL);
+      v.set(cx + 1, y, cz - 2, BL);
+    }
+    const t = g0 + 8 + (tool === 'candle' ? 3 : 0);
+    v.fill(cx - 2, t, cz - 2, cx + 2, t + 4, cz - 2, (x, y) => ((x - cx) % 2 ? 0 : y === t ? BL : B)); // the back of the hand
+    v.fill(cx - 3, t - 1, cz - 1, cx - 3, t + 1, cz + 1, B); v.set(cx - 2, t - 2, cz + 2, BL); // the thumb
+    g0 = t + 4;
+  }
+  // wrist bones, the forearm (radius and ulna) and the sweater cuff
+  const w = Math.max(19, g0 + 1);
+  v.fill(cx - 1, w, cz - 1, cx + 1, w + 2, cz, (x, y, z) => ((x + y + z) % 2 ? B : BD));
+  v.fill(cx - 2, w + 3, cz, cx - 2, w + 16, cz, B);
+  v.fill(cx + 1, w + 3, cz - 1, cx + 1, w + 16, cz - 1, BD);
+  for (let y = w + 11; y < Math.min(v.h, w + 24); y++) for (let z = cz - 3; z <= cz + 3; z++) for (let x = cx - 3; x <= cx + 3; x++) {
+    if (x > cx - 3 && x < cx + 3 && z > cz - 3 && z < cz + 3) continue;
+    if ((x === cx - 3 || x === cx + 3) && (z === cz - 3 || z === cz + 3)) continue;
+    const k = y - (w + 11);
+    v.set(x, y, z, k === 2 || k === 3 ? TEAL : k === 5 ? RED : (x + y) % 3 ? CUFF : 0xd4c4a0);
+  }
+  return { vox: v, size: 0.008, origin: [cx + 0.5, 0, cz + 0.5] };
+}
+
 // tinMegaphone() — Gus's dented tin bullhorn with a red band, held by its handle. An
 // upright prop: the bell points along +z (the way he faces), the mouthpiece sits just
 // behind the grip and the cone just above it.
