@@ -1,7 +1,7 @@
 // Render pipeline:
 //   scene -> HDR target (with depth) -> bloom -> composite (fog, god rays,
 //   grading, cartoon outlines) -> FXAA -> canvas.
-// Renders at native resolution by default (or above it on high-DPI screens);
+// Renders at device pixels (or a whole fraction of them, upscaled nearest);
 // 'Retro' pixel sizes (>= 2) bring back the chunky dithered, posterised look.
 import * as THREE from 'three';
 import { G, NOISE_GLSL } from './shaderlib.js';
@@ -236,7 +236,6 @@ export class Pipeline {
     this.touch = touch;
     this.maxPixels = touch ? 1.4e6 : 5.2e6;
     this.maxDpr = touch ? 1.5 : 3; // device pixels per CSS pixel we ever render
-    this.supersample = 1; // set by the graphics quality (game.applySettings)
     this.reflections = !touch;
     this.bloom = !touch;
     this.rays = !touch;
@@ -345,33 +344,36 @@ export class Pipeline {
     let s = this.pixelScale;
     this.retro = s >= 2;
     if (this.retro) {
-      this.w = Math.ceil(W / s);
-      this.h = Math.ceil(H / s);
-      this.canvas.style.width = `${this.w * s}px`;
-      this.canvas.style.height = `${this.h * s}px`;
-    } else {
-      // native device pixels, capped by a pixel budget for very large or very dense screens
-      // HD supersamples above the screen's pixels where the budget allows (crisper
-      // edges on voxels, leaves and wires), then the browser filters it down
-      // Below the screen's own density we drop by WHOLE device pixels (2x2, 3x3)
-      // and upscale nearest, so the picture stays sharp instead of smeared.
+      // retro: s CSS pixels per rendered pixel, rounded to whole device pixels
       const dpr = Math.max(0.5, window.devicePixelRatio || 1);
-      const ss = s <= 1 ? this.supersample : 1;
-      const devW = W * dpr, devH = H * dpr;
-      const want = Math.min(dpr * ss, this.maxDpr) / dpr; // fraction of device pixels
+      const devW = Math.round(W * dpr), devH = Math.round(H * dpr);
+      const n = Math.max(1, Math.round(s * dpr));
+      this.w = Math.max(2, Math.ceil(devW / n));
+      this.h = Math.max(2, Math.ceil(devH / n));
+      this.canvas.style.width = `${(this.w * n) / dpr}px`;
+      this.canvas.style.height = `${(this.h * n) / dpr}px`;
+      this.upscale = n;
+    } else {
+      // Device pixels, or a WHOLE fraction of them (1/2, 1/3...) when the pixel
+      // budget or the 'Balanced' setting asks for less. Never above the screen's
+      // own pixels: a supersampled canvas has to be filtered down by the browser
+      // (bilinear), which smeared every edge of the picture. The canvas is then
+      // sized in CSS so it covers exactly w*n by h*n device pixels and is
+      // upscaled nearest-neighbour: every rendered pixel is an n x n hard block.
+      const dpr = Math.max(0.5, window.devicePixelRatio || 1);
+      const devW = Math.round(W * dpr), devH = Math.round(H * dpr);
+      const want = Math.min(dpr, this.maxDpr) / dpr; // fraction of device pixels
       const budget = Math.sqrt(this.maxPixels / (devW * devH));
-      let k = Math.min(want, budget) / (s > 1 ? s : 1);
-      let crisp = true;
-      if (k > 1.01) crisp = false; // supersampled: the browser filters it down
-      else if (k < 0.99) k = 1 / Math.ceil(1 / k - 0.02);
-      else k = 1;
-      this.w = Math.max(2, Math.round(devW * k));
-      this.h = Math.max(2, Math.round(devH * k));
-      this.canvas.style.width = `${W}px`;
-      this.canvas.style.height = `${H}px`;
-      this.crisp = crisp;
+      const k = Math.min(1, want, budget) / (s > 1 ? s : 1);
+      const n = Math.max(1, Math.ceil(1 / k - 0.02));
+      this.w = Math.max(2, Math.ceil(devW / n));
+      this.h = Math.max(2, Math.ceil(devH / n));
+      this.canvas.style.width = `${(this.w * n) / dpr}px`;
+      this.canvas.style.height = `${(this.h * n) / dpr}px`;
+      this.crisp = true;
+      this.upscale = n;
     }
-    this.canvas.style.imageRendering = this.retro || this.crisp ? 'pixelated' : 'auto';
+    this.canvas.style.imageRendering = 'pixelated';
     this.renderer.setSize(this.w, this.h, false);
     this.post.uRes.value.set(this.w, this.h);
     const P = this.post;
