@@ -24,7 +24,7 @@ const CELL = 32;
 const SHADOW_R = 60; // out-of-view cells this close still go in (their shadows)
 // per kind: wind sway, draw distance (m, times lodScale)
 const KIND = {
-  tree: { sway: 1, far: 1e5 },
+  tree: { sway: 1, far: 900 }, // (fades out past ~720 m: across the bigger map the far forest is haze anyway)
   bush: { sway: 0.35, far: 170 },
   sapling: { sway: 0.7, far: 110 },
   fern: { sway: 0.45, far: 70 },
@@ -420,7 +420,7 @@ export class Forest2D {
     this.FAR = new Float32Array(n);
     this.MOD = new Array(n).fill(null);
     this.HID = new Uint8Array(n);
-    const half = this.forest.half ?? 320;
+    const fx0 = this.forest.x0 ?? -320, fz0 = this.forest.z0 ?? -320;
     for (let i = 0; i < n; i++) {
       const t = trees[i];
       t.fi = i;
@@ -431,7 +431,7 @@ export class Forest2D {
       const M = this.models.get(`${t.species}:${t.vseed}`);
       if (!M) continue;
       t.vkey = t.vkeyBaked = M.key;
-      t.chunk = t.chunk ?? `${Math.floor((t.x + half) / 64)},${Math.floor((t.z + half) / 64)}`;
+      t.chunk = t.chunk ?? `${Math.floor((t.x - fx0) / 64)},${Math.floor((t.z - fz0) / 64)}`;
       const h2 = hash(t.z, t.x);
       let sc = M.kind === 'tree' ? Math.max(0.6, Math.min(1.5, (t.H || M.H) / M.H)) : 0.85 + h2 * 0.3;
       if (M.kind === 'log') sc = 1;

@@ -22,6 +22,9 @@ import { Doors } from './doors.js';
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _s = new THREE.Vector3(1, 1, 1), _p = new THREE.Vector3();
 const UP = new THREE.Vector3(0, 1, 0);
 const CHUNK = 48;
+function freeArray() {
+  this.array = null;
+}
 
 export class VoxelWorld {
   constructor(world) {
@@ -43,7 +46,7 @@ export class VoxelWorld {
     let r = this.cache.get(key);
     if (!r) {
       r = fn();
-      r.geometry = meshVox(r.vox, { size: r.size, origin: r.origin, jitter: r.jitter ?? 0 });
+      r.geometry = meshVox(r.vox, { size: r.size, origin: r.origin, jitter: r.jitter ?? 0, ao: r.ao });
       this.cache.set(key, r);
     }
     return r;
@@ -53,9 +56,10 @@ export class VoxelWorld {
     return this.terrain.heightAt(x, z);
   }
 
-  // static voxel geometry, merged per 48 m chunk
+  // static voxel geometry, merged per 48 m chunk (96 m out in the backcountry, where it's sparse)
   addStatic(r, x, y, z, yaw = 0, scale = 1) {
-    const key = `${Math.floor(x / CHUNK)},${Math.floor(z / CHUNK)}`;
+    const C = x < -236 || z > 236 || z < -236 ? CHUNK * 2 : CHUNK;
+    const key = `${C === CHUNK ? '' : 'b'}${Math.floor(x / C)},${Math.floor(z / C)}`;
     let c = this.chunks.get(key);
     if (!c) this.chunks.set(key, (c = []));
     _q.setFromAxisAngle(UP, yaw);
@@ -85,13 +89,28 @@ export class VoxelWorld {
       for (const g of geos) g.dispose();
       if (!merged) continue;
       merged.computeBoundingSphere();
+      // nothing reads a merged chunk back on the CPU: let its arrays go once they're on the GPU
+      for (const a of [...Object.values(merged.attributes), merged.index]) a?.onUpload(freeArray);
       const mesh = voxMesh(merged, mat);
       mesh.name = `decor:${key}`;
       mesh.matrixAutoUpdate = false;
       this.scene.add(mesh);
       this.meshes.push(mesh);
+      (this.decorChunks ||= []).push({ mesh, c: merged.boundingSphere.center, r: merged.boundingSphere.radius });
     }
     this.chunks.clear();
+  }
+
+  // The merged clutter is small stuff: past a few hundred metres (deep in the haze) a chunk is
+  // skipped altogether, which keeps the far side of the bigger map from costing draw calls.
+  updateFar(camPos, far = 380) {
+    const L2 = this._farAt;
+    if (L2 && Math.abs(L2.x - camPos.x) + Math.abs(L2.z - camPos.z) < 8) return;
+    this._farAt = { x: camPos.x, z: camPos.z };
+    for (const d of this.decorChunks || []) {
+      const dist = Math.hypot(d.c.x - camPos.x, d.c.z - camPos.z) - d.r;
+      d.mesh.visible = dist < far;
+    }
   }
 
   // ------------------------------------------------------------ buildings

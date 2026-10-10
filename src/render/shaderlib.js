@@ -19,7 +19,8 @@ export const G = {
   uCamPos: { value: new THREE.Vector3() },
   uHeightTex: { value: null },
   uSplatTex: { value: null },
-  uWorldHalf: { value: 320 },
+  uWorldMin: { value: new THREE.Vector2(-320, -320) }, // the terrain's north-west corner (x, z) and side (m)
+  uWorldSize: { value: 640 },
   uHeightN: { value: 321 },
   uHRes: { value: 2 },
   uClipY: { value: -1e5 }, // reflection pass: discard fragments below this
@@ -48,10 +49,11 @@ export function worldUniforms(extra = {}) {
 // Exact texel-centre lookup into the terrain heightmap texture
 export const HEIGHT_GLSL = /* glsl */ `
 uniform sampler2D uHeightTex;
-uniform float uWorldHalf;
+uniform vec2 uWorldMin;
+uniform float uWorldSize;
 uniform float uHeightN;
 uniform float uHRes;
-vec2 heightUV(vec2 xz) { return ((xz + uWorldHalf) / uHRes + 0.5) / uHeightN; }
+vec2 heightUV(vec2 xz) { return ((xz - uWorldMin) / uHRes + 0.5) / uHeightN; }
 float terrainHeight(vec2 xz) { return texture2D(uHeightTex, heightUV(xz)).r; }
 `;
 

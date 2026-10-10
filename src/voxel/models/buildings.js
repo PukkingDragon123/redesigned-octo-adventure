@@ -2727,6 +2727,9 @@ const SHOP_CFG = {
   fishchips: { small: true, fascia: 0x1e4a6a, fg: '#fff4dc', accent: 0x1e4a6a, awning: [0x2a6a8a, 0xf2e8d4], hatch: true, topper: 'fish' },
   hardware: { parapet: 'flat', fascia: 0x2e2e34, fg: '#f2c23a', door: 1, accent: 0x3a5a8a, awning: [0x3a5a8a, 0xf2e8d4], blade: 'hammer', goods: 'tools' },
   bakery: { roof: 'gable', pitch: 0.9, fascia: 0x7a3e22, fg: '#fff0d8', door: -1, accent: 0x7a3e22, awning: [0xe8a03a, 0xf6e8d6], blade: 'bread', boxes: true, goods: 'bread' },
+  // the backcountry: the orchard's cider house and the coffee hut on the west road
+  cider: { roof: 'gable', pitch: 0.95, fascia: 0x5a2a1e, fg: '#ffe8c8', door: 0, accent: 0x5a2a1e, awning: [0xb8322a, 0xf6e8d6], blade: 'leaf', boxes: true, goods: 'jars' },
+  coffee: { small: true, fascia: 0x5a3220, fg: '#fff4dc', accent: 0x5a3220, awning: [0x8a2a22, 0xf2e8d4], hatch: true, topper: 'mug' },
 };
 const SF = { kick: 3, win0: 4, win1: 15, tr0: 17, tr1: 18, fas0: 20, fas1: 24, cor: 25, top: 26 }; // storefront rows
 
@@ -2929,6 +2932,8 @@ function buildShop(spec, ctx) {
     awningOn(Ff, ha - 2, hb + 2, 20, 8, cfg.awning, { drop: 2, stripe: 3 });
     Ff.occ.push([ha - 2, 6, hb + 2, 21]);
     signOn(ctx, Ff, 0, 1, W - 16, 4, '', { bg: P.chalk, edge: P.woodDark, board: true });
+    // the menu board's skirt reaches down to the yard
+    if (ctx.ground) for (let u = -((W - 16) >> 1) - 1; u <= ((W - 16) >> 1); u++) for (const n of [1, 2]) { const p = Ff.P(u, n); toGround(p[0], p[1], -1, P.woodDark, 2); }
     doorOn(ctx, F.left, 0, { color: acc, h: 17, lanternOpts: { radius: 5 } });
     stoopOn(ctx, F.left, -6, 5, G);
     windowOn(ctx, F.right, -3, 8, { w: 6, h: 6, lit: true, box: false });
@@ -3004,6 +3009,20 @@ function buildShop(spec, ctx) {
     const cy = Rf ? Rf.ridge - 2 : H, cz = 0;
     vb.fill(-6, cy, cz - 4, 5, cy + 8, cz + 3, (x, y) => (((x + 6) >> 1) % 2 ? P.red : P.white));
     for (let x = -5; x <= 4; x++) for (let z = cz - 3; z <= cz + 2; z++) { const h = 2 + Math.floor(vhash(x, z, 8) * 5); for (let k = 0; k < h; k++) vb.set(x, cy + 9 + k, z, k === h - 1 ? 0xf6d26a : 0xe8b440); }
+  }
+  if (cfg.topper === 'mug') {
+    // a giant steaming mug of cocoa on the roof
+    const cy = Rf ? Rf.ridge - 1 : H, R0 = 6;
+    for (let y = 0; y <= 11; y++) for (let x = -R0 - 1; x <= R0 + 1; x++) for (let z = -R0 - 1; z <= R0 + 1; z++) {
+      const d = Math.hypot(x, z);
+      if (d > R0 + 0.4) continue;
+      const rim = d > R0 - 1.2;
+      if (y === 11 && !rim) { vb.set(x, cy + 10, z, 0x6a3a22); continue; }
+      if (!rim && y > 0) continue;
+      vb.set(x, cy + y, z, y === 4 || y === 5 ? 0xc8361f : 0xf2ece0);
+    }
+    for (let y = 3; y <= 8; y++) for (let x = R0 + 1; x <= R0 + 3; x++) if (y === 3 || y === 8 || x === R0 + 3) vb.set(x, cy + y, 0, 0xf2ece0);
+    ctx.smoke.push(M3(0, cy + 12, 0));
   }
   if (cfg.topper === 'fish') {
     const cy = Rf ? Rf.ridge + 1 : H, cz = 0;
@@ -3543,10 +3562,168 @@ function buildCoveredBridge(spec, ctx) {
   return ctx;
 }
 
+// ------------------------------------------------------------------ RAILWAY STATION (the old line's halt)
+// One storey of board & batten under a gable with wide bracketed eaves, an operator's bay window
+// looking up and down the line, a long plank platform along the track side with benches, lamps
+// and a train-order signal, a name board on each gable and a chimney for the waiting-room stove.
+function buildStation(spec, ctx) {
+  const W = evenV(spec.w ?? 16), D = evenV(spec.d ?? 7);
+  const H = 26;
+  const b = { x0: -W / 2, x1: W / 2 - 1, z0: -D / 2, z1: D / 2 - 1 };
+  const G = (ctx.G = 3);
+  const plat = 44; // the platform's depth in front of the wall (5.5 m)
+  const vb = (ctx.vb = new VB(b.x0 - 34, -14, b.z0 - 26, b.x1 + 34, H + 70, b.z1 + plat + 12));
+  const sid = SIDING[spec.color] ?? SIDING.red, trim = P.trim;
+  const Rf = roofGeom({ axis: 'x', b, H, pitch: 0.62, oh: 14, ohR0: 10, ohR1: 10, t: 2 });
+  const st = roofStyle(spec.roof ?? 'dark', ctx.seed, { gutter: false });
+  foundation(ctx, b, G, 4);
+  fillBody(vb, b, H, Rf, sid);
+  const F = frames(vb, b);
+  for (const f of Object.values(F)) battens(f, sid, 0, H + 50, 3, ctx.seed, 1);
+  cornerTrims(vb, b, 0, H - 1, trim);
+  for (const f of Object.values(F)) { band(f, 0, 1, trim); band(f, 11, 11, trim); band(f, H - 2, H - 1, trim); }
+  drawRoof(vb, Rf, st);
+  const Ff = F.front, Fb = F.back;
+  // the bay: a box standing out from the middle of the track side with a wide window, its own little roof
+  const bu0 = -7, bu1 = 6, bd = 5;
+  Ff.fill(bu0, 0, 1, bu1, H - 3, bd, (u, y, n) => (n === bd || u === bu0 || u === bu1 ? (y < 2 || y === 11 ? trim : sid) : 0));
+  windowOn(ctx, Ff.sub(bd), bu0 + 2, 13, { w: 10, h: 9, lit: true, frame: trim, panes: 3 });
+  Ff.fill(bu0 - 1, H - 2, 1, bu1 + 1, H - 2, bd + 2, P.woodDark);
+  Ff.fill(bu0 - 1, H - 1, 1, bu1 + 1, H - 1, bd + 2, ROOFC.dark);
+  // doors either side of the bay (waiting room, freight shed) and windows beyond them
+  const dl = doorOn(ctx, Ff, bu0 - 9, { color: 0x2e5a40, frame: trim, w: 8, h: 18 });
+  const dr = doorOn(ctx, Ff, bu1 + 10, { color: 0x2e5a40, frame: trim, w: 12, h: 18, plank: true, main: false });
+  windowOn(ctx, Ff, dl.u0 - 12, 8, { w: 7, h: 11, frame: trim, lit: true });
+  windowOn(ctx, Ff, dr.u1 + 5, 8, { w: 7, h: 11, frame: trim });
+  windowRow(ctx, Fb, Fb.umin + 6, Fb.umax - 6, 8, 4, { w: 7, h: 11, frame: trim });
+  for (const f of [F.left, F.right]) windowOn(ctx, f, -4, 8, { w: 7, h: 11, frame: trim, lit: f === F.left });
+  // brackets under the deep eaves, front and back
+  for (const f of [Ff, Fb]) for (let u = f.umin + 2; u <= f.umax - 2; u += 16) {
+    if (f === Ff && u >= bu0 - 2 && u <= bu1 + 2) continue;
+    for (let k = 0; k <= 9; k++) f.fill(u, 14 + k, 1 + k, u + 1, 14 + k, 1 + k, P.woodDark);
+    f.fill(u, 14, 1, u + 1, 23, 1, P.woodDark);
+  }
+  // the name board on each gable, lettered like the welcome signs
+  for (const f of [F.left, F.right]) {
+    signOn(ctx, f, 0, H + 2, 26, 6, '', { bg: P.cream, edge: P.woodDark, n: 1, board: true });
+    const p = f.pt(-0.5, H + 4.5, 3.2);
+    ctx.signs.push({ ...M3(p[0], p[1], p[2]), w: 3.1, h: 0.62, text: spec.sign || 'GARE', normal: [f.nx, 0, f.nz], bg: hexs(P.cream), fg: '#7a2a1e' });
+  }
+  // the platform: planks along the whole track side (and a bit beyond), a yellow edge line
+  deckOn(ctx, Ff, b.x0 - 10, b.x1 + 10, plat, { col: P.plankB });
+  Ff.fill(b.x0 - 10, -1, plat, b.x1 + 10, -1, plat, 0xd8c060);
+  for (const u of [b.x0 - 6, b.x0 + 20, b.x1 - 20, b.x1 - 5]) {
+    if (u + 11 >= bu0 - 1 && u <= bu1 + 1) continue;
+    bench(ctx, Ff.sub(bd + 4), u, 1, 12, { col: P.woodLight });
+  }
+  lanternOn(ctx, Ff, dl.u0 - 3, 17, { radius: 8 });
+  lanternOn(ctx, Ff, dr.u1 + 2, 17, { radius: 8 });
+  // lamp posts along the platform edge
+  for (const u of [b.x0 - 4, b.x1 + 4]) {
+    Ff.fill(u, 0, plat - 3, u, 26, plat - 3, P.iron);
+    Ff.fill(u - 1, 27, plat - 4, u + 1, 29, plat - 2, P.lamp);
+    Ff.fill(u - 1, 30, plat - 4, u + 1, 30, plat - 2, P.iron);
+    addLight(ctx, Ff.pt(u, 27, plat - 3), [1.0, 0.74, 0.42], 10, 'lamp');
+  }
+  // the train-order signal by the bay: a tall mast with two red-and-white arms
+  const mu = 2;
+  Ff.fill(mu, 0, plat - 6, mu + 1, 52, plat - 5, (u, y) => (y % 12 < 6 ? P.white : P.iron));
+  for (const [dir, y] of [[-1, 46], [1, 41]]) for (let k = 2; k <= 11; k++) Ff.fill(mu + dir * k, y, plat - 6, mu + dir * k, y + 1, plat - 6, k > 8 ? P.white : P.red);
+  Ff.fill(mu - 1, 53, plat - 7, mu + 2, 54, plat - 4, P.iron);
+  // a chimney for the waiting-room stove
+  chimneyBrick(ctx, b.x0 + 8, -2, H - 2, Rf.ridge + 5);
+  ctx.door = { ...M3(dl.u0 + 4, 0, b.z1 + 3), face: 'front' };
+  ctx.solids.push({ x0: b.x0 / VPM, y0: -G / VPM, z0: b.z0 / VPM, x1: (b.x1 + 1) / VPM, y1: H / VPM, z1: (b.z1 + 1) / VPM });
+  return ctx;
+}
+
+// ------------------------------------------------------------------ FIRE LOOKOUT TOWER (Mont Écho)
+// Four splayed timber legs, X-braced, a switchback stair climbing inside them to a glassed-in cab
+// with a catwalk all round, a pyramid roof, a radio mast and a flag. The legs reach the ground
+// wherever it is (open kind: the floor sits at the footprint's lowest point).
+function buildFiretower(spec, ctx) {
+  const G = (ctx.G = 0);
+  const top = 92, cab = 11, cabH = 18, foot = 17;
+  const vb = (ctx.vb = new VB(-28, -14, -28, 28, top + cabH + 40, 28));
+  const wood = 0x7a5a3c, woodD = 0x553c26, cabC = 0xe8dfca;
+  // legs: 2x2 coarse posts from wide feet to the cab's corners, on concrete piers sunk into the ground
+  const legs = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
+  for (const [sx, sz] of legs) {
+    const gx = sx * foot - (sx > 0 ? 1 : 0), gz = sz * foot - (sz > 0 ? 1 : 0);
+    const tx = sx * (cab - 1) - (sx > 0 ? 1 : 0), tz = sz * (cab - 1) - (sz > 0 ? 1 : 0);
+    for (const [ox, oz] of [[0, 0], [1, 0], [0, 1], [1, 1]]) vb.line(gx + ox, 0, gz + oz, tx + ox, top, tz + oz, woodD);
+    const yb = ctx.ground ? Math.min(-2, Math.floor(gAt(gx, gz)) - 3) : -4;
+    vb.fill(gx - 1, yb, gz - 1, gx + 2, 0, gz + 2, P.stoneB);
+  }
+  // girts and X braces on each face between the levels
+  const lvl = [0, 23, 46, 69, top];
+  const at = (y) => Math.round(foot - (foot - cab + 1) * (y / top));
+  for (let i = 0; i < lvl.length - 1; i++) {
+    const ya = lvl[i] + 1, yb = lvl[i + 1] - 1, ra = at(ya), rb = at(yb);
+    for (const sd of [-1, 1]) {
+      const za = sd > 0 ? ra - 1 : -ra, zb = sd > 0 ? rb - 1 : -rb;
+      vb.line(-ra, ya, za, rb - 1, yb, zb, wood); vb.line(ra - 1, ya, za, -rb, yb, zb, wood);
+      vb.line(za, ya, -ra, zb, yb, rb - 1, wood); vb.line(za, ya, ra - 1, zb, yb, -rb, wood);
+    }
+    const r = at(lvl[i + 1]);
+    vb.fill(-r, lvl[i + 1], -r, r - 1, lvl[i + 1], -r, woodD); vb.fill(-r, lvl[i + 1], r - 1, r - 1, lvl[i + 1], r - 1, woodD);
+    vb.fill(-r, lvl[i + 1], -r, -r, lvl[i + 1], r - 1, woodD); vb.fill(r - 1, lvl[i + 1], -r, r - 1, lvl[i + 1], r - 1, woodD);
+  }
+  // the stair: flights zig-zagging up between landings
+  for (let i = 0; i < lvl.length - 1; i++) {
+    const ya = lvl[i], yb = lvl[i + 1], dir = i % 2 ? -1 : 1, z = i % 2 ? 2 : -4;
+    const xa = -dir * 7, xb = dir * 7;
+    for (let k = 0; k <= 14; k++) {
+      const x = Math.round(xa + (xb - xa) * (k / 14)), y = Math.round(ya + (yb - ya) * (k / 14));
+      vb.fill(x, y, z, x + dir, y, z + 2, P.plank);
+      vb.set(x, y + 7, i % 2 ? z + 2 : z, woodD);
+    }
+    vb.fill(xb - 2, yb, -4, xb + 2, yb, 4, P.plankB);
+  }
+  // the catwalk deck and its railing
+  vb.fill(-cab - 4, top, -cab - 4, cab + 3, top + 1, cab + 3, (x, y) => (y === top + 1 ? plankTone(x, ctx.seed) : woodD));
+  for (let x = -cab - 4; x <= cab + 3; x++) for (let z = -cab - 4; z <= cab + 3; z++) {
+    if (x > -cab - 4 && x < cab + 3 && z > -cab - 4 && z < cab + 3) continue;
+    for (let y = top + 2; y <= top + 9; y++) {
+      const c = y === top + 9 ? wood : (x + z) % 4 === 0 ? woodD : 0;
+      if (c) vb.set(x, y, z, c);
+    }
+  }
+  // the cab: glass all round between white bands, the fire finder on its stand inside
+  const y0 = top + 2, y1 = y0 + cabH;
+  vb.fill(-cab, y0, -cab, cab - 1, y1, cab - 1, (x, y, z) => {
+    const edge = (x === -cab || x === cab - 1) && (z === -cab || z === cab - 1);
+    const wall = x === -cab || x === cab - 1 || z === -cab || z === cab - 1;
+    if (!wall) return y === y0 ? P.plank : 0;
+    if (edge || y < y0 + 6 || y > y1 - 2) return y === y0 + 5 || y === y1 - 2 ? P.white : cabC;
+    const along = x === -cab || x === cab - 1 ? z : x;
+    return (along + cab) % 7 === 0 ? P.white : P.glass | GLASS;
+  });
+  vb.fill(-3, y0 + 1, -3, 2, y0 + 5, 2, (x, y) => (y === y0 + 5 ? 0xe8d8a8 : woodD));
+  vb.disc(-0.5, y0 + 6, -0.5, 3, P.brass);
+  // a pyramid roof with a wide brim, the radio mast, a flag and a red beacon on top
+  for (let k = 0; k <= 12; k++) {
+    const r = cab + 3 - k;
+    if (r < 1) break;
+    vb.fill(-r, y1 + 1 + k, -r, r - 1, y1 + 1 + k, r - 1, (x, y, z) => (Math.max(Math.abs(x + 0.5), Math.abs(z + 0.5)) > r - 1.6 ? ROOFC.green : 0));
+  }
+  vb.fill(0, y1 + 10, 0, 0, y1 + 34, 0, P.metalL);
+  for (let k = 0; k < 4; k++) vb.fill(1, y1 + 28 + k, 0, 7 - k, y1 + 28 + k, 0, k < 2 ? P.red : P.white);
+  vb.fill(-3, y1 + 22, 0, 3, y1 + 22, 0, P.metal);
+  vb.fill(-1, y1 + 35, -1, 0, y1 + 35, 0, P.lamp);
+  addLight(ctx, [0, y1 + 35, 0], [1.0, 0.3, 0.2], 6, 'beacon');
+  vb.fill(-1, y1 - 3, -1, 0, y1 - 2, 0, P.lampHot);
+  addLight(ctx, [0, y1 - 4, 0], [1.0, 0.75, 0.45], 9, 'window');
+  ctx.door = { ...M3(0, 0, foot + 4), face: 'front' };
+  ctx.posts = legs.map(([sx, sz]) => ({ x: r3((sx * foot) / VPM), z: r3((sz * foot) / VPM), r: 0.22 }));
+  return ctx;
+}
+
 // ------------------------------------------------------------------ API
 const KINDS = {
   house: buildHouse, cabin: buildCabin, shed: buildGarage, garage: buildGarage, outhouse: buildOuthouse, chapel: buildChapel, lighthouse: buildLighthouse, sawmill: buildSawmill,
   shop: buildShop, firehall: buildFirehall, barn: buildBarn, sugarshack: buildSugarShack, gazebo: buildGazebo, lifeguard: buildLifeguard, rink: buildRink, coveredBridge: buildCoveredBridge,
+  station: buildStation, firetower: buildFiretower,
 };
 
 // The main doors as models of their own (meta.doors), so the game can swing them (world/doors.js).

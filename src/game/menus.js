@@ -7,7 +7,7 @@ import { kPanel, kSign, kClose, kBook, kBar, kSlider, kToggle, kSlot, kKey, esc,
 import { iconURL, iconSmallURL, glyphURL } from '../art/icons.js';
 import { LivePortrait } from '../ui/live3d.js';
 import { CHARACTERS } from '../art/characters.js';
-import { KEEPSAKES, POI, CUSTOMERS, WORLD_HALF, BUILDINGS } from '../world/layout.js';
+import { KEEPSAKES, POI, CUSTOMERS, WORLD_HALF, WORLD_X0, WORLD_Z0, BUILDINGS } from '../world/layout.js';
 import { KEEPSAKE_ICON } from './keepsakes.js';
 import { hasSave } from './state.js';
 import { tempBarHTML, cupTemp } from './orders.js';
@@ -554,7 +554,7 @@ export class Menus {
     img.getContext('2d').drawImage(c, 0, 0);
     img.style.width = img.style.height = `calc(var(--u) * ${N})`;
     wrap.appendChild(img);
-    const at = (x, z) => [((x + WORLD_HALF) / (WORLD_HALF * 2)) * N, ((z + WORLD_HALF) / (WORLD_HALF * 2)) * N];
+    const at = (x, z) => [((x - WORLD_X0) / (WORLD_HALF * 2)) * N, ((z - WORLD_Z0) / (WORLD_HALF * 2)) * N];
     const pin = (x, z, src, cls = '') => {
       const e = el('img', `pin ${cls}`);
       e.src = src;
@@ -581,6 +581,13 @@ export class Menus {
     if (POI.pond) label(POI.pond.x, POI.pond.z - 12, 'Beaver Pond');
     if (POI.trapper) label(POI.trapper.x, POI.trapper.z + 12, "Trapper's Hut");
     if (POI.bridge) label(POI.bridge.x + 18, POI.bridge.z + 12, 'Covered Bridge');
+    // the backcountry
+    if (POI.lake) label(POI.lake.x, POI.lake.z - 4, 'Lac des Huards');
+    if (POI.station) label(POI.station.x + 6, POI.station.z - 16, 'Gare Ste-Rose');
+    if (POI.firetower) label(POI.firetower.x, POI.firetower.z - 18, 'Mont Écho');
+    if (POI.orchard) label(POI.orchard.x, POI.orchard.z + 24, 'Verger');
+    if (POI.marsh) label(POI.marsh.x, POI.marsh.z + 36, 'Moose Marsh');
+    if (POI.cafeHut) label(POI.cafeHut.x + 4, POI.cafeHut.z - 14, 'Café');
     pin(POI.cabin.x, POI.cabin.z, glyphURL('home'));
     for (const o of g.orders.carried()) { const c2 = CUSTOMERS[o.spot]; if (c2) pin(c2.x, c2.z, glyphURL('cocoa')); }
     for (const k of KEEPSAKES) if (g.state.keepsakes[k.id]) pin(k.x, k.z, iconSmallURL(KEEPSAKE_ICON[k.id]));
@@ -726,11 +733,11 @@ function paintMap(terrain, N = 192) {
   c.height = N;
   const ctx = c.getContext('2d');
   const img = ctx.createImageData(N, N);
-  const toW = (i) => -WORLD_HALF + ((i + 0.5) / N) * WORLD_HALF * 2;
+  const toX = (i) => WORLD_X0 + ((i + 0.5) / N) * WORLD_HALF * 2, toZ = (j) => WORLD_Z0 + ((j + 0.5) / N) * WORLD_HALF * 2;
   const H = new Float32Array(N * N), RD = new Uint8Array(N * N);
   for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
-    H[j * N + i] = terrain.heightAt(toW(i), toW(j));
-    RD[j * N + i] = terrain.splatAt(toW(i), toW(j)).road > 0.5 ? 1 : 0;
+    H[j * N + i] = terrain.heightAt(toX(i), toZ(j));
+    RD[j * N + i] = terrain.splatAt(toX(i), toZ(j)).road > 0.5 ? 1 : 0;
   }
   const cstep = Math.max(4, Math.round(5 * (384 / N) * 0.6));
   for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
@@ -757,7 +764,7 @@ function paintMap(terrain, N = 192) {
   // tree doodles where the forest is thick
   const sp = N >= 240 ? 8 : 7;
   for (let j = 4; j < N; j += sp) for (let i = 4 + ((j / sp) % 2) * 3; i < N; i += sp) {
-    const x = toW(i), z = toW(j);
+    const x = toX(i), z = toZ(j);
     if (H[j * N + i] < 2 || RD[j * N + i]) continue;
     const f = terrain.splatAt(x, z).litter ?? 0.5;
     if (f < 0.45) continue;
@@ -765,9 +772,18 @@ function paintMap(terrain, N = 192) {
     ctx.fillRect(i - 1, j - 3, 3, 1); ctx.fillRect(i - 2, j - 2, 5, 2);
     ctx.fillStyle = '#3e2a1c'; ctx.fillRect(i, j, 1, 1);
   }
+  // the old railway: an inked line with cross ties where the rails still lie
+  const rail = terrain.roadProfiles?.find((r) => r.road.id === 'railTrail');
+  if (rail) rail.samples.forEach((p, k) => {
+    if (p.x > -334) return;
+    const i = Math.round(((p.x - WORLD_X0) / (WORLD_HALF * 2)) * N), j = Math.round(((p.z - WORLD_Z0) / (WORLD_HALF * 2)) * N);
+    ctx.fillStyle = '#2a1a14';
+    ctx.fillRect(i, j, 1, 1);
+    if (k % 3 === 0) { ctx.fillRect(i - Math.round(p.dz), j + Math.round(p.dx), 1, 1); ctx.fillRect(i + Math.round(p.dz), j - Math.round(p.dx), 1, 1); }
+  });
   // little houses
   for (const bld of BUILDINGS) {
-    const x = Math.round(((bld.x + WORLD_HALF) / (WORLD_HALF * 2)) * N), y = Math.round(((bld.z + WORLD_HALF) / (WORLD_HALF * 2)) * N);
+    const x = Math.round(((bld.x - WORLD_X0) / (WORLD_HALF * 2)) * N), y = Math.round(((bld.z - WORLD_Z0) / (WORLD_HALF * 2)) * N);
     ctx.fillStyle = '#3a2a24'; ctx.fillRect(x - 2, y - 2, 5, 4);
     ctx.fillStyle = '#c8502e'; ctx.fillRect(x - 2, y - 3, 5, 1); ctx.fillRect(x - 1, y - 4, 3, 1);
     ctx.fillStyle = '#f2e6c8'; ctx.fillRect(x - 1, y - 1, 3, 2);

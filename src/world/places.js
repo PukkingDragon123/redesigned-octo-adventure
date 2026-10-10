@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import * as L from './layout.js';
 import * as PR from '../voxel/models/props.js';
 import { roadSamples } from './terrain.js';
+import { dressBackcountry } from './backcountry.js';
 
 export function dressPlaces(vw, physprops) {
   const W = vw.world, PH = W.physics, ctx = W.ctx;
@@ -40,6 +41,8 @@ export function dressPlaces(vw, physprops) {
   roadside(vw, { S, post, box, gy });
   yards(vw, { S, post, box, gy });
   restStop(vw, { S, post, box, bench, gy });
+  // the backcountry: the railway, Mont Écho, the lake, the marsh, the orchard, the café
+  dressBackcountry(vw, physprops, { S, post, box, bench, gy });
 }
 
 // ---------------------------------------------------------------- back yards over the harbour

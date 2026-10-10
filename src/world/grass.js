@@ -84,7 +84,7 @@ void main() {
   vec2 wc = floor(uGridOrigin / uSpacing) + iGrid - floor(uGridN * 0.5);
   float h1 = hash12(wc), h2 = hash12(wc + 17.31), h3 = hash12(wc * 1.73 + 3.1), h4 = hash12(wc * 0.37 + 9.7);
   vec2 xz = (wc + vec2(h1, h2)) * uSpacing;
-  vec2 muv = (xz + uWorldHalf) / (2.0 * uWorldHalf);
+  vec2 muv = (xz - uWorldMin) / uWorldSize;
   vec4 mask = texture2D(tMask, muv);
   float dist = distance(xz, uCamPos.xz);
   float R = uGridN * uSpacing * 0.5;
@@ -166,13 +166,13 @@ void main() {
 
 // Build the density mask: R = density, G = height factor, B = spare
 export function buildGrassMask(terrain, blockers = []) {
-  const N = 640; // 1 texel per metre
+  const N = L.WORLD_HALF * 2; // 1 texel per metre
   const data = new Uint8Array(N * N * 4);
   const sx = new Simplex(808);
   for (let j = 0; j < N; j++) {
-    const z = -L.WORLD_HALF + j + 0.5;
+    const z = L.WORLD_Z0 + j + 0.5;
     for (let i = 0; i < N; i++) {
-      const x = -L.WORLD_HALF + i + 0.5;
+      const x = L.WORLD_X0 + i + 0.5;
       const h = terrain.heightAt(x, z);
       const s = terrain.splatAt(x, z);
       let d = 1;
@@ -218,7 +218,7 @@ export function buildGrassMask(terrain, blockers = []) {
         const dx = x + 0.5 - b.x, dz = z + 0.5 - b.z;
         const lx = dx * c - dz * sn, lz = dx * sn + dz * c;
         if (Math.abs(lx) <= b.w / 2 + 0.5 && Math.abs(lz) <= b.d / 2 + 0.5) {
-          const i = x + L.WORLD_HALF, j = z + L.WORLD_HALF;
+          const i = x - L.WORLD_X0, j = z - L.WORLD_Z0;
           if (i < 0 || j < 0 || i >= N || j >= N) continue;
           const o = (j * N + i) * 4;
           data[o] = Math.round(data[o] * (b.keep ?? 0));

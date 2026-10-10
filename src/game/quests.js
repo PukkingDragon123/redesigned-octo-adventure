@@ -1,6 +1,8 @@
 // Side quests & fall-fair games: lost cats, lost things, tree planting, bird
 // photos, letters, helping the café, lawn bowling, harvest-supper invitations,
 // Lou's stunt bet, the grocery run for Nana. Villagers offer them when Hank stops to chat.
+// The backcountry's quests and folk (the ranger, the cottager, the orchard, the station)
+// live in questsWild.js; this module hands them its calls.
 import * as THREE from 'three';
 import { Vox, tone } from '../voxel/vox.js';
 import { meshVox } from '../voxel/mesh.js';
@@ -9,6 +11,7 @@ import * as PR from '../voxel/models/props.js';
 import { input } from '../core/input.js';
 import { CUSTOMERS, BUILDINGS, POI, MO_SPOT } from '../world/layout.js';
 import { PEOPLE } from './npcRoutines.js';
+import { WildQuests, WILD_QUESTS } from './questsWild.js';
 
 const PEOPLE_LINES = (who) => Object.values(PEOPLE).find((p) => (p.char || '') === who || PEOPLE[who] === p)?.wary;
 
@@ -81,6 +84,7 @@ export const QUESTS = {
   bowling: { title: 'Lawn bowling', giver: 'pip', reward: 20 },
   treat: { title: 'Harvest supper invitations', giver: 'pop', reward: 15 },
   stunt: { title: "Lou's stunt bet", giver: 'lou', reward: 40 },
+  ...WILD_QUESTS,
 };
 
 const GREET = {
@@ -106,6 +110,7 @@ export class Quests {
     this.photo = null;
     this.t = 0;
     this.doors = [];
+    this.wild = new WildQuests(this);
   }
 
   get S() {
@@ -148,6 +153,7 @@ export class Quests {
       const p = V(d.x, d.y, d.z).applyMatrix4(v.M);
       this.doors.push({ id: b.id, owner: b.owner, x: p.x, y: p.y, z: p.z });
     }
+    this.wild.sync();
   }
 
   spawn(kind, id, x, z, r) {
@@ -253,6 +259,7 @@ export class Quests {
     if (who === 'pop' && this.game.world.atmosphere.hour > 14) add('treat', "Mom's harvest supper is tonight! Knock on six doors and invite the neighbours. I'm too shy.", async () => {
       const q = this.q('treat'); q.state = 'active'; q.n = 0; q.have = {};
     }, { expr: 'sheepish', yes: "I'll knock!" });
+    if (who === 'ollie') { const o = this.wild.ollieOffer(); if (o) out.push(o); }
     if (who === 'lou') add('stunt', 'Bet you can\'t chain *four tricks* in one combo on that old bike! Five bucks says no!', async () => {
       const q = this.q('stunt'); q.state = 'active'; q.best = 0;
     }, { expr: 'smug', yes: "You're on!" });
@@ -307,6 +314,8 @@ export class Quests {
     if (who === 'pip' && bowling.state === 'active' && bowling.strike) return done('bowling', 'STRIIIIKE!!! You are the BEST SKELETON EVER!!!', 'sparkle');
     const treat = this.q('treat');
     if (who === 'pop' && treat.state === 'active' && treat.n >= 6) return done('treat', "Six doors?! Everybody's coming! Mom says you get the first slice of pie.", 'sparkle');
+    const rl = this.q('railLetter');
+    if (who === 'ollie' && rl.state === 'active' && rl.step === 'ollie') return done('railLetter', 'She wrote back? ...She wants to meet at the café. I had better iron my good sweater.', 'love');
     const stunt = this.q('stunt');
     if (who === 'lou' && stunt.state === 'active' && stunt.best >= 4) return done('stunt', 'NO WAY! Four in a row! ...Here. Five bucks. And thirty-five more for the show.', 'shock');
     // groceries handed to Nana
@@ -389,10 +398,13 @@ export class Quests {
       }
     }
     if (g.mode === 'ride') this.updatePhoto(dt);
+    this.wild.update(dt);
   }
 
   // what Hank can do right here (shown as a prompt)
   action(g) {
+    const w = this.wild.action(g);
+    if (w) return w;
     const p = g.playerPos;
     if (!g.onFoot && g.bike.speed > 3) return null;
     for (const o of this.objs) {
@@ -564,6 +576,7 @@ export class Quests {
     if (S.bowling?.state === 'active') out.push(S.bowling.strike ? 'Tell Pip: STRIKE!' : 'Bowl a strike');
     if (S.treat?.state === 'active') out.push(S.treat.n >= 6 ? 'Tell Pop: everyone is coming' : `Supper invitations ${S.treat.n}/6`);
     if (S.stunt?.state === 'active') out.push(S.stunt.best >= 4 ? 'Tell Lou: four-trick combo!' : 'Chain a 4-trick combo');
+    out.push(...this.wild.noteLines());
     if (Object.keys(g.state.bag || {}).length) out.push('Groceries: bring home');
     else if (S.groceries?.state === 'active') out.push('Buy groceries at Moose & Goose');
     return out.slice(0, 5);
@@ -574,11 +587,13 @@ export class Quests {
     const S = this.S;
     for (const o of this.objs) m.push({ id: `q:${o.id}`, x: o.x, z: o.z, icon: o.kind === 'cat' ? 'cat' : 'star' });
     if (S.groceries?.state === 'active' && !Object.keys(this.game.state.bag || {}).length) m.push({ id: 'shop', x: MO_SPOT.x, z: MO_SPOT.z, icon: 'basket' });
+    m.push(...this.wild.markers());
     return m;
   }
 
   // a "!" over villagers who have something to ask
   updateHints(villagers) {
+    this.wild.updateHints();
     if ((this.hintT = (this.hintT || 0) - 1) > 0) return;
     this.hintT = 90;
     for (const a of Object.values(villagers.actors)) {

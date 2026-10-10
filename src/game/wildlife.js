@@ -20,6 +20,10 @@ export class Wildlife {
       [-60, -200, 3],
       [150, -140, 2],
       [-230, 40, 2],
+      // the backcountry: between the lake and the marsh, in the orchard, under Mont Écho
+      [-432, 104, 3],
+      [-196, 292, 2],
+      [-336, -226, 2],
     ];
     for (const [hx, hz, n] of herds) {
       const herd = { x: hx, z: hz, alarm: 0, fleeYaw: 0 };
@@ -31,6 +35,12 @@ export class Wildlife {
     // a moose who likes the marsh by the pond (and sometimes the road)
     const m = C.add('moose', L.POI.pond.x - 14, L.POI.pond.z + 22, { ...stay, yaw: 1, ai: mooseAI, cat: 'moose' });
     m.collider = game.physics.addCircle({ x: m.x, z: m.z, r: 1.3, kind: 'moose' });
+    // and one who owns Moose Marsh
+    const mm = L.POI.marsh;
+    if (mm) {
+      const m2 = C.add('moose', mm.x + 4, mm.z - 8, { ...stay, yaw: 2.4, ai: mooseAI, cat: 'moose' });
+      m2.collider = game.physics.addCircle({ x: m2.x, z: m2.z, r: 1.3, kind: 'moose' });
+    }
     // crows on the dead tree in the graveyard
     for (const p of game.world.ctx.perches) {
       const c = C.add('crow', p.x, p.z, { ...stay, y: p.y, ai: perchCrowAI, cat: 'perchCrow', maxDraw: 160, yaw: rng.range(0, 6.28) });

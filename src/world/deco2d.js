@@ -93,7 +93,7 @@ export function placeDeco2D(vw) {
   let why = '';
   const no = (w) => { why = w; return false; };
   const free = (x, z, r, o = {}) => {
-    if (Math.abs(x) > L.WORLD_HALF - 12 || Math.abs(z) > L.WORLD_HALF - 12) return no('edge');
+    if (!L.inWorld(x, z, 12)) return no('edge');
     if (!kept(x, z)) return no('keepout');
     if (o.level && !o.hang && inDoorway(x, z, r * 0.5)) return no('door');
     const g = PH.groundAt(x, z, o.y != null ? o.y + 0.5 : 60);

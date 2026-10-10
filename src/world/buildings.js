@@ -451,6 +451,8 @@ const GENERIC = {
   gazebo: { lift: 0.05, H: () => 5.6, open: true },
   lifeguard: { lift: 0.0, H: () => 4.2, open: true },
   rink: { lift: 0.06, H: () => 1.2, open: true, top: true },
+  station: { lift: 0.25, H: () => 5.5 },
+  firetower: { lift: 0.0, H: () => 14, open: true },
 };
 function generic(ctx, B, b) {
   const { terrain, physics } = ctx;

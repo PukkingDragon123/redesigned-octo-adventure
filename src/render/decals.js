@@ -9,7 +9,7 @@
 import * as THREE from 'three';
 import { G, NOISE_GLSL } from './shaderlib.js';
 import { H_RES } from '../world/terrain.js';
-import { WORLD_HALF } from '../world/layout.js';
+import { WORLD_X0, WORLD_Z0 } from '../world/layout.js';
 
 const PPM = 64; // atlas pixels per metre
 // sprites, as ASCII: '#' a deep dent, '+' a shallow one, 'o' raised spoil ('.' nothing).
@@ -260,7 +260,7 @@ export class Decals {
     const T = this.T;
     if (!T) { n.x = 0; n.y = 1; n.z = 0; return 0; }
     const N = T.n, H = T.h;
-    const fx = Math.min(N - 1.001, Math.max(0, (x + WORLD_HALF) / H_RES)), fz = Math.min(N - 1.001, Math.max(0, (z + WORLD_HALF) / H_RES));
+    const fx = Math.min(N - 1.001, Math.max(0, (x - WORLD_X0) / H_RES)), fz = Math.min(N - 1.001, Math.max(0, (z - WORLD_Z0) / H_RES));
     const i = Math.floor(fx), j = Math.floor(fz), tx = fx - i, tz = fz - j;
     const a = H[j * N + i], b = H[j * N + i + 1], c = H[(j + 1) * N + i], d = H[(j + 1) * N + i + 1];
     let gx, gz, h;

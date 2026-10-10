@@ -11,8 +11,9 @@ import * as L from './layout.js';
 const KIND_LIFT = {
   house: 0.35, cabin: 0.45, shed: 0.15, garage: 0.15, outhouse: 0.15, chapel: 0.4, sawmill: 0.2,
   shop: 0.3, firehall: 0.2, barn: 0.15, sugarshack: 0.3, gazebo: 0.05, lifeguard: 0, rink: 0.06,
+  station: 0.25, firetower: 0,
 };
-const OPEN = { gazebo: true, lifeguard: true }; // stand on their lowest point, not the highest
+const OPEN = { gazebo: true, lifeguard: true, firetower: true }; // stand on their lowest point, not the highest
 
 // local (building frame, +z = front) -> world
 export function localToWorld(b, lx, lz) {
@@ -84,6 +85,8 @@ export function buildingSpecPure(b, terrain) {
     opts.stilt = Math.max(1.5, y0 - Math.min(low, -0.4) + 0.6);
   }
   const big = b.kind === 'rink' || b.kind === 'barn' || b.kind === 'sawmill';
-  opts.ground = groundGrid(terrain, b, y0, { side: big ? 6 : 4, back: big ? 6 : 4, front: big ? 10 : 8 });
+  // (the station's platform reaches 6 m out over the track side; the tower's feet stand wide)
+  const wide = b.kind === 'station' ? { side: 7, back: 4, front: 12 } : b.kind === 'firetower' ? { side: 4, back: 4, front: 4 } : null;
+  opts.ground = groundGrid(terrain, b, y0, wide ?? { side: big ? 6 : 4, back: big ? 6 : 4, front: big ? 10 : 8 });
   return { ...b, ...opts };
 }

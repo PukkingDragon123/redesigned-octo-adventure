@@ -1,6 +1,12 @@
 // The handcrafted map of Maple Hollow & Maple Cove.
 // X = east, Z = south (north is -Z). Units are metres. Water level is y = 0.
 //
+// The backcountry beyond the old map (west, north and south):
+//   NW  Mont Écho & its fire tower (switchback trail)    N  the river's upper valley
+//   W   Gare Sainte-Rose on the old rail line (tunnel, rail trail east to the tree stand),
+//       Café du Rang on the west road, Lac des Huards (cottage, dock, fishing camp)
+//   SW  Moose Marsh (boardwalk)        S  Verger Tremblay (apple orchard & cider house)
+//
 //   NW  Old Pine Cemetery            N  Sunset Lookout (hill) . . . loop road . . .  NE  Sandy Point Beach
 //   W   Nana's homestead -- main road -- Beaver Creek covered bridge -- farm -- Maple Cove (Main Street)
 //   SW  trapper's hut                S  sawmill, river mouth           SE  harbour, lighthouse point
@@ -9,7 +15,14 @@
 // leaves it at the covered bridge, climbs past the sugar shack, skirts the lookout hill and comes
 // down to the beach, then runs south along the coast back into the east end of Main Street.
 
-export const WORLD_HALF = 320;
+// The world is a square WORLD_HALF * 2 metres a side centred on (WORLD_CX, WORLD_CZ): the sea keeps
+// the east edge where it always was (x = 320) and the backcountry grew west, north and south.
+export const WORLD_HALF = 440;
+export const WORLD_CX = -120, WORLD_CZ = 0;
+export const WORLD_X0 = WORLD_CX - WORLD_HALF, WORLD_X1 = WORLD_CX + WORLD_HALF;
+export const WORLD_Z0 = WORLD_CZ - WORLD_HALF, WORLD_Z1 = WORLD_CZ + WORLD_HALF;
+// inside the world, at least m metres from its edges
+export const inWorld = (x, z, m = 0) => x > WORLD_X0 + m && x < WORLD_X1 - m && z > WORLD_Z0 + m && z < WORLD_Z1 - m;
 export const WATER_LEVEL = 0;
 
 // Points of interest (keys used by the story, the map, ambience and music)
@@ -46,6 +59,17 @@ export const POI = {
   restStop: { x: 180, z: -107, r: 9, name: 'Rest Area' },
   // the prologue's lumber camp: a flat clearing ringed by dense autumn forest, just east of the grave road
   lumberCamp: { x: -181, z: 16, r: 12 },
+  // the backcountry
+  lake: { x: -405, z: 55, r: 60, name: 'Lac des Huards' },
+  cottage: { x: -333, z: 76, name: 'Chalet Gisèle' },
+  fishCamp: { x: -417, z: 4, name: 'Fishing Camp' },
+  marsh: { x: -434, z: 154, r: 40, name: 'Moose Marsh' },
+  station: { x: -398, z: -150, name: 'Gare Sainte-Rose' },
+  tunnel: { x: -497, z: -171 },
+  firetower: { x: -300, z: -286, r: 14, name: 'Mont Écho' },
+  towerTrailhead: { x: -282, z: -156 },
+  orchard: { x: -168, z: 290, r: 30, name: 'Verger Tremblay' },
+  cafeHut: { x: -306, z: 4, name: 'Café du Rang' },
 };
 
 // The sea & the cove. Shapes: ellipse {cx,cz,rx,rz} or rounded box {box:[x0,z0,x1,z1], round}
@@ -53,6 +77,7 @@ export const SEA = [
   { cx: 450, cz: 90, rx: 165, rz: 330 }, // open sea to the east
   { box: [128, 82, 282, 178], round: 14 }, // the cove (harbour)
   { cx: 270, cz: 240, rx: 150, rz: 85 }, // south bay
+  { cx: 235, cz: 430, rx: 205, rz: 150 }, // the open water south of the bay (to the world's south edge)
 ];
 // Land that always stays above water (cut out of the sea): the lighthouse point
 export const LAND = [
@@ -64,8 +89,24 @@ export const BEACHES = [
   { x: 296, z: -58, len: 104, width: 30, angle: 0.18 }, // angle: shore normal (radians from +x toward +z)
 ];
 
+// Inland water below sea level: lakes {x, z, rx, rz, rot, depth} (a wobbly ellipse, rot radians)
+// and marshes {x, z, r} (flats right at the waterline: pools between grassy hummocks)
+export const LAKES = [
+  { x: -405, z: 55, rx: 60, rz: 37, rot: 0.25, depth: 2.8 },
+];
+export const MARSHES = [
+  { x: -434, z: 154, r: 38 },
+];
+// Hills raised onto the base terrain: {x, z, h (m at the top), s (spread, m)}
+export const HILLS = [
+  { x: -300, z: -286, h: 30, s: 56 }, // Mont Écho
+  { x: -520, z: -174, h: 16, s: 20 }, // the ridge the railway tunnels through
+];
+
 // River: north mountains -> cove. Width per point.
 export const RIVER = [
+  { x: -14, z: -460, w: 7 },
+  { x: -24, z: -400, w: 8 },
   { x: -30, z: -340, w: 8 },
   { x: -44, z: -250, w: 9 },
   { x: -26, z: -190, w: 9 },
@@ -130,6 +171,31 @@ export const ROADS = [
   // gravel paths across the town green to the gazebo and the chapel
   { id: 'greenPath1', type: 'trail', w: 2.4, path: true, pts: [[186, MS_N + 0.2], [186, 9]] },
   { id: 'greenPath2', type: 'trail', w: 2.4, path: true, pts: [[170, 40], [186, 24], [202, 40]] },
+  // ---- the backcountry (a road that ends on an earlier one takes its height there)
+  // the old railway's bed: rails from the tunnel under the west ridge past the station, then a gravel rail trail east to the tree stand
+  {
+    id: 'railTrail', type: 'trail', w: 5, smooth: true, grade: 0.05, startH: 12.5,
+    pts: [[-500, -171], [-460, -152], [-420, -139], [-380, -137], [-340, -141], [-300, -151], [-260, -164], [-215, -172], [-170, -168], [-136, -158], [-114, -147]],
+  },
+  // the west road: Nana's lane by the cemetery road, past the café, along the lake, up to the station
+  {
+    id: 'westRoad', type: 'road', w: 7, smooth: true, grade: 0.08,
+    pts: [[-183, 46], [-206, 47], [-240, 42], [-276, 32], [-306, 23], [-334, 18], [-356, 8], [-372, -14], [-384, -48], [-392, -88], [-396, -118], [-398, -137]],
+  },
+  { id: 'lakeLane', type: 'trail', w: 4.5, smooth: true, grade: 0.1, pts: [[-318, 21], [-320, 44], [-327, 64]] },
+  { id: 'campLane', type: 'trail', w: 3.5, smooth: true, grade: 0.1, pts: [[-365, -4], [-386, -6], [-406, -3]] },
+  // up Mont Écho in switchbacks to the fire tower
+  {
+    id: 'towerTrail', type: 'trail', w: 3.6, smooth: true, grade: 0.17,
+    pts: [[-282, -157], [-270, -178], [-296, -190], [-322, -198], [-300, -212], [-266, -222], [-290, -236], [-322, -244], [-298, -258], [-301, -275]],
+  },
+  // south to the orchard, then west by the trapper's hut to the marsh
+  {
+    id: 'orchardRoad', type: 'road', w: 6, smooth: true, grade: 0.08,
+    pts: [[-118, 59], [-116, 90], [-124, 130], [-136, 170], [-146, 210], [-150, 240], [-152, 263]],
+  },
+  { id: 'rangRoad', type: 'road', w: 6, smooth: true, grade: 0.09, pts: [[-152, 263], [-176, 257], [-206, 241], [-232, 213], [-246, 182], [-249, 152]] },
+  { id: 'marshTrail', type: 'trail', w: 4, smooth: true, grade: 0.1, pts: [[-250, 153], [-288, 157], [-328, 159], [-362, 153], [-386, 148], [-400, 147.5]] },
 ];
 
 // Flat areas (cx, cz, r, h = target height or null for local smoothing)
@@ -146,6 +212,11 @@ export const FLATS = [
   { x: 90, z: 46, r: 30, h: 5.2 }, // the road dips gently down into the village
   { x: -181, z: 16, r: 16, h: null }, // the lumber camp clearing
   { x: 180, z: -107, r: 11, h: null }, // the rest area on the loop road
+  // the backcountry
+  { x: -398, z: -146, r: 16, h: 11.0 }, // the station yard, level with the track
+  { x: -300, z: -286, r: 13, h: null }, // Mont Écho's summit
+  { x: -152, z: 272, r: 12, h: null }, // the cider house
+  { x: -304, z: 13, r: 11, h: 7.0 }, // Café du Rang (a pull-off at the road's level)
 ];
 // Smooth hollows pressed into the ground (the bike park bowl): r radius, depth metres
 export const BOWLS = [
@@ -223,6 +294,13 @@ export const BUILDINGS = [
   { id: 'garage', kind: 'shed', x: -154, z: 94, w: 7, d: 8, floors: 1, color: 'weathered', roof: 'rust', facing: Math.PI * 0.5 },
   { id: 'outhouse', kind: 'outhouse', x: -190, z: 92, w: 1.6, d: 1.6, floors: 1, color: 'weathered', roof: 'rust', facing: Math.PI * 0.5 },
   { id: 'trapperHut', kind: 'cabin', x: -252, z: 146, w: 6, d: 5, floors: 1, color: 'log', roof: 'moss', facing: Math.PI * 0.3 },
+  // ---- the backcountry
+  { id: 'station', kind: 'station', x: -398, z: -150, w: 16, d: 7, floors: 1, color: 'red', roof: 'dark', facing: 0, sign: 'GARE STE-ROSE', owner: 'odile' },
+  { id: 'firetower', kind: 'firetower', x: -300, z: -287, w: 4.5, d: 4.5, floors: 1, color: 'weathered', roof: 'dark', facing: 0.35 },
+  { id: 'cottage', kind: 'cabin', x: -333, z: 76, w: 8, d: 7, floors: 1, color: 'log', roof: 'green', facing: -Math.PI / 2, porch: true, chimney: true, owner: 'gisele' },
+  { id: 'fishcamp', kind: 'cabin', x: -417, z: 3, w: 6, d: 5, floors: 1, color: 'log', roof: 'rust', facing: 0.12 },
+  { id: 'cidrerie', kind: 'shop', x: -152, z: 274, w: 10, d: 8, floors: 1, color: 'red', roof: 'dark', facing: Math.PI, sign: 'CIDRERIE TREMBLAY', shop: 'cider', owner: 'tremblay' },
+  { id: 'cafehut', kind: 'shop', x: -304, z: 12, w: 7, d: 6, floors: 1, color: 'yellow', roof: 'red', facing: 0, sign: 'CAFE DU RANG', shop: 'coffee' },
 ];
 
 // a point `dist` metres in front of a building's door (along its facing), with side offset `side`
@@ -265,6 +343,14 @@ export const RAMPS = [
   { x: 262, z: -70, yaw: Math.PI + 0.12, len: 5, h: 1.3 },
   { x: -95, z: -2, yaw: Math.PI + 0.05, len: 5, h: 1.3 },
   { x: -198, z: 112, yaw: 2.3, len: 5, h: 1.2 },
+  // the backcountry: kickers on the shoulders of the new roads and trails
+  { x: -238, z: -166, yaw: Math.PI / 2 + 0.15, len: 5, h: 1.3 }, // rail trail
+  { x: -262, z: 41, yaw: -Math.PI / 2 - 0.25, len: 5, h: 1.2 }, // west road
+  { x: -119, z: 112, yaw: 0.12, len: 5, h: 1.3 }, // orchard road
+  { x: -306, z: 160, yaw: -Math.PI / 2 - 0.05, len: 5, h: 1.1 }, // marsh trail
+  { x: -280, z: -165, yaw: Math.PI * 0.85, len: 6, h: 1.6 }, // the bottom of the Mont Écho trail
+  { x: -293.4, z: -217.1, yaw: -1.33, len: 5, h: 1.2 }, // Mont Écho's switchbacks, for the ride down
+  { x: -301.4, z: -235.9, yaw: 1.4, len: 5, h: 1.2 },
 ];
 
 // Tree clearings (forest.js thins trees inside r, fading back over `soft` metres)
@@ -287,6 +373,13 @@ export const CLEARINGS = [
   { x: 250, z: -46, r: 10, soft: 6 }, // fish & chips
   { x: 180, z: -107, r: 9, soft: 5 }, // rest area & the giant goose
   { x: -181, z: 16, r: 12, soft: 2.5, ring: 10, bare: true }, // lumber camp: open inside (no undergrowth either), thick forest right at its edge
+  // the backcountry
+  { x: -398, z: -146, r: 16, soft: 8 }, // the station
+  { x: -300, z: -286, r: 13, soft: 8 }, // the fire tower (and its view: see forest.js)
+  { x: -336, z: 74, r: 12, soft: 8 }, // the lake cottage
+  { x: -416, z: 5, r: 9, soft: 6 }, // the fishing camp
+  { x: -304, z: 12, r: 10, soft: 6 }, // Café du Rang
+  { x: -176, z: 288, r: 36, soft: 8 }, // the orchard & cider house
 ];
 // Trees planted on purpose (the big maple on the green, maples lining the green)
 export const PLANTED = [
