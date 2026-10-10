@@ -267,7 +267,8 @@ export function createWorldTextures(terrain) {
   const half = new Uint16Array(n * n);
   for (let i = 0; i < n * n; i++) half[i] = THREE.DataUtils.toHalfFloat(terrain.h[i]);
   const heightTex = dataTexture(half, n, n, { format: THREE.RedFormat, type: THREE.HalfFloatType, linear: true });
-  const splatTex = dataTexture(new Uint8Array(terrain.splat.buffer.slice(0)), terrain.sn, terrain.sn, { linear: true });
+  // (the texture shares the terrain's splat array: nothing writes to it after the build)
+  const splatTex = dataTexture(terrain.splat, terrain.sn, terrain.sn, { linear: true });
   G.uHeightTex.value = heightTex;
   G.uSplatTex.value = splatTex;
   G.uWorldMin.value.set(WORLD_X0, WORLD_Z0);
@@ -285,7 +286,7 @@ export function createWorldTextures(terrain) {
 // hangs a skirt down from its edges, so the seams between neighbours at different levels
 // never open a crack.
 const LOD_LEVELS = [{ step: 1, dist: 0 }, { step: 2, dist: 150 }, { step: 4, dist: 360 }];
-export function createTerrainMeshes(terrain, material, chunkCells = 40) {
+export function createTerrainMeshes(terrain, material, chunkCells = 44) {
   const group = new THREE.Group();
   group.name = 'terrain';
   const n = terrain.n, Hh = terrain.h;

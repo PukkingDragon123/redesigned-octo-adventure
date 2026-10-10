@@ -43,7 +43,7 @@ export class VoxelWorld {
     let r = this.cache.get(key);
     if (!r) {
       r = fn();
-      r.geometry = meshVox(r.vox, { size: r.size, origin: r.origin, jitter: r.jitter ?? 0 });
+      r.geometry = meshVox(r.vox, { size: r.size, origin: r.origin, jitter: r.jitter ?? 0, ao: r.ao });
       this.cache.set(key, r);
     }
     return r;
@@ -90,8 +90,21 @@ export class VoxelWorld {
       mesh.matrixAutoUpdate = false;
       this.scene.add(mesh);
       this.meshes.push(mesh);
+      (this.decorChunks ||= []).push({ mesh, c: merged.boundingSphere.center, r: merged.boundingSphere.radius });
     }
     this.chunks.clear();
+  }
+
+  // The merged clutter is small stuff: past a few hundred metres (deep in the haze) a chunk is
+  // skipped altogether, which keeps the far side of the bigger map from costing draw calls.
+  updateFar(camPos, far = 450) {
+    const L2 = this._farAt;
+    if (L2 && Math.abs(L2.x - camPos.x) + Math.abs(L2.z - camPos.z) < 8) return;
+    this._farAt = { x: camPos.x, z: camPos.z };
+    for (const d of this.decorChunks || []) {
+      const dist = Math.hypot(d.c.x - camPos.x, d.c.z - camPos.z) - d.r;
+      d.mesh.visible = dist < far;
+    }
   }
 
   // ------------------------------------------------------------ buildings

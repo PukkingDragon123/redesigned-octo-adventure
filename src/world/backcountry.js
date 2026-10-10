@@ -25,14 +25,16 @@ export function dressBackcountry(vw, physprops, { S, post, box, bench, gy }) {
       PH.addBox({ x: x + c * off, z: z - s * off, yaw, w: 0.2, l: Ls, y0: top - 1, y1: top + 1.0, kind: 'railing' });
     }
   };
-  // a run of deck sections along a polyline at height `top`
+  // a run of deck sections along a polyline at height `top` (with o.top1: easing down to it from
+  // `top` over the first leg, so a boardwalk can start at the trail's height and settle near the water)
   const deckRun = (pts, w, top, o = {}) => {
     for (let k = 0; k + 1 < pts.length; k++) {
       const [ax, az] = pts[k], [bx, bz] = pts[k + 1];
       const len = Math.hypot(bx - ax, bz - az), n = Math.max(1, Math.ceil(len / 2.9)), yaw = Math.atan2(bx - ax, bz - az);
       for (let i = 0; i < n; i++) {
         const t = (i + 0.5) / n;
-        deck(ax + (bx - ax) * t, az + (bz - az) * t, yaw, 3, w, top, o);
+        const y = o.top1 == null ? top : k === 0 ? top + (o.top1 - top) * t : o.top1;
+        deck(ax + (bx - ax) * t, az + (bz - az) * t, yaw, 3, w, y, o);
       }
     }
   };
@@ -74,7 +76,7 @@ function railway(vw, { S, post, box, gy, PH, ctx, fingerpost }) {
       break;
     }
     const x = (a.x + b.x) / 2, z = (a.z + b.z) / 2, yaw = Math.atan2(b.x - a.x, b.z - a.z);
-    S('railtrack', () => PR.railTrack({ len: 4.05 }), x, z, yaw, -0.06);
+    S('railtrack', () => PR.railTrack({ len: 4.1 }), x, z, yaw, -0.05);
   }
   // the tunnel portal where the line comes out of the west ridge (closed: dark inside)
   const t0 = sm[0], t1 = sm[1], tyaw = Math.atan2(t1.x - t0.x, t1.z - t0.z);
@@ -191,17 +193,17 @@ function lake(vw, { S, post, box, gy, ctx, deck, deckRun }) {
 function marsh(vw, { S, post, box, gy, deckRun, fingerpost }) {
   const m = L.POI.marsh;
   // the boardwalk from the trail's end out across the pools to the blind on the far side
-  const pts = [[-393, 147], [-408, 151], [-424, 148], [-438, 156], [-450, 166], [-460, 171]];
-  deckRun(pts, 1.8, Math.max(0.75, gy(pts[0][0], pts[0][1]) + 0.12), { rail: 1, kind: 'boardwalk' });
+  const pts = [[-399, 147.5], [-412, 151], [-424, 148], [-438, 156], [-450, 166], [-460, 171]];
+  const top = 0.8;
+  deckRun(pts, 1.8, Math.max(top, gy(pts[0][0], pts[0][1]) + 0.1), { rail: 1, kind: 'boardwalk', top1: top });
   const [bx, bz] = pts[pts.length - 1];
   const byaw = Math.atan2(m.x - bx, m.z - bz); // (the blind's door faces back along the boardwalk, its slot out west)
-  const top = Math.max(0.75, gy(pts[0][0], pts[0][1]) + 0.12);
   vw.addStatic(vw.model('blind', () => PR.wildlifeBlind()), bx - Math.sin(byaw) * 2, top, bz - Math.cos(byaw) * 2, byaw + Math.PI);
   vw.world.physics.addPlatform({ x: bx - Math.sin(byaw) * 2, z: bz - Math.cos(byaw) * 2, yaw: byaw, w: 2.4, l: 2.2, y0: top, surface: 'wood', kind: 'deck' });
   // reeds and cattails round the pools
   const T = vw.terrain;
   let n = 0;
-  for (let k = 0; k < 140 && n < 26; k++) {
+  for (let k = 0; k < 140 && n < 16; k++) {
     const a = k * 2.399, r = 6 + ((k * 37) % 100) / 100 * (m.r + 4);
     const x = m.x + Math.cos(a) * r, z = m.z + Math.sin(a) * r, h = T.heightAt(x, z);
     if (h < -0.35 || h > 0.7) continue;
@@ -220,8 +222,8 @@ function orchard(vw, { S, post, box, gy, physprops, fingerpost }) {
   const T = vw.terrain;
   const trees = (vw.orchardTrees = []);
   let k = 0;
-  for (let j = 0; j < 5; j++) for (let i = 0; i < 6; i++) {
-    const x = -201 + i * 7 + (((i * 7 + j * 3) % 5) - 2) * 0.25, z = 277 + j * 8 + (j % 2) * 1.5;
+  for (let j = 0; j < 4; j++) for (let i = 0; i < 6; i++) {
+    const x = -201 + i * 7 + (((i * 7 + j * 3) % 5) - 2) * 0.25, z = 278 + j * 9 + (j % 2) * 1.5;
     if (T.splatAt(x, z).road > 0.2) continue;
     const seed = (i * 3 + j * 5) % 4;
     S(`appletree:${seed}`, () => PR.appleTree({ seed }), x, z, (k++ * 1.7) % 6.28, -0.05);

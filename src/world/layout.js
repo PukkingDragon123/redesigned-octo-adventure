@@ -195,7 +195,7 @@ export const ROADS = [
     pts: [[-118, 59], [-116, 90], [-124, 130], [-136, 170], [-146, 210], [-150, 240], [-152, 263]],
   },
   { id: 'rangRoad', type: 'road', w: 6, smooth: true, grade: 0.09, pts: [[-152, 263], [-176, 257], [-206, 241], [-232, 213], [-246, 182], [-249, 152]] },
-  { id: 'marshTrail', type: 'trail', w: 4, smooth: true, grade: 0.1, pts: [[-250, 153], [-288, 157], [-328, 159], [-362, 153], [-394, 147]] },
+  { id: 'marshTrail', type: 'trail', w: 4, smooth: true, grade: 0.1, pts: [[-250, 153], [-288, 157], [-328, 159], [-362, 153], [-386, 148], [-400, 147.5]] },
 ];
 
 // Flat areas (cx, cz, r, h = target height or null for local smoothing)

@@ -3192,19 +3192,17 @@ export function hockeyNet() {
 
 // ------------------------------------------------------------------ the backcountry
 const RAIL = 0x5a4038, RAIL_TOP = 0xa8a4a0, TIE = 0x4a3a2c, TIE_L = 0x5e4a36;
-// railTrack({ len }) — a length of standard-gauge track: creosoted ties on a ballast bed, two rails
-// with shiny worn tops. Origin bottom-centre, the rails run along z.
+// railTrack({ len }) — a length of standard-gauge track: creosoted ties on the trail's gravel, two rails
+// with shiny worn tops. Origin bottom-centre, the rails run along z; 0.1 m voxels (cheap to repeat).
 export function railTrack({ len = 4, seed = 1 } = {}) {
-  const L = Math.round(len / STD), Wd = 54, c = Wd / 2;
-  const v = new Vox(Wd, 6, L);
+  const L = Math.round(len / MID), Wd = 27, c = 13;
+  const v = new Vox(Wd, 3, L);
   const R = rng(seed * 7 + 3);
-  // (the ballast is the trail's own gravel)
-  for (let z = 4; z < L; z += 15) v.fill(2, 1, z, Wd - 3, 2, z + 3, R() < 0.3 ? TIE_L : TIE);
-  for (const x of [c - 15, c + 14]) {
-    v.fill(x, 3, 0, x + 1, 3, L - 1, RAIL);
-    v.fill(x, 4, 0, x + 1, 4, L - 1, RAIL_TOP);
-  }
-  return finish(v, STD, { origin: [c, 0, L / 2], radius: 1.3 });
+  for (let z = 1; z < L; z += 7) v.fill(1, 0, z, Wd - 2, 0, z + 1, R() < 0.3 ? TIE_L : TIE);
+  for (const x of [c - 7, c + 7]) { v.fill(x, 1, 0, x, 1, L - 1, RAIL); v.fill(x, 2, 0, x, 2, L - 1, RAIL_TOP); }
+  const res = finish(v, MID, { origin: [c + 0.5, 0, L / 2], radius: 1.3 });
+  res.ao = false; // (thin bars on thin ties: without occlusion they merge into a handful of quads)
+  return res;
 }
 
 // tunnelPortal() — a dressed-stone portal with a round-topped bore into the ridge, a keystone and a
@@ -3281,32 +3279,28 @@ export function woodDeck({ len = 6, w = 2, posts = 2.2, rail = 0, seed = 1 } = {
     for (let z = 1; z < L; z += 15) v.fill(x, P - 1, z, x, P + 8, z, GREYWOOD_D);
     v.fill(x, P + 8, 0, x, P + 8, L - 1, GREYWOOD_L);
   }
-  return finish(v, MID, { origin: [(Wd + 2) / 2, 0, L / 2], radius: w / 2 });
+  const res = finish(v, MID, { origin: [(Wd + 2) / 2, 0, L / 2], radius: w / 2 });
+  res.ao = false;
+  return res;
 }
 
 const APPLE_LEAF = [0x6a8a2e, 0x80983a, 0x9aa23e, 0xb8a03a];
 // appleTree({ seed, fruit }) — a pruned orchard apple tree: a short crooked trunk under a round crown
 // in late-season green and gold (shaded in big patches so it meshes cheaply), red apples dotted over
-// its outside and a few in the grass. 0.125 m voxels.
+// its outside and a few in the grass. Chunky 0.2 m voxels: a whole orchard of them stays cheap.
 export function appleTree({ seed = 1, fruit = true } = {}) {
-  const S = 0.125, v = new Vox(34, 38, 34), c = 17;
+  const S = 0.2, v = new Vox(22, 24, 22), c = 11;
   const R = rng(seed * 31 + 7);
-  const lean = (R() - 0.5) * 3;
-  polyline(v, [[c, 0, c], [c + lean * 0.4, 7, c - 1], [c + lean, 12, c]], 0x5a4030, 1.2);
-  const lobes = [[c + lean, 22, c, 10.5, 8.5], [c + lean - 5 + R() * 2, 19, c + 4 - R() * 2, 7, 6], [c + lean + 5 - R() * 2, 20, c - 4 + R() * 2, 7, 6], [c + lean, 27, c + 1, 7, 5]];
-  for (const [x, y, z, r, ry] of lobes) v.ellipsoid(x, y, z, r, ry, r, (xx, yy, zz) => APPLE_LEAF[Math.min(3, Math.floor(vhash(xx >> 2, yy >> 2, zz >> 2, seed) * 3.2) + (yy > 25 ? 1 : 0))]);
-  // apples on the outside of the crown
+  const lean = (R() - 0.5) * 2;
+  polyline(v, [[c, 0, c], [c + lean * 0.4, 4, c - 0.5], [c + lean, 7.5, c]], 0x5a4030, 0.7);
+  const lobes = [[c + lean, 13.5, c, 6.6, 5.3], [c + lean - 3 + R(), 12, c + 2.5 - R(), 4.4, 3.8], [c + lean + 3 - R(), 12.5, c - 2.5 + R(), 4.4, 3.8], [c + lean, 17, c + 0.5, 4.4, 3.2]];
+  for (const [x, y, z, r, ry] of lobes) v.ellipsoid(x, y, z, r, ry, r, (xx, yy, zz) => APPLE_LEAF[Math.min(3, Math.floor(vhash(xx >> 1, yy >> 1, zz >> 1, seed) * 3.2) + (yy > 15 ? 1 : 0))]);
   if (fruit) {
-    for (let k = 0; k < 26; k++) {
-      const a = R() * 6.28, e = (R() - 0.3) * 1.2, x = Math.round(c + Math.cos(a) * Math.cos(e) * 12), z = Math.round(c + Math.sin(a) * Math.cos(e) * 12);
-      for (let y = 34; y > 10; y--) {
-        if (!v.get(x, y, z)) continue;
-        // walk in from the outside along the ray until the crown
-        v.set(x, y, z, k % 3 ? 0xb8221e : 0xd8402a);
-        break;
-      }
+    for (let k = 0; k < 18; k++) {
+      const a = R() * 6.28, e = (R() - 0.3) * 1.2, x = Math.round(c + Math.cos(a) * Math.cos(e) * 8), z = Math.round(c + Math.sin(a) * Math.cos(e) * 8);
+      for (let y = 22; y > 6; y--) if (v.get(x, y, z)) { v.set(x, y, z, k % 3 ? 0xb8221e : 0xd8402a); break; }
     }
-    for (let k = 0; k < 5; k++) { const a = R() * 6.28, r = 4 + R() * 8; v.set(c + Math.cos(a) * r, 0, c + Math.sin(a) * r, 0xb8221e); }
+    for (let k = 0; k < 4; k++) { const a = R() * 6.28, r = 3 + R() * 5; v.set(c + Math.cos(a) * r, 0, c + Math.sin(a) * r, 0xb8221e); }
   }
   bevel(v, { top: 0.1, bottom: -0.12 });
   return finish(v, S, { origin: [c, 0, c], radius: 0.4 });

@@ -262,6 +262,7 @@ export class World {
     this.forest2d?.update(camera.position, camera);
     this.fences?.update(camera);
     this.forest?.updateVisibility(camera.position);
+    this.voxel?.updateFar?.(camera.position);
     this.grass?.update(camera.position);
     this.updateShadow(focus);
     this.updateTown(dt);

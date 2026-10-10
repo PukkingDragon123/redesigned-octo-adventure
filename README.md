@@ -132,6 +132,18 @@ its heat, more the harder the crash.
   compass, stethoscope and Mountie hat, six saplings to plant for Gus, bird
   photos for Birdie, a secret letter, pumpkins for the café, lawn bowling,
   harvest supper invitations, and Lou's stunt bet.
+- Ride out into the backcountry west, north and south of the old map: Café du
+  Rang on the west road (a giant mug on its roof), Lac des Huards with Gisèle's
+  cottage, its dock, canoes and a fishing camp, Moose Marsh and its boardwalk
+  and blind, the old railway coming out of its tunnel past Gare Sainte-Rose (a
+  handcar on the rails, a rail trail east to the tree stand), Mont Écho's
+  switchback trail up to Ranger Rosie's fire tower and its view, and Verger
+  Tremblay's apple orchard and cider press. Their folk have favours too: a
+  cocoa to go carried up the mountain before it cools, a race against Gérard
+  the moose down the switchbacks, Gisèle's lost paddle, eight windfall apples
+  for the press, Old Ollie's letter to the station master and back, and beating
+  the old express down the rail trail. (`node tools/wildtest.mjs` checks the
+  bigger world, its roads and models, and every one of these quests.)
 - Crash badly and Hank bursts into bones, then zips back together.
 
 ## How it's made
@@ -212,7 +224,10 @@ its heat, more the harder the crash.
   Out in the country there's a red-barn farm with a pumpkin patch and corn
   maze, a sugar shack, a campground, a covered bridge, a bike park, a beach
   with a lifeguard tower and a fish & chips shack. Buildings are meshed in Web Workers. The sea uses Gerstner waves
-  with surf that follows the shoreline, foam, swash and wet sand.
+  with surf that follows the shoreline, foam, swash and wet sand. The world is
+  880 m a side (the sea keeps the east edge); the terrain is drawn in chunks with
+  three levels of detail and skirts, inland lakes and marshes sit below the
+  waterline, and the merged clutter far across the map is skipped.
 - **Characters** (`src/game/vchar.js`): jointed voxel rigs with springy
   procedural poses, idle fidgets, cartoon reactions, pixel face decals with
   many expressions, verlet-cloth scarves and capes, held props, bike-riding IK
