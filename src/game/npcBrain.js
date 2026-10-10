@@ -1158,7 +1158,8 @@ export class NpcBrain {
   }
 
   // ------------------------------------------------------------ the contest's first look at Hank (contest.js)
-  // Frozen mid-action, staring at him: no screams, no running. Heads follow him about.
+  // Frozen mid-action, scared stiff, staring at him: no screams, no running. Trembling,
+  // hands to the mouth or half up (fright.js). Heads follow him about.
   // hideBehind: a parent to duck behind and peek round (Pop, behind Josée)
   freeze(hideBehind = null) {
     if (this.mode === 'frozen') return;
@@ -1175,13 +1176,13 @@ export class NpcBrain {
         a.faceTowards(P.x, P.z);
         a.peekSide = Math.random() < 0.5 ? 1 : -1;
         a.play('peek', 'worried');
-      } else C?.freezeActor(a);
+      } else C?.freezeActor(a, C.styleOf?.(this.key));
       a.lookAt(g.playerChar);
       a.tempExpr('shock', rand(0.6, 1.2));
       for (;;) {
         await w(rand(2.5, 5));
         // (a nervous gulp when he comes right up close)
-        if (this.d < 2 && Math.random() < 0.5) { a.react('flinch'); g.emotes?.show(a, 'sweat', 1.2); }
+        if (this.d < 2 && Math.random() < 0.5) { a.react('gulp'); g.emotes?.show(a, 'sweat', 1.2); }
         if (hideBehind && Math.random() < 0.4) { a.peekSide = -a.peekSide; }
       }
     });

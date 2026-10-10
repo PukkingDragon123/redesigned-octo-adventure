@@ -12,6 +12,7 @@ import { charForSpot } from './npcs.js';
 import { voxelPoutine } from './quests.js';
 import { StrayCat } from './strayCat.js';
 import { AFTER_COCOA, ROUND_KEYS } from './contest.js';
+import { ENTRY, fixedShots, followShot, faceSpot } from './entryShots.js';
 import { CONTEST } from '../world/contest.js';
 import { nearestRoad } from '../world/terrain.js';
 import * as FOOD from '../voxel/models/food.js';
@@ -484,18 +485,174 @@ export class Story {
     });
   }
 
-  // ---------------------------------------------------------------- 4. the contest freezes
+  // ---------------------------------------------------------------- 4. into town: the contest freezes
   // Hank's first ride into Maple Cove: the pumpkin carving contest is on in the street,
-  // packed, Gus hosting through his tin megaphone... and as Hank rides in, everyone
-  // freezes mid-action and stares. That all happens in the game itself, not a cutscene:
-  // contest.js runs the freeze and the cocoa round (Hank hands out cups from the carrier
-  // Nana sent along), and once the regulars are all warmed up Gus comes over and invites
-  // him to carve (contestInvite below).
+  // packed, Gus mid-announcement through his tin megaphone... and as Bessie rolls in past
+  // the corn sheaves, everyone freezes, scared stiff (townEntry, a short cutscene: no
+  // screams, nobody runs). Then it's Hank's move, in the game itself: contest.js runs the
+  // cocoa round (Hank hands out cups from the carrier Nana sent along; the street stays
+  // frozen and frightened until each of them has one), and once the regulars are all
+  // warmed up Gus comes over and invites him to carve (contestInvite below).
   //
-  // Test entry points: ?scene=villagePanic rides in from the bridge road for the first
-  // look; ?scene=cocoaRound starts at the contest, everyone already frozen;
-  // ?scene=carveInvite skips to Gus's invitation (then the carving); ?scene=contestScream
-  // (game.js) is a save from before the contest riding in.
+  // Flags: contestFreeze (set as the street freezes) marks the cutscene as seen; old saves
+  // from before the contest get it on their next ride in; saves from mid-round or after it
+  // never see it.
+  //
+  // Test entry points: ?scene=townEntry plays the cutscene from the top; ?scene=villagePanic
+  // rides in from the bridge road (the cutscene starts at the corn sheaves);
+  // ?scene=cocoaRound starts at the contest, everyone already frozen; ?scene=carveInvite
+  // skips to Gus's invitation (then the carving); ?scene=contestScream (game.js) is a save
+  // from before the contest riding in.
+  townEntry() {
+    const g = this.g, K = g.contest, R = K.round;
+    if (this.entering) return this.entering;
+    // (a test entry, from far off or once it has all happened: start the first arrival over)
+    const p = g.playerPos;
+    const replay = !R.needsStart() || Math.hypot(p.x - ENTRY.stop.x, p.z - ENTRY.stop.z) > 45;
+    this.entering = (async () => {
+      if (replay) {
+        this.firstArrival({ at: 'road' });
+        // a moment for the crowd to turn out (their bodies build in idle time)
+        for (let i = 0; i < 40 && K.crowd.building < K.crowd.list.length; i++) await g.wait(0.25);
+        await g.wait(0.6);
+      }
+      await this.scene((S) => this.townEntryShots(S));
+      // (skipped, or cut short: the street freezes all the same)
+      if (R.needsStart()) K.beginRound();
+      g.save();
+    })().finally(() => { this.entering = null; });
+    return this.entering;
+  }
+  async townEntryShots(S) {
+    const g = this.g, K = g.contest, VL = g.villagers, b = g.bike, E = ENTRY;
+    S.keepFrozen = true; // (contest.js: the street stays frozen while the lens is on it)
+    const gy = (x, z) => g.physics.groundAt(x, z).h;
+    const V3 = (a) => V(a[0], a[1], a[2]);
+    // Bessie (Hank aboard) on the road in, just short of the village (a leaf wipe over
+    // the jump when he was somewhere else)
+    const faded = Math.hypot(g.playerPos.x - E.start.x, g.playerPos.z - E.start.z) > 12;
+    if (faded) await S.fade(1, 0.5);
+    if (g.onFoot) g.hopOn();
+    g.setBikeVisible(true);
+    b.reset(E.start.x, E.start.z, E.yaw);
+    const y = gy(E.stop.x, E.stop.z);
+    const fx = Math.sin(E.yaw), fz = Math.cos(E.yaw);
+    // everyone busy at their places; Gus in the middle of the street, megaphone up
+    K.stageEntry();
+    const gus = VL.get('gus');
+    const gs = CONTEST.spots.gus;
+    if (gus) {
+      gus.scripted = true;
+      gus.path = null;
+      gus.pos.set(gs.x, gy(gs.x, gs.z), gs.z);
+      gus.yaw = gus.targetYaw = Math.atan2(E.start.x - gs.x, E.start.z - gs.z);
+      gus.lookAt(null);
+      gus.play('announce', 'happy');
+      S.temp.push({ remove: () => { gus.scripted = false; } });
+    }
+    S.music('village');
+    // shot 1: rolling in behind Hank, the packed street ahead
+    let rolling = true;
+    S.every(() => {
+      if (!rolling) return true;
+      const rem = (E.stop.x - b.pos.x) * fx + (E.stop.z - b.pos.z) * fz;
+      const v = rem <= 0.06 || S.skip ? 0 : Math.min(5.2, Math.sqrt(2 * 1.5 * rem));
+      b.vel.x = fx * v;
+      b.vel.z = fz * v;
+      if (v === 0) rolling = false;
+      return !rolling;
+    });
+    const track = S.every(() => {
+      const sh = followShot(b.pos, gy(b.pos.x, b.pos.z));
+      g.chase.cut(V3(sh.pos), V3(sh.look), sh.fov);
+      g.chase.subject = g.playerChar;
+      return false;
+    });
+    if (faded) await S.fade(0, 0.4);
+    await S.wait(0.5);
+    if (gus && !S.skip) {
+      S.sfx('megaphone', { volume: 0.55 });
+      gus.brain?.bubble.set(gus.pos.x, gus.pos.y + gus.P.height + 0.35, gus.pos.z);
+      if (gus.brain) VL.bubble(gus.brain, 'TEN MINUTES, CARVERS! TEN MIN—', 2000);
+      gus.say(1.4);
+    }
+    for (let t = 0; t < 4 && !S.skip && b.pos.x < E.freezeX; t += 0.05) await S.wait(0.05);
+    // ...and the whole street freezes. Silence.
+    K.beginRound({ drop: false });
+    S.music('none');
+    S.sfx('gasp', { volume: 0.45, pitch: 0.85 });
+    if (gus) { gus.say(0); K.freezeActor(gus, 'still'); gus.lookAt(g.playerChar); }
+    for (let t = 0; t < 3.5 && !S.skip && rolling; t += 0.05) await S.wait(0.05);
+    track();
+    if (S.skip) b.reset(E.stop.x, E.stop.z, E.yaw);
+    b.vel.set(0, 0, 0);
+    const H = g.playerChar;
+    const shots = fixedShots(y);
+    // shot 2: Hank stops; a little wave
+    await S.cam(V3(shots.reverse.pos), V3(shots.reverse.look), 0, shots.reverse.fov, H);
+    S.sfx('crickets', { volume: 0.5 });
+    H.react('hi');
+    await S.wait(0.5);
+    H.tempExpr('sheepish', 2.5);
+    await S.say('hank', '...Uh. Hi, everybody?', { actor: H, expr: 'sheepish' });
+    // shot 3: the whole street, frozen, staring
+    const W = shots.wide;
+    await S.cam(V3(W.pos), V3(W.look), 0, W.fov, V3(W.look));
+    S.cam(V3(W.to), V3(W.look), 2.2, W.fov, V3(W.look));
+    await S.wait(1.7);
+    // the close-ups: whoever the lens can find a clear spot for, from the street
+    const people = () => VL.list.filter((a) => a.visible && !a.hiddenByStory).map((a) => ({ x: a.pos.x, z: a.pos.z, a }));
+    const close = async (subj, { dist = 2.1, fov = 38, hold = 1.1, mid = null, before = null } = {}) => {
+      if (S.skip || !subj?.visible) return false;
+      subj.root.updateMatrixWorld(true);
+      const head = subj.headWorld(V(0, 0, 0));
+      if (mid) { const h2 = mid.headWorld(V(0, 0, 0)); head.lerp(h2, 0.5); }
+      const ppl = people().filter((p) => p.a !== subj && p.a !== mid);
+      ppl.push({ x: b.pos.x, z: b.pos.z });
+      const at = faceSpot(head, g.playerPos, ppl, { dist, ground: gy(head.x, head.z) });
+      if (!at) return false;
+      await S.cam(V(at.x, at.y, at.z), V(head.x, head.y - 0.12, head.z), 0, fov, subj);
+      before?.();
+      await S.wait(hold);
+      return true;
+    };
+    // Marie throws her hands up, and the little pumpkin she was holding drops (Agnes beside
+    // her, hands flown to her mouth)
+    const marie = VL.get('marie'), agnes = VL.get('agnes');
+    await close(marie, { dist: 2.9, fov: 40, hold: 1.4, mid: agnes?.visible ? agnes : null, before: () => K.dropPumpkin(marie) });
+    // Josée, with Pop hiding behind her, peeking round
+    await close(VL.get('josee'), { dist: 2.5, fov: 40, hold: 1.2 });
+    // the dog: tucked in behind its owner, whimpering
+    const dw = K.crowd.list.find((m) => m.role === 'dog' && m.shown && m.a && m.dog);
+    if (dw && !S.skip) {
+      const D = dw.dog, ga = gy(D.x, D.z);
+      const at = faceSpot({ x: D.x, y: ga + 0.5, z: D.z }, g.playerPos, people().filter((p) => p.a !== dw.a), { dist: 2.2, ground: ga, up: 0.05 });
+      if (at) {
+        await S.cam(V(at.x, at.y, at.z), V((D.x + dw.a.pos.x) / 2, ga + 0.45, (D.z + dw.a.pos.z) / 2), 0, 44, dw.a);
+        VL.sfx('meow_sad', dw.a.pos, 0.4, 1.45);
+        D.whimperT = 6;
+        await S.wait(1.3);
+      }
+    }
+    // Gus lowers the megaphone... and gulps
+    if (gus) {
+      await close(gus, { dist: 2.0, fov: 38, hold: 0.35 });
+      if (!S.skip) {
+        if (gus._freeze) gus._freeze.anim = 'hostWalk';
+        await S.wait(0.4);
+        gus.react('gulp');
+        S.sfx('pop', { volume: 0.5, pitch: 0.45 });
+        gus.showEmote('sweat', 1.6);
+        await S.wait(1.1);
+      }
+    }
+    // shot: back on Hank; Nana's carrier of cocoa sits in the crate
+    const Hs = shots.hank;
+    await S.cam(V3(Hs.pos), V3(Hs.look), 0, Hs.fov, H);
+    H.tempExpr('sparkle', 3);
+    await S.say('hank', "Frozen stiff... Good thing Nana packed extra cocoa!", { actor: H, expr: 'sparkle' });
+  }
+
   firstArrival({ at = 'road' } = {}) {
     const g = this.g, f = this.st.flags;
     for (const k of ['village1', 'contestFreeze', 'cocoaRound', 'contestScream', 'carveIntro']) f[k] = false;
