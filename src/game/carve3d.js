@@ -325,6 +325,34 @@ export function looseParts(p) {
   }
   return out;
 }
+// a quick look while the ring is being cut: has the bit round the stem come free yet? (a
+// flood from the stem that gives up as soon as it gets well outside the marker ring)
+let LSEEN = null, LQ = null;
+export function lidFree(p) {
+  const K8 = p.kind, B = base();
+  const seen = LSEEN || (LSEEN = new Uint8Array(N3)), q = LQ || (LQ = new Int32Array(4096));
+  const s0 = idx(B.stem[0], B.stem[1], B.stem[2]);
+  if (!STRUCT[K8[s0]]) return false;
+  let head = 0, tail = 0, free = true;
+  seen[s0] = 1;
+  q[tail++] = s0;
+  const far = (LID_R + 2.5) ** 2, low = Y0 + RY * 0.3;
+  flood: while (head < tail) {
+    const i = q[head++];
+    const x = i % W, r = (i - x) / W, y = r % H, z = (r - y) / H;
+    if ((x + 0.5 - X0) ** 2 + (z + 0.5 - Z0) ** 2 > far || y < low) { free = false; break; }
+    for (let k = 0; k < 6; k++) {
+      if ((k === 0 && x === W - 1) || (k === 1 && x === 0) || (k === 2 && y === H - 1) || (k === 3 && y === 0) || (k === 4 && z === D - 1) || (k === 5 && z === 0)) continue;
+      const j = i + NB6[k];
+      if (seen[j] || !STRUCT[K8[j]]) continue;
+      if (tail >= q.length) { free = false; break flood; }
+      seen[j] = 1;
+      q[tail++] = j;
+    }
+  }
+  for (let k = 0; k < tail; k++) seen[q[k]] = 0;
+  return free;
+}
 // the lid: cut free (a loose piece with the stem on it), lifted off. Returns
 // { cells, col, kind, c: [cx, cy, cz] (its middle) }; its voxels leave the grid
 export function takeLid(p, part, rec = null) {
@@ -481,7 +509,8 @@ export function displayVox(p, { lit = true, candle = true } = {}) {
   if (air) {
     for (let z = 0; z < D; z++) for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
       const i = idx(x, y, z), k = p.kind[i] & KIND;
-      if (k !== K.SKIN && k !== K.FLESH) continue;
+      if (!k || k === K.STEM) continue;
+      if (k === K.GOO || k === K.SEED) { v.data[i] = tone(p.col[i], 0.08) | EMIT; continue; } // (any guts left in, lit up too)
       let tin = false, tout = false;
       for (let n = 0; n < 6; n++) {
         const xx = x + (n === 0 ? 1 : n === 1 ? -1 : 0), yy = y + (n === 2 ? 1 : n === 3 ? -1 : 0), zz = z + (n === 4 ? 1 : n === 5 ? -1 : 0);
@@ -499,7 +528,7 @@ export function displayVox(p, { lit = true, candle = true } = {}) {
     const fx = Math.floor(X0) - 1, fz = Math.floor(Z0) - 1;
     let fy = 0;
     while (fy < H && !B.CAV[idx(fx, fy, fz)]) fy++;
-    for (let y = fy; y < fy + 4; y++) for (let z = fz; z <= fz + 1; z++) for (let x = fx; x <= fx + 1; x++) v.data[idx(x, y, z)] = COL.candle;
+    for (let y = fy; y < fy + 4; y++) for (let z = fz; z <= fz + 1; z++) for (let x = fx; x <= fx + 1; x++) v.data[idx(x, y, z)] = lit ? COL.candle | EMIT : COL.candle;
     if (lit) { v.data[idx(fx + 1, fy + 4, fz + 1)] = COL.flame | EMIT; v.data[idx(fx + 1, fy + 5, fz + 1)] = COL.flame2 | EMIT; }
   }
   return { vox: v, size: SIZE, origin: [X0, 0, Z0], jitter: 0, meta: { radius: RX * SIZE } };

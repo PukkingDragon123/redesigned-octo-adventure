@@ -772,7 +772,7 @@ export class CarveStage {
     for (let k = 1; k <= n; k++) this.cutAt(s.x + ((x - s.x) * k) / n, s.y + ((y - s.y) * k) / n);
     s.x = x;
     s.y = y;
-    if (this.phase === 'lid' && now - (this.lidCheckT || 0) > 140 && s.n) { this.lidCheckT = now; this.checkLid(); }
+    if (this.phase === 'lid' && now - (this.lidCheckT || 0) > 120 && s.n) { this.lidCheckT = now; if (C.lidFree(this.p)) this.checkLid(); }
   }
   // how big a voxel looks on screen (CSS pixels)
   voxelPx() {
@@ -839,7 +839,7 @@ export class CarveStage {
     const s = this.stroke;
     this.stroke = null;
     if (!s) return;
-    if (this.phase === 'lid') { if (s.n) this.checkLid(); return; }
+    if (this.phase === 'lid') { if (s.n && C.lidFree(this.p)) this.checkLid(); return; }
     if (this.phase !== 'carve' || !s.rec?.length) return;
     // whatever's cut free drops in
     let fell = 0;
@@ -850,7 +850,11 @@ export class CarveStage {
     }
     this.undoStack.push(s.rec);
     if (this.undoStack.length > 40) this.undoStack.shift();
-    // is it holding up?
+    this.judgeSoon = true; // (next frame: the finger's lift stays light)
+  }
+  // is it holding up?
+  holding() {
+    this.judgeSoon = false;
     const J = C.judge(this.p);
     if (J.res.split && !this.warned) {
       this.warned = true;
@@ -1155,6 +1159,7 @@ export class CarveStage {
     if (this.hover && !this.stroke && !this.finished && (this.phase === 'carve' || this.phase === 'lid' || this.phase === 'scoop')) this.aim(this.hover.x, this.hover.y, false);
     this.updateHands(dt);
     this.remesh();
+    if (this.judgeSoon && !this.stroke && this.phase === 'carve' && !this.finished) this.holding();
     // the screen turned (a phone on its side): frame the shot again
     if ((g.camera.aspect || 1.6) !== this.asp && this.shotName && !this.finished) this.shot(this.shotName, 0);
     if (this.msgT > 0 && (this.msgT -= dt) <= 0) this.msgEl.classList.remove('on');

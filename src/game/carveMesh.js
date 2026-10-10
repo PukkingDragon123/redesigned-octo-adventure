@@ -70,7 +70,6 @@ export function meshChunk(p, c, air = null) {
   const col = p.col, kind = p.kind;
   OUT[0].n = OUT[1].n = 0;
   const P = [0, 0, 0];
-  const solid = (x, y, z) => x >= 0 && y >= 0 && z >= 0 && x < W && y < H && z < D && kind[x + W * (y + H * z)] !== 0;
   for (let z = z0; z < z1; z++) for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) {
     const i = x + W * (y + H * z);
     const k = kind[i];
@@ -82,27 +81,33 @@ export function meshChunk(p, c, air = null) {
       let j = -1;
       if (na >= 0 && na < DIM[a]) { j = i + s * STRIDE[a]; if (kind[j]) continue; }
       const glow = air !== null && j >= 0 && air[j] === 1;
-      emit(OUT[glow ? 1 : 0], P, F, glow ? GLOW[k & KIND] || GLOW[K.FLESH] : col[i], glow, solid);
+      emit(OUT[glow ? 1 : 0], P, F, glow ? GLOW[k & KIND] || GLOW[K.FLESH] : col[i], glow, kind, j);
     }
   }
   const box = new THREE.Box3(new THREE.Vector3(x0, y0, z0), new THREE.Vector3(x1, y1, z1));
   return { geo: OUT[0].geometry(box), glow: air ? OUT[1].geometry(box) : null };
 }
 
-const Q = [0, 0, 0], AOS = [0, 0, 0, 0];
+const Q = [0, 0, 0], AOS = [0, 0, 0, 0], NB = new Uint8Array(9);
 const CU = [0, 1, 1, 0], CV = [0, 0, 1, 1];
-function emit(o, P, F, c, glow, solid) {
+// fi: the cell in front of the face (-1: outside the volume)
+function emit(o, P, F, c, glow, kind, fi) {
   if ((o.n + 4) > o.cap) o.grow(o.cap * 2);
   const q = o.n >> 2;
   if (q >= o.flip.length) { const nf = new Uint8Array(o.flip.length * 2); nf.set(o.flip); o.flip = nf; }
   const { a, s, u, v } = F;
-  // the cell in front of the face, and its neighbours in the face's plane (for AO)
-  const fx = P[0] + (a === 0 ? s : 0), fy = P[1] + (a === 1 ? s : 0), fz = P[2] + (a === 2 ? s : 0);
-  const sl = (du, dv) => {
-    Q[0] = fx; Q[1] = fy; Q[2] = fz;
-    Q[u] += du; Q[v] += dv;
-    return solid(Q[0], Q[1], Q[2]) ? 1 : 0;
-  };
+  // the front cell's eight neighbours in the face's plane (for AO): NB[(du+1) + 3 (dv+1)]
+  NB.fill(0);
+  if (fi >= 0) {
+    const pu = P[u], pv = P[v], su = STRIDE[u], sv = STRIDE[v], mu = DIM[u] - 1, mv = DIM[v] - 1;
+    for (let dv = -1; dv <= 1; dv++) {
+      if (pv + dv < 0 || pv + dv > mv) continue;
+      for (let du = -1; du <= 1; du++) {
+        if ((du | dv) === 0 || pu + du < 0 || pu + du > mu) continue;
+        NB[du + 1 + (dv + 1) * 3] = kind[fi + du * su + dv * sv] !== 0 ? 1 : 0;
+      }
+    }
+  }
   const em = glow || c & EMIT ? 1 : 0;
   const r = LIN[(c >> 16) & 255], g = LIN[(c >> 8) & 255], b = LIN[c & 255];
   const did = glow ? 0 : detailOf(c);
@@ -112,7 +117,8 @@ function emit(o, P, F, c, glow, solid) {
   for (let k = 0; k < 4; k++) {
     const kk = s > 0 ? k : (4 - k) & 3;
     const du = CU[kk], dv = CV[kk];
-    const s1 = sl(du ? 1 : -1, 0), s2 = sl(0, dv ? 1 : -1), cc = sl(du ? 1 : -1, dv ? 1 : -1);
+    const xu = du ? 2 : 0, xv = dv ? 6 : 0;
+    const s1 = NB[xu + 3], s2 = NB[1 + xv], cc = NB[xu + xv];
     const ao = s1 && s2 ? 0 : 3 - (s1 + s2 + cc);
     AOS[k] = ao;
     Q[a] = plane; Q[u] = P[u] + du; Q[v] = P[v] + dv;
