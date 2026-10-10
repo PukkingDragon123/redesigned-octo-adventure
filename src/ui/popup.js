@@ -8,11 +8,16 @@
 //
 // Options: who (character id, default hank), expr (face), key (a newer message with
 // the same key replaces this one instead of queueing), shout (spiky bubble, no
-// typing, short), ms (how long it stays after the text is out).
+// typing, short), ms (how long it stays after the text is out), prio ('high' for the
+// few that must be seen: a tutorial hint shown once, Nana calling; everything else is
+// 'normal', shouts are 'low').
 // Text markup: *bold*, ~wave~, ^shake^, _small_, and [W] for a key cap.
 //
-// Messages queue, never stack; they wait out cutscenes, dialogue and menus (shouts
-// are simply dropped then). The portrait is the real voxel model, live in 3D
+// Few and far between: after one has been up, the next ordinary one has to wait out a
+// cooldown (COOLDOWN seconds); anything that comes along before then, or while another
+// is up or waiting, is simply dropped instead of queueing. Only 'high' ones queue past
+// that. Messages never stack; they wait out cutscenes, dialogue and menus (shouts are
+// simply dropped then). The portrait is the real voxel model, live in 3D
 // (live3d.js): it blinks, talks and pulls faces while the message is up.
 // Before each message the corner is chosen so nothing covers the touch controls or
 // the HUD (Nana's list, the speedometer, the prompt).
@@ -23,7 +28,9 @@ import { el, scale, snap } from './kit.js';
 
 const ART = 56; // portrait size in art pixels
 const HEAD = 14; // empty art rows above him for the stretch to grow into
-const MAXQ = 6;
+const MAXQ = 4;
+// seconds after one pop-up before the next ordinary one may show (earlier ones are dropped)
+export const COOLDOWN = 32;
 // things the pop-up must keep clear of
 const OBSTACLES = '#touch.on .tbtn, #touch.on .twheel, #touch.on .t-talk.lit, .crank-hud.on, .hud-gauge, .hud-note, .hud-prompt.on, .hud-tl, .hud-compass';
 
@@ -58,6 +65,8 @@ export class Popups {
     this.t = 0;
     this.live = null;
     this.warmT = 1.5;
+    this.lastShown = -1e9; // when the last one rose (the cooldown counts from here)
+    this.dropped = 0;
     addEventListener('resize', () => this.cur && (this.cur.placed = false));
   }
 
@@ -66,6 +75,7 @@ export class Popups {
     const m = {
       text: String(text), who: opts.who || 'hank', expr: opts.expr || (opts.shout ? 'shock' : 'happy'), key: opts.key || (opts.shout ? 'shout' : null),
       shout: !!opts.shout, ms: opts.ms, name: opts.name || '', voice: opts.voice || 'hank', born: this.t,
+      prio: opts.prio || (opts.shout ? 'low' : 'normal'),
     };
     const c = this.cur;
     // same key (or any shout over a shout): replace what's up there right now
@@ -73,11 +83,21 @@ export class Popups {
     if (c && c.state !== 'duck' && c.text === m.text) { c.hold = 0; return; }
     const q = this.queue.findIndex((x) => (m.key && x.key === m.key) || x.text === m.text);
     if (q >= 0) { m.born = Math.min(m.born, this.queue[q].born); this.queue[q] = m; return; }
+    if (!this.admit(m)) { this.dropped++; return; }
     this.queue.push(m);
     while (this.queue.length > MAXQ) {
       const i = this.queue.findIndex((x) => x.shout);
       this.queue.splice(i >= 0 ? i : 0, 1);
     }
+  }
+
+  // the rate limit: an ordinary message only gets in when nothing else is up or waiting
+  // and the last one rose long enough ago; the rest are dropped, not saved for later
+  admit(m) {
+    if (m.prio === 'high') return true;
+    const c = this.cur;
+    if ((c && c.state !== 'duck') || this.queue.length) return false;
+    return this.t - this.lastShown >= COOLDOWN;
   }
 
   clear() {
@@ -147,6 +167,7 @@ export class Popups {
     this.layer.appendChild(wrap);
     Object.assign(m, { wrap, clip, img, bub, anim, b, tl, state: 'rise', st: 0, hold: 0, placed: false });
     this.cur = m;
+    this.lastShown = this.t;
     this.fill(m);
     sound.play(m.who === 'hank' ? 'bone_rattle' : 'pop', { volume: m.shout ? 0.5 : 0.35, pitch: 1.1 + Math.random() * 0.15 });
     this.animate(0);

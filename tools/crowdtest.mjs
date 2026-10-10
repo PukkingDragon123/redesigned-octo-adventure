@@ -4,13 +4,15 @@
 // big and varied (kids, elders, hats, scarves, plaid, puffy vests...), the dressing is the
 // same every time (seeded), the named villagers' outfits still build, the crowd's props
 // (cane, stroller, dog, lid, cocoa carrier) mesh, and the cocoa round (src/game/cocoaRound.js)
-// runs: freeze, cups for the regulars, the count, the finish, the save and old saves.
+// runs: freeze, cups for the regulars, the count, the finish, the save and old saves; and
+// the into-town cutscene's shots (src/game/entryShots.js) all sit out in the open street.
 import { makeCrowd, ROSTER } from '../src/game/crowdGen.js';
 import { CocoaRound, ROUND_KEYS, NEED, PINNED } from '../src/game/cocoaRound.js';
 import { CHARACTERS, buildHead, buildTorso, buildLimb, buildSkirt, VS } from '../src/voxel/models/characters.js';
 import * as CM from '../src/voxel/models/contest.js';
 import { CONTEST } from '../src/world/contest.js';
 import { meshVox } from '../src/voxel/mesh.js';
+import { ENTRY, inStreet, blocked, faceSpot, fixedShots, followShot, clearLine } from '../src/game/entryShots.js';
 
 const verbose = process.argv.includes('-v');
 let pass = 0, fail = 0;
@@ -122,6 +124,34 @@ check('regulars who already like Hank count as served', R.progress().count === 2
 st = { flags: { contestFreeze: true }, cocoaRound: 'junk' };
 R = new CocoaRound(() => st);
 check('a damaged round record is repaired', R.isActive() && R.progress().count === 0 && R.give('doug').count === 1);
+
+
+// ---- the into-town cutscene's shots: out in the open street, nobody in the way
+{
+  const SP = CONTEST.spots;
+  const people = [...Object.entries(SP).map(([k, q]) => ({ k, x: q.x, z: q.z })), ...CONTEST.crowd.carve.map((q) => ({ k: 'carver', x: q.x, z: q.z }))];
+  const hank = ENTRY.stop;
+  people.push({ k: 'bessie', x: hank.x, z: hank.z });
+  const F = fixedShots(0);
+  for (const [name, sh] of Object.entries(F)) {
+    const ok = inStreet(sh.pos[0], sh.pos[2]) && !blocked(sh.pos[0], sh.pos[2], sh.pos[1]) && (!sh.to || inStreet(sh.to[0], sh.to[2]));
+    check(`into town: the ${name} shot is out in the open street`, ok, sh.pos.join(','));
+  }
+  check('into town: nobody stands between the lens and Hank', ['reverse', 'hank'].every((k) => clearLine(F[k].pos[0], F[k].pos[2], hank.x, hank.z, people.filter((q) => q.k !== 'bessie'))));
+  let roll = true;
+  for (let k = 0; k <= 20; k++) {
+    const x = ENTRY.start.x + ((ENTRY.stop.x - ENTRY.start.x) * k) / 20, z = ENTRY.start.z + ((ENTRY.stop.z - ENTRY.start.z) * k) / 20;
+    const sh = followShot({ x, z }, 0);
+    if (!inStreet(sh.pos[0], sh.pos[2])) roll = false;
+  }
+  check('into town: the lens follows Bessie in along the road', roll);
+  check('into town: the street freezes before she stops', ENTRY.freezeX > ENTRY.start.x && ENTRY.freezeX < ENTRY.stop.x);
+  for (const key of ['marie', 'agnes', 'josee', 'gus', 'kids', 'birdie', 'lou', 'ingrid', 'doug']) {
+    const q = SP[key];
+    const at = faceSpot({ x: q.x, y: 1.55, z: q.z }, hank, people.filter((o) => o.k !== key), { dist: 2.1, ground: 0 });
+    check(`into town: a clear close-up of ${key}, from the street`, !!at && inStreet(at.x, at.z) && !blocked(at.x, at.z, at.y), at ? `${at.x.toFixed(1)},${at.z.toFixed(1)}` : 'none');
+  }
+}
 
 console.log(`\n${pass}/${pass + fail} passed`);
 process.exit(fail ? 1 : 0);

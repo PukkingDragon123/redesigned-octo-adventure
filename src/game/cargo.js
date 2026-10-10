@@ -3,7 +3,8 @@
 // speeds up, brakes, lands or bumps; hot cups steam; a crash throws them out onto the
 // ground and they hop back into the crate when Hank picks himself up.
 // load() is the bit after Nana's order board: Hank carries the cups out on a tray and
-// packs them into the crate one by one (skippable like any cutscene).
+// packs them into the crate one by one (skippable like any cutscene). handOff() lifts a
+// cup out of the crate into a customer's hands when they come over for it (npcs.js).
 import * as THREE from 'three';
 import { Builder } from '../render/builder.js';
 import { propMesh } from '../render/propMaterial.js';
@@ -84,14 +85,16 @@ export class Cargo {
     this.cups = this.cups.filter((c) => {
       if (want.includes(c.o)) return true;
       c.g.parent?.remove(c.g);
+      c.handing?.res?.();
       return false;
     });
     for (const o of want) if (!this.cups.find((c) => c.o === o)) this.cups.push(this.makeCup(o));
     this.cups.sort((a, b) => want.indexOf(a.o) - want.indexOf(b.o));
     this.cups.forEach((c, i) => {
       const [x, z] = SLOTS[i % SLOTS.length];
-      if (c.g.parent !== anchor) anchor.add(c.g);
       c.slot = [x, z];
+      if (c.handing) return; // (on its way into somebody's hands)
+      if (c.g.parent !== anchor) anchor.add(c.g);
       c.g.position.set(x, 0, z);
       c.g.rotation.set(0, (c.o.id * 1.7) % (Math.PI * 2), 0);
     });
@@ -125,9 +128,50 @@ export class Cargo {
     }
   }
 
+  // ---------------------------------------------------------------- handing a cup over
+  // the cup for order o lifts out of the crate in a little arc into customer a's hands
+  // (their own cup takes over once it's there: npcs.js pays and sets them sipping)
+  handOff(o, a, dur = 0.5) {
+    const c = this.cups.find((q) => q.o === o);
+    if (!c || this.spilled || c.handing) return Promise.resolve();
+    this.model.root.updateMatrixWorld(true);
+    const from = c.g.getWorldPosition(new THREE.Vector3());
+    this.game.scene.attach(c.g);
+    this.game.sfx?.('cup', from, 0.5);
+    return new Promise((res) => { c.handing = { t: 0, dur, from, a, res }; });
+  }
+  updateHanding(dt) {
+    for (const c of this.cups) {
+      const h = c.handing;
+      if (!h) continue;
+      h.t += dt;
+      const k = clamp(h.t / h.dur, 0, 1);
+      const a = h.a;
+      // between their two hands (or just in front of them)
+      if (a?.arms?.L?.hand && a.arms.R?.hand && a.root?.visible !== false) {
+        a.arms.L.hand.getWorldPosition(_v);
+        a.arms.R.hand.getWorldPosition(_w);
+        _v.add(_w).multiplyScalar(0.5);
+      } else if (a?.pos) _v.set(a.pos.x, a.pos.y + 1.0, a.pos.z);
+      else _v.copy(h.from);
+      const e = k * k * (3 - 2 * k);
+      c.g.position.lerpVectors(h.from, _v, e);
+      c.g.position.y += Math.sin(k * Math.PI) * 0.25 - 0.08 * e;
+      c.g.rotation.x = c.g.rotation.z = 0;
+      if (k >= 1) {
+        c.g.visible = false;
+        h.res?.();
+        h.res = null;
+        // (never paid for after all: a cutscene got in the way) back into the crate
+        if (h.t > h.dur + 2) { c.handing = null; c.g.visible = true; this.reseat(c); }
+      }
+    }
+  }
+
   // a crash throws the cups out of the crate (lids stay on: Nana's lids are legendary)
   spill(e) {
     if (this.spilled || !this.cups.length) return;
+    for (const c of this.cups) if (c.handing) { c.handing.res?.(); c.handing = null; c.g.visible = true; }
     const b = this.game.bike;
     const scene = this.game.scene;
     this.model.root.updateMatrixWorld(true);
@@ -243,6 +287,7 @@ export class Cargo {
     const vis = this.model.root.visible;
     for (const c of this.cups) c.steam.visible = vis;
     if (this.spilled) return this.updateSpilled(dt);
+    this.updateHanding(dt);
     // safety net: cups that were picked but never carried out pop in once Hank rides off
     const g = this.game;
     if (g.mode === 'ride' && !g.onFoot && g.bike.speed > 0.8 && g.orders.carried().some((o) => o.loaded === false)) {
@@ -256,6 +301,7 @@ export class Cargo {
     const fx = Math.sin(b.yaw), fz = Math.cos(b.yaw);
     const fwd = clamp(ax * fx + az * fz, -25, 25), side = clamp(ax * fz - az * fx, -25, 25);
     for (const c of this.cups) {
+      if (c.handing) continue;
       // tipping back when Bessie surges forward, forward when she brakes, out in turns
       const tx = -fwd * 0.012, tz = side * 0.01;
       c.vx += ((tx - c.ax) * 160 - c.vx * 9) * dt;

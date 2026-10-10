@@ -1,7 +1,9 @@
 // Villagers of Maple Cove (and Nana at home). Each villager has a brain
 // (npcBrain.js) with their own trust in Hank, kept in the save; this module
 // spawns them, runs their days, hands out Hank's bell / crashes / tricks, and
-// works out how a delivery happens when the customer is too scared to stand still.
+// runs deliveries: customers come to Hank for their cup when he slows down near them
+// (walkup.js decides, this acts it out), or snatch it when they're too scared to stand
+// still.
 import * as THREE from 'three';
 import { VoxelCharacter as Actor, CHARACTERS } from './vchar.js';
 import './npcPoses.js';
@@ -16,6 +18,7 @@ import { tone } from '../voxel/vox.js';
 import { voxMesh, sharedVoxelMaterial } from '../render/voxelMaterial.js';
 import * as FOOD from '../voxel/models/food.js';
 import { clamp } from '../core/math.js';
+import { WalkUps, thanksLine } from './walkup.js';
 
 const IDLE = { agnes: 'knit', pip: 'hockey', pop: 'hockey' };
 const hyp = Math.hypot;
@@ -63,6 +66,7 @@ export class Villagers {
     this.pets = new Pets(this);
     this.list = Object.values(this.actors);
     this.crowd = []; // { a, x, z, r } everyone standing about this frame (brains steer round them)
+    this.walkups = new WalkUps();
     game.listeners?.push((e) => this.onBikeEvent(e));
   }
 
@@ -128,12 +132,13 @@ export class Villagers {
     if (b) b.addTrust(n, cap);
     else if (char !== 'grandma') { const r = this.rec(char); r.trust = clamp(r.trust + n, 0, cap ?? 100); }
   }
+  // someone warmed up to Hank: shown, not told (hearts, a happy face)
   moodToast(b, mood) {
     if (this.game.mode === 'title') return;
-    const name = this.game.villagerName?.(b.char) || b.char;
-    const txt = { wary: `${name} only screamed a *little* that time. Progress!`, friendly: `${name} likes me now! Me! A skeleton!`, fan: `${name} is my *biggest fan*! Should I sign autographs?` }[mood];
-    if (txt) this.game.ui?.pop(txt, { expr: mood === 'wary' ? 'sheepish' : 'love', key: `mood:${b.char}` });
-    if (mood === 'friendly' || mood === 'fan') this.game.effects?.hearts(b.a.pos.x, b.a.pos.y + 1.8, b.a.pos.z, 5);
+    if (mood === 'friendly' || mood === 'fan') {
+      this.game.effects?.hearts(b.a.pos.x, b.a.pos.y + 1.8, b.a.pos.z, 5);
+      b.a.tempExpr(mood === 'fan' ? 'excited' : 'happy', 2);
+    }
   }
 
   // story scenes hide a villager while a scripted double stands in for them
@@ -327,6 +332,7 @@ export class Villagers {
         a.update(dt, cam);
       }
     }
+    this.updateWalkUps(dt);
   }
   // ------------------------------------------------------------ bodies don't overlap
   // who's standing where this frame: the brains steer round these (npcBrain.avoid)
@@ -508,8 +514,141 @@ export class Villagers {
     if (trick) for (const b of this.brains) if (!b.a.scripted) b.onTrick(e.type, X);
   }
 
-  // ------------------------------------------------------------ deliveries
-  // what the E prompt does for an order, depending on how the customer feels
+  // ------------------------------------------------------------ deliveries come to Hank (walkup.js)
+  // Hank, as the walk-ups see him this frame
+  hankState() {
+    const g = this.game, X = this.ctx, p = g.playerPos;
+    const H = this._wuH || (this._wuH = { crate: null });
+    H.x = p.x; H.z = p.z; H.y = p.y;
+    H.speed = X.speed;
+    H.onFoot = X.onFoot;
+    H.fx = X.fwd.x; H.fz = X.fwd.z;
+    H.crashed = X.crashed;
+    H.scene = !!g.currentScene || g.mode === 'cutscene';
+    H.free = g.mode === 'ride' && !H.scene && !g.ui?.dialogueTick && !g.ui?.menuStack?.length && !g.interior?.active;
+    return H;
+  }
+  // can this customer come over for their cup right now (and how)?
+  walkUpAvail(a, b) {
+    const g = this.game;
+    if (a.scripted || a.hiddenByStory || a.path) return 'no';
+    if (!b) return a.visible ? 'stand' : 'no';
+    if (b.leash || b.kids) return 'no';
+    // (Gus is on his way over to invite Hank to carve: that scene hands his cup over; and
+    // while the cocoa round is on, the contest regulars wait for it to finish)
+    if (b.key === 'gus' && g.contest?.gusComing) return 'no';
+    if (g.contest?.round?.isActive() && g.contest.round.pinned(b.key)) return 'no';
+    if (b.mood === 'terrified') return ['hide', 'cowerOpen', 'standoff'].includes(b.mode) && a.visible ? 'hiding' : 'no';
+    if (b.inside) return b.door && b.mode === 'routine' ? 'inside' : 'no';
+    if (b.mode !== 'routine' || !a.visible || !b.shown) return 'no';
+    return b.mood === 'wary' ? 'nervous' : 'walk';
+  }
+  updateWalkUps(dt) {
+    const g = this.game, S = this.walkups;
+    if (!g.orders || !g.state) return;
+    const H = this.hankState();
+    const anchor = g.bikeModel?.crateAnchor;
+    if (!H.onFoot && anchor) {
+      anchor.getWorldPosition(_p);
+      H.crate = H.crate || { x: 0, z: 0 };
+      H.crate.x = _p.x;
+      H.crate.z = _p.z;
+    } else H.crate = null;
+    const cands = this._wuC || (this._wuC = []);
+    cands.length = 0;
+    for (const o of g.orders.list) {
+      const mine = S.job?.o === o;
+      if (!mine && (o.state !== 'carried' || o.loaded === false)) continue;
+      const a = this.actors[o.spot];
+      if (!a) continue;
+      const b = a.brain;
+      cands.push({ o, spot: o.spot, x: a.pos.x, z: a.pos.z, y: a.pos.y, avail: mine ? 'job' : this.walkUpAvail(a, b), door: b?.door || null });
+    }
+    for (const e of S.update(dt, { hank: H, cands })) this.onWalkUp(e);
+  }
+  onWalkUp(e) {
+    const g = this.game, j = e.job;
+    const a = this.actors[j.spot];
+    if (!a) return;
+    const b = a.brain;
+    const P = g.playerPos;
+    switch (e.type) {
+      case 'start':
+        if (b) b.walkUpStart(j);
+        else { a.faceTowards(P.x, P.z); a.lookAt(g.playerChar); a.react('hi'); }
+        break;
+      case 'target':
+        b?.walkUpTo(j.target, j.kind);
+        break;
+      case 'arrived': case 'fallback':
+        if (b) b.walkUpWait(j, e.type === 'fallback');
+        else a.faceTowards(P.x, P.z);
+        break;
+      case 'hand':
+        this.handOver(j, a, b);
+        break;
+      case 'pay':
+        this.payWalkUp(j, a, b);
+        break;
+      case 'done': case 'cancel':
+        if (b) b.walkUpEnd(j, e.type === 'done');
+        else { a.lookAt(null); a.play(IDLE[a.char] || 'idle'); }
+        if (g.playerChar?.lookTarget === a) g.playerChar.lookAt(null);
+        break;
+      case 'snatch':
+        b?.snatch(j.o);
+        break;
+    }
+  }
+  // the cup changes hands: out of Bessie's crate into theirs, or from Hank's hand on foot
+  handOver(j, a, b) {
+    const g = this.game, P = g.playerPos;
+    b?.stopWalk();
+    const shy = j.kind === 'nervous';
+    a.lookAt(g.playerChar);
+    g.playerChar?.lookAt(a);
+    if (g.onFoot) {
+      a.faceTowards(P.x, P.z);
+      g.walker.yaw = Math.atan2(a.pos.x - P.x, a.pos.z - P.z);
+      g.playerChar?.react('offerCup');
+      g.sound.play('cup', { volume: 0.5 });
+      g.wait(0.3).then(() => { if (this.walkups.job === j) a.play('offer', shy ? 'worried' : 'happy'); });
+      // (the cup leaves his hand even if something else interrupts the reaching out)
+      g.wait(1.6).then(() => { const ch = g.playerChar; if (ch?.held.R?.userData.cup) ch.hold(null, 'R'); });
+    } else {
+      const f = j.target?.face || P;
+      a.faceTowards(f.x, f.z);
+      a.play('offer', shy ? 'worried' : 'happy');
+      g.wait(0.25).then(() => { if (this.walkups.job === j) g.cargo?.handOff(j.o, a, 0.5); });
+    }
+  }
+  // the order is theirs: pay, a sip, a short thank-you in a bubble (no talk box)
+  payWalkUp(j, a, b) {
+    const g = this.game, o = j.o;
+    if (o.state !== 'carried') return;
+    const r = g.orders.deliver(o);
+    const hot = r.quality > 55;
+    a.play('sipCup', hot ? 'happy' : 'sad');
+    if (hot) a.jump(1.6);
+    a.showEmote(hot ? (r.quality > 80 ? 'heart' : 'note') : 'cold', 1.6);
+    const p = g.playerPos;
+    g.effects.coins((a.pos.x + p.x) / 2, a.pos.y + 1.3, (a.pos.z + p.z) / 2, 6 + Math.round(r.tip / 2));
+    if (r.quality > 70) g.effects.hearts(a.pos.x, a.pos.y + 1.8, a.pos.z, 4);
+    g.sound.play('delivered');
+    g.wait(0.3).then(() => g.sound.play('cash'));
+    const line = thanksLine(o.customer, r.quality);
+    if (b) b.say(line, 2400, true);
+    else g.ui?.tag(`npc:${o.spot}`, line, a.pos.clone().setY(a.pos.y + a.P.height + 0.35), 2400);
+    a.say(1.4);
+    // the takings float up over Hank
+    g.ui?.tag(`pay:${o.id}`, `+$${r.pay + r.tip}`, new THREE.Vector3(p.x, p.y + 2.2, p.z), 1700);
+    this.afterDelivery(b, r.quality, a);
+    g.save();
+  }
+
+  // what the E prompt does for an order: a fallback for when they can't come to Hank
+  // (they're waiting where they are, or he got right up to them first); the frightened
+  // want it held out at arm's length, or left on the step
   deliveryAction(o, p, slow) {
     const a = this.get(o.spot);
     if (!a || !slow) return null;
@@ -518,34 +657,35 @@ export class Villagers {
     const name = a.char === 'pip' ? 'Pip & Pop' : g.villagerName(a.char);
     const near = (x, z, y, r) => hyp(p.x - x, p.z - z) < r && Math.abs(y - p.y) < 2.5;
     const mood = b ? b.mood : 'friendly';
-    const busy = b && ['script', 'frozen', 'cocoa'].includes(b.mode);
+    const W = this.walkups;
+    if (W.paid.has(o.id) || (W.job && !(W.job.o === o && W.job.phase === 'fallback'))) return null;
+    const busy = b && ['script', 'frozen', 'cocoa'].includes(b.mode) && W.job?.o !== o;
     if (busy) return null;
     if (mood !== 'terrified' || !b) {
-      if (a.visible && near(a.pos.x, a.pos.z, a.pos.y, 4.5)) return { text: `Deliver ${o.label} to ${name}`, fn: () => this.deliver(o, a) };
+      if (a.visible && near(a.pos.x, a.pos.z, a.pos.y, 4.5)) return { text: `Hand ${name} the cocoa`, fn: () => this.deliverNow(o, a) };
       // wary folk indoors still answer the door
-      if (b?.door && b.inside && near(b.door.x, b.door.z, a.pos.y, 3.5)) return { text: `Knock for ${name}`, fn: () => { this.game.sound.play('knock'); b.answerDoor(); this.deliver(o, a); } };
+      if (b?.door && b.inside && near(b.door.x, b.door.z, a.pos.y, 3.5)) return { text: `Knock for ${name}`, fn: () => { g.sound.play('knock'); b.answerDoor(); this.deliverNow(o, a); } };
       return null;
     }
-    if (a.visible && near(a.pos.x, a.pos.z, a.pos.y, 7.5)) return { text: `Hold out the cocoa for ${name}`, fn: () => b.snatch(o) };
-    if (b.door && near(b.door.x, b.door.z, a.pos.y, 4.6)) return { text: `Leave the cocoa on ${name}'s step`, fn: () => b.leaveOnStep(o) };
+    if (a.visible && near(a.pos.x, a.pos.z, a.pos.y, 7.5)) return { text: `Hold out the cocoa for ${name}`, fn: () => { W.paid.add(o.id); b.snatch(o); } };
+    if (b.door && near(b.door.x, b.door.z, a.pos.y, 4.6)) return { text: `Leave the cocoa on ${name}'s step`, fn: () => { W.paid.add(o.id); b.leaveOnStep(o); } };
     return null;
   }
-  async deliver(o, a) {
-    const g = this.game, b = a.brain;
-    if (b && b.mood === 'wary') {
-      g.mode = 'menu';
-      await b.nervousGrab();
-    }
-    const quality = o.quality;
-    this.afterDelivery(b, quality, a);
-    await g.story.deliver(o, a);
+  // the prompt: straight to the hand-over, where they stand
+  deliverNow(o, a) {
+    const b = a.brain;
+    const f = this.walkups.force(o, { x: a.pos.x, z: a.pos.z }, this.hankState(), !b ? 'stand' : b.mood === 'wary' ? 'nervous' : 'walk');
+    if (!f) return;
+    if (f.fresh) this.onWalkUp({ type: 'start', job: f.job });
+    this.onWalkUp({ type: 'hand', job: f.job });
   }
   afterDelivery(b, quality, a) {
     if (b) b.addTrust(quality > 55 ? 22 : 12);
     // neighbours who saw it warm up a little too
     for (const q of this.brains) if (q !== b && q.d < 20 && q.shown && hyp(q.a.pos.x - a.pos.x, q.a.pos.z - a.pos.z) < 20) q.addTrust(3, TRUST.FRIENDLY + 5);
   }
-  // pay for an order handed over at arm's length or left on the step (no talk scene)
+  // pay for an order snatched at arm's length or left on the step (no talk scene): the
+  // coins and the takings over Hank say it
   payFor(o, b, how) {
     const g = this.game, a = b.a;
     const r = g.orders.deliver(o);
@@ -553,10 +693,7 @@ export class Villagers {
     g.effects.coins(at.x, at.y, at.z, 6 + Math.round(r.tip / 2));
     g.sound.play('delivered');
     setTimeout(() => g.sound.play('cash'), 300);
-    const name = g.villagerName(a.char);
-    const money = `*$${r.pay}*${r.tip ? ` (plus *$${r.tip}* tip)` : ''}`;
-    if (how === 'step') g.ui.pop(`${name}'s note says "LEAVE IT ON THE STEP!!" Fine. ${money} under the mat.`, { expr: 'sheepish', ms: 4200 });
-    else g.ui.pop(`${name} snatched the cocoa and ran! Well, I got ${money}.`, { expr: 'sheepish' });
+    g.ui?.tag(`pay:${o.id}`, `+$${r.pay + r.tip}`, at.clone().setY(at.y + 1), 1700);
     this.afterDelivery(null, r.quality, a);
     g.save();
     return r;
@@ -578,16 +715,15 @@ export class Villagers {
     if (b.mood === 'terrified') return false;
     return !['flee', 'hide', 'indoors', 'startle', 'script', 'cowerOpen', 'standoff', 'frozen', 'cocoa'].includes(b.mode) && a.visible;
   }
-  // a gentle nudge the first couple of times a frightened villager peeks at Hank
+  // a gentle nudge, once, the first time a frightened villager peeks at Hank
   hint() {
     const g = this.game, N = g.state?.npc;
-    if (!N || (N._hints || 0) >= 2 || !this.ctx.live || (this._hintT = (this._hintT || 0) - 1) > 0) return;
+    if (!N || (N._hints || 0) >= 1 || !this.ctx.live || (this._hintT = (this._hintT || 0) - 1) > 0) return;
     this._hintT = 30;
     const b = this.brains.find((q) => q.mood === 'terrified' && q.peeking && q.d < 15 && q.d > 3);
     if (!b) return;
-    N._hints = (N._hints || 0) + 1;
-    this._hintT = 1800;
-    g.ui?.pop(`${g.villagerName(b.char)} is peeking at me. Calm and slow, Hank... or ring the bell ${g.touch?.on ? '' : '[R] '}to say hi!`, { expr: 'worried', ms: 5000 });
+    N._hints = 1;
+    g.ui?.pop(`Slow and calm... or ring the bell${g.touch?.on ? '' : ' [R]'}.`, { expr: 'worried', ms: 3600, prio: 'high' });
   }
 }
 

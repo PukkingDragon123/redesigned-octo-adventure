@@ -15,14 +15,16 @@
 // a winner is named and when Hank's own carving gets its ribbon (src/game/carving.js,
 // the mini-game at Hank's table).
 //
-// The first time Hank rides in, the whole contest FREEZES mid-action and stares at him:
-// no screams, no running, just silence, crickets, heads turning to follow him, a lid
-// dropped on a table and a kid peeking out from behind a parent. Nana sent a carrier of
-// extra cocoa along: Hank offers everyone a cup, and one by one they hesitate, take it,
-// sip, soften and go back to their pumpkins (the neighbours thaw with them). Once the
-// eight regulars have a cup, Gus comes over and invites him to carve (the cocoa round:
-// cocoaRound.js keeps the rules and flags; Story.contestInvite the invitation). Ever
-// after, anyone at the contest who is still frightened of Hank just freezes and watches.
+// The first time Hank rides in, the whole contest FREEZES mid-action, scared stiff, and
+// stares at him (Story.townEntry, a short cutscene): no screams, no running, just silence,
+// crickets, trembling, hands flown to mouths, heads turning to follow him, a pumpkin
+// dropped, a kid hiding behind a parent, the dog whimpering. Nana sent a carrier of extra
+// cocoa along: Hank offers everyone a cup, and one by one they hesitate, take it, sip,
+// soften and go back to their pumpkins (the neighbours thaw with them). Until then they
+// stay frozen and frightened. Once the eight regulars have a cup, Gus comes over and
+// invites him to carve (the cocoa round: cocoaRound.js keeps the rules and flags;
+// Story.contestInvite the invitation). Ever after, anyone at the contest who is still
+// frightened of Hank just freezes and watches.
 import * as THREE from 'three';
 import { extendVChar, POSE_KIT, REACT } from './vchar.js';
 import { CONTEST } from '../world/contest.js';
@@ -33,6 +35,7 @@ import { Carving } from './carving.js';
 import { RIBBONS } from './carveScore.js';
 import { Crowd } from './crowd.js';
 import { CocoaRound, ROUND_KEYS, NEED } from './cocoaRound.js';
+import { frightOverlay, styleFor } from './fright.js';
 import { meshVox } from '../voxel/mesh.js';
 import { voxMesh, sharedVoxelMaterial } from '../render/voxelMaterial.js';
 import * as FOOD from '../voxel/models/food.js';
@@ -114,12 +117,14 @@ extendVChar({
     },
     cheerFlag2(c, t, T) { POSES.cheerFlag(c, t + 0.4, T); },
     // frozen mid-action: whatever they were doing when Hank rode up, held stock still
-    // (Contest.freezeActor keeps the pose and the moment), a little stiff and wide-eyed
+    // (Contest.freezeActor keeps the pose and the moment), stiff, wide-eyed and trembling,
+    // with a fright layered on top (fright.js: hands to the mouth, hands up, clutching...)
     frozen(c, t, T) {
       const f = c._freeze;
       const fn = f && f.anim !== 'frozen' && POSES[f.anim];
       (fn || POSES.idle)(c, f ? f.t : 0, T);
       T.shUp += 0.035; T.lean -= 0.05; T.headX -= 0.06;
+      frightOverlay(c, t, T);
     },
   },
   held: {
@@ -177,6 +182,8 @@ const LINES = {
 };
 const HOORAY = ['Hooray!', 'Woo-hoo!', 'Bravo!', 'Hip hip HOORAY!', 'Encore!', 'Yeah!!'];
 const KID_HOORAY = ['YAAAY!', 'WOOOO!', 'BEST DAY EVER!', 'HOORAY!!'];
+// how the regulars take fright at the first sight of Hank (fright.js)
+const FRIGHT_OF = { agnes: 'mouth', marie: 'hands', kids: 'still', birdie: 'clutch', lou: 'hands', ingrid: 'still', doug: 'clutch', josee: 'clutch', gus: 'still' };
 const CATEGORIES = ['Best Moustache', 'Spookiest Grin', 'Most Seeds Saved', 'Best Use of a Nose', 'Cutest Cat', 'Neatest Lid', 'Most Teeth'];
 
 // Gus's rounds: in front of each place at the tables (the street side), looking at the
@@ -192,6 +199,9 @@ const HOST_ROUND = (() => {
 })();
 
 const _v = new THREE.Vector3();
+// how close to the contest Hank gets before the first-look cutscene starts (the corn
+// sheaves at the west end, coming in along the road from Nana's)
+const ENTRY_R = CONTEST.r + 10;
 
 export class Contest {
   constructor(game) {
@@ -242,7 +252,7 @@ export class Contest {
           a.react(kid ? 'yay' : 'bounce');
           // ...and sometimes that one's finished: the whole street cheers
           if (Math.random() < 0.25) { b.say(pick(LINES.finished), 1800); this.cheer(1, { except: b }); }
-          else if (Math.random() < 0.5) b.say(pick(LINES[s.role]), 2000);
+          else if (Math.random() < 0.15) b.say(pick(LINES[s.role]), 2000);
           await w(rand(1.6, 2.4));
         } else if (r < 0.75) {
           // a word with the neighbour at the same table
@@ -259,7 +269,7 @@ export class Contest {
         } else {
           a.play('idle', 'happy');
           a.react(kid ? pick(['yay', 'spin', 'laugh']) : 'laugh');
-          if (kid && Math.random() < 0.4) b.say(pick(LINES.kid), 1800);
+          if (kid && Math.random() < 0.15) b.say(pick(LINES.kid), 1800);
           await w(1.4);
         }
       } else if (s.role === 'watch') {
@@ -268,7 +278,7 @@ export class Contest {
         const r = Math.random();
         if (r < 0.3) a.react('nod');
         else if (r < 0.5) { a.react('clap'); this.sfx('applause', a.pos, 0.18); }
-        else if (r < 0.65) b.say(pick(LINES.watch), 2200);
+        else if (r < 0.55) b.say(pick(LINES.watch), 2200);
         await w(1.2);
       } else {
         // cheering from the kerb
@@ -277,7 +287,7 @@ export class Contest {
         const r = Math.random();
         if (r < 0.35) { a.react('clap'); this.sfx('applause', a.pos, 0.15); }
         else if (r < 0.6) a.react('laugh');
-        else if (r < 0.75) b.say(pick(LINES.cheer), 2000);
+        else if (r < 0.68) b.say(pick(LINES.cheer), 2000);
         else a.react('hi');
         await w(1.4);
       }
@@ -299,7 +309,7 @@ export class Contest {
         a.face(r.yaw);
         a.play('judge', 'neutral');
         this.sfx('pencil_scribble', a.pos, 0.35);
-        if (Math.random() < 0.6) b.say(pick(LINES.judge), 2200);
+        if (Math.random() < 0.25) b.say(pick(LINES.judge), 2200);
         const near = this.present().filter((o) => o !== b && hyp(o.a.pos.x - r.x, o.a.pos.z - r.z) < 2.6);
         for (const o of near) {
           o.a.react('bounce');
@@ -405,7 +415,7 @@ export class Contest {
     } else {
       const roll = Math.random();
       if (roll < 0.4) { a.play('hostPoint', 'happy'); b.say(pick(LINES.look), 2400); }
-      else if (roll < 0.75) { a.react('nod'); b.say(pick(LINES.hum), 1800); }
+      else if (roll < 0.75) a.react('nod');
       else a.react('nod');
     }
     a.say(1);
@@ -466,15 +476,15 @@ export class Contest {
       if (kid) {
         a.react('yay');
         g.wait(0.95).then(() => a.react(level > 1 && Math.random() < 0.5 ? 'spin' : 'yay'));
-        if (Math.random() < 0.6) say(pick(KID_HOORAY), 1500);
+        if (Math.random() < 0.25) say(pick(KID_HOORAY), 1500);
         return;
       }
-      if (clap) { a.react('clap'); if (Math.random() < 0.3) say(pick(HOORAY), 1500); return; }
+      if (clap) { a.react('clap'); if (Math.random() < 0.12) say(pick(HOORAY), 1500); return; }
       const prev = a.anim, pose = pick(['cheerFlag', 'cheerFlag2', 'cheer', 'cheerFlag']);
       a.play(pose);
       a.tempExpr(pick(['excited', 'happy', 'laugh']), 2.4);
       g.wait(level > 1 ? 2.6 : 1.8).then(() => { if (a.anim === pose) a.play(prev); });
-      if (Math.random() < 0.45) say(pick(HOORAY), 1600);
+      if (Math.random() < 0.18) say(pick(HOORAY), 1600);
     });
   }
 
@@ -499,14 +509,22 @@ export class Contest {
   }
 
   // ------------------------------------------------------------ frozen mid-action
-  // hold whatever pose they were in (and what's in their hand), wide-eyed
-  freezeActor(a) {
-    if (a.anim === 'frozen') return;
-    a._freeze = { anim: a.anim, t: a.animT };
+  // hold whatever pose they were in (and what's in their hand), scared stiff: trembling,
+  // with a fright style on top (fright.js)
+  freezeActor(a, style = null) {
+    if (a.anim === 'frozen') {
+      if (style && a._freeze) a._freeze.style = style;
+      return;
+    }
+    a._freeze = { anim: a.anim, t: a.animT, style: style || styleFor(a.anim), shake: rand(0.45, 0.95) };
     const h = a.held.R;
     if (h?.userData.held) h.userData.held = 'frozen';
     a.reaction = null;
-    a.play('frozen', pick(['surprised', 'shock', 'awe']));
+    a.play('frozen', pick(['scared', 'scared', 'shock', 'worried']));
+  }
+  // how each regular takes fright (the rest get one to suit what they were doing)
+  styleOf(key) {
+    return FRIGHT_OF[key] || null;
   }
   // the brains at the contest, frozen or not
   atContest() {
@@ -517,8 +535,9 @@ export class Contest {
   }
 
   // ------------------------------------------------------------ the cocoa round (cocoaRound.js)
-  // Hank rides in for the first time: everyone freezes and stares. Silence; crickets.
-  beginRound() {
+  // Hank rides in for the first time: everyone freezes, scared stiff, and stares. Silence;
+  // crickets. (Story.townEntry films it; this is what happens in the street.)
+  beginRound({ drop = true } = {}) {
     const g = this.g, R = this.round;
     const here = this.atContest();
     // (an old save: regulars who already like him just wave; they count as served)
@@ -530,27 +549,48 @@ export class Contest {
       b.freeze(b.key === 'pop' ? g.villagers.get('josee') : null);
     }
     for (const m of this.crowd.present()) this.crowd.freeze(m);
-    this.dropLid();
+    if (drop) this.dropPumpkin();
     this.cricketT = 1.2;
-    g.chase?.shake?.(0.08);
-    g.wait(1.4).then(() => g.ui.pop('...Uh. Hi?', { expr: 'sheepish', key: 'freeze1', ms: 2600 }));
-    g.wait(4.4).then(() => g.ui.pop("They're frozen stiff! ...Wait. Nana sent a carrier of *extra cocoa* along in Bessie's crate. Nothing thaws a body like a warm cup!", { expr: 'sparkle', key: 'freeze2', ms: 6000 }));
-    g.wait(10.5).then(() => { if (R.isActive() && !R.progress().count) g.ui.pop(`Walk up to them and *offer cocoa* ${g.touch?.on ? '' : '[E] '}to everyone. Slow and friendly, Hank.`, { expr: 'happy', key: 'freeze3', ms: 5500 }); });
+    this.hintT = 28; // (one nudge, later, if nobody has had a cup yet)
     g.save();
   }
-  // somebody had just lifted the lid off their pumpkin: it slips out of their hand
-  dropLid() {
+  // the first-look cutscene (Story.townEntry): everyone busy at their places, wherever
+  // they had wandered off to, so the street is packed and nobody is caught mid-walk
+  stageEntry() {
+    const g = this.g, V = g.villagers, R = this.round;
+    for (const b of V?.brains || []) {
+      const s = CONTEST.spots[b.key];
+      if (!s || !R.pinned(b.key) || b.a.scripted || b.mode === 'frozen') continue;
+      b.cancel();
+      b.leash = null;
+      b.kids = null;
+      b.mode = 'routine';
+      b._act = { k: 'contest', block: 'pinned' };
+      b.a.path = null;
+      b.a.pos.set(s.x, g.physics.groundAt(s.x, s.z, b.a.pos.y + 2).h, s.z);
+      b.a.yaw = b.a.targetYaw = s.yaw;
+      b.inside = false;
+      b.setShown(true);
+    }
+    this.crowd.stageEntry();
+  }
+  // somebody had just picked up a little pumpkin: it slips out of their hands
+  // (who: whose hands; left out, whoever is carving nearest Hank)
+  dropPumpkin(who = null) {
     const g = this.g, V = g.villagers;
-    const m = this.crowd.list.find((q) => q.role === 'carve' && q.shown && q.a && q.tier === 'rig') || this.crowd.list.find((q) => q.role === 'carve' && q.shown && q.a);
-    const a = m?.a || V?.get('agnes');
+    const p = g.playerPos;
+    const near = (q) => hyp(q.a.pos.x - p.x, q.a.pos.z - p.z);
+    const m = who ? null : this.crowd.list.filter((q) => q.role === 'carve' && q.shown && q.a).sort((x, y) => near(x) - near(y))[0];
+    const a = who || m?.a || V?.get('marie');
     if (!a || !V) return;
-    const r = CM.pumpkinLid();
-    const lid = voxMesh(meshVox(r.vox, { size: r.size, origin: r.origin, jitter: 0.02 }), sharedVoxelMaterial());
+    const r = CM.simplePumpkin({ r: 0.14, seed: 23 });
+    const pk = voxMesh(meshVox(r.vox, { size: r.size, origin: r.origin, jitter: 0.02 }), sharedVoxelMaterial());
     a.root.updateMatrixWorld(true);
-    a.arms.L.hand.getWorldPosition(lid.position);
-    if (a.root.visible === false) lid.position.set(a.pos.x + Math.sin(a.yaw) * 0.4, a.pos.y + 1.0, a.pos.z + Math.cos(a.yaw) * 0.4);
-    g.scene.add(lid);
-    g.wait(0.35).then(() => { V.litter.drop(lid); g.wait(0.45).then(() => this.sfx('pumpkin_bonk', lid.position, 0.4)); });
+    a.arms.L.hand.getWorldPosition(pk.position);
+    if (a.root.visible === false || !(pk.position.y > a.pos.y + 0.3)) pk.position.set(a.pos.x + Math.sin(a.yaw) * 0.4, a.pos.y + 1.05, a.pos.z + Math.cos(a.yaw) * 0.4);
+    g.scene.add(pk);
+    this.dropped = { a, at: pk.position };
+    g.wait(0.3).then(() => { V.litter.drop(pk); g.wait(0.4).then(() => { this.sfx('pumpkin_bonk', pk.position, 0.55); g.wait(0.25).then(() => this.sfx('pumpkin_roll', pk.position, 0.35)); }); });
   }
 
   // the "Offer cocoa" prompt: the nearest frozen soul in reach
@@ -609,12 +649,6 @@ export class Contest {
     const share = Math.ceil(this.crowd.list.length / NEED);
     this.crowd.thawNear(a.pos.x, a.pos.z, share);
     g.sound.play(r.complete ? 'quest_done' : 'item_get', { volume: 0.5 });
-    const say = {
-      1: ['One warmed up! Cocoa works on *everybody*.', 'happy'],
-      4: ["Halfway! Even the music's thawing out.", 'sparkle'],
-      7: ['Just one more frozen face...', 'determined'],
-    }[r.count];
-    if (say && !r.complete) g.ui.pop(say[0], { expr: say[1], key: `cocoa${r.count}`, ms: 3400 });
     if (r.complete) this.finishRound();
   }
   // everyone has a cup: the last of the crowd thaws, the music comes back... and Gus comes over
@@ -627,10 +661,10 @@ export class Contest {
       if (b.mode === 'frozen') b.unfreeze();
     }
     V.force('gus', Math.max(V.trustOf('gus'), 46));
+    this.gusComing = true; // (he hands himself his own cup in the invitation: no walk-up)
     this.crowd.thawNear(CONTEST.x, CONTEST.z, 99);
     this.showCarrier(false);
     g.wait(1.0).then(() => this.cheer(1, { force: true }));
-    g.ui.pop('Everybody has a cup! Look at them. All warm and smiley.', { expr: 'love', key: 'cocoaDone', ms: 3400 });
     g.save();
     g.wait(2.6).then(() => this.inviteGus());
   }
@@ -648,6 +682,7 @@ export class Contest {
       await g.story.contestInvite();
     } finally {
       this.inviting = false;
+      this.gusComing = false;
     }
   }
   // the carrier of extra cocoa: in Bessie's crate, or in Hank's hand when he's walking
@@ -719,9 +754,13 @@ export class Contest {
     R.migrate();
     const p = g.playerPos;
     const dC = hyp(p.x - CONTEST.x, p.z - CONTEST.z);
-    const live = (g.mode === 'ride' || g.mode === 'menu') && !g.interior?.active;
+    // (the first-look cutscene films the frozen street: it stays frozen for the lens)
+    const staged = !!g.currentScene?.keepFrozen;
+    const live = ((g.mode === 'ride' || g.mode === 'menu') && !g.interior?.active) || staged;
     if (R.needsStart()) {
-      if (g.mode === 'ride' && live && dC < CONTEST.r + 4 && (this.atContest().length || this.crowd.present().length)) this.beginRound();
+      // Hank comes into town for the first time: the cutscene (Story.townEntry) begins the round
+      const free = g.mode === 'ride' && !g.currentScene && !g.ui?.dialogueTick && !g.interior?.active;
+      if (free && dC < ENTRY_R && (this.atContest().length || this.crowd.present().length)) g.story?.townEntry();
       return;
     }
     const active = R.isActive();
@@ -748,7 +787,12 @@ export class Contest {
       if (g.onFoot && (this.gulpT = (this.gulpT || 0) - dt) <= 0) {
         this.gulpT = 1.5;
         const m = this.crowd.nearestFrozen(p, 1.6);
-        if (m && Math.random() < 0.5) { m.a.react('flinch'); g.emotes?.show(m.a, 'sweat', 1.2); }
+        if (m && Math.random() < 0.5) { m.a.react('gulp'); g.emotes?.show(m.a, 'sweat', 1.2); }
+      }
+      // nobody has had a cup a good while after the cutscene: one short nudge (once)
+      if (g.mode === 'ride' && this.hintT > 0 && (this.hintT -= dt) <= 0 && !R.progress().count && !R.rec.crowd && !g.state.flags.cocoaHint) {
+        g.state.flags.cocoaHint = true;
+        g.ui.pop(`Ride up slow and offer a cup ${g.touch?.on ? '' : '[E]'}`.trim(), { expr: 'happy', key: 'cocoaHint', prio: 'high', ms: 3800 });
       }
     } else if (this.carrier) this.showCarrier(false);
   }

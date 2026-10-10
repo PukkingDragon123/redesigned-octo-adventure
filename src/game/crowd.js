@@ -8,8 +8,10 @@
 // announces (Contest.cheer), lean in when he inspects a table near them, and wave at
 // Hank once they know him.
 //
-// The first time Hank rides in they all freeze mid-action and stare (contest.js runs the
-// cocoa round): no screams, no running; a cup of cocoa thaws them one by one.
+// The first time Hank rides in they all freeze mid-action, scared stiff, and stare
+// (contest.js runs the cocoa round): no screams, no running. They tremble, clutch each
+// other, the toddler hides behind the stroller, the dog whimpers and tucks itself behind
+// its owner's legs; a cup of cocoa thaws them one by one.
 //
 // Cheap on phones: each townsperson is a full voxel rig (vchar.js, no cloth) only while
 // among the nearest few to the camera (12 / 8 / 5 by quality); everyone else is a baked
@@ -600,7 +602,8 @@ export class Crowd {
   }
   say(m, text, ms = 2000) {
     const g = this.g;
-    if (!m.a || m.d > 24 || g.time - this.sayT < 1.6) return;
+    // (a word now and then, not a wall of chatter: one bubble every few seconds, nearby only)
+    if (!m.a || m.d > 20 || g.time - this.sayT < 4.5) return;
     this.sayT = g.time;
     g.ui?.tag(`crowd:${m.i}`, text, _w.set(m.a.pos.x, m.a.pos.y + m.a.P.height + 0.4, m.a.pos.z).clone(), ms);
     m.a.say(Math.min(2.5, ms / 1000));
@@ -620,10 +623,14 @@ export class Crowd {
     m.frozen = true;
     m.path = null;
     const a = m.a;
-    this.contest.freezeActor(a);
+    // (the couple clutch each other's arms; kids at play throw their hands up)
+    const style = m.role === 'couple' || m.role === 'stroller' ? 'clutch' : m.role === 'tag' ? pick(['hands', 'cower']) : m.role === 'chat' ? pick(['mouth', 'clutch', 'hands', 'still']) : null;
+    this.contest.freezeActor(a, style);
     a.lookAt(this.g.playerChar);
-    a.tempExpr(pick(['shock', 'surprised']), rand(0.6, 1.4));
+    a.tempExpr(pick(['shock', 'scared']), rand(0.6, 1.4));
     m.cheerT = 0;
+    // the dog whimpers and slinks round behind its owner's legs
+    if (m.dog) { m.dog.whimperT = rand(0.3, 1.2); m.dog.sniff = 0; }
     // the toddler hides behind the parent's legs and peeks out
     if (m.role === 'tagalong' && m.parent?.a) {
       const pa = m.parent.a, P = this.g.playerPos;
@@ -637,6 +644,7 @@ export class Crowd {
     if (!m.frozen) return;
     m.frozen = false;
     m.hideAt = null;
+    if (m.dog) m.dog.whimperT = 0;
     m.a.lookAt(null);
     m.a.play(m.homePose, 'neutral');
     m.gen = this.behaviour(m);
@@ -687,6 +695,20 @@ export class Crowd {
   frozenCount() {
     return this.list.filter((m) => m.frozen).length;
   }
+  // the first-look cutscene: the dog walker stands at the west end of the street (the
+  // dog nosing about), so the lens can find the two of them when the street freezes
+  stageEntry() {
+    const m = this.list.find((q) => q.role === 'dog' && q.a && q.shown && !q.frozen);
+    if (!m) return;
+    const x = C.x0 + 1.2, z = C.stripN;
+    m.a.pos.set(x, this.g.physics.groundAt(x, z, m.a.pos.y + 2).h, z);
+    m.a.yaw = m.a.targetYaw = PI * 0.75;
+    m.path = null;
+    m.gen = this.behaviour(m);
+    m.waitT = 9;
+    this.pose(m, 'leash', 'happy');
+    if (m.dog) { m.dog.x = x + 0.5; m.dog.z = z - 0.45; m.dog.sniff = 4; }
+  }
   // the nearest frozen townsperson Hank could offer a cup
   nearestFrozen(p, r) {
     let best = null, bd = r;
@@ -718,7 +740,7 @@ export class Crowd {
           a.tempExpr(pick(['excited', 'happy', 'laugh']), 2.4);
           g.wait(m.cheerT).then(() => { if (a.anim === 'cheer' && !m.frozen) a.play(prev); });
         }
-        if (said < 3 && m.d < 20 && Math.random() < 0.3) { said++; this.say(m, pick(m.kid ? LINES.kidCheer : LINES.cheer), 1500); }
+        if (said < 1 && m.d < 20 && Math.random() < 0.3) { said++; this.say(m, pick(m.kid ? LINES.kidCheer : LINES.cheer), 1500); }
       });
     }
     return { n, kids };
@@ -760,7 +782,7 @@ export class Crowd {
       this.greetT = g.time + rand(1.5, 3);
       m.a.lookAt(g.playerChar);
       m.a.react(m.kid ? 'yay' : 'hi');
-      if (Math.random() < 0.6) this.say(m, pick(m.kid ? LINES.kidHello : LINES.hello), 1800);
+      if (Math.random() < 0.3) this.say(m, pick(m.kid ? LINES.kidHello : LINES.hello), 1800);
       g.wait(3).then(() => { if (!m.frozen && m.a.lookTarget === g.playerChar) m.a.lookAt(null); });
       return;
     }
@@ -986,7 +1008,16 @@ export class Crowd {
     const fx = Math.sin(a.yaw), fz = Math.cos(a.yaw);
     let tx = a.pos.x + fz * 0.55 + fx * 0.35, tz = a.pos.z - fx * 0.55 + fz * 0.35;
     if (D.sniff > 0) { D.sniff -= dt; tx += Math.sin(D.ph * 0.7) * 0.5; tz += Math.cos(D.ph * 0.5) * 0.4; }
-    if (m.frozen) { tx = D.x; tz = D.z; }
+    if (m.frozen) {
+      // tucked in behind the owner's legs, away from the skeleton, whimpering now and then
+      const P = g.playerPos, hx = a.pos.x - P.x, hz = a.pos.z - P.z, hd = hyp(hx, hz) || 1;
+      tx = a.pos.x + (hx / hd) * 0.5 + (hz / hd) * 0.12;
+      tz = a.pos.z + (hz / hd) * 0.5 - (hx / hd) * 0.12;
+      if (D.whimperT > 0 && (D.whimperT -= dt) <= 0) {
+        D.whimperT = rand(5, 9);
+        if (m.d < 30) this.g.villagers?.sfx('meow_sad', a.pos, 0.3, 1.45);
+      }
+    }
     const dx = tx - D.x, dz = tz - D.z, d = hyp(dx, dz);
     let sp = 0;
     if (d > 0.08) {
@@ -996,13 +1027,15 @@ export class Crowd {
       D.yaw += wrap(Math.atan2(dx, dz) - D.yaw) * Math.min(1, dt * 8);
     } else if (m.frozen) D.yaw += wrap(Math.atan2(g.playerPos.x - D.x, g.playerPos.z - D.z) - D.yaw) * Math.min(1, dt * 4);
     const y = a.pos.y;
-    D.grp.position.set(D.x, y, D.z);
+    // (frozen: crouched low and shivering)
+    D.grp.position.set(D.x + (m.frozen ? Math.sin(D.ph * 47) * 0.006 : 0), y - (m.frozen ? 0.035 : 0), D.z);
     D.grp.rotation.y = D.yaw;
     const k = Math.min(1, sp / 1.2);
     D.front.rotation.x = Math.sin(D.ph * 14) * 0.6 * k;
     D.back.rotation.x = -Math.sin(D.ph * 14) * 0.6 * k;
-    // the tail: a wag (a happy blur once Hank has handed out the cocoa; tucked still while frozen)
-    D.tail.rotation.set(-0.6, 0, m.frozen ? 0 : Math.sin(D.ph * (this.friendly() ? 22 : 9)) * 0.7);
+    // the tail: a wag (a happy blur once Hank has handed out the cocoa; tucked between the
+    // legs, quivering, while frozen)
+    D.tail.rotation.set(m.frozen ? 2.5 : -0.6, 0, m.frozen ? Math.sin(D.ph * 40) * 0.04 : Math.sin(D.ph * (this.friendly() ? 22 : 9)) * 0.7);
     // the leash from the hand to the collar
     const pos = D.line.geometry.attributes.position;
     if (m.tier === 'rig') a.arms.R.hand.getWorldPosition(_v);
