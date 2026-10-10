@@ -151,8 +151,9 @@
 .hud-clip .heat.warm i { background: linear-gradient(180deg, #fff2a0 0 var(--u), #f0ae26 var(--u) calc(100% - var(--u)), #b86e12 calc(100% - var(--u))); }
 .hud-clip .heat.cool i { background: linear-gradient(180deg, #e6f2fc 0 var(--u), #8ab4e0 var(--u) calc(100% - var(--u)), #4a6aa0 calc(100% - var(--u))); }
 .hud-clip .qrow { height: auto; min-height: calc(var(--u) * 16); align-items: flex-start; white-space: normal; line-height: calc(var(--u) * 16); color: var(--nb-pencil); }
-.hud-clip .obj { display: none; padding-left: 0; color: var(--nb-red); white-space: normal; line-height: calc(var(--u) * 16); background: none; overflow: hidden; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; }
-.hud-clip .obj::before { content: ''; position: absolute; left: calc(var(--u) * 2); width: calc(var(--u) * 12); height: calc(var(--u) * 12); margin-top: calc(var(--u) * 2); background: var(--g-arrowR) 0 0 / 100% 100% no-repeat; }
+/* the objective: a pencil note in the small print (the half-size grid), two lines at most */
+.hud-clip .obj { display: none; padding-left: 0; color: var(--nb-red); white-space: normal; font-size: var(--tfs); line-height: calc(var(--us) * 16); background: none; overflow: hidden; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; }
+.hud-clip .obj::before { content: ''; position: absolute; left: calc(var(--u) * 2); width: calc(var(--us) * 16); height: calc(var(--us) * 16); margin-top: 0; background: var(--g-arrowR) 0 0 / 100% 100% no-repeat; }
 .hud-clip .obj.on { display: -webkit-box; }
 .touchmode .hud-clip .obj.on { display: none; }
 .hud-clip .foot { height: calc(var(--u) * 4); }
