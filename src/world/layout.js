@@ -298,7 +298,7 @@ export const PLANTED = [
 
 // Harold's lost keepsakes (collectibles)
 export const KEEPSAKES = [
-  { id: 'cane', x: -214, z: -54, name: "Harold's Walking Cane", note: 'He carved the handle from a moose antler. Took him eleven winters.' },
+  { id: 'cane', x: -176, z: 21, name: "Harold's Walking Cane", note: 'He carved the handle from a moose antler. Took him eleven winters.' },
   { id: 'spyglass', x: 64, z: -122, name: 'Brass Spyglass', note: 'For "spotting deer". Mostly used for spotting the bakery van.' },
   { id: 'pack', x: -114, z: -155, name: 'Hunting Pack', note: 'Inside: 3 granola bars, 0 bullets. Classic Harold.' },
   { id: 'clock', x: 304, z: 12, name: 'Mantel Clock', note: 'Stopped at 4:12 — the minute he proposed. Or so Nana says.' },

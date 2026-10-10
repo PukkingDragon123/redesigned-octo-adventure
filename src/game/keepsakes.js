@@ -34,7 +34,7 @@ export class Keepsakes {
       if (it.taken) continue;
       it.t += dt;
       const d = Math.hypot(it.x - p.x, it.z - p.z);
-      // floating collectibles never photobomb a cutscene or the title (Harold's cane lies by the grave)
+      // floating collectibles never photobomb a cutscene or the title
       it.bb.mesh.visible = d < 160 && g.mode !== 'cutscene' && g.mode !== 'title' && !g.currentScene;
       const bob = Math.sin(it.t * 2) * 0.12;
       it.bb.mesh.position.set(it.x, it.y + 0.9 + bob, it.z);
