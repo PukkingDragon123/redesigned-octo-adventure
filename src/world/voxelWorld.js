@@ -53,9 +53,10 @@ export class VoxelWorld {
     return this.terrain.heightAt(x, z);
   }
 
-  // static voxel geometry, merged per 48 m chunk
+  // static voxel geometry, merged per 48 m chunk (96 m out in the backcountry, where it's sparse)
   addStatic(r, x, y, z, yaw = 0, scale = 1) {
-    const key = `${Math.floor(x / CHUNK)},${Math.floor(z / CHUNK)}`;
+    const C = x < -236 || z > 236 || z < -236 ? CHUNK * 2 : CHUNK;
+    const key = `${C === CHUNK ? '' : 'b'}${Math.floor(x / C)},${Math.floor(z / C)}`;
     let c = this.chunks.get(key);
     if (!c) this.chunks.set(key, (c = []));
     _q.setFromAxisAngle(UP, yaw);
@@ -97,7 +98,7 @@ export class VoxelWorld {
 
   // The merged clutter is small stuff: past a few hundred metres (deep in the haze) a chunk is
   // skipped altogether, which keeps the far side of the bigger map from costing draw calls.
-  updateFar(camPos, far = 450) {
+  updateFar(camPos, far = 380) {
     const L2 = this._farAt;
     if (L2 && Math.abs(L2.x - camPos.x) + Math.abs(L2.z - camPos.z) < 8) return;
     this._farAt = { x: camPos.x, z: camPos.z };

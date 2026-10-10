@@ -119,7 +119,8 @@ const g = {
 };
 const Q = new Quests(g);
 const W = Q.wild;
-W.spawned = true;
+W.synced = true;
+W.homes = {};
 const H = { rosie: [ft.x + 3, ft.z + 5.5], gisele: [-336, 84.5], odile: [-400.6, -143.8], tremblay: [-146, 269.8] };
 for (const [id, [x, z]] of Object.entries(H)) W.folk[id] = mkActor(x, z);
 const at = (x, z) => { g.playerPos.x = x; g.playerPos.z = z; g.playerPos.y = T.heightAt(x, z); };

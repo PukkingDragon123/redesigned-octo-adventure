@@ -772,6 +772,15 @@ function paintMap(terrain, N = 192) {
     ctx.fillRect(i - 1, j - 3, 3, 1); ctx.fillRect(i - 2, j - 2, 5, 2);
     ctx.fillStyle = '#3e2a1c'; ctx.fillRect(i, j, 1, 1);
   }
+  // the old railway: an inked line with cross ties where the rails still lie
+  const rail = terrain.roadProfiles?.find((r) => r.road.id === 'railTrail');
+  if (rail) rail.samples.forEach((p, k) => {
+    if (p.x > -334) return;
+    const i = Math.round(((p.x - WORLD_X0) / (WORLD_HALF * 2)) * N), j = Math.round(((p.z - WORLD_Z0) / (WORLD_HALF * 2)) * N);
+    ctx.fillStyle = '#2a1a14';
+    ctx.fillRect(i, j, 1, 1);
+    if (k % 3 === 0) { ctx.fillRect(i - Math.round(p.dz), j + Math.round(p.dx), 1, 1); ctx.fillRect(i + Math.round(p.dz), j - Math.round(p.dx), 1, 1); }
+  });
   // little houses
   for (const bld of BUILDINGS) {
     const x = Math.round(((bld.x - WORLD_X0) / (WORLD_HALF * 2)) * N), y = Math.round(((bld.z - WORLD_Z0) / (WORLD_HALF * 2)) * N);

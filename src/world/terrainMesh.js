@@ -285,8 +285,8 @@ export function createWorldTextures(terrain) {
 // 2 m grid up close, every 2nd vertex further out and every 4th in the distance. Every level
 // hangs a skirt down from its edges, so the seams between neighbours at different levels
 // never open a crack.
-const LOD_LEVELS = [{ step: 1, dist: 0 }, { step: 2, dist: 150 }, { step: 4, dist: 360 }];
-export function createTerrainMeshes(terrain, material, chunkCells = 44) {
+const LOD_LEVELS = [{ step: 1, dist: 0 }, { step: 2, dist: 200 }, { step: 4, dist: 420 }];
+export function createTerrainMeshes(terrain, material, chunkCells = 80) {
   const group = new THREE.Group();
   group.name = 'terrain';
   const n = terrain.n, Hh = terrain.h;

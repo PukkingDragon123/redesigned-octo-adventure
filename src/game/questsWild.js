@@ -102,11 +102,13 @@ export class WildQuests {
   }
 
   // ------------------------------------------------------------ the folk
-  spawnFolk() {
+  // each is built the first time Hank comes within a couple of hundred metres (no cost up front)
+  spawnNear(p) {
     const g = this.game;
-    if (this.spawned || !g.scene || !g.physics) return;
-    this.spawned = true;
-    for (const [id, h] of Object.entries(homes())) {
+    if (!g.scene || !g.physics) return;
+    this.homes ||= homes();
+    for (const [id, h] of Object.entries(this.homes)) {
+      if (this.folk[id] || Math.hypot(h.x - p.x, h.z - p.z) > 200) continue;
       const a = new VoxelCharacter(g, id, { x: h.x, z: h.z, yaw: h.yaw });
       a.homePos = a.pos.clone();
       a.homeYaw = h.yaw;
@@ -435,8 +437,9 @@ export class WildQuests {
   // ------------------------------------------------------------ per frame
   update(dt) {
     const g = this.game;
-    if (!this.spawned) { this.spawnFolk(); this.sync(); }
     const p = g.playerPos, cam = g.camera?.position;
+    if (!this.synced) { this.synced = true; this.sync(); }
+    if ((this.spawnT = (this.spawnT || 0) - dt) <= 0) { this.spawnT = 1; this.spawnNear(p); }
     for (const a of Object.values(this.folk)) {
       const d = Math.hypot(a.pos.x - p.x, a.pos.z - p.z);
       a.visible = d < 110 && g.mode !== 'title';

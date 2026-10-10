@@ -127,8 +127,8 @@ function monteEcho(vw, { S, post, box, bench, gy, ctx, fingerpost }) {
   // the trailhead down on the rail trail
   const th = L.POI.towerTrailhead;
   fingerpost(th.x - 4, th.z - 4, [['MONT ECHO', -276, -186, 0xc8d8c0]]);
-  S('welcome:trail', () => PR.welcomeSign({ text: 'SENTIER MONT ECHO' }), th.x + 5, th.z - 5, 0.25);
-  box(th.x + 5, th.z - 5, 0.25, 3.2, 0.4, 2.2);
+  S('welcome:trail', () => PR.welcomeSign({ text: 'SENTIER MONT ECHO' }), th.x - 8, th.z - 10, 0.5);
+  box(th.x - 8, th.z - 10, 0.5, 3.2, 0.4, 2.2);
 }
 
 // ---------------------------------------------------------------- Lac des Huards
@@ -246,7 +246,7 @@ function orchard(vw, { S, post, box, gy, physprops, fingerpost }) {
   S('welcome:verger', () => PR.welcomeSign({ text: 'VERGER TREMBLAY POMMES' }), -142, 254, Math.PI + 0.2);
   box(-142, 254, Math.PI + 0.2, 3.2, 0.4, 2.2);
   // split-rail fence along the road side of the orchard
-  for (let x = -206; x < -166; x += 3) vw.fenceRun('rail', x, 268, x + 3, 268);
+  for (let x = -206; x < -166; x += 3) { vw.fenceRun('rail', x, 268, x + 3, 268); box(x + 1.5, 268, Math.PI / 2, 0.2, 3.1, 1.3, 'fence'); }
   void physprops; void post; void fingerpost;
 }
 

@@ -349,6 +349,8 @@ export const RAMPS = [
   { x: -119, z: 112, yaw: 0.12, len: 5, h: 1.3 }, // orchard road
   { x: -306, z: 160, yaw: -Math.PI / 2 - 0.05, len: 5, h: 1.1 }, // marsh trail
   { x: -280, z: -165, yaw: Math.PI * 0.85, len: 6, h: 1.6 }, // the bottom of the Mont Écho trail
+  { x: -293.4, z: -217.1, yaw: -1.33, len: 5, h: 1.2 }, // Mont Écho's switchbacks, for the ride down
+  { x: -301.4, z: -235.9, yaw: 1.4, len: 5, h: 1.2 },
 ];
 
 // Tree clearings (forest.js thins trees inside r, fading back over `soft` metres)
