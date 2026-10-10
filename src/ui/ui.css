@@ -81,9 +81,6 @@
 .letterbox .skiphint { display: flex; }
 .touchmode .skiphint { pointer-events: auto; padding: calc(var(--u) * 2); }
 
-/* ---------------------------------------------------------------- little tags over things in the world */
-.wtag { position: absolute; left: 0; top: 0; pointer-events: none; z-index: 2; }
-
 /* ---------------------------------------------------------------- classic dialogue box (unused by default) */
 /* the speech bubble's look (paper.css), docked along the bottom with a portrait */
 #dialogue { position: absolute; left: 0; right: 0; margin: 0 auto; bottom: calc(var(--u) * 6 + var(--safe-b)); width: min(calc(var(--u) * 260), calc(100% - var(--u) * 8)); display: none; z-index: 3; pointer-events: auto; }

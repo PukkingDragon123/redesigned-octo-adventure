@@ -7,13 +7,20 @@
 // per-letter text effects. Reply bubbles for choices; narration on a dark cocoa
 // bubble across the top.
 //
+// Out in the world (villagers muttering as Hank rides by: WorldBubbles, ui.tag) the
+// very same bubble comes on the half-size pixel grid with one or two short lines, or,
+// too far off to read, as a tiny thought cloud with three dots.
+//
 // Everything is drawn on the kit's pixel grid: frames are 9-slices at a whole
 // number of device pixels per art pixel, text is the pixel font at its native
 // size, positions are snapped to device pixels and all motion moves in whole art
-// pixels (steps()), so nothing is ever resampled or blurred.
+// pixels (steps()), so nothing is ever resampled or blurred. Bubbles are placed
+// after the camera and the characters have moved for the frame (ui.late), on the
+// speaker's real head, with no easing and no bob.
+import * as THREE from 'three';
 import { input } from '../core/input.js';
 import { sound } from '../game/sound.js';
-import { bubbleArt, bubbleTailArt, nameTabArt, BUBBLE_JOIN, BUBBLE_TAIL } from './kitart.js';
+import { bubbleArt, bubbleTailArt, nameTabArt, BUBBLE_JOIN, BUBBLE_TAIL, CLOUD_ART } from './kitart.js';
 import { glyphURL } from '../art/icons.js';
 import { el, scale, snap } from './kit.js';
 
@@ -104,6 +111,23 @@ export function layoutText(txt, parts) {
     word.appendChild(sp);
     out.push(sp);
   });
+  return out;
+}
+
+// ---------------------------------------------------------------- where a speaker's head is
+// The top of the head this frame. Up and down it is held still through the little bob
+// of a walk or a nod (BAND metres) and only follows once the head really goes up or
+// down (it then rides the edge of the band: no easing, no lag beyond it). A character
+// drawn as a far-off stand-in (the contest crowd) has no posed rig: their height then.
+const BAND = 0.09;
+const _hv = new THREE.Vector3();
+export function headAnchor(a, st, out) {
+  if (a.headWorld && (!a.root || (a.root.visible && a.root.parent))) a.headWorld(out);
+  else out.set(a.pos.x, a.pos.y + (a.P?.height ?? 1.7), a.pos.z);
+  if (st.ay == null || Math.abs(out.y - st.ay) > 1.5) st.ay = out.y;
+  else if (out.y > st.ay + BAND) st.ay = out.y - BAND;
+  else if (out.y < st.ay - BAND) st.ay = out.y + BAND;
+  out.y = st.ay;
   return out;
 }
 
@@ -203,7 +227,6 @@ export class Bubbles {
       this.ui.dialogueTick = (dt) => {
         const confirm = input.pressed('confirm') || this.ui._dlgClick;
         this.ui._dlgClick = false;
-        this.place(A);
         if (!done) {
           acc += dt * speed * (input.down('confirm') && i > 3 ? 3 : 1);
           let blipped = false;
@@ -327,7 +350,7 @@ export class Bubbles {
     const bw = A.b.offsetWidth, bh = A.b.offsetHeight;
     let sx = W / 2, sy = H * 0.72, onScreen = false;
     if (A.speaker?.headWorld) {
-      const p = A.speaker.headWorld();
+      const p = headAnchor(A.speaker, A, _hv);
       p.y += 0.22;
       const v = p.project(cam);
       if (v.z < 1 && Math.abs(v.x) < 1.15 && Math.abs(v.y) < 1.15) {
@@ -368,7 +391,7 @@ export class Bubbles {
       let rx = W - rw - 12 * u, ry = H - rh - 12 * u;
       const h = A.replySpeaker;
       if (h?.headWorld && h !== A.speaker) {
-        const v = h.headWorld().project(cam);
+        const v = headAnchor(h, A.replyAnchor || (A.replyAnchor = {}), _hv).project(cam);
         if (v.z < 1 && Math.abs(v.x) < 1 && Math.abs(v.y) < 1) {
           rx = (v.x * 0.5 + 0.5) * W + 16 * u;
           ry = (-v.y * 0.5 + 0.5) * H - rh * 0.3;
@@ -378,6 +401,243 @@ export class Bubbles {
       ry = Math.max(by + bh + tailBelow + 4 * u, Math.min(H - rh - m, ry));
       if (ry + rh > H - m) ry = H - rh - m;
       A.replies.style.transform = `translate(${snap(Math.round(rx / u) * u)}px, ${snap(Math.round(ry / u) * u)}px)`;
+    }
+  }
+}
+
+// ---------------------------------------------------------------- little bubbles out in the world
+// Villagers muttering as Hank goes by (ui.tag): the same cream bubble, outline and tail
+// as a conversation, on the half-size pixel grid (--us) with one or two short lines (a
+// longer line is split over two bubbles in turn, and anything past that trimmed). Each
+// one sits right on top of its speaker's head, found once when the line is said and
+// followed every frame. Far off, or crowded out by nearer talk, it is a tiny thought
+// cloud with three dots instead, which pops open into the words as Hank comes closer.
+const W_LINE = 14; // characters a line (Monogram is 6 px a character)
+const W_LINES = 2; // lines a bubble
+const W_NEAR = 17, W_FAR = 21; // m from the camera: nearer opens the words, further makes a cloud
+const W_GONE = 48; // m: further off than this, nothing at all
+const W_OPEN = 3; // at most this many open at once (the nearest)
+const CLOUD_TIP = 6.5; // x of the middle of the cloud's last little puff (it hangs over the head)
+const CH = 6, LH = 12; // a character's width and a line's height (art px)
+const BOX_X = 11, BOX_Y = 10; // the bubble frame's borders and padding across / down
+const SETTLE = 220; // ms a change between words and cloud has to hold before it shows
+
+// words -> pages of at most W_LINES lines of at most W_LINE characters
+export function pagesOf(text) {
+  const words = String(text).replace(/\[([^\]\s]{1,8})\]/g, '$1').replace(/<[^>]+>/g, '').replace(/[*~^_]/g, '').replace(/\s+/g, ' ').trim().split(' ').filter(Boolean);
+  const lines = [];
+  let cur = '';
+  for (let w of words) {
+    while (w.length > W_LINE) {
+      if (cur) { lines.push(cur); cur = ''; }
+      lines.push(`${w.slice(0, W_LINE - 1)}-`);
+      w = w.slice(W_LINE - 1);
+    }
+    if (!cur) cur = w;
+    else if (cur.length + 1 + w.length <= W_LINE) cur += ` ${w}`;
+    else { lines.push(cur); cur = w; }
+  }
+  if (cur) lines.push(cur);
+  const pages = [];
+  for (let i = 0; i < lines.length; i += W_LINES) pages.push(lines.slice(i, i + W_LINES));
+  if (pages.length > 2) {
+    pages.length = 2;
+    const pg = pages[1], l = pg[pg.length - 1].replace(/[.,!?;:-]+$/, '');
+    pg[pg.length - 1] = `${l.length >= W_LINE ? l.slice(0, W_LINE - 1) : l}…`;
+  }
+  return pages.length ? pages : [['…']];
+}
+
+// who is talking at pos: the character standing right under it (a villager, someone in the
+// contest crowd, a cutscene actor, Hank); nobody for a dog's bark or the stray cat (their
+// own position, which they keep up to date, is used as it is)
+function speakerAt(g, pos) {
+  let best = null, bd = 0.4 * 0.4;
+  const test = (a) => {
+    if (!a?.pos || !a.headWorld) return;
+    const dx = a.pos.x - pos.x, dz = a.pos.z - pos.z, d = dx * dx + dz * dz;
+    if (d < bd && pos.y > a.pos.y - 0.5 && pos.y < a.pos.y + 4) { bd = d; best = a; }
+  };
+  for (const a of Object.values(g.villagers?.actors || {})) test(a);
+  for (const m of g.contest?.crowd?.list || []) test(m.a);
+  for (const a of g.currentScene?.actors || []) test(a);
+  test(g.rider?.ch);
+  test(g.player?.ch);
+  return best;
+}
+
+const _wp = new THREE.Vector3();
+const overlaps = (R, q) => R[0] < q[2] && R[2] > q[0] && R[1] < q[3] && R[3] > q[1];
+export class WorldBubbles {
+  constructor(ui) {
+    this.ui = ui;
+    this.game = ui.game;
+    // under the HUD and the touch controls: they belong to the world
+    this.layer = el('div', 'wbub-layer');
+    ui.root.prepend(this.layer);
+    this.list = new Map();
+  }
+
+  // ui.tag(id, text, pos, ms): pos is where the line was said (often a copy made then);
+  // the bubble follows whoever is standing there
+  say(id, text, pos, ms = 1500) {
+    const now = performance.now();
+    let t = this.list.get(id);
+    if (!t) {
+      const e = el('div', 'wbub');
+      e.innerHTML = '<div class="wb-in"><div class="wb-box"></div><i class="wb-tail"></i><i class="wb-cloud"></i></div>';
+      this.layer.appendChild(e);
+      t = { e, anim: e.firstChild, box: e.querySelector('.wb-box'), tl: e.querySelector('.wb-tail'), mode: '', shown: '', flip: false };
+      this.list.set(id, t);
+    }
+    t.pages = pagesOf(text);
+    t.page = -1;
+    t.born = now;
+    // long enough to read every part
+    t.until = now + Math.max(ms, t.pages.length * 1800);
+    t.pos = pos;
+    t.who = pos ? speakerAt(this.game, pos) : null;
+    t.ay = null;
+    if (t.shown === 'text') t.repop = true;
+  }
+
+  clear() {
+    for (const t of this.list.values()) t.e.remove();
+    this.list.clear();
+  }
+
+  // once a frame, after the camera and everyone in the world have moved
+  place() {
+    if (!this.list.size) return;
+    const g = this.game, ui = this.ui, cam = g.camera, now = performance.now();
+    const off = !cam || g.mode === 'title' || ui.menuStack.length > 0;
+    const W = innerWidth, H = innerHeight, us = scale.us, m = 3 * us;
+    const live = [];
+    for (const [id, t] of this.list) {
+      if (now > t.until) { t.e.remove(); this.list.delete(id); continue; }
+      let vis = !off && !!(t.who || t.pos) && (!t.who || (t.who.visible !== false && !t.who.hiddenByStory));
+      if (vis) {
+        const p = t.who ? headAnchor(t.who, t, _wp) : _wp.copy(t.pos);
+        const d = p.distanceTo(cam.position);
+        p.y += 0.16;
+        p.project(cam);
+        vis = p.z < 1 && Math.abs(p.x) < 1.02 && Math.abs(p.y) < 1.05 && d < W_GONE;
+        if (vis) { t.d = d; t.sx = (p.x * 0.5 + 0.5) * W; t.sy = (-p.y * 0.5 + 0.5) * H; live.push(t); }
+      }
+      if (!vis) { t.mode = ''; this.show(t, ''); }
+    }
+    if (!live.length) return;
+    // nearest first: they open (up to W_OPEN), and anyone who would land on top of them
+    // (or on the conversation going on) is a cloud
+    live.sort((a, b) => a.d - b.d);
+    const taken = [];
+    const D = ui.bubbles?.active;
+    if (D?.wrap?.isConnected) {
+      const r = D.wrap.getBoundingClientRect();
+      if (r.width) taken.push([r.left, r.top - 16 * scale.u, r.right, r.bottom + 10 * scale.u]);
+    }
+    const hits = (R) => taken.some((q) => overlaps(R, q));
+    let open = 0;
+    for (const t of live) {
+      // which part of a long line is up
+      const n = t.pages.length;
+      const pg = Math.min(n - 1, Math.floor(((now - t.born) / (t.until - t.born)) * n));
+      if (pg !== t.page) {
+        t.page = pg;
+        t.lines = t.pages[pg];
+        t.cols = Math.max(...t.lines.map((l) => l.length));
+        if (pg > 0 && t.shown === 'text') t.repop = true;
+      }
+      let want = t.d < W_NEAR ? 'text' : t.d > W_FAR ? 'cloud' : t.mode || 'cloud';
+      if (want === 'text' && open >= W_OPEN) want = 'cloud';
+      const fit = (mode) => {
+        if (mode === 'text') { const R = this.textRect(t, W, m, us); return hits(R) ? null : R; }
+        const R = this.cloudRect(t, W, m, us);
+        const q = taken.find((q) => overlaps(R, q));
+        if (!q) return R;
+        // crowded: sit just above whatever is in the way (one small step), or keep quiet
+        const lift = R[3] - q[1] + us;
+        if (lift > (R[3] - R[1]) * 1.25) return null;
+        const L = [R[0], R[1] - lift, R[2], R[3] - lift];
+        L.x = R.x; L.y = R.y - lift;
+        return L[1] < m || hits(L) ? null : L;
+      };
+      let R = want === 'text' ? fit('text') : null;
+      if (!R) { want = 'cloud'; R = fit('cloud'); }
+      if (!R) want = '';
+      // a change has to hold a moment before it shows (no flicker as people cross)
+      if (want !== t.mode && t.mode) {
+        if (t.pend !== want) { t.pend = want; t.pendAt = now; }
+        if (now - t.pendAt < SETTLE) {
+          const keep = t.mode === 'text' ? this.textRect(t, W, m, us) : this.cloudRect(t, W, m, us);
+          if (!hits(keep) || !want) { want = t.mode; R = keep; }
+        }
+      }
+      if (want === t.mode) t.pend = null;
+      t.mode = want;
+      if (!want) { this.show(t, ''); continue; }
+      if (want === 'text') open++;
+      taken.push([R[0], R[1], R[2], R[3]]);
+      this.show(t, want, R);
+    }
+  }
+
+  // where the open bubble for t goes: [x0, y0, x1, y1] round the box and its tail
+  textRect(t, W, m, us) {
+    const bw = (t.cols * CH + BOX_X) * us, bh = (t.lines.length * LH + BOX_Y) * us;
+    const hang = (TAIL_H - BUBBLE_JOIN) * us; // the tail's tip hangs this far under the box
+    const x = Math.max(m, Math.min(W - bw - m, Math.round((t.sx - bw / 2) / us) * us));
+    const y = Math.max(m, Math.round((t.sy - hang - bh) / us) * us);
+    const R = [x, y, x + bw, y + bh + hang];
+    R.x = x; R.y = y; R.w = bw; R.h = bh;
+    return R;
+  }
+  cloudRect(t, W, m, us) {
+    const [cw, ch] = CLOUD_ART;
+    const x = Math.max(m, Math.min(W - cw * us - m, Math.round((t.sx - CLOUD_TIP * us) / us) * us));
+    const y = Math.round((t.sy - (ch - 2) * us) / us) * us;
+    const R = [x, y, x + cw * us, y + ch * us];
+    R.x = x; R.y = y;
+    return R;
+  }
+
+  // put t on the page as words, a cloud or nothing (writing only what changed)
+  show(t, mode, R) {
+    const e = t.e;
+    if (mode !== t.shown) {
+      const was = t.shown;
+      t.shown = mode;
+      e.className = mode ? `wbub ${mode === 'cloud' ? 'cloud' : 'open'}` : 'wbub';
+      // a cloud popping open into words (or one appearing) bounces in
+      if (mode && mode !== was) t.repop = true;
+    }
+    if (!mode) return;
+    const us = scale.us;
+    if (mode === 'text') {
+      const key = t.lines.join('\n');
+      if (t.textKey !== key) {
+        t.textKey = key;
+        t.box.textContent = key;
+        t.box.style.width = `calc(var(--us) * ${t.cols * CH + BOX_X})`;
+        t.box.style.height = `calc(var(--us) * ${t.lines.length * LH + BOX_Y})`;
+      }
+      // the tail's tip right over the head: just off the middle of the bottom edge, or
+      // mirrored once the edge of the screen has pushed the bubble aside
+      const sx = t.sx - R.x;
+      const flip = sx > R.w / 2 + 2 * us;
+      let tx = flip ? sx - (TAIL_W - 1.5) * us : sx - 1.5 * us;
+      tx = Math.round(Math.max(3 * us, Math.min(R.w - (TAIL_W + 4) * us, tx)) / us) * us;
+      if (flip !== t.flip) { t.flip = flip; t.tl.style.backgroundImage = flip ? `url(${tail('round', true)})` : ''; }
+      if (tx !== t.tx) { t.tx = tx; t.tl.style.left = `${snap(tx)}px`; }
+      if (R.h !== t.th) { t.th = R.h; t.tl.style.top = `${snap(R.h - BUBBLE_JOIN * us)}px`; }
+    }
+    const x = snap(R.x), y = snap(R.y);
+    if (x !== t.x || y !== t.y) { t.x = x; t.y = y; e.style.transform = `translate(${x}px, ${y}px)`; }
+    if (t.repop) {
+      t.repop = false;
+      t.anim.classList.remove('pop');
+      void t.anim.offsetWidth;
+      t.anim.classList.add('pop');
     }
   }
 }

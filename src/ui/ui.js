@@ -5,10 +5,10 @@ import './ui.css';
 import './paper.css';
 import './menus.css';
 import './notebook.css';
-import { Bubbles, nameTab, frame } from './bubbles.js';
+import { Bubbles, WorldBubbles, nameTab, frame } from './bubbles.js';
 import { Popups, htmlToMarkup } from './popup.js';
 import { buildPaperHUD, updatePaperHUD, Gauge } from './paperhud.js';
-import { installKit, kitReady, kButton, kPanel, el, snap, snapBox, scale } from './kit.js';
+import { installKit, kitReady, kButton, kPanel, el, snapBox, scale } from './kit.js';
 import { iconURL, hasIcon } from '../art/icons.js';
 import { foodIconURL, FOOD_INFO } from '../art/foodsprites.js';
 import { LivePortrait } from './live3d.js';
@@ -45,6 +45,7 @@ export class UI {
     this.buildHUD();
     this.dialogue = this.buildDialogue();
     this.bubbles = new Bubbles(this);
+    this.chatter = new WorldBubbles(this);
     this.popups = new Popups(this);
     this.skipHint = el('div', 'skiphint', '<span class="k-key">Esc</span><span class="k-shadow">skip</span>');
     this.skipHint.addEventListener('pointerdown', (e) => {
@@ -59,7 +60,6 @@ export class UI {
     this.overlay = null;
     this.menuStack = [];
     this.prompted = null;
-    this.tags = new Map();
   }
 
   // ---------------------------------------------------------------- HUD
@@ -115,38 +115,35 @@ export class UI {
     this.root.classList.toggle('letterbox', on);
   }
 
-  // little tooltip tags over world positions (villagers muttering, a dog barking);
-  // the old comic stamps (a cls) are Hank shouting it instead
+  // a villager muttering (a dog barking...) out in the world: a tiny speech bubble on
+  // their head, or a "..." cloud when they're far off (bubbles.js WorldBubbles); the old
+  // comic stamps (a cls) are Hank shouting it instead
   tag(id, text, pos, ms = 1500, cls = '') {
     if (cls) { this.pop(text, { shout: true, expr: /bail/.test(cls) ? 'shock' : 'sparkle' }); return; }
-    let t = this.tags.get(id);
-    if (!t) {
-      t = { e: el('div', 'k-tip wtag') };
-      this.root.appendChild(t.e);
-      this.tags.set(id, t);
-    }
-    t.e.textContent = text;
-    t.pos = pos;
-    t.until = performance.now() + ms;
+    this.chatter.say(id, text, pos, ms);
   }
-  updateTags() {
-    const cam = this.game.camera;
-    const now = performance.now();
-    for (const [id, t] of this.tags) {
-      if (now > t.until) {
-        t.e.remove();
-        this.tags.delete(id);
-        continue;
-      }
-      const v = t.pos.clone().project(cam);
-      const vis = v.z < 1 && Math.abs(v.x) < 1.1 && Math.abs(v.y) < 1.1;
-      t.e.style.display = vis ? '' : 'none';
-      if (!vis) continue;
-      const W = window.innerWidth, w = t.e.offsetWidth;
-      const x = (v.x * 0.5 + 0.5) * W, y = (-v.y * 0.5 + 0.5) * window.innerHeight;
-      const left = Math.max(4, Math.min(W - w - 4, x - w / 2));
-      t.e.style.transform = `translate(${snap(left)}px, ${snap(Math.max(4, y - t.e.offsetHeight))}px)`;
-    }
+
+  // Everything pinned to something in the 3D world (speech bubbles, the little bubbles
+  // out in the world) is placed once a frame AFTER the camera and the characters have
+  // moved: just before the world is drawn. Placed at the start of the frame instead, it
+  // would trail a frame behind the head it belongs to and slide about whenever the camera
+  // swings. (If the world wasn't drawn, the next frame's update does it first.)
+  late() {
+    if (!this._late) return;
+    this._late = false;
+    const B = this.bubbles;
+    if (B.active) B.place(B.active);
+    this.chatter.place();
+  }
+  hookRender() {
+    const sc = this.game.world?.scene;
+    if (!sc || sc === this._hooked) return;
+    this._hooked = sc;
+    const prev = sc.onBeforeRender;
+    sc.onBeforeRender = (...a) => {
+      prev.apply(sc, a);
+      this.late();
+    };
   }
 
   // ---------------------------------------------------------------- dialogue (the classic box; speech bubbles are the default)
@@ -409,9 +406,12 @@ export class UI {
       this._leafAmb = menu;
       leaves.ambient('menu', menu, 4);
     }
+    // (the world wasn't drawn since last frame: place the bubbles now)
+    this.late();
+    this.hookRender();
     if (this.dialogueTick) this.dialogueTick(dt);
     else this.menuTick();
-    this.updateTags();
+    this._late = true;
     this.popups.update(dt);
   }
 }
