@@ -293,6 +293,9 @@ export class CarveStage {
     this.S = S;
     g.ui.letterbox(false);
     g.rider.visible = false;
+    // (Bessie parked right up against the table would stand in front of the lens: she waits out of sight)
+    const bike = g.bikeModel?.root;
+    if (bike?.visible && Math.hypot(g.bike.pos.x - T.x, g.bike.pos.z - T.z) < 2.8) { bike.visible = false; this.bikeHidden = bike; }
     this.host.hidden = true;
     if (this.host.group) this.host.group.visible = false;
     this.build(T);
@@ -364,6 +367,7 @@ export class CarveStage {
     if (this.expo0 !== undefined) g.tween(g.pipeline.post.uExposure, 'value', this.expo0, 0.8);
     this.host.hidden = false;
     g.rider.visible = true;
+    if (this.bikeHidden) this.bikeHidden.visible = true;
   }
 
   // ------------------------------------------------------------ the overlay: clock, a line, the tools
@@ -551,6 +555,16 @@ export class CarveStage {
     C.cutLidRing(this.p);
     this.sfx('carve_cut', { volume: 0.4 });
     this.checkLid();
+    if (this.phase === 'lid') {
+      // (Hank's own cuts left the ring odd: take the whole band round the stem out)
+      const B = C.shapeOf();
+      for (let i = 0; i < C.N3; i++) {
+        if (!C.STRUCT[this.p.kind[i]] || B.ORIG[i] !== 1) continue;
+        const x = i % C.W, r = (i - x) / C.W, y = r % C.H, z = (r - y) / C.H;
+        if (y > C.Y0 + C.RY * 0.45 && Math.abs(Math.hypot(x + 0.5 - C.X0, z + 0.5 - C.Z0) - C.LID_R) < 1) this.p.remove(i);
+      }
+      this.checkLid();
+    }
   }
 
   // ------------------------------------------------------------ 3. carve!
