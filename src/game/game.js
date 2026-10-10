@@ -425,9 +425,8 @@ export class Game {
       const hi = q === 'high', lo = q === 'low';
       const size = lo ? 1024 : hi && !touch ? 4096 : 2048;
       const P = this.pipeline;
-      // high on a desktop supersamples; everything else renders at (or in whole
-      // steps below) the screen's own pixels, which keeps it crisp and cheap
-      P.supersample = hi && !touch ? 1.5 : 1;
+      // the frame renders at the screen's own pixels or in whole steps below them
+      // (never above: a browser-filtered downscale blurs the picture)
       P.maxDpr = touch ? (hi ? 2 : lo ? 1 : 1.5) : 3;
       P.maxPixels = touch ? (hi ? 2.4e6 : lo ? 0.9e6 : 1.4e6) : lo ? 1.6e6 : q === 'medium' ? 3.2e6 : 5.2e6;
       P.bloom = hi;

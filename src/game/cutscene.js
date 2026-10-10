@@ -89,7 +89,7 @@ export class Scene {
     if (this.skip) return Promise.resolve();
     return this.g.wait(s);
   }
-  // short fades are autumn leaf wipes, long ones stay soft (see ui/leaves.js)
+  // short fades are warm glow dissolves, long ones stay soft (see ui/leaves.js)
   async fade(to, dur = 0.6) {
     if (this.skip) dur = 0.01;
     await screenFade(this.g, to, dur);

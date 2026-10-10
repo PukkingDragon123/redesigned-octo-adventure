@@ -183,10 +183,11 @@ its heat, more the harder the crash.
 - **Leaves and transitions** (`src/ui/leaves.js`, `src/ui/leafart.js`): pixel
   maple, oak, birch and aspen leaves (pre-drawn turn and tumble frames, never
   smoothly rotated) shake off menus, burst from big buttons and deliveries and
-  drift over the title; short fades are leaf wipes (a gust blows a solid
-  two-depth pile of leaves over the screen, the scene changes under it, then
-  the pile blows away: leaves all the way through, never black), long ones stay
-  soft, into a warm dark plum (`leafTransition`, `screenFade`).
+  drift over the title; short fades are glow dissolves (a warm lantern glow
+  closes in as a dithered pixel iris with a golden rim while glints twinkle
+  and a few leaves drift by, the scene changes under it, then it opens out
+  again: never black), long ones stay soft, into a warm dark plum
+  (`leafTransition`, `screenFade`).
 - **See-through** (`SEE_GLSL` in `src/render/shaderlib.js`, `updateSee` in
   `src/game/camera.js`): whatever stands between the camera and Hank (or a
   cutscene's subject) dissolves in a pixel dither with a glowing ember edge.

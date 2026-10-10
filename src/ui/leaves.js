@@ -1,9 +1,9 @@
 // Autumn leaves in the interface: little pixel-art leaves (leafart.js) that flutter
 // off menus as they open, burst out of big buttons and finished deliveries, drift
 // across the title and pause screens and now and then get caught on Nana's list,
-// plus the leaf-wipe screen transitions: a gust blows a solid pile of leaves across
-// the screen (leaves all the way through, never a flat or black fill), the scene
-// changes underneath, then the gust carries the pile away to reveal it.
+// plus the screen transitions: a warm lantern glow closes in as a dithered pixel
+// iris with a golden rim (never black), glints twinkle and a few leaves drift by,
+// the scene changes underneath, then the glow opens out again to reveal it.
 //
 // Two pooled canvases drawn on the kit's art-pixel grid (one canvas pixel = one art
 // pixel, shown at a whole number of device pixels per pixel, never smoothed):
@@ -14,8 +14,8 @@
 //
 //   leafTransition(async () => { /* swap */ }, { layer: 'front' })   cover, swap, reveal
 //   await leafCover(opts); ... ; leafReveal(opts)                    the two halves
-//   screenFade(game, to, dur)       the cutscene / cabin fade: short fades are leaf
-//                                   wipes, long (emotional) ones stay soft (warm plum,
+//   screenFade(game, to, dur)       the cutscene / cabin fade: short fades are glow
+//                                   dissolves, long (emotional) ones stay soft (warm plum,
 //                                   never black) with a few leaves
 //   leaves.burst(x, y, n) / leaves.burstFrom(el, n) / leaves.flutter(el, n)
 //   leaves.gust(n) / leaves.ambient('title', true) / leaves.catchOn(el)
@@ -33,7 +33,7 @@ export function setLeafMotion(on) {
   if (reduced) for (const L of [back, front]) L.parts.length = 0;
 }
 export const leafMotion = () => !reduced;
-// paint the leaf sprites and the wipe's pile ahead of time (the loading screen does,
+// paint the leaf sprites and the transition's glow ahead of time (the loading screen does,
 // so its exit doesn't hitch)
 export function warmLeaves() {
   leafAtlas('m');
@@ -41,7 +41,7 @@ export function warmLeaves() {
   const idle = window.requestIdleCallback || ((f) => setTimeout(f, 50));
   idle(() => {
     const { W, H } = gridSize();
-    pileOf(W, H);
+    glowOf(W, H);
   });
 }
 
@@ -51,7 +51,6 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const smooth = (k) => k * k * (3 - 2 * k);
 const ALL = LEAF_KINDS.map((_, i) => i);
 const MAXP = 240; // particles per layer (phones too)
-const EDGE = 52; // how far past the screen a wipe's front runs, in art pixels
 
 // the screen in art pixels (whole art pixels, rounded up)
 function gridSize() {
@@ -132,8 +131,8 @@ class Layer {
     for (const h of this.hooks) h(dt, this);
     if (this.wipe) this.wipe.step(dt);
     this.step(dt);
-    // a pile just sitting there (nothing flying over it) is drawn once, not every frame
-    const still = this.wipe?.mode === 'hold' && !this.parts.length && !this.hooks.size;
+    // a glow just sitting there (nothing flying over it) is drawn once, not every frame
+    const still = !!this.wipe?.still() && !this.parts.length && !this.hooks.size;
     if (!still || this.dirty) this.draw();
     this.dirty = !still;
     if (this.parts.length || this.wipe || this.hooks.size) this.raf = requestAnimationFrame(this.loop);
@@ -350,236 +349,229 @@ function release(p) {
   p.wind = d * rnd(20, 40);
 }
 
-// ---------------------------------------------------------------- the pile a wipe is made of
-// A tile the size of the layer (it wraps left to right, so it can drift with the
-// wind) packed solid with overlapping leaves in two depths: a dense back pile in
-// shadow - opaque, the deep russet under it only shows in the odd chink between
-// leaves - and a looser pile of bright leaves on top. Painted once per screen size.
-const PILE_BASE = '#7a2c16';
-const PILE_SHADE = 'rgba(64, 18, 22, 0.36)';
-const PILES = new Map();
-function pileOf(W, H) {
+// ---------------------------------------------------------------- the glow a transition is made of
+// A warm lantern glow painted on the art-pixel grid: honey gold in the middle,
+// amber, then a dusky rose at the corners (never black), in a handful of flat
+// tones blended by an ordered (Bayer) dither so it reads as pixel art. Each pixel
+// also gets a threshold - its distance from the middle plus a Bayer offset - which
+// the dissolve compares against its progress, so the glow closes in (and later
+// opens out) as a dithered iris with hard pixel edges. Built once per screen size.
+const GLOW_STOPS = [[0, 0xffe7ad], [0.3, 0xffcb7c], [0.6, 0xf2a25e], [0.85, 0xd9784f], [1.08, 0xb5574e]];
+const GLOW_TONES = 7;
+const RIM = 0.075; // how wide the bright rim on the dissolving edge is (threshold units)
+const RIM_COL = [0xfff3cf, 0xffe08a];
+const BAYER = [0, 32, 8, 40, 2, 34, 10, 42, 48, 16, 56, 24, 50, 18, 58, 26, 12, 44, 4, 36, 14, 46, 6, 38, 60, 28, 52, 20, 62, 30, 54, 22, 3, 35, 11, 43, 1, 33, 9, 41, 51, 19, 59, 27, 49, 17, 57, 25, 15, 47, 7, 39, 13, 45, 5, 37, 63, 31, 55, 23, 61, 29, 53, 21];
+const bayer = (x, y) => (BAYER[(y & 7) * 8 + (x & 7)] + 0.5) / 64;
+// 0xRRGGBB -> the canvas's little-endian 0xAABBGGRR
+const abgr = (c) => (0xff000000 | ((c & 0xff) << 16) | (c & 0xff00) | ((c >> 16) & 0xff)) >>> 0;
+const mixHex = (a, b, k) => {
+  const ch = (s) => Math.round(((a >> s) & 255) + (((b >> s) & 255) - ((a >> s) & 255)) * k);
+  return (ch(16) << 16) | (ch(8) << 8) | ch(0);
+};
+function glowTone(d) {
+  for (let i = 1; i < GLOW_STOPS.length; i++) {
+    const [d1, c1] = GLOW_STOPS[i], [d0, c0] = GLOW_STOPS[i - 1];
+    if (d <= d1) return mixHex(c0, c1, clamp((d - d0) / (d1 - d0), 0, 1));
+  }
+  return GLOW_STOPS[GLOW_STOPS.length - 1][1];
+}
+// the middle of the glow (a touch above centre, where the eye sits) and its reach
+const glowCentre = (W, H) => {
+  const cx = W / 2, cy = H * 0.46;
+  return { cx, cy, R: Math.hypot(Math.max(cx, W - cx), Math.max(cy, H - cy)) };
+};
+const GLOWS = new Map();
+function glowOf(W, H) {
   const key = `${W}x${H}`;
-  let P = PILES.get(key);
-  if (P) return P;
-  if (PILES.size > 2) PILES.clear();
-  const mk = () => {
-    const c = document.createElement('canvas');
-    c.width = W;
-    c.height = H;
-    return c;
-  };
-  const back = mk(), top = mk();
-  const M = leafAtlas('m'), B = leafAtlas('b');
-  // one leaf, wrapped round the left and right edges so the tile repeats seamlessly
-  const stamp = (g, At, k, x, y) => {
-    const c = At.cell, sx = At.sx((Math.random() * TURNS) | 0, pick([0, 0, 0, 1, 5])), sy = At.sy(k);
-    x = Math.round(x - c / 2);
-    y = Math.round(y - c / 2);
-    g.drawImage(At.canvas, sx, sy, c, c, x, y, c, c);
-    if (x < 0) g.drawImage(At.canvas, sx, sy, c, c, x + W, y, c, c);
-    if (x + c > W) g.drawImage(At.canvas, sx, sy, c, c, x - W, y, c, c);
-  };
-  const fill = (g, At, kinds, step, keep = 1) => {
-    for (let y = -step; y < H + step; y += step) for (let x = 0; x < W; x += step) {
-      if (Math.random() < keep) stamp(g, At, pick(kinds), x + rnd(0, step), y + rnd(0, step));
-    }
-  };
-  let g = back.getContext('2d');
-  g.fillStyle = PILE_BASE;
-  g.fillRect(0, 0, W, H);
-  fill(g, M, ALL, 8);
-  fill(g, B, BIG_KINDS, 11);
-  fill(g, B, BIG_KINDS, 14);
-  // the lower leaves lie in the shadow of the ones on top
-  g.fillStyle = PILE_SHADE;
-  g.fillRect(0, 0, W, H);
-  g = top.getContext('2d');
-  fill(g, B, BIG_KINDS, 13, 0.7);
-  fill(g, M, ALL, 11, 0.5);
-  P = { back, top };
-  PILES.set(key, P);
-  return P;
+  let G = GLOWS.get(key);
+  if (G) return G;
+  if (GLOWS.size > 2) GLOWS.clear();
+  const tones = [];
+  for (let i = 0; i < GLOW_TONES; i++) tones.push(abgr(glowTone((i / (GLOW_TONES - 1)) * 1.08)));
+  const n = W * H, col = new Uint32Array(n), thr = new Float32Array(n);
+  const { cx, cy, R } = glowCentre(W, H);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const i = y * W + x, b = bayer(x, y), d = clamp(Math.hypot(x + 0.5 - cx, (y + 0.5 - cy) * 1.15) / R, 0, 1);
+    const f = d * (GLOW_TONES - 1), t = Math.floor(f);
+    col[i] = tones[Math.min(GLOW_TONES - 1, t + (f - t > b ? 1 : 0))];
+    thr[i] = d * 0.78 + b * 0.22;
+  }
+  const canvas = document.createElement('canvas');
+  canvas.width = W;
+  canvas.height = H;
+  const g = canvas.getContext('2d');
+  const img = g.createImageData(W, H);
+  new Uint32Array(img.data.buffer).set(col);
+  g.putImageData(img, 0, 0);
+  G = { col, thr, canvas, img: g.createImageData(W, H), rim: RIM_COL.map(abgr) };
+  GLOWS.set(key, G);
+  return G;
 }
 
-// ---------------------------------------------------------------- the leaf wipe
-// A gust blows a solid pile of leaves across the screen behind a ragged front of big
-// tumbling leaves (cover), the pile sits there (hold) while the scene changes
-// underneath, then the gust carries it on, its trailing edge shedding leaves that
-// flutter down over the revealed scene (reveal). Nothing but leaves: no flat colour
-// ever shows. The pile comes in two depths that drift at different speeds.
-// dir: 1 left to right, -1 right to left.
+// ---------------------------------------------------------------- the glow dissolve
+// cover: the warm glow closes in from the edges of the screen to its middle in a
+// dithered iris with a bright golden rim; hold: it glows there while the scene
+// changes underneath, a few glints twinkling; reveal: it opens out again from the
+// middle. A few leaves drift through and little glints of light rise and twinkle -
+// a gentle, short bit of magic rather than a wall of anything.
+const MOTE_MAX = 26;
 class Wipe {
-  constructor(L, mode, dur, dir) {
+  constructor(L, mode, dur) {
     this.L = L;
     this.mode = mode;
     this.t = 0;
     this.dur = dur;
-    this.dir = dir;
-    this.seed = rnd(0, 100);
-    this.band = [];
     this.res = null;
     this.watch = null;
-    this.makeBand();
+    this.motes = [];
+    this.spawn = 0;
   }
-  makeBand() {
-    const H = this.L.H, rev = this.mode === 'reveal';
-    for (let y = -10; y < H + 10; y += rnd(3, 5.5)) {
-      const big = Math.random() < 0.6;
-      this.band.push({
-        y: Math.round(y), big, k: big ? pick(BIG_KINDS) : pick(ALL),
-        dx: rev ? rnd(-6, big ? 26 : 34) : -rnd(-6, big ? 26 : 34),
-        rot: rnd(0, TURNS), rs: rnd(-9, 9), fl: rnd(0, 6.3), fs: rnd(4, 9) * (Math.random() < 0.5 ? -1 : 1), bob: rnd(0, 6.3),
-      });
-    }
+  // the threshold the iris edge sits at right now: covered pixels have thr >= edge
+  edgeThr() {
+    const k = smooth(clamp(this.t / this.dur, 0, 1));
+    return this.mode === 'cover' ? 1 + RIM - k * (1 + 2 * RIM) : k * (1 + RIM) - RIM * 0.5;
   }
-  jag(y) {
-    const s = this.seed, t = this.t * 2;
-    return Math.round(7 * Math.sin(y * 0.19 + s + t) + 5 * Math.sin(y * 0.071 + s * 1.7 - t) + 3 * Math.sin(y * 0.53 + s * 0.3));
-  }
-  // the edge position (art px along the wind) for this moment
-  edge() {
-    const W = this.L.W;
-    if (this.mode === 'hold') return W + EDGE;
-    return -EDGE + (W + 2 * EDGE) * smooth(clamp(this.t / this.dur, 0, 1));
-  }
-  speed() {
-    return (this.L.W + 2 * EDGE) / this.dur;
-  }
-  // how far a depth of the pile has drifted with the wind (k: its speed): it arrives
-  // with the gust and settles, and leaves with it
-  drift(k) {
-    if (this.mode === 'hold') return 0;
-    const e = this.edge();
-    return Math.round((this.mode === 'cover' ? e - (this.L.W + EDGE) : e + EDGE) * 0.4 * k);
-  }
-  // jump to fully covered (an instant cut while the leaves were still coming in)
+  // jump to fully covered (an instant cut while the glow was still closing in)
   finish() {
     if (this.mode !== 'cover') return;
     this.mode = 'hold';
     this.L.dirty = true;
     this.res?.();
   }
+  covering() {
+    return this.mode === 'cover' || this.mode === 'hold';
+  }
+  addMote(x, y) {
+    if (this.motes.length >= MOTE_MAX) return;
+    this.motes.push({ x, y, vx: rnd(-4, 4), vy: rnd(-16, -5), t: 0, life: rnd(0.7, 1.5), ph: rnd(0, 6.3), sp: rnd(7, 13), big: Math.random() < 0.35 });
+  }
   step(dt) {
     this.t += dt;
-    for (const b of this.band) { b.rot += b.rs * dt; b.fl += b.fs * dt; }
-    if (this.mode === 'reveal' && !reduced) {
-      // the trailing edge sheds leaves that are left behind fluttering over the scene
-      const L = this.L, e = this.edge(), sp = this.speed();
-      // (about a leaf a frame: enough to feel blown off the pile, few enough not to bury the dialogue)
-      const n = Math.random() < dt * 32 ? 1 + ((L.H / 320) | 0) : 0;
-      for (let i = 0; i < n; i++) {
-        const y = rnd(0, L.H), s = e + this.jag(y) + rnd(-2, 8);
-        if (s < -10 || s > L.W + 10) continue;
-        const big = Math.random() < 0.3;
-        L.add(leaf({ x: this.dir > 0 ? s : L.W - s, y, vx: this.dir * sp * rnd(0.12, 0.45), wind: this.dir * rnd(20, 60), vy: rnd(-60, -10), drag: 1.8, g: 44, term: 36, life: 3.5, big, k: big ? pick(BIG_KINDS) : pick(ALL) }));
+    const L = this.L;
+    if (!reduced) {
+      // glints: along the dissolving rim while it moves, drifting over the glow while it holds
+      this.spawn += dt * (this.mode === 'hold' ? 5 : this.mode === 'tail' ? 0 : 26);
+      const { cx, cy, R } = glowCentre(L.W, L.H);
+      while (this.spawn >= 1) {
+        this.spawn--;
+        const a = rnd(0, Math.PI * 2);
+        const r = this.mode === 'hold' ? rnd(0, 0.8) : clamp((this.edgeThr() - 0.11 + rnd(-0.05, 0.05)) / 0.78, 0.02, 1);
+        this.addMote(cx + Math.cos(a) * r * R, cy + (Math.sin(a) * r * R) / 1.15);
+      }
+      for (let i = this.motes.length - 1; i >= 0; i--) {
+        const m = this.motes[i];
+        m.t += dt;
+        m.x += m.vx * dt;
+        m.y += m.vy * dt;
+        if (m.t > m.life) this.motes.splice(i, 1);
       }
     }
-    if (this.mode !== 'hold' && this.t >= this.dur) {
-      if (this.mode === 'reveal') { this.L.wipe = null; this.res?.(); return; }
-      this.mode = 'hold';
-      this.L.dirty = true;
+    if ((this.mode === 'cover' || this.mode === 'reveal') && this.t >= this.dur) {
+      // revealed: the glints left over twinkle out on their own a moment longer
+      this.mode = this.mode === 'reveal' ? 'tail' : 'hold';
+      L.dirty = true;
       this.res?.();
     }
+    if (this.mode === 'tail' && (reduced || !this.motes.length || this.t > this.dur + 1.6) && L.wipe === this) L.wipe = null;
     // a held cover stands in for the 3D fade: whatever brings the scene back (a direct
-    // reset of the fade, a slow fade in) blows the leaves away
-    if (this.mode === 'hold' && this.watch && this.watch.value < 0.5 && this.L.wipe === this) {
-      leafReveal({ layer: this.L === back ? 'back' : 'front', sound: true });
+    // reset of the fade, a slow fade in) opens the glow up again
+    if (this.mode === 'hold' && this.watch && this.watch.value < 0.5 && L.wipe === this) {
+      leafReveal({ layer: L === back ? 'back' : 'front', sound: true });
     }
+  }
+  still() {
+    return this.mode === 'hold' && (reduced || !this.motes.length);
   }
   draw(ctx) {
-    const L = this.L, W = L.W, H = L.H, P = pileOf(W, H);
-    if (reduced || this.mode === 'hold') {
-      // reduced motion: the pile fades in and out in four steps instead of sweeping
-      const k = this.mode === 'hold' ? 1 : clamp(this.t / this.dur, 0, 1);
-      ctx.globalAlpha = Math.round((this.mode === 'reveal' ? 1 - k : k) * 4) / 4;
-      ctx.drawImage(P.back, 0, 0);
-      ctx.drawImage(P.top, 0, 0);
-      ctx.globalAlpha = 1;
+    if (this.mode === 'tail') return;
+    const L = this.L, W = L.W, H = L.H, G = glowOf(W, H);
+    if (this.mode === 'hold') {
+      ctx.drawImage(G.canvas, 0, 0);
       return;
     }
-    this.drawPile(ctx, P.back, 0, 1);
-    this.drawPile(ctx, P.top, 6, 1.6);
-  }
-  // one depth of the pile, clipped (whole art pixels, so the edge stays hard) to the
-  // covered side of the ragged edge; lead: how far ahead of the edge this depth runs
-  drawPile(ctx, tile, lead, k) {
-    const L = this.L, W = L.W, H = L.H, rev = this.mode === 'reveal', d = this.dir;
-    const e = this.edge() + lead;
-    ctx.save();
-    ctx.beginPath();
-    let any = false;
-    for (let y = 0; y < H; y += 2) {
-      const s = clamp(Math.round(e + this.jag(y)), 0, W);
-      // cover: the pile is behind the front (s < edge); reveal: ahead of the trailing edge
-      const a = rev ? s : 0, b = rev ? W : s;
-      if (b > a) { ctx.rect(d > 0 ? a : W - b, y, b - a, 2); any = true; }
+    const img = G.img, out = new Uint32Array(img.data.buffer), col = G.col, thr = G.thr;
+    const e = this.edgeThr(), n = W * H, rimA = G.rim[0], rimB = G.rim[1];
+    for (let i = 0; i < n; i++) {
+      const r = thr[i] - e;
+      out[i] = r < 0 ? 0 : r < RIM * 0.45 ? rimA : r < RIM ? rimB : col[i];
     }
-    if (any) {
-      ctx.clip();
-      const o = (((this.drift(k) * d) % W) + W) % W;
-      ctx.drawImage(tile, o, 0);
-      if (o > 0) ctx.drawImage(tile, o - W, 0);
-    }
-    ctx.restore();
+    ctx.putImageData(img, 0, 0);
   }
-  // the ragged front of leaves rides on the edge, over the pile
+  // the twinkling glints, over the glow and the drifting leaves
   drawTop(ctx) {
-    if (reduced || this.mode === 'hold') return;
-    const L = this.L, e = this.edge(), W = L.W;
-    for (const b of this.band) {
-      const At = leafAtlas(b.big ? 'b' : 'm'), c = At.cell;
-      const s = e + this.jag(b.y) + b.dx + Math.sin(this.t * 9 + b.bob) * 2;
-      const x = this.dir > 0 ? s : W - s;
-      if (x < -c || x > W + c) continue;
-      ctx.drawImage(At.canvas, At.sx(Math.floor(b.rot), tumbleOf(b.fl)), At.sy(b.k), c, c, Math.round(x - c / 2), Math.round(b.y + Math.sin(this.t * 6 + b.bob) * 2 - c / 2), c, c);
+    if (reduced) return;
+    for (const m of this.motes) {
+      const life = 1 - m.t / m.life;
+      const tw = Math.sin(m.t * m.sp + m.ph);
+      if (life <= 0 || tw < -0.55) continue;
+      const x = Math.round(m.x), y = Math.round(m.y);
+      ctx.fillStyle = tw > 0.4 ? '#fffbe8' : '#ffd86e';
+      ctx.fillRect(x, y, 1, 1);
+      if (m.big && tw > 0.25 && life > 0.25) {
+        // a little four-pointed sparkle
+        ctx.fillStyle = tw > 0.75 ? '#fff1b8' : '#f5b84e';
+        ctx.fillRect(x - 1, y, 3, 1);
+        ctx.fillRect(x, y - 1, 1, 3);
+        ctx.fillStyle = '#fffbe8';
+        ctx.fillRect(x, y, 1, 1);
+        if (tw > 0.8) {
+          ctx.fillStyle = '#f5b84e';
+          ctx.fillRect(x - 2, y, 1, 1);
+          ctx.fillRect(x + 2, y, 1, 1);
+          ctx.fillRect(x, y - 2, 1, 1);
+          ctx.fillRect(x, y + 2, 1, 1);
+        }
+      }
     }
   }
 }
+// a few leaves drift through a transition (never a pile of them)
+function driftLeaves(L, n, dir) {
+  if (reduced) return;
+  for (let i = 0; i < n; i++) {
+    const big = Math.random() < 0.3;
+    const x = dir > 0 ? rnd(-30, L.W * 0.3) : L.W - rnd(-30, L.W * 0.3);
+    L.add(leaf({ x, y: rnd(-24, -6) + (i % 2 ? rnd(0, L.H * 0.35) : 0), vx: dir * rnd(18, 40), wind: dir * rnd(22, 46), vy: rnd(0, 12), g: 16, term: rnd(20, 32), drag: 1, life: 4.5, big, k: big ? pick(BIG_KINDS) : pick(ALL) }));
+  }
+}
 let lastDir = 1;
-// sweep the pile in; resolves when the screen is covered (it stays covered until leafReveal)
+// close the glow in; resolves when the screen is covered (it stays covered until leafReveal)
 export function leafCover({ layer = 'front', dur = 0.6, dir = Math.random() < 0.5 ? 1 : -1, sound: snd = true } = {}) {
   const L = layerOf(layer);
   L.wake();
   lastDir = dir;
-  const w = new Wipe(L, 'cover', reduced ? Math.min(dur, 0.3) : dur, dir);
+  const w = new Wipe(L, 'cover', reduced ? Math.min(dur, 0.35) : dur);
   L.wipe?.res?.();
   L.wipe = w;
-  if (snd) sound.play('leaf_gust', { volume: 0.55, pitch: rnd(0.9, 1.1) });
-  if (!reduced) {
-    // a scatter of leaves racing ahead of the front
-    const sp = w.speed();
-    for (let i = 0; i < 10 + L.H / 14; i++) {
-      const s = rnd(-EDGE - 30, -6), big = Math.random() < 0.25;
-      L.add(leaf({ x: dir > 0 ? s : L.W - s, y: rnd(-0.05, 1.02) * L.H, vx: dir * sp * rnd(1.05, 1.45), wind: dir * sp * rnd(0.9, 1.2), vy: rnd(-30, 20), drag: 0.4, g: 10, term: 50, life: 3, big, k: big ? pick(BIG_KINDS) : pick(ALL) }));
-    }
-  }
+  if (snd) sound.play('leaf_rustle', { volume: 0.3, pitch: rnd(1.1, 1.3) });
+  driftLeaves(L, 3 + ((L.W / 260) | 0), dir);
   return new Promise((res) => (w.res = res));
 }
-// blow the pile away (it is drawn whole at once first, so whatever was swapped
+// open the glow out again (it is drawn whole at once first, so whatever was swapped
 // underneath never flashes); resolves when the scene is uncovered
 export function leafReveal({ layer = 'front', dur = 0.75, dir = lastDir, sound: snd = false } = {}) {
   const L = layerOf(layer);
   L.wake();
-  const w = new Wipe(L, 'reveal', reduced ? Math.min(dur, 0.3) : dur, dir);
+  const w = new Wipe(L, 'reveal', reduced ? Math.min(dur, 0.35) : dur);
   L.wipe?.res?.();
   L.wipe = w;
   L.draw();
-  if (snd) sound.play('leaf_gust', { volume: 0.35, pitch: rnd(1.05, 1.2) });
+  if (snd) sound.play('leaf_rustle', { volume: 0.22, pitch: rnd(1.2, 1.4) });
+  driftLeaves(L, 2, dir);
   return new Promise((res) => (w.res = res));
 }
-// let go of a held cover: the leaves blow away
+// let go of a held cover: the glow opens up
 export function leafRelease({ layer = 'front' } = {}) {
   const w = layerOf(layer).wipe;
   if (w && w.mode === 'hold') leafReveal({ layer });
 }
-// cover the screen with leaves, run swap() underneath, then blow them away
-export async function leafTransition(swap, { layer = 'front', dur = 0.6, revealDur = 0.75, dir } = {}) {
+// close the glow over the screen, run swap() underneath, then open it again
+export async function leafTransition(swap, { layer = 'front', dur = 0.55, revealDur = 0.7, dir } = {}) {
   await leafCover({ layer, dur, dir });
   try {
     await swap?.();
   } finally {
-    // let the new scene draw once before the leaves blow off it
+    // let the new scene draw once before the glow opens on it
     await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
     await leafReveal({ layer, dur: revealDur });
   }
@@ -587,9 +579,9 @@ export async function leafTransition(swap, { layer = 'front', dur = 0.6, revealD
 
 // ---------------------------------------------------------------- the 3D fade
 // Scene fades (cutscenes, Nana's cabin, the end of the day) go through here. Short
-// fades (up to 1.25 s) are leaf wipes on the layer just above the 3D view (over the
-// cutscene letterbox, under the dialogue): the pile covers the screen and STAYS -
-// the leaves are the cover, nothing goes dark - and fading back in blows it away.
+// fades (up to 1.25 s) are glow dissolves on the layer just above the 3D view (over
+// the cutscene letterbox, under the dialogue): the glow covers the screen and STAYS -
+// it is the cover, nothing goes dark - and fading back in opens it out again.
 // The 3D fade is set underneath (code reads it) but never shows. Longer fades are
 // the slow, emotional ones (a funeral, falling asleep): they stay soft, into the
 // pipeline's warm dark plum (never black), with a few leaves drifting down.
@@ -605,7 +597,7 @@ export async function screenFade(game, to, dur = 0.6) {
   for (const tw of game.tweens || []) if (tw.obj === U) tw.obj = { value: 0 };
   const hidden = typeof document === 'undefined' || document.hidden;
   const w = back.wipe;
-  const covered = !!w && w.mode !== 'reveal'; // a pile coming in or sitting there
+  const covered = !!w && w.covering(); // the glow closing in or sitting there
   if (dur <= 0.05 || hidden) {
     // an instant cut (a skipped cutscene): leaves already coming in settle at once,
     // leaves sitting there blow off quickly
@@ -644,7 +636,7 @@ export async function screenFade(game, to, dur = 0.6) {
     }
     if (U.value < 0.01) return;
     // dark without leaves (after a slow fade): come back softly on a little gust
-    leaves.gust(8, { layer: 'back', speed: 0.8 });
+    leaves.gust(3, { layer: 'back', speed: 0.6 });
     return game.tween(U, 'value', to, dur);
   }
   if (to < U.value && covered) leafReveal({ layer: 'back', dur: 0.9, sound: true });
