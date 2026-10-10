@@ -249,7 +249,7 @@ export class Pipeline {
     this.fsScene.add(this.fsMesh);
 
     this.brightMat = new THREE.ShaderMaterial({
-      uniforms: { tColor: { value: null }, uTexel: { value: new THREE.Vector2() }, uThreshold: { value: 0.95 } },
+      uniforms: { tColor: { value: null }, uTexel: { value: new THREE.Vector2() }, uThreshold: { value: 1.05 } },
       vertexShader: FS_VERT, fragmentShader: BRIGHT_FRAG, depthTest: false, depthWrite: false,
     });
     this.blurMat = new THREE.ShaderMaterial({
@@ -340,7 +340,10 @@ export class Pipeline {
   // canvas stretched over 2-3x as many device pixels looked smeared); 2 and 3
   // are the retro looks in CSS pixels (nearest upscale, dither, posterise).
   resize() {
-    const W = window.innerWidth, H = window.innerHeight;
+    // the stage's real size: innerWidth/innerHeight are rounded to whole CSS pixels,
+    // but a 1080-pixel-wide phone at 2.625 is 411.43 CSS pixels across
+    const box = this.canvas.parentElement?.getBoundingClientRect?.();
+    const W = box?.width || window.innerWidth, H = box?.height || window.innerHeight;
     let s = this.pixelScale;
     this.retro = s >= 2;
     if (this.retro) {
