@@ -22,6 +22,9 @@ import { Doors } from './doors.js';
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _s = new THREE.Vector3(1, 1, 1), _p = new THREE.Vector3();
 const UP = new THREE.Vector3(0, 1, 0);
 const CHUNK = 48;
+function freeArray() {
+  this.array = null;
+}
 
 export class VoxelWorld {
   constructor(world) {
@@ -86,6 +89,8 @@ export class VoxelWorld {
       for (const g of geos) g.dispose();
       if (!merged) continue;
       merged.computeBoundingSphere();
+      // nothing reads a merged chunk back on the CPU: let its arrays go once they're on the GPU
+      for (const a of [...Object.values(merged.attributes), merged.index]) a?.onUpload(freeArray);
       const mesh = voxMesh(merged, mat);
       mesh.name = `decor:${key}`;
       mesh.matrixAutoUpdate = false;
