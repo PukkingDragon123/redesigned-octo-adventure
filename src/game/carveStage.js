@@ -63,8 +63,8 @@ const TABLE = { x0: -0.88, x1: 0.88, z0: -0.47, z1: 0.47 };
 const TOPY = C.Y0 + C.RY - 1; // the voxel row the lid sits in
 // camera shots: elevation, azimuth (0: from Hank's side), what it looks at, how much must fit
 const SHOTS = {
-  pick: { el: 0.36, az: 0, look: [0, 0.25, 0], r: 0.42 },
-  front: { el: 0.3, az: 0, look: [0, 0.235, 0], r: 0.35 },
+  pick: { el: 0.36, az: 0, look: [0, 0.23, 0], r: 0.43 },
+  front: { el: 0.3, az: 0, look: [0, 0.215, 0], r: 0.37 }, // (a little low: the buttons are along the bottom)
   top: { el: 0.98, az: 0, look: [0, 0.42, 0.05], r: 0.27 },
   scoop: { el: 1.05, az: 0, look: [0, 0.44, 0.09], r: 0.22 },
   show: { el: 0.26, az: PI + 0.6, look: [0, 0.28, 0], r: 0.6 },
@@ -357,8 +357,7 @@ export class CarveStage {
       g.scene.remove(this.root);
       this.root.traverse((o) => { if (o.isMesh && o.geometry !== EMPTY && !o.isInstancedMesh) o.geometry.dispose(); });
       this.chips.dispose();
-      this.mat.dispose();
-      this.glowMat.dispose();
+      for (const m of [this.mat, this.glowMat]) { m.userData.depth?.dispose(); m.dispose(); }
     }
     if (this.light) g.lightPool.removeDynamic(this.light);
     this.light = null;
@@ -691,11 +690,21 @@ export class CarveStage {
     };
     const wheel = (e) => {
       e.preventDefault();
-      if (this.phase === 'carve') { this.yawT += Math.sign(e.deltaY) * 0.12; this.turnIdle = 0; }
+      if (this.phase === 'carve' && !this.finished) { this.yawT += Math.sign(e.deltaY) * 0.12; this.turnIdle = 0; }
     };
     const key = (e) => {
-      if (this.finished || this.phase !== 'carve') return;
+      if (this.finished) return;
       const c = e.code;
+      if (this.phase === 'pick') {
+        // 1-5 for the requests in the order shown, Enter for Gus's own idea
+        const ids = Object.keys(this.btn), n = c.startsWith('Digit') ? +c.slice(5) : 0;
+        if (n >= 1 && n <= ids.length) this.pick(ids[n - 1]);
+        else if (c === 'Enter') this.pick(ids[0]);
+        return;
+      }
+      if (c === 'Enter' && this.phase === 'lid') { this.skipWarmup(); return; }
+      if (c === 'Enter' && this.phase === 'scoop') { this.endScoop(true); return; }
+      if (this.phase !== 'carve') return;
       if (c === 'Digit1') this.tool('knife');
       else if (c === 'Digit2') this.tool('gouge');
       else if (c === 'KeyZ') this.undo();
@@ -717,7 +726,7 @@ export class CarveStage {
     this.unbind = () => window.removeEventListener('keydown', key);
   }
   spin(dx, dy) {
-    if (this.phase !== 'carve') return;
+    if (this.phase !== 'carve' || this.finished) return;
     const k = 3.2 / Math.max(320, Math.min(window.innerWidth, window.innerHeight));
     this.yawT += dx * k;
     this.tiltT = Math.max(TILT_MIN, Math.min(TILT_MAX, this.tiltT + dy * k * 0.8));
@@ -856,12 +865,12 @@ export class CarveStage {
   holding() {
     this.judgeSoon = false;
     const J = C.judge(this.p);
-    if (J.res.split && !this.warned) {
+    if (J.res.collapse && !this.warned) {
       this.warned = true;
       this.sfx('tree_creak', { volume: 0.4, pitch: 1.6 });
-      this.say("Uh oh... it's coming apart! (Undo?)", 2600);
+      this.say(J.res.split ? "Uh oh... it's coming apart! (Undo?)" : "Uh oh... it's more hole than pumpkin! (Undo?)", 2600);
       this.g.chase.shake(0.25);
-    } else if (!J.res.split && J.res.area > 0.42 && !this.flimsy) {
+    } else if (!J.res.collapse && J.res.area > 0.42 && !this.flimsy) {
       this.flimsy = true;
       this.say("Careful! It's getting flimsy...", 2200);
     }
@@ -1003,7 +1012,22 @@ export class CarveStage {
     this.sfx('crowd_ooh', { volume: 0.8 });
     this.say('Ooooooooh!', 1900);
     H.play('present', 'proud');
+    this.swoon();
     await this.wait(2.3);
+  }
+
+  // the street goes "ooooh": little hearts over the heads of everyone nearby
+  swoon() {
+    const g = this.g, T = this.root.position, C2 = this.host.contest;
+    try {
+      const folk = [...(C2.present?.() || []).map((b) => b.a), ...(C2.crowd?.list || []).filter((m) => m.shown && !m.frozen).map((m) => m.a)];
+      for (const a of folk) {
+        if (!a?.showEmote || Math.hypot(a.pos.x - T.x, a.pos.z - T.z) > 16 || Math.random() < 0.3) continue;
+        g.wait(rnd(0, 0.6)).then(() => a.showEmote('heart', 1.8));
+      }
+    } catch (e) {
+      console.warn('carving: no swoon', e);
+    }
   }
 
   // ------------------------------------------------------------ the camera
@@ -1015,6 +1039,7 @@ export class CarveStage {
     const vh = (fov * PI) / 360, hh = Math.atan(Math.tan(vh) * asp), half = Math.min(vh, hh);
     const s = SHOTS[name];
     const look = V(...s.look);
+    if (asp < 1 && (name === 'front' || name === 'pick')) look.y -= 0.035; // (two rows of buttons on a phone held upright)
     const dist = s.r / Math.sin(half);
     const pos = look.clone().add(V(Math.sin(s.az) * Math.cos(s.el), Math.sin(s.el), Math.cos(s.az) * Math.cos(s.el)).multiplyScalar(dist));
     this.root.updateMatrixWorld(true);
@@ -1040,11 +1065,13 @@ export class CarveStage {
       a.t += dt;
       const k = smooth(Math.min(1, a.t / a.dur));
       tip = this.toStage(C.X0, a.from + (a.to - a.from) * k, C.Z0, V());
-      dir = V(0.05, 1, 0.12).normalize();
+      dir = V(0.04, 1, 0.06).applyQuaternion(this.pk.quaternion).normalize(); // (straight down the opening)
     } else if (hs.target && hs.show) {
+      // a right hand: the tool comes in from the right, the cut itself (and the face) in clear view
       tip = hs.target.clone();
       const din = hs.din || V(0, 0, -1);
-      dir = din.clone().multiplyScalar(this.phase === 'scoop' ? -0.25 : -0.5).addScaledVector(camUp, 0.8).addScaledVector(camR, 0.32).normalize();
+      const sc = this.phase === 'scoop';
+      dir = din.clone().multiplyScalar(sc ? -0.2 : -0.3).addScaledVector(camR, 0.62).addScaledVector(toCam, 0.55).addScaledVector(camUp, sc ? 0.3 : 0.16).normalize();
     } else {
       // resting on the table to the right
       tip = V(0.3, 0.02, 0.24);

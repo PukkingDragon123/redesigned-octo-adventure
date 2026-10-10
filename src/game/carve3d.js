@@ -336,7 +336,7 @@ export function lidFree(p) {
   let head = 0, tail = 0, free = true;
   seen[s0] = 1;
   q[tail++] = s0;
-  const far = (LID_R + 2.5) ** 2, low = Y0 + RY * 0.3;
+  const far = (LID_R + 5) ** 2, low = Y0 + RY * 0.15; // (a ring cut a bit wide of the marker still counts)
   flood: while (head < tail) {
     const i = q[head++];
     const x = i % W, r = (i - x) / W, y = r % H, z = (r - y) / H;
