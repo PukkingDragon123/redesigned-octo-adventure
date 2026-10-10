@@ -385,7 +385,14 @@ export class Terrain {
         for (let k = 0; k < 12 && idx + dir * k >= 0 && idx + dir * k < prof.length; k++) prof[idx + dir * k] += delta * (1 - smoothstep(0, 12, k));
         return true;
       };
-      const pinA = pin(0, 1), pinB = pin(prof.length - 1, -1);
+      let pinA = pin(0, 1);
+      const pinB = pin(prof.length - 1, -1);
+      // a road can set its own height at its start (the railway comes out of its tunnel in a cutting)
+      if (road.startH != null && !pinA) {
+        const delta = road.startH - prof[0];
+        for (let k = 0; k < 40 && k < prof.length; k++) prof[k] += delta * (1 - smoothstep(0, 40, k));
+        pinA = true;
+      }
       // limit the gradient so roads stay rideable (pinned junction ends stay put)
       if (road.grade) {
         const g = road.grade * 2.0;

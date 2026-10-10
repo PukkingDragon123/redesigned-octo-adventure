@@ -3190,6 +3190,212 @@ export function hockeyNet() {
   return finish(v, STD, { origin: [19, 0, 11], radius: 0.9 });
 }
 
+// ------------------------------------------------------------------ the backcountry
+const RAIL = 0x5a4038, RAIL_TOP = 0xa8a4a0, TIE = 0x4a3a2c, TIE_L = 0x5e4a36;
+// railTrack({ len }) — a length of standard-gauge track: creosoted ties on a ballast bed, two rails
+// with shiny worn tops. Origin bottom-centre, the rails run along z.
+export function railTrack({ len = 4, seed = 1 } = {}) {
+  const L = Math.round(len / STD), Wd = 54, c = Wd / 2;
+  const v = new Vox(Wd, 6, L);
+  const R = rng(seed * 7 + 3);
+  // (the ballast is the trail's own gravel)
+  for (let z = 4; z < L; z += 15) v.fill(2, 1, z, Wd - 3, 2, z + 3, R() < 0.3 ? TIE_L : TIE);
+  for (const x of [c - 15, c + 14]) {
+    v.fill(x, 3, 0, x + 1, 3, L - 1, RAIL);
+    v.fill(x, 4, 0, x + 1, 4, L - 1, RAIL_TOP);
+  }
+  return finish(v, STD, { origin: [c, 0, L / 2], radius: 1.3 });
+}
+
+// tunnelPortal() — a dressed-stone portal with a round-topped bore into the ridge, a keystone and a
+// date stone, wing walls either side. Faces +z (the track comes out towards +z); 0.1 m voxels.
+export function tunnelPortal() {
+  const W = 92, H = 80, D = 16, c = W / 2;
+  const v = new Vox(W, H, D);
+  const R = rng(91);
+  const ow = 23, oh = 50; // the bore's half width and the spring line + arch height
+  const inBore = (x, y) => { const dx = Math.abs(x + 0.5 - c); if (dx > ow) return false; return y < oh - ow || Math.hypot(dx, y - (oh - ow)) <= ow; };
+  for (let z = 0; z < D; z++) for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const wing = Math.abs(x + 0.5 - c) > 34;
+    const top = wing ? 56 - Math.round((Math.abs(x + 0.5 - c) - 34) * 1.2) : H - 4;
+    if (y > top) continue;
+    if (inBore(x, y)) { if (z <= 2) v.set(x, y, z, 0x0c0b0e); continue; } // the dark bore
+    if (z < 6 && !wing) continue;
+    // dressed blocks in courses: one shade per block, recessed joints
+    const course = Math.floor(y / 6), blk = Math.floor((x + course * 5) / 13), joint = y % 6 === 0 || (x + course * 5) % 13 === 0;
+    if (joint && z === D - 1) continue;
+    v.set(x, y, z, joint ? STONE_D : [STONE, STONE_L, tone(STONE, -0.06)][Math.floor(vhash(blk, course, 3) * 3)]);
+  }
+  // voussoirs round the arch, a keystone, the cornice and a date stone
+  for (let a = 0; a <= 40; a++) {
+    const t = Math.PI * (a / 40), r = ow + 2.5;
+    const x = c + Math.cos(t) * r, y = oh - ow + Math.sin(t) * r;
+    v.fill(x - 1, y - 1, D - 2, x + 1, y + 1, D - 1, a % 4 === 0 ? STONE_D : STONE_L);
+  }
+  v.fill(c - 3, oh + 1, D - 3, c + 2, oh + 7, D - 1, STONE_L);
+  v.fill(2, H - 6, D - 3, W - 3, H - 4, D - 1, (x) => (Math.abs(x + 0.5 - c) > 34 ? 0 : STONE_L));
+  v.fill(c - 8, H - 15, D - 2, c + 7, H - 9, D - 1, (x, y) => ((x === c - 8 || x === c + 7 || y === H - 15 || y === H - 9) ? STONE_D : (y === H - 12 && (x - c + 8) % 4 < 3 ? 0x5a5860 : STONE_L)));
+  // moss along the top, a lamp over the bore
+  for (let x = 0; x < W; x += 2) { const y = topY(v, x, D - 1); if (y > 0 && R() < 0.5) v.fill(x, y + 1, D - 5, x + 1, y + 1, D - 1, MOSS); }
+  v.fill(c - 1, oh + 9, D, c, oh + 11, D, 0xffd27a | EMIT);
+  return finish(v, MID, { origin: [c, 0, D / 2], radius: 4, lights: [{ at: [c, oh + 10, D], color: [1.0, 0.72, 0.42], radius: 7 }] });
+}
+
+// handcar() — a railway pump trolley: plank deck on four flanged wheels, a walking-beam pump handle
+// on an A-frame. Wheels sit on the rails (gauge as railTrack); 0.05 m voxels, rails along z.
+export function handcar({ seed = 1 } = {}) {
+  const v = new Vox(40, 36, 48), c = 20;
+  const red = 0xb8322a, redD = 0x84221e;
+  for (const x of [c - 15, c + 14]) for (const z of [9, 38]) {
+    for (let a = -5; a <= 5; a++) for (let b = -5; b <= 5; b++) {
+      const d = Math.hypot(a, b);
+      if (d > 5.3) continue;
+      v.set(x, 6 + b, z + a, d > 4.2 ? IRON : d < 1.5 ? IRON_L : (a + b) % 3 === 0 ? IRON_L : IRON);
+      v.set(x + (x < c ? 1 : -1), 6 + b, z + a, d > 4.5 ? IRON_L : 0);
+    }
+  }
+  v.fill(c - 18, 11, 4, c + 17, 12, 43, (x, y, z) => (y === 12 ? ((z >> 2) % 2 ? WOOD : WOOD_L) : WOOD_D));
+  v.fill(c - 18, 9, 4, c + 17, 10, 6, red); v.fill(c - 18, 9, 41, c + 17, 10, 43, red);
+  // the A-frame and the walking beam with its two handles
+  polyline(v, [[c - 6, 13, 22], [c, 27, 24], [c + 6, 13, 22]], redD, 0.6);
+  polyline(v, [[c - 6, 13, 26], [c, 27, 24], [c + 6, 13, 26]], redD, 0.6);
+  polyline(v, [[c, 29, 8], [c, 26, 40]], WOOD_D, 0.8);
+  for (const z of [8, 40]) v.fill(c - 9, z < 20 ? 29 : 26, z, c + 8, z < 20 ? 29 : 26, z + 1, WOOD_L);
+  v.fill(c - 1, 26, 23, c + 1, 28, 25, IRON);
+  v.fill(c - 3, 13, 18, c + 2, 18, 30, IRON_L); // gearbox
+  bevel(v, { top: 0.06, bottom: 0 });
+  return finish(v, STD, { origin: [c, 0, 24], radius: 1.1 });
+}
+
+// woodDeck({ len, w, posts, rail }) — a plank deck on posts (lake docks, the marsh boardwalk): the deck
+// top is `posts` metres above the model's base, so the posts reach down into the water or mud.
+// Runs along z; 0.1 m voxels.
+export function woodDeck({ len = 6, w = 2, posts = 2.2, rail = 0, seed = 1 } = {}) {
+  const L = Math.round(len / MID), Wd = Math.round(w / MID), P = Math.round(posts / MID);
+  const v = new Vox(Wd + 2, P + 12, L);
+  const R = rng(seed * 11 + 5);
+  for (let z = 0; z < L; z++) v.fill(1, P - 1, z, Wd, P - 1, z, z % 3 === 0 ? GREYWOOD_L : (z * 7) % 5 === 0 ? tone(GREYWOOD, -0.06) : GREYWOOD);
+  for (const x of [1, Wd]) v.fill(x, P - 2, 0, x, P - 2, L - 1, GREYWOOD_D);
+  for (let z = 1; z < L; z += 15) for (const x of [1, Wd]) v.fill(x, 0, z, x, P - 2, z, (xx, y) => (y < P * 0.6 ? 0x3e3a2c : GREYWOOD_D));
+  if (rail) for (const x of rail > 1 ? [0, Wd + 1] : [Wd + 1]) {
+    for (let z = 1; z < L; z += 15) v.fill(x, P - 1, z, x, P + 8, z, GREYWOOD_D);
+    v.fill(x, P + 8, 0, x, P + 8, L - 1, GREYWOOD_L);
+  }
+  return finish(v, MID, { origin: [(Wd + 2) / 2, 0, L / 2], radius: w / 2 });
+}
+
+const APPLE_LEAF = [0x6a8a2e, 0x80983a, 0x9aa23e, 0xb8a03a];
+// appleTree({ seed, fruit }) — a pruned orchard apple tree: a short crooked trunk under a round crown
+// in late-season green and gold (shaded in big patches so it meshes cheaply), red apples dotted over
+// its outside and a few in the grass. 0.125 m voxels.
+export function appleTree({ seed = 1, fruit = true } = {}) {
+  const S = 0.125, v = new Vox(34, 38, 34), c = 17;
+  const R = rng(seed * 31 + 7);
+  const lean = (R() - 0.5) * 3;
+  polyline(v, [[c, 0, c], [c + lean * 0.4, 7, c - 1], [c + lean, 12, c]], 0x5a4030, 1.2);
+  const lobes = [[c + lean, 22, c, 10.5, 8.5], [c + lean - 5 + R() * 2, 19, c + 4 - R() * 2, 7, 6], [c + lean + 5 - R() * 2, 20, c - 4 + R() * 2, 7, 6], [c + lean, 27, c + 1, 7, 5]];
+  for (const [x, y, z, r, ry] of lobes) v.ellipsoid(x, y, z, r, ry, r, (xx, yy, zz) => APPLE_LEAF[Math.min(3, Math.floor(vhash(xx >> 2, yy >> 2, zz >> 2, seed) * 3.2) + (yy > 25 ? 1 : 0))]);
+  // apples on the outside of the crown
+  if (fruit) {
+    for (let k = 0; k < 26; k++) {
+      const a = R() * 6.28, e = (R() - 0.3) * 1.2, x = Math.round(c + Math.cos(a) * Math.cos(e) * 12), z = Math.round(c + Math.sin(a) * Math.cos(e) * 12);
+      for (let y = 34; y > 10; y--) {
+        if (!v.get(x, y, z)) continue;
+        // walk in from the outside along the ray until the crown
+        v.set(x, y, z, k % 3 ? 0xb8221e : 0xd8402a);
+        break;
+      }
+    }
+    for (let k = 0; k < 5; k++) { const a = R() * 6.28, r = 4 + R() * 8; v.set(c + Math.cos(a) * r, 0, c + Math.sin(a) * r, 0xb8221e); }
+  }
+  bevel(v, { top: 0.1, bottom: -0.12 });
+  return finish(v, S, { origin: [c, 0, c], radius: 0.4 });
+}
+
+// ciderPress() — a cider press: oak frame, the big iron screw and handle, a slatted basket of crushed
+// apples over a tray dripping into a tub, a crate of apples beside it. 0.05 m voxels.
+export function ciderPress() {
+  const v = new Vox(44, 44, 32), c = 16;
+  for (const x of [c - 12, c + 11]) v.fill(x - 1, 0, 12, x + 1, 36, 15, WOOD_D);
+  v.fill(c - 14, 34, 11, c + 13, 38, 16, WOOD);
+  v.fill(c - 14, 6, 10, c + 13, 8, 17, WOOD_D); // the tray bed
+  lathe(v, c, 13.5, 9, 19, 8, (x, y, z, a) => (Math.floor((a + Math.PI) * 6) % 2 ? WOOD_L : 0x3a2a1e), { wall: 1 });
+  v.fill(c - 6, 18, 8, c + 6, 18, 19, 0x9a6a2a); // crushed pulp on top
+  v.fill(c - 7, 19, 7, c + 7, 21, 20, WOOD_D); // the follower block
+  v.fill(c - 1, 22, 12, c + 1, 40, 15, IRON); // the screw
+  polyline(v, [[c - 12, 41, 13], [c + 12, 41, 14]], IRON_L, 0.7); // the handle bar
+  lathe(v, c, 26, 0, 6, 5, (x, y, z, a, d, r) => (y === 6 && d < r - 1 ? 0xd8a040 : WOOD), { wall: 1, floor: 0 }); // the tub of juice
+  // a crate of apples
+  v.fill(c + 17, 0, 4, c + 27, 6, 14, (x, y, z) => (y === 6 && x > c + 17 && x < c + 27 && z > 4 && z < 14 ? ((x + z) % 3 ? 0xb8221e : 0xd8402a) : (y % 3 === 0 ? WOOD_D : WOOD_L)));
+  bevel(v, { top: 0.06, bottom: 0 });
+  return finish(v, STD, { origin: [c, 0, 16], radius: 0.9 });
+}
+
+// cattails({ seed }) — a clump of marsh reeds and cattails with their brown sausage heads. 0.05 m voxels.
+export function cattails({ seed = 1 } = {}) {
+  const v = new Vox(24, 40, 24), R = rng(seed * 17 + 1);
+  for (let k = 0; k < 10; k++) {
+    const x = 12 + (R() - 0.5) * 16, z = 12 + (R() - 0.5) * 16, h = 18 + R() * 18, bx = (R() - 0.5) * 4, bz = (R() - 0.5) * 4;
+    const col = R() < 0.4 ? 0xb89a4a : R() < 0.5 ? 0x7a8a3a : 0x9a9a46;
+    polyline(v, [[x, 0, z], [x + bx, h, z + bz]], col);
+    if (k % 3 === 0) v.fill(x + bx, h - 6, z + bz, x + bx, h - 2, z + bz, 0x5a3a22);
+  }
+  return finish(v, STD, { origin: [12, 0, 12], radius: 0.4 });
+}
+
+// wildlifeBlind() — a little plank hide for watching the moose: shed roof, a long viewing slot. 0.1 m voxels.
+export function wildlifeBlind() {
+  const v = new Vox(26, 28, 22);
+  v.fill(1, 0, 1, 24, 19, 20, (x, y, z) => {
+    const wall = x === 1 || x === 24 || z === 1 || z === 20;
+    if (!wall) return y === 0 ? GREYWOOD_D : 0;
+    if (z === 20 && y >= 11 && y <= 13 && x > 3 && x < 22) return 0; // the slot, facing +z
+    if (z === 1 && x >= 10 && x <= 15 && y < 16) return 0; // the way in
+    return (x + z) % 3 === 0 ? GREYWOOD_D : GREYWOOD;
+  });
+  for (let z = 0; z <= 21; z++) { const y = 20 + Math.round((21 - z) * 0.2); v.fill(0, y, z, 25, y, z, z % 2 ? 0x4a6040 : 0x3e5236); }
+  bevel(v, { top: 0.06, bottom: 0 });
+  return finish(v, MID, { origin: [13, 0, 11], radius: 1.3 });
+}
+
+// coinViewer() — a coin-op viewer on a post at a lookout (green paint, chrome eyepieces). 0.05 m voxels.
+export function coinViewer() {
+  const v = new Vox(16, 32, 20), g = 0x2e6a4a, gd = 0x1e4a34;
+  v.fill(6, 0, 8, 9, 2, 11, gd);
+  v.fill(7, 3, 9, 8, 18, 10, g);
+  v.ellipsoid(7.5, 22, 9.5, 4.5, 4, 6, (x, y, z) => (z >= 15 ? METAL_L : y > 24 ? tone(g, 0.1) : g));
+  v.fill(5, 22, 2, 10, 24, 4, METAL); // eyepieces
+  v.fill(6, 26, 8, 9, 27, 11, gd);
+  bevel(v, { top: 0.06, bottom: 0 });
+  return finish(v, STD, { origin: [7.5, 0, 9.5], radius: 0.3 });
+}
+
+// paddle() — a canoe paddle (lost at the lake). 0.025 m voxels, lying flat along z.
+export function paddle() {
+  const v = new Vox(12, 3, 64);
+  v.fill(5, 1, 0, 6, 1, 3, WOOD_D); // grip
+  v.fill(5, 1, 4, 6, 1, 38, WOOD_L);
+  v.ellipsoid(5.5, 1, 50, 4.5, 0.6, 12, (x, y, z) => (z > 58 ? RED : WOOD));
+  return finish(v, FINE, { origin: [6, 0, 32], radius: 0.4 });
+}
+
+// thermos() — a tall plaid thermos of cocoa with a red cup lid. 0.025 m voxels.
+export function thermos() {
+  const v = new Vox(12, 22, 12);
+  lathe(v, 5.5, 5.5, 0, 16, 4.5, (x, y) => ((y >> 1) % 3 === 0 ? 0x2e5a40 : (x + y) % 4 === 0 ? 0x1e1418 : 0xc8361f));
+  lathe(v, 5.5, 5.5, 17, 20, 3.5, RED_L);
+  return finish(v, FINE, { origin: [5.5, 0, 5.5], radius: 0.15 });
+}
+
+// apple() — one shiny red apple with a leaf (the orchard's windfalls). 0.025 m voxels.
+export function apple({ seed = 1 } = {}) {
+  const v = new Vox(10, 11, 10);
+  v.ellipsoid(4.5, 4, 4.5, 4, 3.8, 4, (x, y) => (y > 6 ? 0xd8402a : seed % 2 && y < 3 ? 0xb8a030 : 0xb8221e));
+  v.fill(4, 8, 4, 4, 9, 4, WOOD_D);
+  v.fill(5, 9, 4, 6, 9, 4, LEAF);
+  return finish(v, FINE, { origin: [4.5, 0, 4.5], radius: 0.1 });
+}
+
 export const PREVIEW = {
   pumpkin_small: () => pumpkin({ kind: 'small', seed: 1 }),
   pumpkin_medium: () => pumpkin({ kind: 'medium', seed: 2 }),
@@ -3347,4 +3553,16 @@ export const PREVIEW = {
   giant_goose: () => giantGoose(),
   clothesline: () => clothesline({}),
   picket_coarse: () => picketFence({ coarse: true }),
+  rail_track: () => railTrack({}),
+  tunnel_portal: () => tunnelPortal(),
+  handcar: () => handcar({}),
+  wood_deck: () => woodDeck({ len: 6, w: 2, rail: 1 }),
+  apple_tree: () => appleTree({ seed: 2 }),
+  cider_press: () => ciderPress(),
+  cattails: () => cattails({}),
+  wildlife_blind: () => wildlifeBlind(),
+  coin_viewer: () => coinViewer(),
+  paddle: () => paddle(),
+  thermos: () => thermos(),
+  apple: () => apple({}),
 };

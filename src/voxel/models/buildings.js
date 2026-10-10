@@ -3612,7 +3612,7 @@ function buildStation(spec, ctx) {
   // the platform: planks along the whole track side (and a bit beyond), a yellow edge line
   deckOn(ctx, Ff, b.x0 - 10, b.x1 + 10, plat, { col: P.plankB });
   Ff.fill(b.x0 - 10, -1, plat, b.x1 + 10, -1, plat, 0xd8c060);
-  for (const u of [b.x0 - 6, b.x0 + 20, b.x1 - 20, b.x1 + 6]) {
+  for (const u of [b.x0 - 6, b.x0 + 20, b.x1 - 20, b.x1 - 5]) {
     if (u + 11 >= bu0 - 1 && u <= bu1 + 1) continue;
     bench(ctx, Ff.sub(bd + 4), u, 1, 12, { col: P.woodLight });
   }

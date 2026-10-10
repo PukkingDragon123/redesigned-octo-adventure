@@ -99,8 +99,8 @@ export const MARSHES = [
 ];
 // Hills raised onto the base terrain: {x, z, h (m at the top), s (spread, m)}
 export const HILLS = [
-  { x: -300, z: -286, h: 34, s: 44 }, // Mont Écho
-  { x: -516, z: -172, h: 24, s: 22 }, // the ridge the railway tunnels through
+  { x: -300, z: -286, h: 30, s: 56 }, // Mont Écho
+  { x: -520, z: -174, h: 16, s: 20 }, // the ridge the railway tunnels through
 ];
 
 // River: north mountains -> cove. Width per point.
@@ -174,7 +174,7 @@ export const ROADS = [
   // ---- the backcountry (a road that ends on an earlier one takes its height there)
   // the old railway's bed: rails from the tunnel under the west ridge past the station, then a gravel rail trail east to the tree stand
   {
-    id: 'railTrail', type: 'trail', w: 5, smooth: true, grade: 0.05,
+    id: 'railTrail', type: 'trail', w: 5, smooth: true, grade: 0.05, startH: 12.5,
     pts: [[-500, -171], [-460, -152], [-420, -139], [-380, -137], [-340, -141], [-300, -151], [-260, -164], [-215, -172], [-170, -168], [-136, -158], [-114, -147]],
   },
   // the west road: Nana's lane by the cemetery road, past the café, along the lake, up to the station
@@ -186,7 +186,7 @@ export const ROADS = [
   { id: 'campLane', type: 'trail', w: 3.5, smooth: true, grade: 0.1, pts: [[-365, -4], [-386, -6], [-406, -3]] },
   // up Mont Écho in switchbacks to the fire tower
   {
-    id: 'towerTrail', type: 'trail', w: 3.6, smooth: true, grade: 0.15,
+    id: 'towerTrail', type: 'trail', w: 3.6, smooth: true, grade: 0.17,
     pts: [[-282, -157], [-270, -178], [-296, -190], [-322, -198], [-300, -212], [-266, -222], [-290, -236], [-322, -244], [-298, -258], [-301, -275]],
   },
   // south to the orchard, then west by the trapper's hut to the marsh
@@ -213,7 +213,7 @@ export const FLATS = [
   { x: -181, z: 16, r: 16, h: null }, // the lumber camp clearing
   { x: 180, z: -107, r: 11, h: null }, // the rest area on the loop road
   // the backcountry
-  { x: -398, z: -147, r: 15, h: null }, // the station yard
+  { x: -398, z: -146, r: 16, h: 11.0 }, // the station yard, level with the track
   { x: -300, z: -286, r: 13, h: null }, // Mont Écho's summit
   { x: -152, z: 272, r: 12, h: null }, // the cider house
   { x: -304, z: 13, r: 11, h: 7.0 }, // Café du Rang (a pull-off at the road's level)

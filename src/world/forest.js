@@ -51,18 +51,28 @@ function bareClearing(x, z) {
   return false;
 }
 
-// The lookout's vista: a wedge of open hillside falling away toward Maple Cove,
-// so the bench actually looks out over something.
-const VISTA_DIR = 1.0; // radians from +x toward +z
+// The lookouts' vistas: a wedge of open hillside falling away from the viewpoint (the Sunset
+// Lookout toward Maple Cove, Mont Écho's summit south over the lake and the valley), so the
+// bench actually looks out over something.
+const VISTAS = [
+  { poi: 'lookout', dir: 1.0, near: 75, far: 125 }, // dir: radians from +x toward +z
+  { poi: 'firetower', dir: Math.PI / 2 + 0.35, near: 70, far: 120 },
+];
 function vistaFactor(x, z) {
-  const dx = x - L.POI.lookout.x, dz = z - L.POI.lookout.z;
-  const d = Math.hypot(dx, dz);
-  if (d < 4 || d > 125) return 1;
-  let da = Math.atan2(dz, dx) - VISTA_DIR;
-  da = Math.atan2(Math.sin(da), Math.cos(da));
-  const inWedge = 1 - smoothstep(0.42, 0.62, Math.abs(da));
-  const fall = d < 75 ? 1 : 1 - (d - 75) / 50;
-  return 1 - inWedge * fall * 0.96;
+  let f = 1;
+  for (const V of VISTAS) {
+    const P = L.POI[V.poi];
+    if (!P) continue;
+    const dx = x - P.x, dz = z - P.z;
+    const d = Math.hypot(dx, dz);
+    if (d < 4 || d > V.far) continue;
+    let da = Math.atan2(dz, dx) - V.dir;
+    da = Math.atan2(Math.sin(da), Math.cos(da));
+    const inWedge = 1 - smoothstep(0.42, 0.62, Math.abs(da));
+    const fall = d < V.near ? 1 : 1 - (d - V.near) / (V.far - V.near);
+    f = Math.min(f, 1 - inWedge * fall * 0.96);
+  }
+  return f;
 }
 
 function pickSpecies(x, z, h, river, rng) {
