@@ -534,8 +534,10 @@ export class Villagers {
     if (a.scripted || a.hiddenByStory || a.path) return 'no';
     if (!b) return a.visible ? 'stand' : 'no';
     if (b.leash || b.kids) return 'no';
-    // (Gus is on his way over to invite Hank to carve: that scene hands his cup over)
+    // (Gus is on his way over to invite Hank to carve: that scene hands his cup over; and
+    // while the cocoa round is on, the contest regulars wait for it to finish)
     if (b.key === 'gus' && g.contest?.gusComing) return 'no';
+    if (g.contest?.round?.isActive() && g.contest.round.pinned(b.key)) return 'no';
     if (b.mood === 'terrified') return ['hide', 'cowerOpen', 'standoff'].includes(b.mode) && a.visible ? 'hiding' : 'no';
     if (b.inside) return b.door && b.mode === 'routine' ? 'inside' : 'no';
     if (b.mode !== 'routine' || !a.visible || !b.shown) return 'no';
