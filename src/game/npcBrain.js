@@ -403,7 +403,9 @@ export class NpcBrain {
   // out at the pumpkin carving contest (doing their part there)
   atContest() {
     const C = this.g.contest;
-    if (!C || this._act?.k !== 'contest') return false;
+    // (pinned there for the cocoa round counts too: a cutscene that just let go of them
+    // leaves their plan blank for a frame)
+    if (!C || (this._act?.k !== 'contest' && !C.round?.pinned(this.key))) return false;
     const c = C.C;
     return Math.hypot(this.a.pos.x - c.x, this.a.pos.z - c.z) < c.r + 6;
   }
