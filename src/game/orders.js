@@ -181,6 +181,10 @@ export class Orders {
     st.stats.dayEarned += pay + tip;
     st.stats.dayTips += tip;
     st.stats.dayDeliveries++;
+    // the warmest cup of the day (for the evening receipt)
+    if (!st.stats.dayWarm || o.quality > st.stats.dayWarm.q) st.stats.dayWarm = { q: Math.round(o.quality), who: o.customer };
+    // the last cup of a round paid: the day plan shows the coins for a moment
+    if (!this.carried().length) this.game.lastPaidT = this.game.time;
     this.syncCups();
     return { pay, tip, quality: o.quality };
   }

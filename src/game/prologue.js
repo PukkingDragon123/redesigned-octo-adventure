@@ -308,7 +308,7 @@ function funeral(story) {
     const wide = at(7.8, 4.2);
     await S.cam(V(wide.x, y0 + 6.5, wide.z), V(gr.x, y0 + 0.6, gr.z), 0, 46);
     const wide2 = at(5.8, -0.6);
-    S.cam(V(wide2.x, y0 + 2.3, wide2.z), V(gr.x, y0 + 0.9, gr.z + 0), 6, 46);
+    S.cam(V(wide2.x, y0 + 2.3, wide2.z), V(gr.x, y0 + 0.9, gr.z + 0), 6, 46, null, { ease: 'glide' });
     S.fade(0, 2.2);
     S.sfx('funeral_bell');
     await S.wait(1.6);
@@ -441,7 +441,7 @@ function revival(story) {
     S.prop(LORE.hankStone(), st.x, st.z, { yaw: GRAVE_YAW, scale: 1.05 });
     const mound = S.prop(LORE.graveMound({}), gr.x, gr.z, { yaw: GRAVE_YAW, y: gy - 0.02 });
     await S.cam(V(gr.x + 4, gy + 1.4, gr.z + 6), V(gr.x, gy + 0.3, gr.z), 0, 45);
-    S.cam(V(gr.x + 5.5, gy + 2.0, gr.z + 4.4), V(gr.x, gy + 0.6, gr.z), 6, 47);
+    S.cam(V(gr.x + 5.5, gy + 2.0, gr.z + 4.4), V(gr.x, gy + 0.6, gr.z), 6, 47, null, { ease: 'glide' });
     await S.fade(0, 2.2);
     // snoring from under the dirt
     S.emote('zzz', V(gr.x, gy + 0.9, gr.z), 6);
@@ -465,11 +465,13 @@ function revival(story) {
       await S.wait(0.06);
     }
     R.bb.fade = 0;
-    await S.faceShot(R, { dist: 2.8, side: 1.0, dur: 1.2 });
+    // looming over the grave: low, tilted
+    await S.low(R, { dist: 2.7, side: 0.9, h: 0.35, fov: 44, dur: 1.2, roll: -0.08 });
     await S.say('reaper', 'Right then. Next on the list...', { actor: R });
     await S.say('reaper', 'Hank. Lumberjack. Cause of departure... a *nap?*', { actor: R, expr: 'surprised' });
     R.play('facepalm');
     S.sfx('dramatic_sting', { volume: 0.6 });
+    await S.closeUp(R, { side: 0.4, roll: 0.1 });
     await S.say('reaper', 'Oh no. Oh no no no no.', { actor: R, expr: 'shock' });
     await S.say('reaper', 'He was never dead! Just *asleep!* For years!', { actor: R, expr: 'sheepish' });
     R.play('float');
@@ -505,6 +507,8 @@ function revival(story) {
     await S.faceShot(H, { dist: 2.4, side: 0.8, dur: 0.6 });
     await S.say('hankBuried', 'B-b-brrr... did I sleep in?', { actor: H, expr: 'scared' });
     H.react('headpop');
+    // a crash zoom
+    await S.push(0.38, 0.22, null, { ease: 'out', roll: 0.05 });
     await S.say('hankBuried', 'And why... am I... *all bones?!*', { actor: H, expr: 'shock' });
     R.play('clipboard');
     await S.faceShot(R, { dist: 2.6, side: -0.9, fov: 42 });

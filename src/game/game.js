@@ -24,6 +24,7 @@ import { Keepsakes } from './keepsakes.js';
 import { Orders } from './orders.js';
 import { Cargo } from './cargo.js';
 import { Story } from './story.js';
+import { DayPlan } from './dayPlan.js';
 import { Menus } from './menus.js';
 import { UI } from '../ui/ui.js';
 import { sound } from './sound.js';
@@ -102,6 +103,7 @@ export class Game {
     this.contest = new Contest(this);
     this.villagers = new Villagers(this);
     this.keepsakes = new Keepsakes(this);
+    this.plan = new DayPlan(this);
     this.interior = new Interior(this);
     this.headlamp = this.lightPool.addDynamic({ pos: new THREE.Vector3(), color: [1.0, 0.9, 0.7], radius: 16, intensity: 0, on: false });
     this.applySettings();
@@ -315,6 +317,8 @@ export class Game {
     const s = st.stats;
     s.dayEarned = s.dayTips = s.dayDeliveries = s.dayCrashes = 0;
     s.dayAir = 0;
+    s.dayWarm = null;
+    s.dayShop = false;
     st.weather = this.pickWeather(st.day);
     this.world.atmosphere.setWeather(st.weather, true);
     this.orders.makeBoard(st.day);
@@ -584,15 +588,25 @@ export class Game {
     return { gus: 'Gus', marie: 'Marie-Claude', birdie: 'Captain Birdie', agnes: 'Agnes', doug: 'Constable Doug', ingrid: 'Dr. Ingrid', lou: 'Big Lou', ollie: 'Old Ollie', mo: 'Mo', pip: 'Pip', pop: 'Pop', josee: 'Josée', grandma: 'Nana' }[char] || char;
   }
 
+  // the compass points at the day's next step (dayPlan.js): the cups while there are cups,
+  // Mo's when the pantry's low, home in the evening; in free time, everything worth a look
   compassMarkers() {
     const m = [];
+    const step = !this.contest?.objective?.() && this.plan?.cur;
+    if (step && !step.free) {
+      if (step.id === 'deliver') {
+        for (const o of this.orders.carried()) {
+          const c = this.villagers.markerFor(o.spot) || L.CUSTOMERS[o.spot];
+          m.push({ id: `o${o.id}`, x: c.x, z: c.z, icon: 'cocoa' });
+        }
+      } else if (step.target) m.push({ id: step.target.icon === 'basket' ? 'shop' : 'home', x: step.target.x, z: step.target.z, icon: step.target.icon });
+      if (m.length) return m;
+    }
     for (const o of this.orders.carried()) {
       const c = this.villagers.markerFor(o.spot) || L.CUSTOMERS[o.spot];
       m.push({ id: `o${o.id}`, x: c.x, z: c.z, icon: 'cocoa' });
     }
     if (!this.orders.carried().length) m.push({ id: 'home', x: L.POI.cabin.x + 8, z: L.POI.cabin.z, icon: 'home' });
-    const cat = this.catEventActive && this.story.stray;
-    if (cat) m.push({ id: 'cat', x: cat.pos.x, z: cat.pos.z, icon: 'cat' });
     for (const q of this.quests?.markers() || []) m.push(q);
     for (const q of this.contest?.markers() || []) m.push(q); // (the cocoa round's next frozen regular)
     const k = this.keepsakes.nearest(this.playerPos);
@@ -604,12 +618,8 @@ export class Game {
     if (this.interior?.hint) return this.interior.hint;
     const co = this.contest?.objective(); // (the cocoa round at the contest)
     if (co) return co;
-    const carried = this.orders.carried().length;
-    const board = this.orders.board().length;
-    if (this.catEventActive) return this.story.stray?.friendly ? 'The little cat likes me! Scoop her up' : 'A little stray cat is wandering the road home...';
-    if (carried) return '';
-    if (board) return "More orders on Nana's board";
-    return this.world.atmosphere.hour > 17 ? 'All done! Home to bed' : 'All done! Explore or chat';
+    // (the day's next step is on the strip under the watch: dayPlan.js)
+    return '';
   }
 
   // ---------------------------------------------------------------- bike events -> sound, cocoa, stats
@@ -840,6 +850,7 @@ export class Game {
     if (this.mode === 'ride' || this.mode === 'menu') {
       this.ui.updateHUD(dt);
       this.ui.setObjective(this.objective());
+      this.plan.update();
     }
     if (this.fpsEl) {
       this.fpsFrames++;
