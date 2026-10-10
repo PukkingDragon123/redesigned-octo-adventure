@@ -23,6 +23,11 @@ const _t = new THREE.Vector3();
 const _d = new THREE.Vector3();
 const _f = new THREE.Vector3();
 
+// a shot's options with their defaults (see ChaseCamera.cut)
+function shotOpts(o) {
+  return { roll: o?.roll || 0, ease: o?.ease || easeInOut, path: o?.path || null, creep: o?.creep || 0, breath: o?.breath || 0, hold: 0 };
+}
+
 // critically damped spring step (no overshoot): moves s.x towards target, s.v is its speed.
 // omega ~ 2x the rate of an equivalent damp(); returns the new value.
 function spring(s, k, target, omega, dt) {
@@ -53,6 +58,7 @@ export class ChaseCamera {
     this.distScale = 1;
     this.time = 0;
     this.roll = 0;
+    this.shotRoll = 0; // a cutscene shot's dutch tilt
     this.kick = 0; // FOV punch (degrees): negative zooms in on a big moment, positive widens
     this.kickVel = 0;
     this.lift = 0;
@@ -89,22 +95,31 @@ export class ChaseCamera {
     this.kickVel = 0;
   }
 
-  // cinematic: move to (pos, look) over `dur` seconds
-  cut(pos, look, fov = 50) {
+  // cinematic: cut to / move to (pos, look) over `dur` seconds. Options (cutscene.js uses them):
+  //   roll   dutch tilt (radians) the shot settles on
+  //   ease   k -> k easing for the move (default ease in-out)
+  //   path   (e, pos, look) => void: the move follows a path instead of a straight line
+  //          (orbits, crane arcs); e is the eased 0..1
+  //   creep  once the shot holds, the lens slowly dollies this fraction of the way in
+  //          towards what it's looking at (a living frame, never a dead still)
+  //   breath a faint handheld float while it holds (metres)
+  cut(pos, look, fov = 50, o = null) {
     this.mode = 'shot';
-    this.shot = { from: null, pos: pos.clone(), look: look.clone(), dur: 0, t: 1, fov };
+    this.shot = { from: null, pos: pos.clone(), look: look.clone(), dur: 0, t: 1, fov, ...shotOpts(o) };
+    this.shotRoll = this.shot.roll;
     this.pos.copy(pos);
     this.look.copy(look);
     this.fov = fov;
   }
-  move(pos, look, dur = 2, fov = 50) {
+  move(pos, look, dur = 2, fov = 50, o = null) {
     this.mode = 'shot';
-    this.shot = { fromPos: this.pos.clone(), fromLook: this.look.clone(), fromFov: this.fov, pos: pos.clone(), look: look.clone(), dur, t: 0, fov };
+    this.shot = { fromPos: this.pos.clone(), fromLook: this.look.clone(), fromFov: this.fov, fromRoll: this.shotRoll, pos: pos.clone(), look: look.clone(), dur, t: 0, fov, ...shotOpts(o) };
   }
   release() {
     this.mode = 'chase';
     this.shot = null;
     this.subject = null;
+    this.shotRoll = 0;
   }
 
   update(dt, bike, lookIn, instant = false) {
@@ -113,14 +128,24 @@ export class ChaseCamera {
       const s = this.shot;
       if (s.dur > 0 && s.t < 1) {
         s.t = Math.min(1, s.t + dt / s.dur);
-        const e = easeInOut(s.t);
-        this.pos.lerpVectors(s.fromPos, s.pos, e);
-        this.look.lerpVectors(s.fromLook, s.look, e);
+        const e = s.ease(s.t);
+        if (s.path) s.path(e, this.pos, this.look);
+        else {
+          this.pos.lerpVectors(s.fromPos, s.pos, e);
+          this.look.lerpVectors(s.fromLook, s.look, e);
+        }
         this.fov = lerp(s.fromFov, s.fov, e);
+        this.shotRoll = lerp(s.fromRoll || 0, s.roll, e);
+        // (a path ends where it ends: the hold carries on from there)
+        if (s.t >= 1 && s.path) { s.pos.copy(this.pos); s.look.copy(this.look); }
       } else {
-        this.pos.copy(s.pos);
+        // holding: a slow push-in towards the subject (eased, so it never starts with a jolt)
+        s.hold += dt;
+        const k = s.creep ? s.creep * easeInOut(Math.min(1, s.hold / 9)) : 0;
         this.look.copy(s.look);
-        this.fov = s.fov;
+        this.pos.lerpVectors(s.pos, s.look, k);
+        this.fov = s.fov * (1 - k * 0.5);
+        this.shotRoll = s.roll;
       }
       this.updateSee(dt, bike);
       this.apply(dt);
@@ -369,9 +394,18 @@ export class ChaseCamera {
       c.position.y += (Math.sin(t * 1.9) + Math.sin(t * 3.1)) * 0.05 * a;
       this.shakeAmt = Math.max(0, this.shakeAmt - dt * 2.5);
     }
+    const br = this.mode === 'shot' ? this.shot?.breath || 0 : 0;
+    if (br > 0) {
+      // a faint handheld float (slow, incommensurate sines: cheap, never visibly repeats)
+      const t = this.time;
+      c.position.x += Math.sin(t * 0.61) * br + Math.sin(t * 1.37) * br * 0.35;
+      c.position.y += Math.sin(t * 0.83 + 1.1) * br * 0.7;
+      c.position.z += Math.cos(t * 0.53 + 0.4) * br;
+    }
     c.up.set(0, 1, 0);
     c.lookAt(this.look);
     if (this.mode === 'chase') c.rotateZ(this.roll);
+    else if (this.shotRoll) c.rotateZ(this.shotRoll);
     const fov = this.mode === 'chase' ? this.fov + this.kick : this.fov;
     if (Math.abs(c.fov - fov) > 0.01) {
       c.fov = fov;
