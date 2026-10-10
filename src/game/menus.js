@@ -631,14 +631,16 @@ export class Menus {
     const s = st.stats;
     r.appendChild(el('div', 'rhead k-bold', 'NANA MARGUERITE’S COCOA'));
     const line = (a, b, cls = '', icon = '') => r.appendChild(el('div', `line ${cls}`, `<span>${icon ? `<img class="k-g" src="${icon}">` : ''}${a}</span><span>${b}</span>`));
-    line('Cocoas delivered', s.dayDeliveries || 0, '', glyphURL('cocoa'));
+    // short: the cups, the tips, the warmest hand-over, the money
+    line('Cups delivered', s.dayDeliveries || 0, '', glyphURL('cocoa'));
     line('Tips', `$${s.dayTips || 0}`, '', glyphURL('coin'));
-    line('Crashes (bones re-attached)', s.dayCrashes || 0, '', glyphURL('bones'));
-    line('Best air time', `${(s.dayAir || 0).toFixed(1)}s`, '', glyphURL('star'));
+    const w = s.dayWarm;
+    if (w) line(`Warmest: ${SHORT_NAME[w.who] || CHARACTERS[w.who]?.name || w.who}`, `${cupTemp(w.q).deg}\u00b0C`, '', glyphURL('heart'));
+    if ((s.dayAir || 0) >= 1) line('Best air', `${s.dayAir.toFixed(1)}s`, '', glyphURL('star'));
     line('Earned today', `$${s.dayEarned || 0}`, 'total');
     line('Savings', `$${Math.floor(st.money)}`);
     body.appendChild(r);
-    body.appendChild(el('p', 'hint', 'Nana: “You did good today, dear. Now off to bed: the dead need their rest too.”'));
+    body.appendChild(el('p', 'hint', 'Nana: “Well done, dear. Off to bed.”'));
     const ok = ui.button('Sleep', done, { icon: glyphURL('moon') });
     body.appendChild(el('div', 'm-foot')).appendChild(ok);
     m = ui.openOverlay(p, { onBack: done, items: [ok] });
