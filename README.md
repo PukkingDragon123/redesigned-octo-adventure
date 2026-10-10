@@ -80,7 +80,10 @@ its heat, more the harder the crash.
 
 ## What there is to do
 
-- Deliver Nana's cocoa before it cools. Each cup uses ingredients from her
+- Deliver Nana's cocoa before it cools. Slow down near a customer and they come
+  to you: a wave, over to Bessie's crate (or to Hank on foot), they take the cup,
+  a thank-you bubble, pay, and off they go sipping (`src/game/walkup.js`,
+  `node tools/walkuptest.mjs`). Each cup uses ingredients from her
   pantry; when something runs out, shop at Moose & Goose on the boardwalk and
   bring the groceries home.
 - Pick the day's orders in Nana's order book, carry the cups out and load
@@ -103,9 +106,11 @@ its heat, more the harder the crash.
   ribbons, and the crowd cheers and claps (pennants, jumping kids, "Hooray!").
   Near the camera the townsfolk are full rigs; further off each is one baked
   mesh, and the lot is hidden when the contest is out of sight.
-- The first time Hank rides in, the whole contest freezes mid-action and
-  stares: no screams, just silence and crickets, heads turning to follow him, a
-  dropped pumpkin lid, a toddler peeking out from behind a parent. Nana sent a
+- The first time Hank rides in, a short cutscene: the whole contest freezes
+  mid-action, scared stiff, and stares: no screams, nobody runs, just silence
+  and crickets, trembling, hands flown to mouths, a dropped pumpkin, Pop hiding
+  behind Josée, the dog whimpering behind its owner, Gus gulping
+  (`?scene=townEntry`). They stay frozen in play until each has a cup. Nana sent a
   carrier of extra cocoa in Bessie's crate: walk up and *offer cocoa* to each of
   them; they hesitate, take it, sip and warm right up, and the people round them
   thaw too. Once the eight regulars have a cup, Gus comes over: "Any skeleton who
@@ -280,7 +285,7 @@ These are useful while developing:
 - `?start=intro` plays the new-game story
 - `?scene=cabinArrive|cabinSofa|loadCargo` plays the cabin and cargo-loading
   beats; `?scene=lumberCamp|funeral|yearsPass|revival|nanaFindsHank` plays one part of
-  the prologue; `?scene=cabinNight|morning|garageReveal|villagePanic|cocoaRound|carveInvite|catRescue|ending`
+  the prologue; `?scene=cabinNight|morning|garageReveal|townEntry|villagePanic|cocoaRound|carveInvite|catRescue|ending`
   plays a later story beat (add `&autotalk` to advance the dialogue by itself)
 - `?loaderonly=60` shows just the loading scene for 60 seconds (`&pop=1` drops
   the head sooner)
