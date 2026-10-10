@@ -27,6 +27,14 @@ export function anyIcon(name) {
 
 export const VOICE = { hank: 'hank', hankBuried: 'hank', grandma: 'grandma', reaper: 'reaper', gus: 'gus', marie: 'marie', doug: 'doug', birdie: 'birdie', ingrid: 'ingrid', lou: 'lou', agnes: 'agnes', pip: 'kid', pop: 'kid', ollie: 'ollie', cat: 'cat' };
 
+// the first sentence of a message (or its first ~60 characters, cut at a word)
+export function firstSentence(s) {
+  const t = String(s).trim();
+  const m = t.match(/^.{4,72}?[.!?]+(?=\s|$)/);
+  if (m) return m[0];
+  return t.length > 64 ? `${t.slice(0, 62).replace(/\s+\S*$/, '')}…` : t;
+}
+
 // old callers styled elements with a frame name; map those onto kit panels
 const FRAME_CLASS = { wood: [], paper: ['k-parchment'], dark: ['k-dark'], order: ['k-parchment'] };
 export function frameStyle(e, style = 'wood') {
@@ -76,10 +84,12 @@ export class UI {
     updatePaperHUD(this, dt);
   }
 
+  // the one-line objective on Nana's list: shown for a while when it changes (paperhud.js
+  // decides when it comes back)
   setObjective(text) {
     if (this.objective.textContent !== (text || '')) {
       this.objective.textContent = text || '';
-      this.objective.classList.toggle('on', !!text);
+      if (this.hudT) this.hudT.obj = text ? 8 : 0;
     }
   }
 
@@ -98,17 +108,23 @@ export class UI {
   }
 
   // Hank (or whoever: opts.who) pops up from a bottom corner and says it. See popup.js.
+  // The very same words again within half a minute are let go: once is plenty.
   pop(text, opts = {}) {
     const who = opts.who || 'hank';
+    const now = performance.now(), said = (this._said ||= new Map()), k = `${who}|${text}`;
+    if (!opts.shout && now - (said.get(k) ?? -1e9) < 30000) return;
+    said.set(k, now);
+    if (said.size > 40) for (const [x, t] of said) if (now - t > 30000) said.delete(x);
     const name = who === 'hank' ? '' : opts.name ?? (who === 'cat' ? 'Poutine' : who === 'grandma' ? 'Nana' : CHARACTERS[who]?.name ?? '');
     this.popups.push(text, { ...opts, who, name, voice: VOICE[who] || CHARACTERS[who]?.voice || 'narrator' });
   }
-  // old-style calls still work: they become Hank saying the same words
+  // old-style calls still work: they become Hank saying it, short: a toast's first
+  // sentence, a banner's title alone
   toast(text, icon = null, ms) {
-    this.pop(htmlToMarkup(text), { expr: { skull: 'worried', coin: 'happy', star: 'sparkle' }[icon] || 'happy', ms });
+    this.pop(firstSentence(htmlToMarkup(text)), { expr: { skull: 'worried', coin: 'happy', star: 'sparkle' }[icon] || 'happy', ms: Math.min(ms ?? 2400, 3000) });
   }
-  banner(title, sub = '') {
-    this.pop(htmlToMarkup(sub ? `*${title}!* ${sub}` : `*${title}!*`), { expr: 'sparkle' });
+  banner(title) {
+    this.pop(`*${htmlToMarkup(title)}!*`, { expr: 'sparkle', ms: 1800 });
   }
 
   letterbox(on) {

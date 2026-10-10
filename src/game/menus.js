@@ -103,7 +103,7 @@ export class Menus {
     p.appendChild(el('i', 'k-strap'));
     // left page: today + favours
     const d = st.stats || {};
-    left.innerHTML = `<div class="jdate"><img class="k-g" src="${glyphURL('coin')}"><b>$${Math.floor(st.money)}</b><img class="k-g" src="${glyphURL('cocoa')}">${d.deliveries || 0} delivered</div><div class="k-h k-bold">Day ${st.day} &middot; Errands</div>`;
+    left.innerHTML = `<div class="jdate"><img class="k-g" src="${glyphURL('coin')}"><b>$${Math.floor(st.money)}</b><img class="k-g" src="${glyphURL('cocoa')}">${d.deliveries || 0}</div><div class="k-h k-bold">Day ${st.day} &middot; Errands</div>`;
     const Q = st.quests || {};
     const lines = [];
     const row = (done, text) => `<div class="jq${done ? ' done' : ''}"><img class="k-g" src="${glyphURL(done ? 'boxOn' : 'box')}"><span>${text}</span></div>`;
@@ -118,7 +118,7 @@ export class Menus {
       else if (q?.state === 'done') lines.push(row(true, `Found the ${L.name}`));
     }
     const list = el('div', 'jlist');
-    list.innerHTML = lines.length ? lines.join('') : '<p class="hint">Nothing yet. Stop and chat with folks around town: someone always needs a hand. Or a skeleton.</p>';
+    list.innerHTML = lines.length ? lines.join('') : '<p class="hint">Nothing yet. Chat with folks around town!</p>';
     left.appendChild(list);
     if (st.photos && Object.keys(st.photos).length) {
       left.insertAdjacentHTML('beforeend', `<div class="k-h k-bold">Bird book</div><div class="jphotos">${Object.keys(st.photos).map((k) => `<span class="jph"><img class="k-g" src="${glyphURL('camera')}">${esc(BIRD_NAMES[k] || k)}</span>`).join('')}</div>`);
@@ -172,7 +172,7 @@ export class Menus {
       grid.appendChild(card);
     }
     body.appendChild(grid);
-    body.appendChild(el('p', 'hint', 'Each cup uses one of everything listed. Running low? Mo at Moose &amp; Goose has it all: bring the groceries home to Nana.'));
+    body.appendChild(el('p', 'hint', 'One of each per cup. Low? Mo at Moose &amp; Goose has it all.'));
     g.sound.play('page_flip');
     m = ui.openOverlay(p, { onBack: close, items: [p.querySelector('.m-close')] });
     return m;
@@ -330,7 +330,7 @@ export class Menus {
     cols.append(col('On the bike', ride), col('On foot & anywhere', foot));
     body.appendChild(cols);
     body.appendChild(el('p', 'hint', touch
-      ? 'On a touch screen: slide the left stick to steer (pull back to wheelie, push up for a stoppie); pedal by circling your thumb round the crank, bottom right (backwards brakes), as fast as you dare. Nothing pedals for you: stop spinning and Bessie coasts. The arrows beside the crank change gear. Spin flat out and Hank runs out of puff (the bone under the crank is his wind): coast to get it back. TRICK (Hank on one wheel) drifts and poses. On foot, the stick walks (all the way out jogs), hold SPRINT to run flat out, and the tag does whatever it says.'
+      ? 'Touch: the left stick steers (pull back: wheelie, push up: stoppie). Circle your thumb round the crank to pedal (backwards brakes); stop and Bessie coasts. The arrows by the crank shift gear. The bone under it is Hank\'s wind: coast to get it back. The wheelie button drifts and poses. On foot the stick walks (all the way out jogs), the runner button sprints, and the tag does what it says.'
       : 'Gamepad: turn the right stick in circles to pedal (or alternate RT and LT), d-pad up / down changes gear (LB down too), hold LT to brake, A hop, RB drift (sprint on foot), left stick up/down leans, X talk, Start journal. Spin flat out and Hank runs out of puff (the bone under the crank): coast to get it back.'));
     const ok = ui.button('Got it', close);
     body.appendChild(el('div', 'm-foot')).appendChild(ok);

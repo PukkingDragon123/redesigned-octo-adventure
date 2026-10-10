@@ -4,13 +4,15 @@
 // centre). Pull it down to lean back (wheelie / manual / backflip), push it up to lean
 // forward (stoppie / nose / frontflip). On the right the thumb pedals by turning the
 // crank (ui/crank.js: drag round the chainring, as fast as you like; backwards is a coaster
-// brake), with the gear shifter just left of it (up over down, the gear number between them,
-// with an A while the box is still automatic: the first tap takes it over), the brake, hop,
-// the bell and one TRICK button (Hank pulling a wheelie): hold TRICK to drift (or strike a
-// pose in the air) and slide your thumb off it to pick a direction from the little radial.
+// brake), with the gear shifter just left of it (up over down; the gear number, with an A
+// while the box is still automatic, is on the crank beside it: the first tap takes it
+// over), the brake, hop, the bell and one TRICK button (Hank pulling a wheelie): hold
+// TRICK to drift (or strike a pose in the air) and slide your thumb off it to pick a
+// direction from the little radial.
 // On foot the stick walks (a gentle push ambles, half way walks briskly, all the way out
 // jogs), with JUMP and a SPRINT button to hold for a flat-out run; a paper tag shows whatever
-// Hank can do right here (talk, hop on, kick the pumpkin...): tap it.
+// Hank can do right here (talk, hop on, kick the pumpkin...): tap it. The buttons are pictures
+// only (no words under them).
 //
 // Buttons are hit-tested from every finger on the screen, and neighbouring buttons'
 // hit circles overlap a little, so a thumb can roll from one onto the next without lifting.
@@ -132,31 +134,6 @@ function stickArt() {
   for (let k = 0; k < 4; k++) { const a = (k / 4) * Math.PI * 2; p.rect(Math.round(36 + Math.cos(a) * 28) - 1, Math.round(36 + Math.sin(a) * 28) - 1, 3, 3, C.goldL); }
   return p;
 }
-// the gear plate between the shifter buttons: a brass plate with a dark window, a little steel
-// cog and the gear number (white for a moment after a shift), and an A while the box is
-// automatic (28x18)
-const DIG = { 1: '010110010010111', 2: '111001111100111', 3: '111001111001111', A: '010101111101101' };
-function gearArt(gear, auto, flash) {
-  const W = 28, H = 18, p = new Pix(W, H);
-  const f = field(W, H, (x, y) => x >= 0 && y >= 0 && x < W && y < H && !((x < 1 || x > W - 2) && (y < 1 || y > H - 2)), 3);
-  paintBands(p, f, [() => C.ink, (l) => (l > 0.3 ? C.goldHi : l > -0.3 ? C.goldL : C.goldD), (l) => (l > 0 ? C.gold : C.goldD)]);
-  p.rect(3, 3, W - 6, H - 6, C.woodDD);
-  p.hline(3, W - 4, 3, C.ink);
-  // the cog: eight teeth round a ring, a dark hole
-  const cx = 9.5, cy = 9;
-  for (let y = 3; y < H - 3; y++) for (let x = 3; x < 17; x++) {
-    const dx = x + 0.5 - cx, dy = y + 0.5 - cy, d = Math.hypot(dx, dy), a = Math.atan2(dy, dx);
-    const r = 3.6 + (Math.cos(a * 8) > 0.15 ? 1.4 : 0);
-    if (d > r || d < 1.3) continue;
-    p.set(x, y, d < 2.3 ? RAMP.silver[3] : dx + dy < -1 ? RAMP.silver[0] : dx + dy < 1.5 ? RAMP.silver[1] : RAMP.silver[2]);
-  }
-  // the number (3x5, doubled) and the A
-  const g = DIG[gear] || DIG[1], col = flash ? C.creamHi : C.goldL;
-  for (let r = 0; r < 5; r++) for (let k = 0; k < 3; k++) if (g[r * 3 + k] === '1') p.rect(16 + k * 2, 4 + r * 2, 2, 2, r === 4 && !flash ? C.gold : col);
-  if (auto) for (let r = 0; r < 5; r++) for (let k = 0; k < 3; k++) if (DIG.A[r * 3 + k] === '1') p.set(23 + k, 9 + r, C.greenHi);
-  return p;
-}
-
 // the thumb knob: a brass dome with a leather cap
 function knobArt() {
   const p = new Pix(28, 28);
@@ -169,17 +146,18 @@ function knobArt() {
 
 // [id, label, action, icon, face, size, right, bottom, mode, iconSize]
 // (riding, the crank sits in the bottom right corner: 88 x 68, its chainring ~32 in from the
-// right; the gear shifter stands just left of it, up over down with the gear plate between)
+// right, the gear number in its top left corner; the gear shifter stands just left of it, up
+// over down). No labels: the pictures say it (brake, hop arrow, wheelie, bell, run, camera)
 const BUTTONS = [
-  ['brake', 'BRAKE', 'brake', 't_brake', 'red', 42, 126, 8, 'ride'],
-  ['jump', 'HOP', 'jump', 't_hop', 'blue', 44, 12, 90, 'ride'],
-  ['trick', 'TRICK', 'drift', 't_wheelie', 'purple', 48, 62, 84, 'ride', 32],
+  ['brake', '', 'brake', 't_brake', 'red', 42, 126, 8, 'ride'],
+  ['jump', '', 'jump', 't_hop', 'blue', 44, 12, 90, 'ride'],
+  ['trick', '', 'drift', 't_wheelie', 'purple', 48, 62, 84, 'ride', 32],
   ['bell', '', 'bell', 't_bell', 'cream', 26, 8, 146, 'ride'],
-  ['gearup', '', 'shiftUp', 't_up', 'leather', 26, 96, 52, 'ride'],
+  ['gearup', '', 'shiftUp', 't_up', 'leather', 26, 96, 38, 'ride'],
   ['geardn', '', 'shiftDown', 't_down', 'leather', 26, 96, 4, 'ride'],
-  ['fjump', 'JUMP', 'jump', 't_hop', 'blue', 50, 12, 18, 'foot'],
-  ['sprint', 'SPRINT', 'sprint', 't_run', 'gold', 44, 68, 18, 'foot'],
-  ['photo', 'SNAP', 'camera', 't_photo', 'cream', 32, 74, 84, 'foot'],
+  ['fjump', '', 'jump', 't_hop', 'blue', 50, 12, 18, 'foot'],
+  ['sprint', '', 'sprint', 't_run', 'gold', 44, 68, 18, 'foot'],
+  ['photo', '', 'camera', 't_photo', 'cream', 32, 74, 84, 'foot'],
 ];
 const DEAD = 0.08; // riding stick dead zone (fraction of its throw)
 const KNOB = 22; // how far (art pixels) the walking knob travels before it sits on the ring
@@ -206,9 +184,7 @@ const CSS = `
 #touch .tc-pet { position: absolute; white-space: nowrap; padding: 0 calc(var(--u) * 3); height: calc(var(--u) * 14); display: flex; align-items: center; color: var(--k-cream2, #e8d8b0); opacity: 0.85; }
 #touch .tc-pet.sel { color: var(--k-gold, #ffdc52); opacity: 1; }
 #touch .tc-pet.off { display: none; }
-#touch .t-trick.down .tl { visibility: hidden; }
-#touch .tc-gear { position: absolute; right: calc(var(--u) * 95 + var(--safe-r)); bottom: calc(var(--u) * (34 + var(--tc-lift)) + var(--safe-b)); width: calc(var(--u) * 28); height: calc(var(--u) * 18); pointer-events: none; }
-#touch .tc-gear img { width: 100%; height: 100%; }
+#touch .t-talk .tg { width: calc(var(--u) * 16); height: calc(var(--u) * 16); background: var(--g-hand) 0 0 / 100% 100% no-repeat; flex: none; }
 /* phones held upright: the brake goes up above the shifter, clear of the steering stick */
 .k-portrait #touch .t-brake { --tb: 84; }
 `;
@@ -282,13 +258,6 @@ export class TouchControls {
       this.root.appendChild(b);
       this.buttons[id] = { el: b, action, icon, face, size, mode, iconSize, img: b.querySelector('.ti'), held: false };
     }
-    // the gear plate between the shifter buttons (repainted when the gear changes)
-    this.gearEl = el('div', 'tc-gear m-ride', '<img>');
-    this.gearImg = this.gearEl.querySelector('img');
-    this.root.appendChild(this.gearEl);
-    this.gearKey = '';
-    this.gearFlash = 0;
-    this.gearArt = new Map();
     // the trick radial: four little plates round the TRICK button
     this.radial = el('div', 'tc-radial');
     this.petals = {};
@@ -301,8 +270,8 @@ export class TouchControls {
     this.trickPtr = null;
     this.trickDir = null;
     this.trickT = 0;
-    // context action: a plate that says what it'll do
-    this.talk = el('div', 'k-plate k-dark t-talk', '<span class="k-key">E</span><span class="tt"></span>');
+    // context action: a plate that says what it'll do (a pointing finger, no key cap)
+    this.talk = el('div', 'k-plate k-dark t-talk', '<i class="tg"></i><span class="tt"></span>');
     this.talkText = this.talk.querySelector('.tt');
     this.root.appendChild(this.talk);
     this.buttons.talk = { el: this.talk, action: 'interact', held: false, plate: true };
@@ -636,19 +605,6 @@ export class TouchControls {
     const p = g.ui.prompted;
     if (this.talk.classList.contains('lit') !== !!p) { this.talk.classList.toggle('lit', !!p); this.rects = null; }
     if (this.talkText.textContent !== (p || '')) { this.talkText.textContent = p || ''; this.rects = null; }
-    // the gear plate: the number, an A while automatic, a white flash on a shift
-    if (!foot && g.bike) {
-      const gear = g.bike.gear || 1;
-      if (gear !== this.gearShown) { if (this.gearShown) this.gearFlash = 0.3; this.gearShown = gear; }
-      this.gearFlash = Math.max(0, this.gearFlash - dt);
-      const key = `${gear}${g.bike.autoGear !== false ? 'a' : ''}${this.gearFlash > 0 ? 'f' : ''}`;
-      if (key !== this.gearKey) {
-        this.gearKey = key;
-        let url = this.gearArt.get(key);
-        if (!url) this.gearArt.set(key, (url = toURL(gearArt(gear, key.includes('a'), key.includes('f')))));
-        this.gearImg.src = url;
-      }
-    }
     const cam = !!g.state?.hasCamera;
     if (this.buttons.photo.el.classList.contains('off') === cam) { this.buttons.photo.el.classList.toggle('off', !cam); this.rects = null; }
   }
