@@ -777,89 +777,204 @@ export class Story {
     this.stray = null;
   }
 
-  // Hank crouches by the stray: a hiss (unless she already likes him), a marshmallow, a name
+  // Riding home, Hank SEES her (Story.update triggers it, once): Bessie skids to a stop, the
+  // lens drops to the road where the little cat sits in the lamplight, mews; a close-up on
+  // Hank; she hisses (unless she already likes him), a marshmallow softens her, he scoops her
+  // into the basket and names her, and the lens cranes up over them onto the road home.
+  // (test entries: ?scene=strayCat rides up to her; ?scene=catRescue starts it on the spot)
   catRescue() {
     const g = this.g;
+    if (this.catScene) return this.catScene;
     let cat = this.stray;
     if (!cat) {
-      // (test entry: a stray right in front of Hank)
+      // (test entry: a stray on the road a few metres ahead of Hank)
       const p = g.playerPos, f = g.bike.forward(new THREE.Vector3());
-      cat = this.spawnStray({ x: p.x + f.x * 2.4, z: p.z + f.z * 2.4 });
+      cat = this.spawnStray({ x: p.x + f.x * 5, z: p.z + f.z * 5 });
     }
     const friendly = cat.friendly;
-    return this.scene(async (S) => {
+    this.flag('catSeen', true);
+    this.catScene = this.scene(async (S) => {
       cat.script(true);
       S.temp.push({ remove: () => { if (!this.flag('catRescued')) cat.script(false); } });
-      const c = cat.pos.clone();
-      const p = g.playerPos;
-      g.bike.vel.set(0, 0, 0);
+      const b = g.bike, ph = g.physics;
+      const gy = (x, z, y = 50) => ph.groundAt(x, z, y).h;
+      // Hank is on Bessie for this (on foot, he was never far from her: the first cut covers it)
+      const P0 = g.playerPos.clone();
+      let riding = !g.onFoot && b.speed > 1.5;
+      let fwd = riding ? V(Math.sin(b.yaw), 0, Math.cos(b.yaw)) : V(cat.pos.x - P0.x, 0, cat.pos.z - P0.z);
+      if (fwd.lengthSq() < 1e-4) fwd.set(Math.sin(b.yaw), 0, Math.cos(b.yaw));
+      fwd.normalize();
+      if (g.onFoot) {
+        g.hopOn();
+        b.reset(P0.x, P0.z, Math.atan2(fwd.x, fwd.z));
+        riding = false;
+      }
+      const right = V(fwd.z, 0, -fwd.x);
+      const along = (cat.pos.x - P0.x) * fwd.x + (cat.pos.z - P0.z) * fwd.z;
+      const stop = riding ? Math.max(0.8, Math.min(along - 3.2, b.speed * 0.55 + 1)) : 0;
+      const B = V(P0.x + fwd.x * stop, 0, P0.z + fwd.z * stop);
+      B.y = gy(B.x, B.z, P0.y + 2);
+      // she sits on the road in Bessie's lamplight, a few steps ahead of where she stops
+      const C = V(B.x + fwd.x * 2.9, 0, B.z + fwd.z * 2.9);
+      C.y = gy(C.x, C.z, B.y + 2);
+      cat.pos.copy(C);
+      cat.yaw = cat.yawTo = Math.atan2(-fwd.x, -fwd.z);
+      cat.pose('sit');
+      const atm = g.world.atmosphere;
+      const dusk = atm.sunDir.y < 0.12;
+      const lamp = g.lightPool.addDynamic({ pos: V(C.x - fwd.x * 0.6, C.y + 1.1, C.z - fwd.z * 0.6), color: [1, 0.86, 0.62], radius: 5.5, intensity: dusk ? 1.6 : 0.6 });
+      S.temp.push({ remove: () => g.lightPool.removeDynamic(lamp) });
+      const catHead = () => cat.headWorld(V(0, 0, 0));
+      const H0 = g.playerChar;
+      // ---- 1. the skid: low at the roadside past her, Bessie barrelling at the lens
+      if (riding) {
+        const sp = Math.max(4, b.speed);
+        let rolling = true, dustT = 0;
+        S.every((dt) => {
+          if (!rolling) return true;
+          const rem = (B.x - b.pos.x) * fwd.x + (B.z - b.pos.z) * fwd.z;
+          const v = rem <= 0.05 || S.skip ? 0 : Math.min(sp, Math.sqrt(2 * 6.5 * rem));
+          b.vel.x = fwd.x * v;
+          b.vel.z = fwd.z * v;
+          b.yaw += (Math.atan2(fwd.x, fwd.z) + Math.sin(rem * 1.7) * 0.18 * Math.min(1, v / 4) - b.yaw) * Math.min(1, dt * 6);
+          if ((dustT -= dt) < 0 && v > 0.6) {
+            dustT = 0.03;
+            const rx = b.pos.x - fwd.x * 0.6, rz = b.pos.z - fwd.z * 0.6;
+            g.effects.ps.spawn({ x: rx + (Math.random() - 0.5) * 0.2, y: b.pos.y + 0.08, z: rz + (Math.random() - 0.5) * 0.2, vx: (Math.random() - 0.5) * 1.2 + right.x * (Math.random() - 0.5), vy: 0.4 + Math.random() * 0.5, vz: (Math.random() - 0.5) * 1.2, life: 0.9, size: 0.18, size1: 0.6, sprite: P.dust, color: [0.72, 0.62, 0.5], drag: 2.2, alpha: 0.75 });
+          }
+          if (v === 0) rolling = false;
+          return !rolling;
+        });
+        const lp = V(C.x + fwd.x * 1.7 + right.x * 1.0, 0, C.z + fwd.z * 1.7 + right.z * 1.0);
+        lp.y = gy(lp.x, lp.z, C.y + 1) + 0.32;
+        await S.cam(lp, V(B.x, B.y + 0.85, B.z), 0, 52, H0, { roll: 0.09, creep: 0.05 });
+        S.sfx('dirt', { volume: 0.9 });
+        S.sfx('wobble', { volume: 0.7, pitch: 0.8 });
+        H0.tempExpr?.('shock', 1.6);
+        for (let t = 0; t < 2 && rolling && !S.skip; t += 0.05) await S.wait(0.05);
+        b.vel.set(0, 0, 0);
+        g.chase.shake(0.25);
+        await S.wait(0.35);
+      }
+      b.vel.set(0, 0, 0);
+      // ---- 2. down on the road beside the front wheel: the little cat, alone in the light
+      const wp = V(B.x + right.x * 0.62 + fwd.x * 0.1, 0, B.z + right.z * 0.62 + fwd.z * 0.1);
+      wp.y = gy(wp.x, wp.z, B.y + 1) + 0.42;
+      await S.cam(wp, V(C.x, C.y + 0.22, C.z), 0, 34, cat, { creep: 0.08 });
+      S.music('none');
+      await S.wait(0.6);
+      cat.pose('sit', 'meow');
+      S.sfx('meow_sad', { pitch: 1.15 });
+      await S.say('cat', 'Mew?', { expr: 'sad' });
+      // (Hank climbs off on the other side of Bessie, out of shot)
       g.rider.visible = false;
-      // Hank kneels a step away from her, on his side; the lens looks across from the open road side
-      const u = V(p.x - c.x, 0, p.z - c.z);
-      if (u.lengthSq() < 0.04) u.set(1, 0, 0);
-      u.normalize();
-      let n = V(u.z, 0, -u.x);
-      const side = (k) => nearestRoad(c.x + n.x * 3 * k, c.z + n.z * 3 * k)?.d ?? 0;
-      if (side(-1) < side(1)) n.multiplyScalar(-1);
-      const hx = c.x + u.x * 1.35, hz = c.z + u.z * 1.35;
-      const H = S.actor('hank', hx, hz, 0, 'idle');
-      H.faceTowards(c.x, c.z);
+      const hs = V(B.x - right.x * 0.75, 0, B.z - right.z * 0.75);
+      const H = S.actor('hank', hs.x, hs.z, 0, 'idle');
+      H.faceTowards(C.x, C.z);
       H.yaw = H.targetYaw;
-      cat.yaw = cat.yawTo = Math.atan2(hx - c.x, hz - c.z);
-      const cy = c.y;
-      const mx = (c.x + hx) / 2, mz = (c.z + hz) / 2;
-      await S.cam(V(mx + n.x * 3.4 - u.x * 0.8, cy + 1.7, mz + n.z * 3.4 - u.z * 0.8), V(mx, cy + 0.45, mz), 0, 42);
-      if (friendly) {
-        cat.pose('sit', 'blink');
-        S.sfx('purr');
-        await S.wait(0.6);
-        await S.say('hank', 'Hello again, little shadow.', { actor: H, expr: 'happy' });
-        S.sfx('meow', { pitch: 1.2 });
-        cat.pose('sit', 'meow');
-        await S.say('cat', 'Mrrp!', { expr: 'happy' });
-      } else {
-        cat.pose('sit');
-        S.sfx('meow_sad');
-        await S.wait(0.8);
-        await S.say('hank', 'Hey, little buddy. Lost too?', { actor: H, expr: 'neutral' });
+      // ---- 3. a close-up on Hank: he's seen her
+      await S.closeUp(H, { side: 0.3, roll: -0.05 });
+      H.tempExpr('surprised', 2);
+      await S.wait(0.5);
+      await S.say('hank', '...Well, hello there.', { actor: H, expr: 'surprised' });
+      // he steps up and crouches a step from her
+      const K = V(C.x - fwd.x * 1.15 - right.x * 0.15, 0, C.z - fwd.z * 1.15 - right.z * 0.15);
+      const toK = H.walkTo([K], 1.0);
+      await S.ots(H, cat, { side: 1, back: 1.0, up: 0.05, fov: 40 });
+      if (!S.skip) await Promise.race([toK, g.wait(2.2)]);
+      H.pos.x = K.x; H.pos.z = K.z;
+      H.faceTowards(C.x, C.z);
+      if (!friendly) {
+        // ---- 4. too close, too dead: she arches and hisses (low, tilted, right in her face)
         cat.pose('arch', 'meow');
         cat.hopT = 0.4;
+        await S.low(cat, { yaw: cat.yaw + 0.85, dist: 1.0, side: 0, h: 0.12, fov: 42, roll: 0.16, subject: cat });
         S.sfx('cat_hiss');
-        S.emote('anger', V(c.x, cy + 0.75, c.z), 1.6);
+        g.chase.shake(0.15);
+        S.emote('anger', V(C.x, C.y + 0.75, C.z), 1.6);
         await S.say('cat', 'HSSSSSSS!', { expr: 'scared' });
+        // whip back to Hank's face
+        H.tempExpr('sheepish', 2.5);
+        await S.closeUp(H, { side: -0.3, roll: -0.06, dur: 0.3, ease: 'whip' });
         await S.say('hank', 'Yeah... I get that a lot.', { actor: H, expr: 'sheepish' });
+        // a two-shot from the verge: the marshmallow
         H.play('offer', 'happy');
+        const mid = V((H.pos.x + C.x) / 2, 0, (H.pos.z + C.z) / 2);
+        const vp = V(mid.x + right.x * 2.4, 0, mid.z + right.z * 2.4);
+        vp.y = gy(vp.x, vp.z, C.y + 1) + 0.7;
+        await S.cam(vp, V(mid.x, C.y + 0.45, mid.z), 0, 40, null, { creep: 0.1 });
         await S.say('hank', 'Marshmallow?', { actor: H, expr: 'happy' });
         cat.pose('sit');
-        S.emote('question', V(c.x, cy + 0.75, c.z), 1.4);
-        await S.wait(1.4);
-        S.sfx('purr');
-        S.emote('heart', V(c.x, cy + 0.75, c.z), 2);
-        // she trots over to sniff it, then sits at his feet
-        if (!S.skip) await Promise.race([cat.walkTo(hx - u.x * 0.45, hz - u.z * 0.45, 0.7, 'crouch'), g.wait(2.5)]);
+        S.emote('question', V(C.x, C.y + 0.75, C.z), 1.4);
+        await S.wait(1.2);
+      } else {
         cat.pose('sit', 'blink');
-        cat.yawTo = Math.atan2(hx - cat.pos.x, hz - cat.pos.z);
+        S.sfx('purr');
+        await S.wait(0.5);
       }
+      // ---- 5. she softens and pads over; the lens circles them, slow
+      S.sfx('purr');
+      S.emote('heart', V(C.x, C.y + 0.75, C.z), 2);
+      const toward = V(H.pos.x - C.x, 0, H.pos.z - C.z).normalize();
+      const meet = V(H.pos.x - toward.x * 0.5, 0, H.pos.z - toward.z * 0.5);
+      const pads = cat.walkTo(meet.x, meet.z, 0.7, 'crouch');
+      const mid2 = V((H.pos.x + meet.x) / 2, (H.pos.y + C.y) / 2, (H.pos.z + meet.z) / 2);
+      const a0 = Math.atan2(right.x, right.z);
+      S.orbit(mid2, { r: 2.5, h: 0.95, a0: a0 - 0.35, a1: a0 + 0.55, dur: 6, fov: 40, lookUp: 0.55, subject: H });
+      if (!S.skip) await Promise.race([pads, g.wait(2.6)]);
+      cat.pose('sit', 'blink');
+      cat.yawTo = Math.atan2(H.pos.x - cat.pos.x, H.pos.z - cat.pos.z);
       H.play('idle', 'happy');
-      await S.cam(V(mx + n.x * 2.2 + u.x * 0.4, cy + 1.1, mz + n.z * 2.2 + u.z * 0.4), V(mx - u.x * 0.2, cy + 0.5, mz - u.z * 0.2), 0.5, 40);
       await S.say('hank', "You don't mind that I'm a little bit dead?", { actor: H, expr: 'surprised' });
       cat.pose('sit', 'meow');
       S.sfx('meow', { pitch: 1.3 });
       await S.say('cat', 'Mrrp.', { expr: 'happy' });
-      await S.say('hank', "Then I'll call you... *Poutine.*", { actor: H, expr: 'happy' });
-      S.sfx('meow', { pitch: 1.2 });
-      cat.pose('sit', 'meow');
-      await S.say('cat', 'Mrrrrrp!', { expr: 'love' });
-      g.effects.hearts(H.pos.x, H.pos.y + 1.4, H.pos.z, 8);
-      this.st.cat = true;
+      // ---- 6. he scoops her up (a close two-shot, low)
+      H.play('bow', 'love');
+      await S.low(H, { dist: 1.9, side: 0.7, h: 0.35, fov: 44, subject: H });
+      await S.wait(0.55);
+      S.sfx('purr', { volume: 0.9 });
+      g.effects.hearts(cat.pos.x, cat.pos.y + 0.4, cat.pos.z, 6);
+      this.despawnStray();
+      await S.wait(0.5);
+      // ---- 7. into the basket: Hank back on Bessie, Poutine peeking over the wicker
+      H.visible = false;
       g.rider.enableCat(true);
       g.rider.visible = true;
+      g.bikeModel.root.updateMatrixWorld(true);
+      const bk = g.bikeModel.basket?.getWorldPosition ? g.bikeModel.basket.getWorldPosition(V(0, 0, 0)) : V(B.x + fwd.x * 0.8, B.y + 1.0, B.z + fwd.z * 0.8);
+      const kp = V(bk.x + fwd.x * 1.25 + right.x * 0.55, bk.y + 0.12, bk.z + fwd.z * 1.25 + right.z * 0.55);
+      await S.cam(kp, V(bk.x, bk.y + 0.12, bk.z), 0, 38, H0, { creep: 0.08 });
+      await S.say('hank', "Then I'll call you... *Poutine.*", { actor: H0, expr: 'happy' });
+      S.sfx('meow', { pitch: 1.2 });
+      await S.say('cat', 'Mrrrrrp!', { expr: 'love' });
+      g.effects.hearts(bk.x, bk.y + 0.4, bk.z, 8);
+      // ---- 8. crane up and back over them: the road home
+      S.music('village');
+      const up = V(B.x - fwd.x * 5.5 + right.x * 1.2, B.y + 3.4, B.z - fwd.z * 5.5 + right.z * 1.2);
+      S.clear(up, V(B.x, B.y + 1, B.z));
+      await S.cam(up, V(B.x + fwd.x * 10, B.y + 1.0, B.z + fwd.z * 10), 2.4, 52, H0, { ease: 'glide', creep: 0 });
+      this.st.cat = true;
       this.flag('catRescued', true);
       g.catEventActive = false;
-      this.despawnStray();
       g.world.atmosphere.setWeather('overcast');
       g.save();
+    }).finally(() => {
+      this.catScene = null;
+      g.rider.visible = true;
     });
+    return this.catScene;
+  }
+  // she's on the road ahead and Hank can see her: the scene plays (once; Story.update)
+  watchForStray() {
+    const g = this.g, cat = this.stray;
+    if (!cat || !g.catEventActive || cat.scripted || this.catScene || this.flag('catRescued') || g.interior?.active) return;
+    if (g.ui.dialogueTick || g.ui.menuStack?.length) return;
+    const p = g.playerPos, dx = cat.pos.x - p.x, dz = cat.pos.z - p.z, d = Math.hypot(dx, dz);
+    if (d > 17 || Math.abs(cat.pos.y - p.y) > 3) return;
+    const b = g.bike;
+    const ahead = g.onFoot ? 1 : (dx * Math.sin(b.yaw) + dz * Math.cos(b.yaw)) / (d || 1);
+    if (d < 6 || (ahead > 0.55 && (g.onFoot || b.speed > 1))) this.catRescue();
   }
 
   // ---------------------------------------------------------------- deliveries
@@ -1219,6 +1334,8 @@ export class Story {
     // (the first visit to Maple Cove, the contest's frozen welcome: contest.js)
     // Poutine wanders the road home once the first day's deliveries are done (and every day after, until she's found)
     if (st.flags.village1 && !st.flags.catRescued && !g.catEventActive && (st.day > 1 || g.orders.pending().length === 0)) this.startCatEvent(st.day === 1);
+    // ...and riding by, Hank sees her: the rescue scene
+    this.watchForStray();
     // Nana calls Hank home at night
     const hr = g.world.atmosphere.hour;
     if (hr > 20.5 && !this.nanaCalled) {
