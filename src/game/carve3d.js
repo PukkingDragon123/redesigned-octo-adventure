@@ -34,6 +34,7 @@ export const P0 = 2; // front: mask column c -> voxel x = c + P0
 export const TOP = Math.ceil(CY + RY) - 1; // mask row r -> voxel y = TOP - r
 export const W = N + P0 * 2, D = W, H = TOP + 8; // 36 x 38 x 36
 export const X0 = CX + P0, Y0 = TOP + 1 - CY, Z0 = D / 2; // the centre (voxel-edge units)
+export { RX, RY };
 export const RZ = RX; // round in plan
 export const WALL = 3.2; // how thick the wall is
 export const SIZE = 0.018; // metres a voxel
