@@ -153,7 +153,7 @@ export class Story {
       S.every(() => void lamp.pos.set(N.pos.x, N.pos.y + 1.0, N.pos.z));
       // the cabin glowing in the dark woods, smoke curling from the chimney
       await S.cam(L(8.5, 3.8, 17.5), L(0, 2.0, 4.5), 0, 46);
-      S.cam(L(5.6, 2.7, 13.2), L(-0.1, 1.4, 6.0), 6.5, 44);
+      S.cam(L(5.6, 2.7, 13.2), L(-0.1, 1.4, 6.0), 6.5, 44, null, { ease: 'glide' });
       await S.fade(0, 1.6);
       S.sfx('owl', { volume: 0.5 });
       const nw = N.walkTo([L(-0.45, 0, 7.8), L(-0.2, 0, 5.3)], 1.0, 'walk+lantern');
@@ -192,13 +192,14 @@ export class Story {
       H.play('shiver', 'surprised');
       g.effects.frost(H.pos.x, H.pos.y + 0.3, H.pos.z, 6);
       await S.cam(L(-0.35, 1.65, 0.4), L(-0.35, 1.15, 2.8), 0.8, 46);
-      await S.faceShot(H, { dist: 2.3, side: -0.6, dur: 0.8 });
+      await S.faceShot(H, { dist: 2.0, side: -0.5, dur: 0.9, fov: 38, ease: 'out' });
       await S.say('hankBuried', "Oh... it's *warm* in here.", { actor: H, expr: 'happy' });
-      await S.faceShot(N, { dist: 2.3, side: 0.6, dur: 0.8 });
+      // over his shoulder onto her
+      await S.ots(H, N, { side: -1, dur: 0.8, fov: 40 });
       await S.say('grandma', 'Look around, dear. Then sit by the fire.', { actor: N, expr: 'happy' });
       // she heads for the stove; a look across the room at the fire
       const nk = N.walkTo([L(-1.9, 0, 0.2), L(-3.75, 0, -2.35)], 1.1, 'walk');
-      await S.cam(L(-1.05, 2.35, 3.35), L(3.0, 0.9, -1.4), 3.2, 52);
+      await S.cam(L(-1.05, 2.35, 3.35), L(3.0, 0.9, -1.4), 3.2, 52, null, { ease: 'glide' });
       await Promise.race([nk, S.wait(2.5)]);
       if (N.path) { N.path = null; N.pos.copy(L(-3.75, 0, -2.35)); }
     });
@@ -269,6 +270,7 @@ export class Story {
       await S.say('grandma', "Harold's quilt. Forty-one winters of patches.", { actor: N, expr: 'happy' });
       H.play('sitShiver', 'scared');
       S.sfx('jaw_chatter', { volume: 0.6 });
+      await S.closeUp(H, { side: -0.4, up: 0.2, roll: -0.07 });
       await S.say('hankBuried', "Th-thank you, ma'am.", { actor: H, expr: 'scared' });
       await S.cam(L(0.6, 2.0, -1.9), L(2.75, 1.25, -2.6), 0.8, 42);
       N.play('talk');
@@ -286,8 +288,9 @@ export class Story {
       H.bounce(0.5);
       g.setOutfit('hank');
       N.play('idle');
-      await S.wait(0.5);
-      await S.faceShot(H, { dist: 2.5, side: -0.6, up: 0.3, dur: 0.6, fov: 42 });
+      await S.wait(0.3);
+      // ta-da: a push in on the new look
+      await S.push(0.32, 1.1, 40, { ease: 'out' });
       await S.say('hank', "Oh... that's *cozy.*", { actor: H, expr: 'happy' });
       // the famous cocoa
       N.play('offer');
@@ -313,7 +316,7 @@ export class Story {
       else await S.say('grandma', 'Wonderful!', { actor: N, expr: 'laugh' });
       await S.say('grandma', 'We start at sunrise. ...Do you sleep?', { actor: N, expr: 'surprised' });
       H.react('headpop');
-      await S.faceShot(H, { dist: 2.5, side: -0.6, up: 0.3, dur: 0.6, fov: 42 });
+      await S.closeUp(H, { side: -0.45, up: 0.22, dur: 0.25, ease: 'whip' });
       await S.say('hank', "Oh, I *sleep.* That's how I got into this mess.", { actor: H, expr: 'sheepish' });
       // she tucks the quilt in and turns the lamp down; he dozes off by the fire
       N.walkTo([L(2.55, 0, -0.75)], 0.8, 'walk');
@@ -376,7 +379,7 @@ export class Story {
       if (b) {
         for (const [who, text, expr] of b.lines) await S.say(who, text, { expr, actor: who === 'hank' ? H : N });
         // close on Hank for the big bite...
-        await S.cam(L(-2.05, 1.5, 3.25), L(-2.6, 0.95, 1.35), 0.5, 40);
+        await S.cam(L(-2.05, 1.5, 3.25), L(-2.6, 0.95, 1.35), 0.5, 40, null, { ease: 'out', creep: 0.1 });
         H.play('sitEat');
         await S.wait(0.8);
         // ...and the food falls straight through him
@@ -400,7 +403,7 @@ export class Story {
         H.showEmote('sweat', 2.2);
         N.showEmote('question', 2.2);
         await S.wait(1.2);
-        await S.cam(wide[0], wide[1], 0.6, 46);
+        await S.whip(wide[0], wide[1], 46);
         if (cat && day >= 3) {
           cat.setFrame('cat:walk:side:0');
           S.sfx('purr');
@@ -446,10 +449,17 @@ export class Story {
       const N = S.actor('grandma', -142.8, 97.3, -2.4, 'idle');
       g.villagers.setVisible('grandma', false);
       const y = g.bike.pos.y;
-      await S.cam(V(-139.3, y + 1.6, 91.5), V(-144.8, y + 0.8, 94.5), 0, 45);
+      // the reveal: a crane up from Bessie's front wheel to the two of them
+      const bp = g.bike.pos;
+      S.sfx('magic', { volume: 0.4 });
+      await S.crane(V(bp.x, y, bp.z), { yaw: Math.atan2(-139.3 - bp.x, 91.5 - bp.z), dist: 2.0, low: 0.35, high: 1.7, back: 2.6, dur: 2.6, fov: 45, lookUp: 0.95 });
       await S.say('grandma', "Ta-da! Harold's old roadster. He called her *Bessie.*", { actor: N, expr: 'happy' });
+      await S.closeUp(H, { side: 0.35 });
       await S.say('hank', "She's... beautiful.", { actor: H, expr: 'happy' });
+      await S.ots(H, N, { side: 1, fov: 40 });
       await S.say('grandma', 'Maple Cove is east, past the bridge. Mind Gus\'s temper.', { actor: N, expr: 'neutral' });
+      // a low hero shot: off he goes
+      await S.low(H, { yaw: Math.PI + 0.9, dist: 1.8, side: 0, h: 0.3, fov: 44, roll: 0.06 });
       await S.say('hank', 'Got it. East. Bridge. Temper.', { actor: H, expr: 'determined' });
       g.villagers.setVisible('grandma', true);
       g.rider.visible = true;
@@ -574,10 +584,12 @@ export class Story {
     // shot 3: the whole street, frozen, staring
     const W = shots.wide;
     await S.cam(V3(W.pos), V3(W.look), 0, W.fov, V3(W.look));
-    S.cam(V3(W.to), V3(W.look), 2.2, W.fov, V3(W.look));
+    S.cam(V3(W.to), V3(W.look), 2.2, W.fov, V3(W.look), { ease: 'glide' });
     await S.wait(1.7);
     // the close-ups: whoever the lens can find a clear spot for, from the street
     const people = () => VL.list.filter((a) => a.visible && !a.hiddenByStory).map((a) => ({ x: a.pos.x, z: a.pos.z, a }));
+    // (the frozen faces, each on a slight tilt, alternating: the street's gone wrong)
+    let tilt = 0.06;
     const close = async (subj, { dist = 2.1, fov = 38, hold = 1.1, mid = null, before = null } = {}) => {
       if (S.skip || !subj?.visible) return false;
       subj.root.updateMatrixWorld(true);
@@ -587,7 +599,7 @@ export class Story {
       ppl.push({ x: b.pos.x, z: b.pos.z });
       const at = faceSpot(head, g.playerPos, ppl, { dist, ground: gy(head.x, head.z) });
       if (!at) return false;
-      await S.cam(V(at.x, at.y, at.z), V(head.x, head.y - 0.12, head.z), 0, fov, subj);
+      await S.cam(V(at.x, at.y, at.z), V(head.x, head.y - 0.12, head.z), 0, fov, subj, { roll: (tilt = -tilt), creep: 0.07 });
       before?.();
       await S.wait(hold);
       return true;
@@ -624,7 +636,7 @@ export class Story {
     }
     // shot: back on Hank; Nana's carrier of cocoa sits in the crate
     const Hs = shots.hank;
-    await S.cam(V3(Hs.pos), V3(Hs.look), 0, Hs.fov, H);
+    await S.cam(V3(Hs.pos), V3(Hs.look), 0, Hs.fov, H, { creep: 0.12 });
     H.tempExpr('sparkle', 3);
     await S.say('hank', "Frozen stiff... Good thing Nana packed extra cocoa!", { actor: H, expr: 'sparkle' });
   }
@@ -1124,7 +1136,7 @@ export class Story {
       // a big yawn
       H.play('yawn', 'sleepy');
       S.sfx('bone_rattle', { volume: 0.3 });
-      await S.faceShot(H, { dist: 2.4, side: 0.5, dur: 0.8, fov: 42 });
+      await S.closeUp(H, { side: 0.4, dur: 0.8, roll: 0.05, ease: 'glide' });
       await S.say('hank', first ? '*Yaaawn.* Skeletons get sleepy?' : pick(['*Yaaawn.*', '*Yaaawn.* My femurs are humming.']), { actor: H, expr: 'sleepy' });
       H.play('idle');
       await Promise.race([nw, S.wait(3)]);
@@ -1156,11 +1168,12 @@ export class Story {
       H.react('spin');
       g.effects.confetti?.(H.pos.x, H.pos.y + 1.4, H.pos.z, 12);
       await S.wait(0.8);
-      await S.faceShot(H, { dist: 2.4, side: 0.5, up: 0.2, dur: 0.6, fov: 42 });
+      await S.faceShot(H, { dist: 2.0, side: 0.45, up: 0.15, dur: 0.6, fov: 40, roll: 0.06, ease: 'out' });
       if (first) await S.say('hank', 'A nightcap with a pompom!', { actor: H, expr: 'happy' });
       else await S.wait(0.6);
       if (first) N.react('laugh');
-      await S.faceShot(H, { dist: 2.3, side: 0.5, up: 0.2, dur: 0.5, fov: 42 });
+      // over Nana's shoulder: goodnight
+      await S.ots(N, H, { side: -1, dur: 0.5, fov: 40 });
       await S.say('hank', first ? 'Goodnight, Nana. Thank you.' : 'Goodnight, Nana.', { actor: H, expr: 'happy' });
       this.flag('pajamas', true);
       // he stretches out on the sofa, head on the armrest by the lamp
@@ -1244,14 +1257,15 @@ export class Story {
       R.floatY = 0.25;
       S.sfx('reaper');
       g.effects.magic(R.pos.x, R.pos.y + 1, R.pos.z, 20, [0.5, 0.4, 0.8]);
-      await S.frame(R, [2.4, 0.8, -3], 1, 42, 1.1);
+      // looming: low and tilted
+      await S.low(R, { dist: 2.6, side: 0.7, h: 0.35, fov: 44, dur: 1.0, roll: -0.08 });
       await S.say('reaper', 'Knock knock! Your paperwork came through, Hank.', { actor: R, expr: 'happy' });
       R.play('clipboard');
       await S.say('reaper', 'You can rest in peace now. Properly.', { actor: R, expr: 'smug' });
-      await S.frame(H, [1.6, 1, 2.6], 0.6, 40, 1);
+      await S.ots(R, H, { side: 1, dur: 0.6, fov: 40 });
       const c = await S.say('hank', 'Could I get an extension?', { actor: H, expr: 'sheepish', choices: ['"I\'ve got deliveries."', '"Poutine would miss me."', '"Nana needs me."'] });
       void c;
-      await S.frame(R, [2.2, 0.8, -2.6], 0.5, 40, 1.1);
+      await S.closeUp(R, { side: 0.4, dur: 0.3, ease: 'whip', roll: 0.05 });
       R.showEmote('question', 2);
       await S.say('reaper', "...Is that Marguerite's cocoa?", { actor: R, expr: 'surprised' });
       N.play('offer', 'happy');
@@ -1262,7 +1276,8 @@ export class Story {
       await S.say('reaper', '...Fine. Extension granted. A cup every Friday!', { actor: R, expr: 'happy' });
       g.effects.confetti(H.pos.x, H.pos.y + 2, H.pos.z, 60);
       S.sfx('upgrade');
-      await S.cam(V(-133.8, y + 6, 86), V(-144.8, y + 1, 95), 3, 50);
+      // crane up and away over the garage yard
+      await S.cam(V(-133.8, y + 6, 86), V(-144.8, y + 1, 95), 3.4, 50, null, { ease: 'glide' });
       await S.say('hank', 'The end? Nah. Keep the cocoa coming!', { actor: H, expr: 'laugh' });
       await S.wait(1.5);
       g.villagers.setVisible('grandma', true);

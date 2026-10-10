@@ -188,8 +188,10 @@ export class Scene {
     const P = t.isVector3 ? t : t.pos;
     const cx = P.x, cz = P.z, gy = P.y, ly = gy + lookUp;
     const ph = this.g.physics;
-    // (shrink the arc while any of it would sit inside a building)
-    for (let i = 0; i < 4; i++) {
+    // (shrink the arc while any of it would sit inside a building; indoors, Nana's cabin, the
+    // arc is the caller's to keep inside the room)
+    const indoors = ph.segmentHit(cx, ly, cz, cx, ly, cz, 0.05) < 1;
+    for (let i = 0; i < 4 && !indoors; i++) {
       let inside = false;
       for (let s = 0; s <= 4 && !inside; s++) {
         const a = a0 + ((a1 - a0) * s) / 4, rr = r + ((r1 ?? r) - r) * (s / 4);
