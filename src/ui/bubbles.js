@@ -506,11 +506,30 @@ export class WorldBubbles {
     this.list.clear();
   }
 
+  // The pixel font's advance as the browser lays it out: some round it to whole CSS
+  // pixels (5 instead of 4.57 on a 2.625x phone), which would push the letters off the
+  // grid and out of the box. A letter-spacing makes up the difference, so every letter
+  // is exactly 6 pixels of the grid. (Measured once the font is in, again on a rescale.)
+  fitFont() {
+    const us = scale.us;
+    if (this.fitFor === us || !document.fonts?.check?.(`${16 * us}px Monogram`)) return;
+    this.fitFor = us;
+    const s = el('span', 'wb-box');
+    s.style.cssText = 'display:inline;position:absolute;left:0;top:0;visibility:hidden;border:0;padding:0;letter-spacing:0';
+    s.textContent = 'MMMMMMMMMM';
+    this.layer.appendChild(s);
+    const w = s.getBoundingClientRect().width / 10;
+    s.remove();
+    this.layer.style.setProperty('--wb-ls', `${(CH * us - w).toFixed(4)}px`);
+  }
+
   // once a frame, after the camera and everyone in the world have moved
   place() {
     if (!this.list.size) return;
+    this.fitFont();
     const g = this.game, ui = this.ui, cam = g.camera, now = performance.now();
-    const off = !cam || g.mode === 'title' || ui.menuStack.length > 0;
+    // (not over a menu, nor through the walls of Nana's cabin)
+    const off = !cam || g.mode === 'title' || ui.menuStack.length > 0 || !!g.interior?.active;
     const W = innerWidth, H = innerHeight, us = scale.us, m = 3 * us;
     const live = [];
     for (const [id, t] of this.list) {

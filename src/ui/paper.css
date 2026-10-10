@@ -137,6 +137,8 @@
   font-family: 'Monogram', monospace;
   font-size: var(--tfs);
   line-height: calc(var(--us) * 12);
+  letter-spacing: var(--wb-ls, 0px);
+  font-kerning: none;
   color: #3e2218;
   text-shadow: none;
   white-space: pre;
