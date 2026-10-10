@@ -275,7 +275,7 @@ export function capsule(p, ax, ay, az, bx, by, bz, r, t, rec = null, out = null)
   }
   return n;
 }
-export const TOOLS = { knife: 0.75, gouge: 1.65 };
+export const TOOLS = { knife: 0.75, gouge: 1.65, lid: 1.25 }; // (the lid's ring is cut a little wide: easier to close)
 const _n = [0, 0, 0];
 // a cut at point (x, y, z) on the surface (voxel units): straight in, through the wall
 export function cut(p, x, y, z, tool = 'knife', rec = null, out = null) {

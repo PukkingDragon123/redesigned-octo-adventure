@@ -819,7 +819,7 @@ export class CarveStage {
     }
     if (!C.onWall(hit, o[0], o[1], o[2], d[0], d[1], d[2])) return;
     if (ph === 'lid' && at[1] < C.Y0 + C.RY * 0.5) return; // (only the top, for the lid)
-    C.cut(p, at[0], at[1], at[2], this.toolName === 'gouge' && ph === 'carve' ? 'gouge' : 'knife', rec);
+    C.cut(p, at[0], at[1], at[2], ph === 'lid' ? 'lid' : this.toolName === 'gouge' ? 'gouge' : 'knife', rec);
     const n = (rec.length - before) / 3;
     if (!n) return;
     s.n += n;
@@ -1094,10 +1094,12 @@ export class CarveStage {
       lt = this.lid.stem.clone().multiplyScalar(SZ).applyQuaternion(this.lidPiv.quaternion).add(this.lidPiv.position);
       ld = V(-0.3, 1, 0.35).normalize();
     } else {
+      // fingertips on the front-left of its flank, the bony fingers draped over it, the
+      // forearm coming from Hank's side
       const c = this.pk.position;
-      const s = V(-(C.RX + 0.4) * SZ, 0.03, 0.05).applyAxisAngle(V(1, 0, 0), this.tilt);
+      const s = V(-0.272, 0.03, 0.1).applyAxisAngle(V(1, 0, 0), this.tilt);
       lt = s.add(c);
-      ld = V(-0.7, 0.75, 0.45).normalize();
+      ld = V(-0.3, 0.6, 0.75).applyAxisAngle(V(1, 0, 0), this.tilt * 0.5).normalize();
     }
     this.lhand.position.lerp(lt, 1 - Math.exp(-dt * 14));
     const lz = V(1, 0.1, 0.2).addScaledVector(ld, -V(1, 0.1, 0.2).dot(ld)).normalize();
