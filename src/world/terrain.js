@@ -11,7 +11,8 @@ export const H_RES = 2; // metres per height cell
 export const S_RES = 0.5; // metres per splat texel
 export const R_RES = 1; // metres per road-frame texel (see Terrain.buildRoadInfo)
 export const ROAD_SPAN = 6; // the road frame's signed distance runs +-6 m
-const HALF = L.WORLD_HALF;
+const SIZE = L.WORLD_HALF * 2; // the square world's side (m)
+const X0 = L.WORLD_X0, Z0 = L.WORLD_Z0; // its north-west corner
 
 const gauss = (d, s) => Math.exp(-(d * d) / (2 * s * s));
 
@@ -60,6 +61,7 @@ export function beachWidth(x, z) {
 export function seaSDF(x, z) {
   let d = 1e9;
   for (const s of L.SEA) d = Math.min(d, shapeSDF(s, x, z));
+  if (d > 60) return d; // (far inland the shore's wobble changes nothing)
   const vm = villageMask(x, z);
   const bm = beachMask(x, z);
   d += (sx.noise(x / 40, z / 40) * 5 + sx.noise(x / 13, z / 13) * 1.5) * (1 - vm * 0.85) * (1 - bm * 0.85);
@@ -92,8 +94,8 @@ export function riverInfo(x, z) {
       bdz = abz / l;
     }
   }
-  // meander wobble
-  best += sx2.noise(x / 30, z / 30) * 2.0;
+  // meander wobble (far from the river it changes nothing)
+  if (best < 80) best += sx2.noise(x / 30, z / 30) * 2.0;
   return { d: Math.max(0, best), w: bw, dirx: bdx, dirz: bdz };
 }
 
@@ -160,16 +162,16 @@ export function nearestRoad(x, z, only = null) {
 
 function rimHeight(x, z) {
   // mountains around the north, west and south edges keep the rider in
-  const dn = z + HALF; // distance from north edge
-  const dw = x + HALF;
-  const ds = HALF - z;
-  const de = HALF - x;
+  const dn = z - Z0; // distance from north edge
+  const dw = x - X0;
+  const ds = Z0 + SIZE - z;
+  const de = X0 + SIZE - x;
   let m = 0;
-  m += 46 * Math.pow(1 - smoothstep(0, 95, dn), 1.6);
-  m += 40 * Math.pow(1 - smoothstep(0, 85, dw), 1.6);
-  m += 30 * Math.pow(1 - smoothstep(0, 70, ds), 1.6) * (1 - smoothstep(120, 220, x));
-  m += 20 * Math.pow(1 - smoothstep(0, 40, de), 1.6);
-  return m * (0.75 + 0.25 * sx.noise(x / 45, z / 45));
+  if (dn < 95) m += 46 * Math.pow(1 - smoothstep(0, 95, dn), 1.6);
+  if (dw < 85) m += 40 * Math.pow(1 - smoothstep(0, 85, dw), 1.6);
+  if (ds < 70) m += 30 * Math.pow(1 - smoothstep(0, 70, ds), 1.6) * (1 - smoothstep(20, 120, x));
+  if (de < 40) m += 20 * Math.pow(1 - smoothstep(0, 40, de), 1.6);
+  return m ? m * (0.75 + 0.25 * sx.noise(x / 45, z / 45)) : 0;
 }
 
 export function baseHeight(x, z) {
@@ -183,8 +185,36 @@ export function baseHeight(x, z) {
   // the loop road rides along a gentle valley between the lookout and the ridge
   h -= 6 * gauss(Math.hypot(x - 100, z + 84), 40);
   h += 6 * gauss(Math.hypot(x + 120, z + 150), 60);
+  // the backcountry's hills (Mont Écho...)
+  for (const hl of L.HILLS) {
+    const dx = x - hl.x, dz = z - hl.z;
+    if (Math.abs(dx) < hl.s * 3.5 && Math.abs(dz) < hl.s * 3.5) h += hl.h * gauss(Math.hypot(dx, dz), hl.s);
+  }
   h += rimHeight(x, z);
   return h;
+}
+
+// 0..1: how much (x, z) is a marsh, or a lake's bank (where the shore stays grassy, bar a few
+// little sandy coves)
+export function inlandWet(x, z) {
+  let m = 0;
+  for (const ms of L.MARSHES) {
+    const d = Math.hypot(x - ms.x, z - ms.z);
+    if (d < ms.r + 30) m = Math.max(m, 1 - smoothstep(ms.r + 6, ms.r + 30, d));
+  }
+  for (const lk of L.LAKES) {
+    if (Math.abs(x - lk.x) > lk.rx + 40 || Math.abs(z - lk.z) > lk.rx + 40) continue;
+    const ld = lakeSDF(lk, x, z);
+    if (ld < 30) m = Math.max(m, (1 - smoothstep(12, 30, ld)) * smoothstep(-0.2, 0.25, sx.noise(x / 40 + 7, z / 40)));
+  }
+  return m;
+}
+
+// Lakes: signed distance to the (wobbly) shore, negative on the water
+export function lakeSDF(lk, x, z) {
+  const dx = x - lk.x, dz = z - lk.z, c = Math.cos(lk.rot || 0), s = Math.sin(lk.rot || 0);
+  const u = (dx * c + dz * s) / lk.rx, v = (-dx * s + dz * c) / lk.rz;
+  return (Math.sqrt(u * u + v * v) - 1) * Math.min(lk.rx, lk.rz) + sx2.noise(x / 26, z / 26) * 4;
 }
 
 // Forest density for trees & leaf litter (0..1), without clearings
@@ -194,10 +224,10 @@ export function forestNoise(x, z) {
 
 export class Terrain {
   constructor() {
-    this.n = Math.round((HALF * 2) / H_RES) + 1; // vertices per side
+    this.n = Math.round(SIZE / H_RES) + 1; // vertices per side
     this.h = new Float32Array(this.n * this.n);
     this.roadW = new Float32Array(this.n * this.n); // road blend weight at height res
-    this.sn = Math.round((HALF * 2) / S_RES); // splat texels per side
+    this.sn = Math.round(SIZE / S_RES); // splat texels per side
     this.splat = new Uint8Array(this.sn * this.sn * 4);
     this.roadMask = new Uint8Array(this.sn * this.sn); // crisp road (for physics surface)
     this.build();
@@ -212,9 +242,9 @@ export class Terrain {
     const H = this.h;
     // 1-5: natural terrain
     for (let j = 0; j < n; j++) {
-      const z = -HALF + j * H_RES;
+      const z = Z0 + j * H_RES;
       for (let i = 0; i < n; i++) {
-        const x = -HALF + i * H_RES;
+        const x = X0 + i * H_RES;
         H[j * n + i] = this.naturalHeight(x, z);
       }
     }
@@ -254,6 +284,21 @@ export class Terrain {
       if (sd > -6 && sd < W) hb += 0.04 * sx.noise(x / 3.5, z / 3.5);
       const back = 1 - smoothstep(W + 12, W + 54, sd);
       h = lerp(h, hb, bm * back);
+    }
+    // lakes: a basin with gentle banks, a sandy-shallow rim and a deep middle
+    for (const lk of L.LAKES) {
+      if (Math.abs(x - lk.x) > lk.rx + 80 || Math.abs(z - lk.z) > lk.rx + 80) continue;
+      const ld = lakeSDF(lk, x, z);
+      if (ld > 70) continue;
+      const t = ld < 0 ? -0.3 - lk.depth * smoothstep(0, 22, -ld) : 0.3 + Math.min(ld, 8) * 0.22 + Math.max(0, ld - 8) * 0.08 + 0.35 * sx.noise(x / 11, z / 11) * smoothstep(2, 10, ld);
+      h = lerp(h, t, 1 - smoothstep(18, 70, ld));
+    }
+    // marshes: pools and grassy hummocks right at the waterline
+    for (const ms of L.MARSHES) {
+      const d = Math.hypot(x - ms.x, z - ms.z);
+      if (d > ms.r + 40) continue;
+      const t = 0.08 + 0.42 * sx2.noise(x / 6.5, z / 6.5) + 0.18 * sx.noise(x / 2.7, z / 2.7) - 0.12;
+      h = lerp(h, d < ms.r ? t : t + (d - ms.r) * 0.06, 1 - smoothstep(ms.r * 0.75, ms.r + 40, d));
     }
     // village shelf
     const vm = villageMask(x, z) * smoothstep(-1, 4, sd) * (1 - chan);
@@ -359,14 +404,14 @@ export class Terrain {
         const a = samples[k], b = samples[k + 1];
         const minx = Math.min(a.x, b.x) - hw - blend, maxx = Math.max(a.x, b.x) + hw + blend;
         const minz = Math.min(a.z, b.z) - hw - blend, maxz = Math.max(a.z, b.z) + hw + blend;
-        const i0 = Math.max(0, Math.floor((minx + HALF) / H_RES)), i1 = Math.min(n - 1, Math.ceil((maxx + HALF) / H_RES));
-        const j0 = Math.max(0, Math.floor((minz + HALF) / H_RES)), j1 = Math.min(n - 1, Math.ceil((maxz + HALF) / H_RES));
+        const i0 = Math.max(0, Math.floor((minx - X0) / H_RES)), i1 = Math.min(n - 1, Math.ceil((maxx - X0) / H_RES));
+        const j0 = Math.max(0, Math.floor((minz - Z0) / H_RES)), j1 = Math.min(n - 1, Math.ceil((maxz - Z0) / H_RES));
         const abx = b.x - a.x, abz = b.z - a.z;
         const l2 = abx * abx + abz * abz || 1e-6;
         for (let j = j0; j <= j1; j++) {
-          const z = -HALF + j * H_RES;
+          const z = Z0 + j * H_RES;
           for (let i = i0; i <= i1; i++) {
-            const x = -HALF + i * H_RES;
+            const x = X0 + i * H_RES;
             const t = clamp(((x - a.x) * abx + (z - a.z) * abz) / l2, 0, 1);
             const d = Math.hypot(x - (a.x + abx * t), z - (a.z + abz * t));
             let w = 1 - smoothstep(hw, hw + blend, d);
@@ -386,7 +431,7 @@ export class Terrain {
       const w = best[id];
       if (w <= 0) continue;
       const i = id % n, j = (id / n) | 0;
-      const x = -HALF + i * H_RES, z = -HALF + j * H_RES;
+      const x = X0 + i * H_RES, z = Z0 + j * H_RES;
       // don't fill in the river under the bridge
       const r = riverInfo(x, z);
       const keep = smoothstep(r.w * 0.5 + 1, r.w * 0.5 + 6, r.d);
@@ -435,10 +480,10 @@ export class Terrain {
       const side = 1.2, back = 1.2, front = b.porch ? 4.5 : 3, blend = 6;
       const ax = b.w / 2 + side, z0 = -b.d / 2 - back, z1 = b.d / 2 + front;
       const R = Math.hypot(b.w / 2 + side + blend, Math.max(b.d / 2 + front, b.d / 2 + back) + blend);
-      const i0 = Math.max(0, Math.floor((b.x - R + HALF) / H_RES)), i1 = Math.min(n - 1, Math.ceil((b.x + R + HALF) / H_RES));
-      const j0 = Math.max(0, Math.floor((b.z - R + HALF) / H_RES)), j1 = Math.min(n - 1, Math.ceil((b.z + R + HALF) / H_RES));
+      const i0 = Math.max(0, Math.floor((b.x - R - X0) / H_RES)), i1 = Math.min(n - 1, Math.ceil((b.x + R - X0) / H_RES));
+      const j0 = Math.max(0, Math.floor((b.z - R - Z0) / H_RES)), j1 = Math.min(n - 1, Math.ceil((b.z + R - Z0) / H_RES));
       for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
-        const x = -HALF + i * H_RES, z = -HALF + j * H_RES;
+        const x = X0 + i * H_RES, z = Z0 + j * H_RES;
         const dx = x - b.x, dz = z - b.z;
         const lx = c * dx - s * dz, lz = s * dx + c * dz;
         const ox = Math.max(0, Math.abs(lx) - ax), oz = Math.max(0, z0 - lz, lz - z1);
@@ -451,8 +496,8 @@ export class Terrain {
 
   sampleGrid(arr, x, z) {
     const n = this.n;
-    const fx = clamp((x + HALF) / H_RES, 0, n - 1.001);
-    const fz = clamp((z + HALF) / H_RES, 0, n - 1.001);
+    const fx = clamp((x - X0) / H_RES, 0, n - 1.001);
+    const fz = clamp((z - Z0) / H_RES, 0, n - 1.001);
     const i = Math.floor(fx), j = Math.floor(fz);
     const tx = fx - i, tz = fz - j;
     const a = arr[j * n + i], b = arr[j * n + i + 1];
@@ -487,14 +532,14 @@ export class Terrain {
         const a = samples[k], b = samples[k + 1];
         const minx = Math.min(a.x, b.x) - hw - edge, maxx = Math.max(a.x, b.x) + hw + edge;
         const minz = Math.min(a.z, b.z) - hw - edge, maxz = Math.max(a.z, b.z) + hw + edge;
-        const i0 = Math.max(0, Math.floor((minx + HALF) / S_RES)), i1 = Math.min(sn - 1, Math.ceil((maxx + HALF) / S_RES));
-        const j0 = Math.max(0, Math.floor((minz + HALF) / S_RES)), j1 = Math.min(sn - 1, Math.ceil((maxz + HALF) / S_RES));
+        const i0 = Math.max(0, Math.floor((minx - X0) / S_RES)), i1 = Math.min(sn - 1, Math.ceil((maxx - X0) / S_RES));
+        const j0 = Math.max(0, Math.floor((minz - Z0) / S_RES)), j1 = Math.min(sn - 1, Math.ceil((maxz - Z0) / S_RES));
         const abx = b.x - a.x, abz = b.z - a.z;
         const l2 = abx * abx + abz * abz || 1e-6;
         for (let j = j0; j <= j1; j++) {
-          const z = -HALF + (j + 0.5) * S_RES;
+          const z = Z0 + (j + 0.5) * S_RES;
           for (let i = i0; i <= i1; i++) {
-            const x = -HALF + (i + 0.5) * S_RES;
+            const x = X0 + (i + 0.5) * S_RES;
             let t = ((x - a.x) * abx + (z - a.z) * abz) / l2;
             t = clamp(t, 0, 1);
             const d = Math.hypot(x - (a.x + abx * t), z - (a.z + abz * t));
@@ -519,11 +564,11 @@ export class Terrain {
       { x: 179, z: -109, r: 6 }, // rest area pull-off
     ];
     for (const y of yards) {
-      const i0 = Math.max(0, Math.floor((y.x - y.r + HALF) / S_RES)), i1 = Math.min(sn - 1, Math.ceil((y.x + y.r + HALF) / S_RES));
-      const j0 = Math.max(0, Math.floor((y.z - y.r + HALF) / S_RES)), j1 = Math.min(sn - 1, Math.ceil((y.z + y.r + HALF) / S_RES));
+      const i0 = Math.max(0, Math.floor((y.x - y.r - X0) / S_RES)), i1 = Math.min(sn - 1, Math.ceil((y.x + y.r - X0) / S_RES));
+      const j0 = Math.max(0, Math.floor((y.z - y.r - Z0) / S_RES)), j1 = Math.min(sn - 1, Math.ceil((y.z + y.r - Z0) / S_RES));
       for (let j = j0; j <= j1; j++) {
         for (let i = i0; i <= i1; i++) {
-          const x = -HALF + (i + 0.5) * S_RES, z = -HALF + (j + 0.5) * S_RES;
+          const x = X0 + (i + 0.5) * S_RES, z = Z0 + (j + 0.5) * S_RES;
           const d = Math.hypot(x - y.x, z - y.z) + sx.noise(x / 4, z / 4) * 2.5;
           const w = 1 - smoothstep(y.r * 0.6, y.r, d);
           const v = Math.round(w * 220);
@@ -532,34 +577,78 @@ export class Terrain {
         }
       }
     }
-    for (let j = 0; j < sn; j++) {
-      const z = -HALF + (j + 0.5) * S_RES;
+    // The layers per texel. Heights come from rolling rows of the bilinear grid (the slope's
+    // +-1 m neighbours are texels 2 away), the forest density from a copy on the coarse height
+    // grid, and the fine noises are only evaluated where they can change the outcome.
+    const n = this.n, H = this.h, K = H_RES / S_RES; // texels per height cell
+    const cI = new Int32Array(sn), cT = new Float32Array(sn);
+    for (let i = 0; i < sn; i++) {
+      const f = Math.min((i + 0.5) / K, n - 1.001);
+      cI[i] = Math.floor(f);
+      cT[i] = f - cI[i];
+    }
+    const FD = new Float32Array(n * n);
+    for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) FD[j * n + i] = forestNoise(X0 + i * H_RES, Z0 + j * H_RES);
+    const rowOf = (arr, j, out) => {
+      const r0 = cI[j] * n, tz = cT[j];
       for (let i = 0; i < sn; i++) {
-        const x = -HALF + (i + 0.5) * S_RES;
+        const c = r0 + cI[i], tx = cT[i];
+        const a = arr[c] + (arr[c + 1] - arr[c]) * tx, b = arr[c + n] + (arr[c + n + 1] - arr[c + n]) * tx;
+        out[i] = a + (b - a) * tz;
+      }
+      return out;
+    };
+    const ring = Array.from({ length: 5 }, () => new Float32Array(sn));
+    const ringJ = new Int32Array(5).fill(-1);
+    const row = (j) => {
+      j = clamp(j, 0, sn - 1);
+      const k = j % 5;
+      if (ringJ[k] !== j) { rowOf(H, j, ring[k]); ringJ[k] = j; }
+      return ring[k];
+    };
+    const fdRow = new Float32Array(sn);
+    const beachR = beaches.map((b) => (b.len * 0.5 + 16) ** 2 + 130 ** 2);
+    for (let j = 0; j < sn; j++) {
+      const z = Z0 + (j + 0.5) * S_RES;
+      const Hn = row(j - 2), Hs = row(j + 2), Hc = row(j);
+      rowOf(FD, j, fdRow);
+      for (let i = 0; i < sn; i++) {
+        const x = X0 + (i + 0.5) * S_RES;
         const id = j * sn + i;
-        const h = this.heightAt(x, z);
-        // slope from grid
-        const e = 1.0;
-        const gx = (this.heightAt(x + e, z) - this.heightAt(x - e, z)) / (2 * e);
-        const gz = (this.heightAt(x, z + e) - this.heightAt(x, z - e)) / (2 * e);
-        const slope = Math.hypot(gx, gz);
+        const h = Hc[i];
+        const gx = (Hc[Math.min(sn - 1, i + 2)] - Hc[Math.max(0, i - 2)]) * 0.5;
+        const gz = (Hs[i] - Hn[i]) * 0.5;
+        const slope = Math.sqrt(gx * gx + gz * gz);
         const road = R[id] / 255;
-        const rock = smoothstep(0.62, 1.05, slope + sx.noise(x / 7, z / 7) * 0.15) * (1 - road);
-        let sand = 1 - smoothstep(0.9, 1.7, h + sx.noise(x / 5, z / 5) * 0.4);
-        const bm = beachMask(x, z);
-        if (bm > 0.02) {
-          const sd = seaSDF(x, z), bw = beachWidth(x, z);
-          sand = Math.max(sand, bm * (1 - smoothstep(bw + 6, bw + 16, sd + sx.noise(x / 6, z / 6) * 3)));
+        let rock = 0, sand = 0, litter = 0, n6 = null;
+        if (slope > 0.47 && road < 1) rock = smoothstep(0.62, 1.05, slope + sx.noise(x / 7, z / 7) * 0.15) * (1 - road);
+        if (h < 2.12) sand = 1 - smoothstep(0.9, 1.7, h + sx.noise(x / 5, z / 5) * 0.4);
+        for (let k = 0; k < beaches.length; k++) {
+          const b = beaches[k];
+          if ((x - b.x) ** 2 + (z - b.z) ** 2 > beachR[k]) continue;
+          const bm = beachMask(x, z);
+          if (bm > 0.02) {
+            const sd = seaSDF(x, z), bw = beachWidth(x, z);
+            n6 = sx.noise(x / 6, z / 6);
+            sand = Math.max(sand, bm * (1 - smoothstep(bw + 6, bw + 16, sd + n6 * 3)));
+          }
+          break;
         }
+        if (sand > 0 && h > -0.6) sand *= 1 - inlandWet(x, z);
         sand *= 1 - road;
-        const fd = forestNoise(x, z);
-        const litter = smoothstep(0.42, 0.75, fd + sx.noise(x / 6, z / 6) * 0.18) * (1 - road) * (1 - sand);
+        const fd = fdRow[i];
+        if (road < 1 && sand < 1 && fd > 0.26) {
+          litter = fd > 0.91 ? 1 : smoothstep(0.42, 0.75, fd + (n6 ?? sx.noise(x / 6, z / 6)) * 0.18);
+          litter *= (1 - road) * (1 - sand);
+        }
         S[id * 4] = R[id];
         S[id * 4 + 1] = Math.round(rock * 255);
         S[id * 4 + 2] = Math.round(sand * 255);
         S[id * 4 + 3] = Math.round(litter * 255);
       }
     }
+    // (the crisp road mask lives on in the splat's red channel)
+    this.roadMask = null;
     this.buildRoadInfo();
   }
 
@@ -568,7 +657,7 @@ export class Terrain {
   // (0 footpath, 85 trail, 170 village lane, 255 country road; the shader draws worn centres,
   // wheel ruts and tyre grooves from these). Far from any road r saturates.
   buildRoadInfo() {
-    const rn = (this.rn = Math.round((HALF * 2) / R_RES));
+    const rn = (this.rn = Math.round(SIZE / R_RES));
     const info = (this.roadInfo = new Uint8Array(rn * rn * 2));
     const best = new Float32Array(rn * rn).fill(1e9);
     for (let i = 0; i < rn * rn; i++) info[i * 2] = 255;
@@ -578,14 +667,14 @@ export class Terrain {
       const reach = road.w * 0.5 + 2.5;
       for (let k = 0; k < samples.length - 1; k++) {
         const a = samples[k], b = samples[k + 1];
-        const i0 = Math.max(0, Math.floor((Math.min(a.x, b.x) - reach + HALF) / R_RES)), i1 = Math.min(rn - 1, Math.ceil((Math.max(a.x, b.x) + reach + HALF) / R_RES));
-        const j0 = Math.max(0, Math.floor((Math.min(a.z, b.z) - reach + HALF) / R_RES)), j1 = Math.min(rn - 1, Math.ceil((Math.max(a.z, b.z) + reach + HALF) / R_RES));
+        const i0 = Math.max(0, Math.floor((Math.min(a.x, b.x) - reach - X0) / R_RES)), i1 = Math.min(rn - 1, Math.ceil((Math.max(a.x, b.x) + reach - X0) / R_RES));
+        const j0 = Math.max(0, Math.floor((Math.min(a.z, b.z) - reach - Z0) / R_RES)), j1 = Math.min(rn - 1, Math.ceil((Math.max(a.z, b.z) + reach - Z0) / R_RES));
         const abx = b.x - a.x, abz = b.z - a.z;
         const l2 = abx * abx + abz * abz || 1e-6, l = Math.sqrt(l2);
         for (let j = j0; j <= j1; j++) {
-          const z = -HALF + (j + 0.5) * R_RES;
+          const z = Z0 + (j + 0.5) * R_RES;
           for (let i = i0; i <= i1; i++) {
-            const x = -HALF + (i + 0.5) * R_RES;
+            const x = X0 + (i + 0.5) * R_RES;
             const t = clamp(((x - a.x) * abx + (z - a.z) * abz) / l2, 0, 1);
             const d = Math.hypot(x - (a.x + abx * t), z - (a.z + abz * t));
             const id = j * rn + i;
@@ -603,8 +692,8 @@ export class Terrain {
 
   splatAt(x, z) {
     const sn = this.sn;
-    const i = clamp(Math.floor((x + HALF) / S_RES), 0, sn - 1);
-    const j = clamp(Math.floor((z + HALF) / S_RES), 0, sn - 1);
+    const i = clamp(Math.floor((x - X0) / S_RES), 0, sn - 1);
+    const j = clamp(Math.floor((z - Z0) / S_RES), 0, sn - 1);
     const id = (j * sn + i) * 4;
     const S = this.splat;
     return { road: S[id] / 255, rock: S[id + 1] / 255, sand: S[id + 2] / 255, litter: S[id + 3] / 255 };

@@ -5,7 +5,7 @@ import { SEA, SEA_GLSL, buildSeaTexture } from './water.js';
 import { pixTexture, dataTexture } from '../render/textures.js';
 import { grassTex, dirtTex, litterTex, rockTex, sandTex, gravelTex, asphaltTex } from '../art/groundtex.js';
 import { H_RES, ROAD_SPAN } from './terrain.js';
-import { WORLD_HALF, VILLAGE_FLAT, MAIN_ST, CROSSWALKS, SIDE_STREETS } from './layout.js';
+import { WORLD_HALF, WORLD_X0, WORLD_Z0, VILLAGE_FLAT, MAIN_ST, CROSSWALKS, SIDE_STREETS } from './layout.js';
 
 const VERT = /* glsl */ `
 ${LIGHT_PARS_VERT}
@@ -56,7 +56,7 @@ void main() {
   float region = vnoise(wp / 13.0 + 3.7) + (vnoise(wp / 3.1) - 0.5) * 0.18;
   if (region > 0.5) uv = vec2(uv.y, -uv.x) + vec2(0.37, 0.61);
   if (vnoise(wp / 17.0 - 5.1) > 0.55) uv = vec2(-uv.x, uv.y) + vec2(0.5, 0.25);
-  vec2 suv = (wp + uWorldHalf) / (2.0 * uWorldHalf);
+  vec2 suv = (wp - uWorldMin) / uWorldSize;
   vec4 sp = texture2D(uSplatTex, suv);
 
   // coherent noise for crisp, organic material borders: wobbly blob edges, not pixel static
@@ -101,7 +101,7 @@ void main() {
   vec2 wq = (texel + 0.5) / 32.0;
   float across = 99.0, style = 0.0, rut = 0.0, bare = 0.0;
   if (re > -0.08) {
-    vec2 rf = texture2D(uRoadTex, (wq + uWorldHalf) / (2.0 * uWorldHalf)).rg;
+    vec2 rf = texture2D(uRoadTex, (wq - uWorldMin) / uWorldSize).rg;
     if (rf.r < 0.985) { across = (rf.r * 255.0 - 128.0) / 127.0 * ${ROAD_SPAN.toFixed(1)}; style = rf.g; }
   }
   bool framed = across < 50.0;
@@ -270,7 +270,8 @@ export function createWorldTextures(terrain) {
   const splatTex = dataTexture(new Uint8Array(terrain.splat.buffer.slice(0)), terrain.sn, terrain.sn, { linear: true });
   G.uHeightTex.value = heightTex;
   G.uSplatTex.value = splatTex;
-  G.uWorldHalf.value = WORLD_HALF;
+  G.uWorldMin.value.set(WORLD_X0, WORLD_Z0);
+  G.uWorldSize.value = WORLD_HALF * 2;
   G.uHeightN.value = n;
   G.uHRes.value = H_RES;
   const seaTex = buildSeaTexture(terrain);
@@ -279,61 +280,89 @@ export function createWorldTextures(terrain) {
   return { heightTex, splatTex, seaTex, paintTex: PAINT.value, roadTex: ROADTEX.value };
 }
 
+// The terrain in square chunks (chunkCells height cells a side), each a THREE.LOD of the full
+// 2 m grid up close, every 2nd vertex further out and every 4th in the distance. Every level
+// hangs a skirt down from its edges, so the seams between neighbours at different levels
+// never open a crack.
+const LOD_LEVELS = [{ step: 1, dist: 0 }, { step: 2, dist: 150 }, { step: 4, dist: 360 }];
 export function createTerrainMeshes(terrain, material, chunkCells = 40) {
   const group = new THREE.Group();
   group.name = 'terrain';
-  const n = terrain.n;
+  const n = terrain.n, Hh = terrain.h;
   const cells = n - 1;
   const chunks = Math.ceil(cells / chunkCells);
+  const hAt = (i, j) => Hh[Math.min(n - 1, Math.max(0, j)) * n + Math.min(n - 1, Math.max(0, i))];
+  const levelGeo = (i0, j0, i1, j1, step, cx, cz) => {
+    const cols = Math.floor((i1 - i0) / step) + 1, rows = Math.floor((j1 - j0) / step) + 1;
+    const nv = cols * rows, ne = 2 * (cols + rows - 2);
+    const pos = new Float32Array((nv + ne) * 3);
+    const nor = new Float32Array((nv + ne) * 3);
+    let k = 0, minY = Infinity, maxY = -Infinity;
+    const put = (i, j, dy) => {
+      const y = hAt(i, j);
+      pos[k * 3] = WORLD_X0 + i * H_RES - cx;
+      pos[k * 3 + 1] = y - dy;
+      pos[k * 3 + 2] = WORLD_Z0 + j * H_RES - cz;
+      if (!dy) { minY = Math.min(minY, y); maxY = Math.max(maxY, y); }
+      // normals across the level's own spacing (smoother far away, where the triangles are big)
+      const nx = hAt(i - step, j) - hAt(i + step, j), nz = hAt(i, j - step) - hAt(i, j + step), ny = 2 * H_RES * step;
+      const l = Math.hypot(nx, ny, nz);
+      nor[k * 3] = nx / l; nor[k * 3 + 1] = ny / l; nor[k * 3 + 2] = nz / l;
+      return k++;
+    };
+    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) put(i0 + c * step, j0 + r * step, 0);
+    const idx = [];
+    for (let r = 0; r < rows - 1; r++) {
+      for (let c = 0; c < cols - 1; c++) {
+        const a = r * cols + c, b = a + 1, cc = a + cols, d = cc + 1;
+        // alternate diagonal for nicer shading
+        if (((i0 / step + c) + (j0 / step + r)) & 1) idx.push(a, cc, b, b, cc, d);
+        else idx.push(a, cc, d, a, d, b);
+      }
+    }
+    // the skirt: the rim walked round (outward faces), each vertex copied a few metres down
+    const skirt = 1.5 + step * 1.5;
+    const ring = [];
+    for (let c = 0; c < cols - 1; c++) ring.push([c, 0]);
+    for (let r = 0; r < rows - 1; r++) ring.push([cols - 1, r]);
+    for (let c = cols - 1; c > 0; c--) ring.push([c, rows - 1]);
+    for (let r = rows - 1; r > 0; r--) ring.push([0, r]);
+    const down = ring.map(([c, r]) => put(i0 + c * step, j0 + r * step, skirt));
+    for (let q = 0; q < ring.length; q++) {
+      const [c0, r0] = ring[q], [c1, r1] = ring[(q + 1) % ring.length];
+      const a = r0 * cols + c0, b = r1 * cols + c1, a2 = down[q], b2 = down[(q + 1) % ring.length];
+      idx.push(a, b, a2, b, b2, a2);
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+    geo.setIndex(idx);
+    geo.computeBoundingSphere();
+    geo.computeBoundingBox();
+    return { geo, minY, maxY };
+  };
   for (let cj = 0; cj < chunks; cj++) {
     for (let ci = 0; ci < chunks; ci++) {
       const i0 = ci * chunkCells, j0 = cj * chunkCells;
       const i1 = Math.min(cells, i0 + chunkCells), j1 = Math.min(cells, j0 + chunkCells);
-      const w = i1 - i0 + 1, h = j1 - j0 + 1;
-      const pos = new Float32Array(w * h * 3);
-      const nor = new Float32Array(w * h * 3);
-      let k = 0;
-      let minY = Infinity, maxY = -Infinity;
-      for (let j = j0; j <= j1; j++) {
-        for (let i = i0; i <= i1; i++) {
-          const x = -WORLD_HALF + i * H_RES, z = -WORLD_HALF + j * H_RES;
-          const y = terrain.h[j * n + i];
-          pos[k * 3] = x;
-          pos[k * 3 + 1] = y;
-          pos[k * 3 + 2] = z;
-          minY = Math.min(minY, y);
-          maxY = Math.max(maxY, y);
-          const hl = terrain.h[j * n + Math.max(0, i - 1)], hr = terrain.h[j * n + Math.min(n - 1, i + 1)];
-          const hd = terrain.h[Math.max(0, j - 1) * n + i], hu = terrain.h[Math.min(n - 1, j + 1) * n + i];
-          const nx = hl - hr, nz = hd - hu, ny = 2 * H_RES;
-          const l = Math.hypot(nx, ny, nz);
-          nor[k * 3] = nx / l;
-          nor[k * 3 + 1] = ny / l;
-          nor[k * 3 + 2] = nz / l;
-          k++;
-        }
+      const cx = WORLD_X0 + ((i0 + i1) / 2) * H_RES, cz = WORLD_Z0 + ((j0 + j1) / 2) * H_RES;
+      const lod = new THREE.LOD();
+      lod.position.set(cx, 0, cz);
+      let maxY = -Infinity;
+      for (const lv of LOD_LEVELS) {
+        if ((i1 - i0) % lv.step || (j1 - j0) % lv.step) continue;
+        const r = levelGeo(i0, j0, i1, j1, lv.step, cx, cz);
+        maxY = Math.max(maxY, r.maxY);
+        const mesh = new THREE.Mesh(r.geo, material);
+        mesh.receiveShadow = true;
+        mesh.castShadow = true;
+        mesh.matrixAutoUpdate = false;
+        lod.addLevel(mesh, lv.dist);
       }
-      const idx = [];
-      for (let j = 0; j < h - 1; j++) {
-        for (let i = 0; i < w - 1; i++) {
-          const a = j * w + i, b = a + 1, c = a + w, d = c + 1;
-          // alternate diagonal for nicer shading
-          if ((i + j) & 1) idx.push(a, c, b, b, c, d);
-          else idx.push(a, c, d, a, d, b);
-        }
-      }
-      const geo = new THREE.BufferGeometry();
-      geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-      geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
-      geo.setIndex(idx);
-      geo.computeBoundingSphere();
-      geo.computeBoundingBox();
-      const mesh = new THREE.Mesh(geo, material);
-      mesh.receiveShadow = true;
-      mesh.castShadow = true;
-      mesh.matrixAutoUpdate = false;
-      if (maxY < -0.5) mesh.userData.underwater = true;
-      group.add(mesh);
+      if (maxY < -0.5) lod.userData.underwater = true;
+      lod.updateMatrix();
+      lod.matrixAutoUpdate = false;
+      group.add(lod);
     }
   }
   return group;

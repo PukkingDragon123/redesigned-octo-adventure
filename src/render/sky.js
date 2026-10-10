@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { G, NOISE_GLSL } from './shaderlib.js';
 import { Simplex } from '../core/noise.js';
+import { WORLD_CX, WORLD_CZ } from '../world/layout.js';
 
 export const SKY = {
   uZenith: { value: new THREE.Color() },
@@ -196,16 +197,17 @@ void main() {
 }
 `;
 
-// the land side as angles round the map centre (atan2(z, x): 0 east, PI/2 south, PI west, 3PI/2 north)
-const LAND_ARC = [1.75, Math.PI * 2 - 0.62];
+// the land side as angles round the world's centre (atan2(z, x): 0 east, PI/2 south, PI west, 3PI/2 north);
+// every range stands well beyond the world's corners (the near one's foot ~670 m out, the corners ~620 m)
+const LAND_ARC = [1.55, Math.PI * 2 - 0.62];
 const TAPER = 0.55; // each end falls away to the sea over this much angle
 const RANGES = [
   // far: the big snowy peaks, pale with distance
-  { r: 1520, depth: 300, h0: 250, h1: 610, step: 10, wave: 400, snow: 305, tree: 0, forest: 0, pix: 8, haze: 0.16, rock: 0x9a9fd0, shade: 0x6c70a8, seed: 3 },
+  { r: 1560, depth: 300, h0: 250, h1: 630, step: 10, wave: 400, snow: 315, tree: 0, forest: 0, pix: 8, haze: 0.16, rock: 0x9a9fd0, shade: 0x6c70a8, seed: 3 },
   // middle: blue-grey slate, snow on the tallest tops, larch gold low down
-  { r: 1090, depth: 200, h0: 140, h1: 340, step: 9, wave: 250, snow: 230, tree: 110, forest: 0.6, pix: 6, haze: 0.07, rock: 0x66729e, shade: 0x464f7e, seed: 7 },
+  { r: 1160, depth: 200, h0: 150, h1: 360, step: 9, wave: 250, snow: 240, tree: 115, forest: 0.6, pix: 6, haze: 0.07, rock: 0x66729e, shade: 0x464f7e, seed: 7 },
   // near: forested foothills
-  { r: 730, depth: 130, h0: 55, h1: 180, step: 7, wave: 150, snow: 9999, tree: 140, forest: 1, pix: 4, haze: 0.02, rock: 0x4a5652, shade: 0x313b3a, seed: 11 },
+  { r: 800, depth: 130, h0: 60, h1: 190, step: 7, wave: 150, snow: 9999, tree: 150, forest: 1, pix: 4, haze: 0.02, rock: 0x4a5652, shade: 0x313b3a, seed: 11 },
 ];
 
 const smooth01 = (a, b, x) => {
@@ -257,7 +259,7 @@ export function createMountains(fog = null) {
           y = Math.max(-20, H * (BASE[j] + sp * 0.3));
         }
         const rr = R.r + u * R.depth + (j > 0 && j < 5 && j !== 3 ? sx.noise(s / 40, j * 13 + R.seed) * R.depth * 0.06 : 0);
-        col.push([Math.cos(th) * rr, y, Math.sin(th) * rr]);
+        col.push([WORLD_CX + Math.cos(th) * rr, y, WORLD_CZ + Math.sin(th) * rr]);
       }
       cols.push(col);
     }
@@ -278,7 +280,7 @@ export function createMountains(fog = null) {
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
     geo.computeVertexNormals();
-    geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(), R.r + R.depth + R.h1);
+    geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(WORLD_CX, 0, WORLD_CZ), R.r + R.depth + R.h1);
     const C = (hex) => new THREE.Color(hex);
     const mat = new THREE.ShaderMaterial({
       uniforms: {

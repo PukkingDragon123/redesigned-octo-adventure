@@ -272,7 +272,7 @@ function waterGrid() {
 
 // Bake the sea field on the terrain's height grid: exposure, signed shore distance, shore direction
 export function buildSeaTexture(terrain) {
-  const n = terrain.n, H = terrain.h, HALF = L.WORLD_HALF, R = 2 * HALF / (n - 1);
+  const n = terrain.n, H = terrain.h, R = (2 * L.WORLD_HALF) / (n - 1);
   const N = n * n;
   const wet = new Uint8Array(N);
   for (let i = 0; i < N; i++) wet[i] = H[i] < 0 ? 1 : 0;
@@ -325,7 +325,7 @@ export function buildSeaTexture(terrain) {
   const hf = THREE.DataUtils.toHalfFloat;
   for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
     const id = j * n + i;
-    const x = -HALF + i * R, z = -HALF + j * R;
+    const x = L.WORLD_X0 + i * R, z = L.WORLD_Z0 + j * R;
     // exposure: open sea & beaches get surf, the harbour a little, river & pond none
     const sd = seaSDF(x, z);
     let e = 1 - smoothstep(-4, 16, sd);

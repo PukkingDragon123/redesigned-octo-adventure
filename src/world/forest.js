@@ -119,9 +119,8 @@ export class Forest {
     const T = this.terrain;
     const rng = new RNG(2024);
     const cell = 3.7 / Math.sqrt(this.density);
-    const half = L.WORLD_HALF - 4;
-    for (let z = -half; z < half; z += cell) {
-      for (let x = -half; x < half; x += cell) {
+    for (let z = L.WORLD_Z0 + 4; z < L.WORLD_Z1 - 4; z += cell) {
+      for (let x = L.WORLD_X0 + 4; x < L.WORLD_X1 - 4; x += cell) {
         const px = x + rng.range(0, cell), pz = z + rng.range(0, cell);
         const h = T.heightAt(px, pz);
         if (h < 1.6) continue;
@@ -139,7 +138,7 @@ export class Forest {
         }
         p *= 1 - smoothstep(52, 75, h); // treeline on the rim mountains
         // the unreachable rim needs fewer trees (it is mostly seen from afar)
-        const edge = Math.min(px + L.WORLD_HALF, L.WORLD_HALF - pz, pz + L.WORLD_HALF);
+        const edge = Math.min(px - L.WORLD_X0, L.WORLD_Z1 - pz, pz - L.WORLD_Z0);
         p *= 0.45 + 0.55 * smoothstep(25, 70, edge);
         if (vm > 0.3) p *= 0.06;
         if (rng.next() > p) continue;
@@ -185,7 +184,6 @@ export class Forest {
     const T = this.terrain;
     const rng = new RNG(7331);
     const cell = 5.2 / Math.sqrt(this.density);
-    const half = L.WORLD_HALF - 8;
     const trunkNear = (x, z, r) => {
       let hit = false;
       this.colliders.query(x, z, r + 1, (o) => {
@@ -198,8 +196,8 @@ export class Forest {
       return rv.d > rv.w * 0.5 + 2;
     })();
     let axes = 0;
-    for (let z = -half; z < half; z += cell) {
-      for (let x = -half; x < half; x += cell) {
+    for (let z = L.WORLD_Z0 + 8; z < L.WORLD_Z1 - 8; z += cell) {
+      for (let x = L.WORLD_X0 + 8; x < L.WORLD_X1 - 8; x += cell) {
         const px = x + rng.range(0, cell), pz = z + rng.range(0, cell);
         const kind = rng.next(), roll = rng.next(), yaw = rng.range(0, Math.PI * 2);
         const h = T.heightAt(px, pz);
@@ -250,7 +248,7 @@ export class Forest {
     this.scatterUndergrowth();
     const buckets = new Map();
     for (const t of this.trees) {
-      const ci = Math.floor((t.x + L.WORLD_HALF) / CHUNK), cj = Math.floor((t.z + L.WORLD_HALF) / CHUNK);
+      const ci = Math.floor((t.x - L.WORLD_X0) / CHUNK), cj = Math.floor((t.z - L.WORLD_Z0) / CHUNK);
       t.chunk = `${ci},${cj}`;
       if (!buckets.has(t.chunk)) buckets.set(t.chunk, { ci, cj, n: 0, y0: 1e9, y1: -1e9 });
       const b = buckets.get(t.chunk);
@@ -262,7 +260,7 @@ export class Forest {
     for (const [key, b] of buckets) {
       const c = new THREE.Group();
       c.userData.key = key;
-      c.userData.center = new THREE.Vector3(-L.WORLD_HALF + (b.ci + 0.5) * CHUNK, (b.y0 + b.y1) / 2, -L.WORLD_HALF + (b.cj + 0.5) * CHUNK);
+      c.userData.center = new THREE.Vector3(L.WORLD_X0 + (b.ci + 0.5) * CHUNK, (b.y0 + b.y1) / 2, L.WORLD_Z0 + (b.cj + 0.5) * CHUNK);
       c.userData.count = b.n;
       this.chunks.push(c);
     }
@@ -272,6 +270,8 @@ export class Forest {
       floor: count((t) => t.bush && !/^bush|fern/.test(t.species)), chunks: this.chunks.length,
     };
     this.half = L.WORLD_HALF;
+    this.x0 = L.WORLD_X0;
+    this.z0 = L.WORLD_Z0;
     return this.group;
   }
 

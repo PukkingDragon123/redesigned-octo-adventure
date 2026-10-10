@@ -13,7 +13,7 @@
 // and removeBox / removeCircle (or removeSolid) take it out of the world.
 import { SpatialHash } from '../core/spatial.js';
 import { clamp } from '../core/math.js';
-import { WORLD_HALF } from './layout.js';
+import { WORLD_X0, WORLD_X1, WORLD_Z0, WORLD_Z1 } from './layout.js';
 
 const MAX_CONTACTS = 8;
 const PASSES = 4;
@@ -291,9 +291,9 @@ export class PhysicsWorld {
       if (!moved) break;
     }
     // world boundary
-    const lim = WORLD_HALF - 6;
-    if (Math.abs(pos.x) > lim || Math.abs(pos.z) > lim) {
-      const bx = clamp(pos.x, -lim, lim), bz = clamp(pos.z, -lim, lim);
+    const lim = 6;
+    if (pos.x < WORLD_X0 + lim || pos.x > WORLD_X1 - lim || pos.z < WORLD_Z0 + lim || pos.z > WORLD_Z1 - lim) {
+      const bx = clamp(pos.x, WORLD_X0 + lim, WORLD_X1 - lim), bz = clamp(pos.z, WORLD_Z0 + lim, WORLD_Z1 - lim);
       const nx = Math.sign(bx - pos.x), nz = Math.sign(bz - pos.z);
       pos.x = bx;
       pos.z = bz;

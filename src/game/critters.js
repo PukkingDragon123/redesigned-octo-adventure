@@ -127,7 +127,7 @@ export class Critters {
   find(minD, maxD, test, tries = 8, ahead = 0.7) {
     for (let k = 0; k < tries; k++) {
       const s = this.around(minD, maxD, ahead);
-      if (Math.abs(s.x) > L.WORLD_HALF - 20 || Math.abs(s.z) > L.WORLD_HALF - 20) continue;
+      if (!L.inWorld(s.x, s.z, 20)) continue;
       const h = this.height(s.x, s.z);
       s.h = h;
       if (test(s.x, s.z, h)) return s;
