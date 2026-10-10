@@ -661,6 +661,7 @@ export class Contest {
       if (b.mode === 'frozen') b.unfreeze();
     }
     V.force('gus', Math.max(V.trustOf('gus'), 46));
+    this.gusComing = true; // (he hands himself his own cup in the invitation: no walk-up)
     this.crowd.thawNear(CONTEST.x, CONTEST.z, 99);
     this.showCarrier(false);
     g.wait(1.0).then(() => this.cheer(1, { force: true }));
@@ -681,6 +682,7 @@ export class Contest {
       await g.story.contestInvite();
     } finally {
       this.inviting = false;
+      this.gusComing = false;
     }
   }
   // the carrier of extra cocoa: in Bessie's crate, or in Hank's hand when he's walking

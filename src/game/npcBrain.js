@@ -7,6 +7,9 @@
 //         45-75  friendly   wave, smile, step aside, gasp then laugh at crashes
 //         75+    fan        cheer tricks, clap, run over to chat
 //
+// Deliveries come to Hank (walkup.js decides when; walkUp* below act it out): they wave,
+// walk over to Bessie's crate (or to Hank on foot), take their cup and head back sipping.
+//
 // Trust grows when Hank delivers cocoa, rings his bell from a polite distance,
 // stays calm and slow nearby, or helps them out; speeding at people knocks it back.
 // Movement steers along waypoints (npcNav.js): they pick up speed over a step or two,
@@ -154,7 +157,8 @@ export class NpcBrain {
     rej?.(CANCEL);
   }
   walkPose() {
-    return this.umbrellaOn() ? 'umbrella' : 'idle';
+    // (still sipping the cup Hank just brought them)
+    return this.umbrellaOn() ? 'umbrella' : this.cool.sip > 0 ? 'sipCup' : 'idle';
   }
   walkStep(dt, X) {
     const a = this.a, P = this.path;
@@ -1133,28 +1137,64 @@ export class NpcBrain {
       } else { a.play('sip', 'happy'); this.say(pick(this.cfg.wary || ['...Thank you.']), 2000); await w(2.5); this.mode = 'routine'; this.busy = false; }
     });
   }
-  // wary customers take the cup at arm's length
-  async nervousGrab() {
+  // ------------------------------------------------------------ deliveries come to Hank (walkup.js, npcs.js)
+  // they noticed him: turn, wave (out of the front door first if they're in)
+  walkUpStart(j) {
     const a = this.a, g = this.g;
     this.cancel();
-    this.mode = 'engaged';
+    this.mode = 'script';
+    this.busy = true;
+    this.peeking = false;
+    a.peekSide = 0;
+    if (this.inside) {
+      const D = this.door;
+      this.inside = false;
+      if (D) {
+        a.pos.set(D.x + D.nx * 0.35, a.pos.y, D.z + D.nz * 0.35);
+        a.yaw = a.targetYaw = D.yaw;
+        this.V.sfx('door', a.pos, 0.35);
+      }
+      this.setShown(true);
+    }
     const P = g.playerPos;
     a.faceTowards(P.x, P.z);
     a.lookAt(g.playerChar);
-    const dx = a.pos.x - P.x, dz = a.pos.z - P.z, d = hyp(dx, dz) || 1;
-    const to = { x: P.x + (dx / d) * 1.2, z: P.z + (dz / d) * 1.2 };
-    a.tempExpr('worried', 3);
-    if (d > 1.5) {
-      this.path = [to]; this.speed = 0.8; this.stopAt = 0.15; this.faceHank = true; this.stuckT = 0; this.bestD = Infinity;
-      a.play('sneak');
-      await new Promise((res) => { this.walkRes = res; this.walkRej = res; setTimeout(res, 3500); });
+    if (j.kind === 'nervous') {
+      a.play('idle', 'worried');
+      a.showEmote('sweat', 1.2);
+    } else {
+      a.play(this.walkPose(), 'happy');
+      a.react('hi');
+      if (Math.random() < 0.5) a.showEmote(Math.random() < 0.5 ? 'heart' : 'note', 1.3);
     }
+  }
+  // over to the spot beside the crate (or a step in front of Hank): brisk for friends,
+  // edging over for the wary
+  walkUpTo(pt, kind) {
+    const pts = this.V.nav.route(this.a.pos, pt);
+    this.walk(pts, kind === 'nervous' ? 0.9 : 1.7, kind === 'nervous' ? 'sneak' : null, { stop: 0.1 }).catch(() => {});
+  }
+  // there (or as far as they can get): face him and wait; stuck, they wave him over
+  walkUpWait(j, stuck) {
+    const a = this.a, g = this.g, P = g.playerPos;
     this.stopWalk();
-    a.react('flinch');
-    a.play('idle', 'worried');
-    const back = { x: a.pos.x + (dx / d) * 1.2, z: a.pos.z + (dz / d) * 1.2 };
-    a.pos.x += (back.x - a.pos.x) * 0.5;
-    a.pos.z += (back.z - a.pos.z) * 0.5;
+    const f = !stuck && j.target?.face ? j.target.face : P;
+    a.faceTowards(f.x, f.z);
+    a.lookAt(g.playerChar);
+    a.play('idle', j.kind === 'nervous' ? 'worried' : 'happy');
+    if (stuck) a.react('hi');
+  }
+  // thanks said (or Hank went off): back to their day, sipping as they go
+  walkUpEnd(j, done) {
+    const a = this.a;
+    if (a.scripted || this.mode !== 'script') return; // (a cutscene has them now)
+    this.stopWalk();
+    a.lookAt(null);
+    if (done) this.cool.sip = 10;
+    this.cool.wave = 40;
+    this.mode = 'routine';
+    this.busy = false;
+    this._act = null;
   }
 
   // ------------------------------------------------------------ the contest's first look at Hank (contest.js)

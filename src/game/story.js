@@ -1,6 +1,7 @@
-// The tale of Hank: intro, cabin night, breakfasts, the contest's frozen welcome and
-// Gus's invitation to carve, Poutine, deliveries, keepsakes and the ending. Plus world
-// triggers.
+// The tale of Hank: intro, cabin night, breakfasts, the ride into town (the contest
+// freezes, scared stiff) and Gus's invitation to carve, Poutine, keepsakes and the ending.
+// Plus world triggers. Lines are kept short: a cutscene says what it must in a line or two
+// and shows the rest.
 import * as THREE from 'three';
 import { Scene } from './cutscene.js';
 import { runPrologue, PROLOGUE } from './prologue.js';
@@ -36,18 +37,6 @@ function voxelFood(g, builder, x, y, z, yaw = 0) {
 const FOOD_FOR = { pancakes: 'pancakes', egg: 'eggsToast', bacon: 'eggsToast', toast: 'eggsToast' };
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
-
-const DELIVERY_LINES = {
-  gus: { hot: ['Hmph. Hot. ...Thanks, kid.', "Not bad for a walking coat rack.", 'Tell Marguerite the marshmallows were... adequate.'], cold: ["This is colder than my ex-wife's heart.", "Lukewarm. Like your personality. Kidding. Mostly."] },
-  marie: { hot: ['Magnifique! Still steaming!', 'Ahh, Marguerite, you angel. And you too, mon petit squelette.', 'My customers will riot with joy!'], cold: ['Hmm, a little tiède... but I forgive you. You are cute for a skeleton.'] },
-  birdie: { hot: ['Hot as a ship\'s boiler! Fair winds, Hank!', 'Warms the old bones. You know about bones, eh?'], cold: ['Bit nippy, sailor. Pedal faster next time!'] },
-  agnes: { hot: ['Oh lovely! The cats and I thank you.', 'You poor dear, you look peaky. Have you tried eating?'], cold: ['Room temperature. Just like my tea. Thank you, dear.'] },
-  doug: { hot: ['Excellent. Strictly for official purposes.', 'Citizen, your service is noted in my report.'], cold: ['I could ticket you for this temperature. I won\'t. But I could.'] },
-  ingrid: { hot: ['Still no pulse, but excellent cocoa.', 'May I take a tiny sample of your... no? Fair.'], cold: ['Cold. Like your extremities. Fascinating.'] },
-  pip: { hot: ['SKELETON COCOA!!! BEST DAY EVER!!!', 'Can you do a wheelie? DO A WHEELIE!'], cold: ['It\'s cold but you\'re a SKELETON so it\'s still awesome.'] },
-  lou: { hot: ['Hank, buddy! Back from the dead AND bringing cocoa? Legend.', 'Boys! Hank brought cocoa!'], cold: ['Lukewarm! Still drinking it! You still owe me five bucks.'] },
-  ollie: { hot: ['Ahh, warm as a lighthouse lamp. Thank ye.', 'Long ride out here. Mind the gulls.'], cold: ['Cold as the North Atlantic, lad. Still welcome.'] },
-};
 
 const LORE = {
   cane: "Harold's cane! He carved that handle from a moose antler he found. Took him eleven winters. He never needed a cane — he just liked pointing at things with it.",
@@ -889,30 +878,7 @@ export class Story {
   }
 
   // ---------------------------------------------------------------- deliveries
-  async deliver(o, actor) {
-    const g = this.g;
-    const r = g.orders.deliver(o);
-    const lines = DELIVERY_LINES[o.customer] || DELIVERY_LINES.marie;
-    const pool = r.quality > 55 ? lines.hot : lines.cold;
-    const line = pool[Math.floor(Math.random() * pool.length)];
-    actor.faceTowards(g.playerPos.x, g.playerPos.z);
-    actor.lookAt(g.playerChar);
-    actor.play('sip', r.quality > 55 ? 'happy' : 'sad');
-    actor.jump(2);
-    g.effects.coins(actor.pos.x, actor.pos.y + 1.4, actor.pos.z, 8 + Math.round(r.tip / 2));
-    if (r.quality > 70) g.effects.hearts(actor.pos.x, actor.pos.y + 1.8, actor.pos.z, 4);
-    g.sound.play('delivered');
-    setTimeout(() => g.sound.play('cash'), 300);
-    const q = Math.round(r.quality);
-    const heat = q > 80 ? 'Still piping hot!' : q > 55 ? `Cocoa ${q}% hot.` : q > 30 ? `Only ${q}% hot... oops.` : `${q}% hot. More like iced cocoa.`;
-    g.ui.pop(`*$${r.pay}*${r.tip ? ` plus a *$${r.tip}* tip` : ''}! ${heat}`, { expr: q > 55 ? 'happy' : 'sheepish' });
-    g.ui.tag(`d${o.id}`, r.quality > 55 ? 'Toasty!' : 'Brr...', actor.pos.clone().setY(actor.pos.y + 2.4), 1600);
-    g.mode = 'menu';
-    await g.ui.say(o.customer, line, { expr: r.quality > 55 ? 'happy' : 'sad' });
-    g.mode = 'ride';
-    setTimeout(() => actor.play(actor.char === 'agnes' ? 'knit' : actor.char === 'pip' ? 'hockey' : 'idle', 'neutral'), 2500);
-    g.save();
-  }
+  // (customers come to Hank for their cups now, with a bubble, not a talk: npcs.js, walkup.js)
 
   // ---------------------------------------------------------------- the porch
   async homeTalk() {
