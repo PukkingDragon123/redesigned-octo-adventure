@@ -149,7 +149,7 @@ export class Forest {
         p *= 1 - smoothstep(52, 75, h); // treeline on the rim mountains
         // the unreachable rim needs fewer trees (it is mostly seen from afar)
         const edge = Math.min(px - L.WORLD_X0, L.WORLD_Z1 - pz, pz - L.WORLD_Z0);
-        p *= 0.45 + 0.55 * smoothstep(25, 70, edge);
+        p *= 0.3 + 0.7 * smoothstep(20, 100, edge);
         if (vm > 0.3) p *= 0.06;
         if (rng.next() > p) continue;
         if (this.roadNear(px, pz, 2.6)) continue;

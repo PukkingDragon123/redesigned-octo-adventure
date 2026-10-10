@@ -286,6 +286,9 @@ export function createWorldTextures(terrain) {
 // hangs a skirt down from its edges, so the seams between neighbours at different levels
 // never open a crack.
 const LOD_LEVELS = [{ step: 1, dist: 0 }, { step: 2, dist: 200 }, { step: 4, dist: 420 }];
+function freeArray() {
+  this.array = null;
+}
 export function createTerrainMeshes(terrain, material, chunkCells = 80) {
   const group = new THREE.Group();
   group.name = 'terrain';
@@ -340,6 +343,9 @@ export function createTerrainMeshes(terrain, material, chunkCells = 80) {
     geo.setIndex(idx);
     geo.computeBoundingSphere();
     geo.computeBoundingBox();
+    // once on the GPU the arrays aren't needed here (heights for physics come from the terrain's
+    // own grid, nothing raycasts the meshes): ~11 MB less to keep around
+    for (const a of [geo.attributes.position, geo.attributes.normal, geo.index]) a.onUpload(freeArray);
     return { geo, minY, maxY };
   };
   for (let cj = 0; cj < chunks; cj++) {

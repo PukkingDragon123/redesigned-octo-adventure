@@ -24,7 +24,7 @@ const CELL = 32;
 const SHADOW_R = 60; // out-of-view cells this close still go in (their shadows)
 // per kind: wind sway, draw distance (m, times lodScale)
 const KIND = {
-  tree: { sway: 1, far: 1e5 },
+  tree: { sway: 1, far: 900 }, // (fades out past ~720 m: across the bigger map the far forest is haze anyway)
   bush: { sway: 0.35, far: 170 },
   sapling: { sway: 0.7, far: 110 },
   fern: { sway: 0.45, far: 70 },
