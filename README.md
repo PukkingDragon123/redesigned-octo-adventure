@@ -118,19 +118,26 @@ its heat, more the harder the crash.
   `?scene=cocoaRound` starts frozen, `?scene=carveInvite` jumps to Gus's
   invitation; `node tools/crowdtest.mjs` checks the crowd and the round.)
 - Carve a pumpkin at Hank's own little table at the west end of the contest
-  (once a day). Gus makes a request (spooky, funny or cute for a style bonus, or
-  copy his design off a little card for a likeness bonus), then scoop out the
-  guts with a few drags, and carve: a pixel knife saws under your finger or
-  mouse, chunks of pumpkin fly, the gouge takes big bites, undo, an optional
-  faint stencil, 75 seconds on the clock. Ring a bit and it drops in; cut right
-  across the face and it caves in. At the end the lights go down, Hank lowers a
-  candle in and strikes a match, the face flickers alight and the street goes
-  "ooooh". Gus and Dr. Ingrid judge it on eyes, mouth, nose, symmetry, how much
-  is cut, style and the request, Gus announces the ribbon and it lands in a
-  flurry of leaves. The face is saved and stands on the table as a glowing
-  carved voxel pumpkin. (`?scene=carve` opens it straight away;
-  `node tools/carvetest.mjs` checks the scoring, the requests, the saved mask
-  and the models.)
+  (once a day), right there in the street: the camera glides into a close-up of
+  a big voxel pumpkin (36 x 38 x 36 voxels: ribbed skin, flesh, a hollow full
+  of guts, a stem), Hank's bony hands in shot, the contest going on behind. Gus
+  makes a request (spooky, funny or cute for a style bonus, or copy his design
+  off a little card for a likeness bonus); cut round the stem along the marker
+  ring and the lid comes free, Hank lifts it off, scoop the guts into the bowl,
+  lid back on; then carve against a 90 second clock: drag to cut (the knife
+  saws under your finger or mouse and goes straight in through the wall, the
+  gouge takes big bites), cut voxels pop out and tumble across the table, ring
+  a bit and it drops in, two fingers (or right-drag, Q/E, the arrow buttons)
+  turn and tip the pumpkin, undo, an optional stencil drawn on in marker. Cut a
+  side clean across (or hollow out half of it) and it caves in. At the end the
+  lights go down, Hank lowers a candle in, strikes a match, the inside and every
+  cut through glow, he turns it to the street and the crowd goes "ooooh". Gus
+  and Dr. Ingrid judge its best side on eyes, mouth, nose, symmetry, how much is
+  cut, style and the request, Gus announces the ribbon and it lands in a flurry
+  of leaves. The exact pumpkin is saved and stands on the table, glowing.
+  (`?scene=carve` opens it straight away; `node tools/carvetest.mjs` checks the
+  scoring, the requests, the voxel carving, the remeshing, the save and the
+  models.)
 - On the first evening a stray cat is out walking the road home; go slowly and
   she comes to you, rush her and she bolts.
 - Chat with villagers for favours: Agnes's three lost cats, lost glasses, puck,
