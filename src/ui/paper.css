@@ -7,7 +7,7 @@
 .bubble-layer { position: absolute; inset: 0; pointer-events: none; z-index: 30; }
 .bubble-layer > * { pointer-events: auto; }
 .bubble-wrap { position: absolute; left: 0; top: 0; }
-.bubble, .reply, .wtag.k-tip {
+.bubble, .reply {
   position: relative;
   box-sizing: border-box;
   border-style: solid;
@@ -80,12 +80,14 @@
 @keyframes k-markbob { 0% { margin-top: 0; } 25% { margin-top: calc(var(--u) * -1); } 50% { margin-top: calc(var(--u) * -2); } 75% { margin-top: calc(var(--u) * -1); } }
 
 /* entrances + moods: whole-pixel steps of a relative offset only - never a transform
-   (composited and resampled off the device grid), never a scale or rotate on text */
+   (composited and resampled off the device grid), never a scale or rotate on text.
+   A mood plays out a few times as the bubble lands, then it sits still on the head
+   (no bubble drifting up and down for as long as it is read) */
 .bub-anim.anim-pop, .bub-anim.anim-bounce, .bub-anim.anim-shake, .bub-anim.anim-tremble, .bub-anim.anim-float { animation: k-bin 0.18s steps(1); }
-.bub-anim.anim-bounce { animation: k-bin 0.18s steps(1), k-bbounce 0.8s 0.2s steps(1) infinite; }
-.bub-anim.anim-shake { animation: k-bin 0.12s steps(1), k-bshake 0.1s 0.12s steps(1) infinite; }
-.bub-anim.anim-tremble { animation: k-bin 0.18s steps(1), k-btremble 0.2s 0.2s steps(1) infinite; }
-.bub-anim.anim-float { animation: k-bin 0.18s steps(1), k-bfloat 2.4s 0.2s steps(1) infinite; }
+.bub-anim.anim-bounce { animation: k-bin 0.18s steps(1), k-bbounce 0.8s 0.2s steps(1) 2; }
+.bub-anim.anim-shake { animation: k-bin 0.12s steps(1), k-bshake 0.1s 0.12s steps(1) 5; }
+.bub-anim.anim-tremble { animation: k-bin 0.18s steps(1), k-btremble 0.2s 0.2s steps(1) 4; }
+.bub-anim.anim-float { animation: k-bin 0.18s steps(1), k-bfloat 2.4s 0.2s steps(1) 1; }
 .bub-anim.anim-droop { animation: k-bdroop 0.5s steps(1); }
 @keyframes k-bin { 0% { opacity: 0; top: calc(var(--u) * 4); } 34% { opacity: 1; top: calc(var(--u) * -2); } 67% { top: var(--u); } 100% { top: 0; } }
 @keyframes k-bbounce { 0% { top: 0; } 50% { top: calc(var(--u) * -1); } }
@@ -115,6 +117,37 @@
 .narr-plate .tsm { color: #c8a88a; }
 @keyframes k-narr { 0% { opacity: 0; margin-top: calc(var(--u) * -6); } 34% { opacity: 1; margin-top: calc(var(--u) * -3); } 67% { margin-top: var(--u); } 100% { margin-top: 0; } }
 
-/* villagers muttering out in the world (ui.tag): a small bubble of the same kind */
-.wtag.k-tip { padding: 0 var(--u); }
-.wtag.k-tip::after { left: calc(var(--u) * 4); bottom: calc(var(--u) * -13); width: calc(var(--u) * 12); height: calc(var(--u) * 10); background-image: var(--k-bub-tail); }
+/* little bubbles out in the world (bubbles.js WorldBubbles, ui.tag): the same bubble and
+   tail on the half-size grid (--us, still whole device pixels per pixel), one or two short
+   lines; far off, a thought cloud whose three dots hop in turn (a 4-frame strip) */
+.wbub-layer { position: absolute; inset: 0; pointer-events: none; z-index: 0; overflow: hidden; }
+.wbub { position: absolute; left: 0; top: 0; display: none; }
+.wbub.open, .wbub.cloud { display: block; }
+.wb-in { position: relative; }
+.wb-in.pop { animation: wb-pop 0.2s steps(1); }
+@keyframes wb-pop { 0% { opacity: 0; top: calc(var(--us) * 3); } 34% { opacity: 1; top: calc(var(--us) * -2); } 67% { top: var(--us); } 100% { top: 0; } }
+.wb-box {
+  display: none;
+  box-sizing: border-box;
+  border-style: solid;
+  border-color: transparent;
+  border-width: calc(var(--us) * 4) calc(var(--us) * 5) calc(var(--us) * 6) calc(var(--us) * 4);
+  border-image: var(--k-bub) 8 fill / calc(var(--us) * 8) / 0 repeat;
+  padding: 0 var(--us);
+  font-family: 'Monogram', monospace;
+  font-size: var(--tfs);
+  line-height: calc(var(--us) * 12);
+  letter-spacing: var(--wb-ls, 0px);
+  font-kerning: none;
+  color: #3e2218;
+  text-shadow: none;
+  white-space: pre;
+  overflow: hidden;
+  image-rendering: pixelated;
+}
+.wb-tail { display: none; position: absolute; left: 0; top: 0; width: calc(var(--us) * 12); height: calc(var(--us) * 10); background: var(--k-bub-tail) 0 0 / 100% 100% no-repeat; z-index: 1; image-rendering: pixelated; }
+.wbub.open .wb-box, .wbub.open .wb-tail { display: block; }
+.wb-cloud { display: none; width: calc(var(--us) * 22); height: calc(var(--us) * 22); background: var(--k-bub-cloud) 0 0 / calc(var(--us) * 88) 100% no-repeat; image-rendering: pixelated; animation: wb-dots 1.6s steps(4) infinite; }
+.wbub.cloud .wb-cloud { display: block; }
+@keyframes wb-dots { to { background-position: calc(var(--us) * -88) 0; } }
+

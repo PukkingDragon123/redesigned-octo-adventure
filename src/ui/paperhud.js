@@ -82,47 +82,47 @@ class PixCanvas {
   }
 }
 
-// ---------------------------------------------------------------- Harold's pocket watch 44x54
+// ---------------------------------------------------------------- Harold's pocket watch 32x40
+// (a small one: bow, crown, a polished case round the face, four hour bars and dots,
+// the day/night window above six, two hands)
 export class PocketWatch extends PixCanvas {
-  constructor() { super(44, 54, 'hud-watch'); }
+  constructor() { super(32, 40, 'hud-watch'); }
   draw(hour) {
     const mm = Math.floor((hour % 1) * 60);
-    const key = `${Math.floor(hour)}:${Math.floor(mm / 2)}`;
+    const key = `${Math.floor(hour)}:${Math.floor(mm / 3)}`;
     if (key === this.key) return;
     this.key = key;
     const p = this.p;
     p.data.fill(0);
-    const cx = 22, cy = 31;
+    const cx = 16, cy = 23;
     // bow and knurled crown
-    ring(p, cx, 6, 2.2, 4.6, GOLD);
-    for (let x = 18; x < 26; x++) for (let y = 9; y < 12; y++) p.set(x, y, x % 2 ? GOLD[2] : GOLD[4]);
-    p.rect(19, 12, 6, 2, GOLD[2]);
-    // the case: polished outer ring, an engraved inner ring, dark bezel lip
-    ring(p, cx, cy, 15.5, 20.5, GOLD);
-    for (let k = 0; k < 24; k++) { const a = (k / 24) * Math.PI * 2; p.set(Math.floor(cx + Math.cos(a) * 18 ), Math.floor(cy + Math.sin(a) * 18), k % 2 ? GOLD[1] : GOLD[2]); }
-    ring(p, cx, cy, 14.5, 15.5, [GOLD[0], GOLD[0], GOLD[1], GOLD[1], GOLD[2], GOLD[2]]);
+    ring(p, cx, 3.5, 1.4, 3.3, GOLD);
+    for (let x = 13; x < 19; x++) for (let y = 6; y < 8; y++) p.set(x, y, x % 2 ? GOLD[2] : GOLD[4]);
+    // the case: polished outer ring and a dark bezel lip
+    ring(p, cx, cy, 11.2, 15, GOLD);
+    ring(p, cx, cy, 10.4, 11.2, [GOLD[0], GOLD[0], GOLD[1], GOLD[1], GOLD[2], GOLD[2]]);
     // the face
     const night = hour < 6.5 || hour > 19.6;
-    disc(p, cx, cy, 14.5, night ? [0xb8b0a0, 0xd8d0bc, 0xe8e0cc] : [0xe2d0ac, 0xfff2d6, 0xfffbea]);
-    // minute dots and hour bars
-    for (let k = 0; k < 60; k += 5) {
-      const a = (k / 60) * Math.PI * 2 - Math.PI / 2;
-      const big = k % 15 === 0;
-      line(p, cx + Math.cos(a) * (big ? 9.6 : 11.2), cy + Math.sin(a) * (big ? 9.6 : 11.2), cx + Math.cos(a) * 12.8, cy + Math.sin(a) * 12.8, big ? 0x2a1a14 : 0x7a6a5a);
+    disc(p, cx, cy, 10.4, night ? [0xb8b0a0, 0xd8d0bc, 0xe8e0cc] : [0xe2d0ac, 0xfff2d6, 0xfffbea]);
+    // hour bars at the quarters, dots between
+    for (let k = 0; k < 12; k++) {
+      const a = (k / 12) * Math.PI * 2 - Math.PI / 2, c = Math.cos(a), s = Math.sin(a);
+      if (k % 3 === 0) line(p, cx + c * 6.6, cy + s * 6.6, cx + c * 9, cy + s * 9, 0x2a1a14);
+      else p.set(Math.floor(cx + c * 8.6), Math.floor(cy + s * 8.6), 0x9a8a7a);
     }
     // day/night window above six
-    p.rect(cx - 4, cy + 4, 9, 6, 0x3a2418);
-    p.rect(cx - 3, cy + 5, 7, 4, night ? 0x1e2850 : 0x6fb0f0);
-    if (night) { p.rect(cx + 1, cy + 5, 2, 2, 0xf6f0c8); p.set(cx + 2, cy + 5, 0x1e2850); p.set(cx - 2, cy + 7, 0xffffff); }
-    else { p.rect(cx - 1, cy + 6, 3, 3, 0xffd040); p.set(cx, cy + 6, 0xfff6b0); }
-    // hands: hour (2px, dark), minute (1px), red seconds pivot
+    p.rect(cx - 3, cy + 3, 7, 5, 0x3a2418);
+    p.rect(cx - 2, cy + 4, 5, 3, night ? 0x1e2850 : 0x6fb0f0);
+    if (night) { p.set(cx + 1, cy + 4, 0xf6f0c8); p.set(cx - 1, cy + 5, 0xffffff); }
+    else { p.rect(cx - 1, cy + 5, 2, 2, 0xffd040); p.set(cx - 1, cy + 5, 0xfff6b0); }
+    // hands: hour (2px, dark), minute (1px), red pivot
     const h12 = (hour % 12) / 12, m60 = mm / 60;
     const ha = h12 * Math.PI * 2 - Math.PI / 2, ma = m60 * Math.PI * 2 - Math.PI / 2;
-    line(p, cx, cy, cx + Math.cos(ma) * 11.4, cy + Math.sin(ma) * 11.4, 0x2a1a14);
-    line(p, cx, cy, cx + Math.cos(ha) * 7.2, cy + Math.sin(ha) * 7.2, 0x2a1a14, 2);
+    line(p, cx, cy, cx + Math.cos(ma) * 8.4, cy + Math.sin(ma) * 8.4, 0x2a1a14);
+    line(p, cx, cy, cx + Math.cos(ha) * 5.2, cy + Math.sin(ha) * 5.2, 0x2a1a14, 2);
     p.rect(cx - 1, cy - 1, 2, 2, 0xc8361f);
     // glass glint
-    for (const [x, y] of [[cx - 9, cy - 8], [cx - 8, cy - 9], [cx - 7, cy - 10], [cx - 10, cy - 6]]) p.set(x, y, 0xffffff);
+    for (const [x, y] of [[cx - 6, cy - 6], [cx - 5, cy - 7], [cx - 7, cy - 4]]) p.set(x, y, 0xffffff);
     this.flush();
   }
 }
@@ -179,8 +179,6 @@ export class Gauge extends PixCanvas {
   constructor() {
     super(72, 72, 'hud-speedo');
     this.canvas = this.c;
-    this.shiftFlash = 0;
-    this.lastGear = 1;
   }
   draw(bike, dt) {
     const p = this.p;
@@ -207,7 +205,7 @@ export class Gauge extends PixCanvas {
       const a = ang + (i / 8) * Math.PI;
       line(p, cx + Math.cos(a) * 16, cy + Math.sin(a) * 16, cx - Math.cos(a) * 16, cy - Math.sin(a) * 16, 0x9aa2ae);
     }
-    // chainring with teeth, holding the gear number
+    // chainring with teeth, holding the km/h (the gear is on the crank: see crank.js)
     const cr = bike.crank || 0;
     for (let i = 0; i < 14; i++) {
       const a = cr + (i / 14) * Math.PI * 2;
@@ -215,21 +213,9 @@ export class Gauge extends PixCanvas {
     }
     ring(p, cx, cy, 7.5, 10.6, GOLD);
     disc(p, cx, cy, 7.5, [0x2a1810, 0x3a2418, 0x3a2418], 0);
-    const g = Math.max(1, bike.gear || 1);
-    if (g !== this.lastGear) { this.shiftFlash = 0.35; this.lastGear = g; }
-    this.shiftFlash = Math.max(0, this.shiftFlash - dt);
-    if (g >= 10) { digit(p, cx - 6, cy - 5, Math.floor(g / 10), 0xffdc5a); digit(p, cx + 1, cy - 5, g % 10, 0xffdc5a); }
-    else digit(p, cx - 3, cy - 5, g, this.shiftFlash > 0 ? 0xffffff : 0xffdc5a);
-    // gear pips along the bottom
-    const n = s.gears || 1;
-    if (n > 1 && n <= 12) {
-      const pw = Math.min(5, Math.floor(30 / n));
-      for (let i = 0; i < n; i++) p.rect(Math.round(cx - (n * pw) / 2 + i * pw), 61, Math.max(1, pw - 1), 3, i < g ? 0xffdc5a : 0x5a3a1e);
-    }
-    // km/h readout
-    const kmh = String(Math.round((bike.speed || 0) * 3.6));
-    const w = kmh.length * 4 - 1;
-    for (let i = 0; i < kmh.length; i++) digit(p, cx - Math.floor(w / 2) + i * 4, 52, +kmh[i], 0xfff4dc, 1);
+    const kmh = String(Math.min(99, Math.round((bike.speed || 0) * 3.6)));
+    const w = kmh.length * 7 - 1;
+    for (let i = 0; i < kmh.length; i++) digit(p, cx - Math.floor(w / 2) + i * 7, cy - 5, +kmh[i], 0xffdc5a);
     this.flush();
   }
 }
@@ -239,32 +225,48 @@ export function buildPaperHUD(ui) {
   const h = el('div', 'k-hud k-text');
   h.id = 'hud';
   ui.hud = h;
-  // pocket watch, day plate and coin pouch (top left)
+  // pocket watch, day plate and coin pouch (top left). Only the watch stays: the day
+  // plate shows as a day starts (and in menus), the pouch when the money changes (and
+  // in menus); tapping the watch peeks at both
   const tl = el('div', 'hud-tl');
   ui.watch = new PocketWatch();
   tl.appendChild(ui.watch.c);
   const col = el('div', 'hud-tlcol');
-  const day = el('div', 'k-plate k-dark hud-day', '<img class="k-g wx"><span class="d">Day 1</span>');
-  const money = el('div', 'hud-money', `<img class="pouch" src="${iconURL('pouch')}"><span class="k-plate k-dark k-bold m">$0</span>`);
+  const day = el('div', 'k-plate k-dark hud-day off', '<img class="k-g wx"><span class="d">Day 1</span>');
+  const money = el('div', 'hud-money off', `<img class="pouch" src="${iconURL('pouch')}"><span class="k-plate k-dark k-bold m"></span>`);
   col.append(day, money);
   tl.appendChild(col);
   h.appendChild(tl);
+  ui.dayEl = day;
   ui.elDay = day.querySelector('.d');
   ui.elWx = day.querySelector('.wx');
   ui.elMoney = money.querySelector('.m');
   ui.pouchEl = money;
+  ui.hudT = { day: 0, cash: 0, peek: 0, fast: 0, slow: 0, obj: 0 };
+  ui.watch.c.addEventListener('pointerdown', (e) => {
+    e.stopPropagation();
+    ui.hudT.peek = ui.hudT.peek > 0 ? 0 : 4;
+  });
   // compass (top centre)
-  const cw = el('div', 'hud-compass');
+  // (only while there's somewhere to go: see updateCompassP)
+  const cw = el('div', 'hud-compass off');
+  ui.compassEl = cw;
   ui.compassP = new Compass();
   cw.appendChild(ui.compassP.c);
   ui.compassLbl = el('div', 'k-plate k-dark hud-dist');
   cw.appendChild(ui.compassLbl);
   h.appendChild(cw);
   // centred with 50%: kit.js keeps it on whole device pixels (.hud-compass is in its snap list)
-  // Nana's list (top right)
-  const note = el('div', 'hud-note hud-clip');
-  note.innerHTML = '<i class="clip"></i><div class="pad nb-ruled"><div class="ttl k-bold">Nana\'s list</div><div class="rows"></div><div class="obj"></div><div class="foot"></div></div>';
+  // Nana's list (top right): only while there's something on it; tap it to fold it
+  // down to its title
+  const note = el('div', 'hud-note hud-clip empty');
+  note.innerHTML = '<i class="clip"></i><div class="pad nb-ruled"><div class="ttl k-bold">Nana\'s list<span class="n"></span></div><div class="rows"></div><div class="obj"></div><div class="foot"></div></div>';
   h.appendChild(note);
+  note.addEventListener('pointerdown', (e) => {
+    if (note.classList.contains('empty')) return;
+    e.stopPropagation();
+    note.classList.toggle('folded');
+  });
   ui.noteEl = note;
   ui.noteRows = note.querySelector('.rows');
   ui.objective = note.querySelector('.obj');
@@ -287,23 +289,39 @@ export function updatePaperHUD(ui, dt) {
   if (!st || !g.bike) return;
   const atm = g.world.atmosphere;
   const hr = atm.hour;
+  const T = ui.hudT;
   ui.watch.draw(hr);
   const day = `Day ${st.day}`;
-  if (ui.elDay.textContent !== day) ui.elDay.textContent = day;
+  if (ui.elDay.textContent !== day) { ui.elDay.textContent = day; T.day = 6; }
   const night = hr < 6.5 || hr > 19.6;
   let wx = WX[atm.weatherTarget] || 'sun';
   if (wx === 'sun' && night) wx = 'moon';
   if (ui.elWx.dataset.i !== wx) { ui.elWx.src = glyphURL(wx); ui.elWx.dataset.i = wx; }
   const money = `$${Math.floor(st.money)}`;
   if (ui.elMoney.textContent !== money) {
-    if (ui.elMoney.textContent && ui.elMoney.textContent !== '$0') { ui.pouchEl.classList.remove('jingle'); void ui.pouchEl.offsetWidth; ui.pouchEl.classList.add('jingle'); }
+    if (ui.elMoney.textContent) { T.cash = 4; ui.pouchEl.classList.remove('jingle'); void ui.pouchEl.offsetWidth; ui.pouchEl.classList.add('jingle'); }
     ui.elMoney.textContent = money;
   }
+  // riding fast, the HUD gets out of the way (the watch fades, the list shrinks to its
+  // cups); slow down or stop and it all comes back
+  const sp = g.onFoot ? g.walker?.speed || 0 : g.bike.speed || 0;
+  T.fastT = sp > (g.onFoot ? 6.5 : 4.5) ? (T.fastT || 0) + dt : 0;
+  T.slowT = sp < 2.2 ? (T.slowT || 0) + dt : 0;
+  if (!T.fast && T.fastT > 1.2) T.fast = true;
+  else if (T.fast && T.slowT > 0.6) T.fast = false;
+  const menu = ui.menuStack.length > 0;
+  T.day -= dt;
+  T.cash -= dt;
+  T.peek -= dt;
+  const peek = T.peek > 0 || menu;
+  ui.hud.classList.toggle('fast', !!T.fast && !peek);
+  ui.dayEl.classList.toggle('off', !(peek || T.day > 0));
+  ui.pouchEl.classList.toggle('off', !(peek || T.cash > 0));
   // the speedometer only matters on the bike
   const gaugeOn = !g.onFoot;
   ui.gaugeEl.classList.toggle('away', !gaugeOn);
   if (gaugeOn) ui.gauge.draw(g.bike, dt);
-  updateNote(ui);
+  updateNote(ui, dt);
   updateCompassP(ui);
   // now and then a leaf blows in and gets caught on the clipboard's clip for a while
   ui._leafT = (ui._leafT ?? 14 + Math.random() * 10) - dt;
@@ -331,7 +349,7 @@ const DONE_MS = 8000;
 const HEAT_CSS = 'width:calc(var(--u)*30);height:calc(var(--u)*6);margin-left:calc(var(--u)*12);background:linear-gradient(90deg,#d8e8f6,#f6e6c8)';
 // a little drawn face at the bar's end: beaming while hot, frozen once cold
 const FACE_CSS = 'position:absolute;left:calc(var(--u)*-14);top:calc(var(--u)*-5);width:calc(var(--u)*16);height:calc(var(--u)*16);image-rendering:pixelated';
-function updateNote(ui) {
+function updateNote(ui, dt) {
   const g = ui.game;
   const list = g.orders?.list || [];
   const now = performance.now();
@@ -394,7 +412,21 @@ function updateNote(ui) {
     ui.noteRows.querySelectorAll('.qrow').forEach((e) => e.remove());
     for (const t of extra) ui.noteRows.appendChild(el('div', 'nrow qrow', `<i class="bx"></i><span>${esc(t)}</span>`));
   }
-  ui.noteEl.classList.toggle('empty', !orders.length && !extra.length && !ui.objective.textContent);
+  // the objective line: for a while after it changes, and again once Hank stops for a
+  // moment ("all done" lines only the once)
+  const T = ui.hudT, txt = ui.objective.textContent;
+  T.obj -= dt;
+  const objOn = !!txt && (T.obj > 0 || (T.slowT > 2.5 && !/^all done\b/i.test(txt)));
+  if (ui.objective.classList.contains('on') !== objOn) ui.objective.classList.toggle('on', objOn);
+  const n = orders.filter((o) => o.state === 'carried').length + extra.length;
+  const ns = n ? String(n) : '';
+  const nEl = ui.noteEl.querySelector('.ttl .n');
+  if (nEl.textContent !== ns) nEl.textContent = ns;
+  // (touch screens keep the objective off the list: see notebook.css)
+  const empty = !orders.length && !extra.length && !(objOn && !ui.root.classList.contains('touchmode'));
+  if (ui.noteEl.classList.contains('empty') !== empty) ui.noteEl.classList.toggle('empty', empty);
+  const cups = orders.length > 0;
+  if (ui.noteEl.classList.contains('cups') !== cups) ui.noteEl.classList.toggle('cups', cups);
 }
 
 // a 16px picture for a compass target
@@ -413,8 +445,11 @@ function updateCompassP(ui) {
     const d = Math.hypot(m.x - p.x, m.z - p.z);
     if (!best || d < best.d) best = { ...m, d };
   }
-  let needle = null;
-  if (best) needle = (Math.atan2(best.x - p.x, -(best.z - p.z)) * 180) / Math.PI - heading;
+  // just the way home, with nothing to fetch there and the day still young, is no target
+  const goal = !!best && (marks.some((m) => m.id !== 'home') || g.world.atmosphere.hour >= 17 || (g.orders?.board?.().length || 0) > 0);
+  if (ui.compassEl.classList.contains('off') === goal) ui.compassEl.classList.toggle('off', !goal);
+  if (!goal) return;
+  const needle = (Math.atan2(best.x - p.x, -(best.z - p.z)) * 180) / Math.PI - heading;
   ui.compassP.draw(heading, needle);
   const txt = best ? (best.d < 1000 ? `${Math.round(best.d)} m` : `${(best.d / 1000).toFixed(1)} km`) : '';
   const k = txt + (best?.icon || '');

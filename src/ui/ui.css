@@ -28,10 +28,14 @@
 #hud { position: absolute; inset: 0; z-index: 0; transition: opacity 0.4s steps(4); }
 #hud.hidden { opacity: 0; }
 
-.hud-tl { position: absolute; left: calc(var(--u) * 3 + var(--safe-l)); top: calc(var(--u) * 2 + var(--safe-t)); display: flex; align-items: flex-start; gap: calc(var(--u) * 1); }
-.hud-watch { position: relative; width: calc(var(--u) * 44); height: calc(var(--u) * 54); animation: k-watch 6s steps(1) infinite; }
+.hud-tl { position: absolute; left: calc(var(--u) * 3 + var(--safe-l)); top: calc(var(--u) * 2 + var(--safe-t)); display: flex; align-items: flex-start; gap: calc(var(--u) * 2); transition: opacity 0.3s steps(3); }
+/* the small pocket watch is all that stays up there: tap it to peek at the day and the money */
+.hud-watch { position: relative; width: calc(var(--u) * 32); height: calc(var(--u) * 40); animation: k-watch 6s steps(1) infinite; pointer-events: auto; cursor: pointer; }
 @keyframes k-watch { 0%, 90% { top: 0; } 92% { top: var(--u); } 95% { top: 0; } 97% { top: var(--u); } }
-.hud-tlcol { display: flex; flex-direction: column; align-items: flex-start; gap: calc(var(--u) * 1); margin-top: calc(var(--u) * 10); }
+.hud-tlcol { display: flex; flex-direction: column; align-items: flex-start; gap: calc(var(--u) * 1); margin-top: calc(var(--u) * 6); }
+.hud-day.off, .hud-money.off { display: none; }
+/* riding fast, the HUD gets out of the way (paperhud.js) */
+#hud.fast .hud-tl { opacity: 0; }
 .hud-day { display: flex; align-items: center; gap: calc(var(--u) * 2); height: calc(var(--u) * 24); padding: 0 calc(var(--u) * 3) 0 calc(var(--u) * 1); }
 .hud-money { display: flex; align-items: center; }
 .hud-money .pouch { width: calc(var(--u) * 32); height: calc(var(--u) * 32); position: relative; z-index: 1; }
@@ -40,7 +44,9 @@
 .hud-money.jingle .m { animation: k-jingle 0.45s steps(1) 0.05s; }
 @keyframes k-jingle { 0% { top: calc(var(--u) * -3); } 25% { top: calc(var(--u) * -1); } 50% { top: calc(var(--u) * -2); } 75%, 100% { top: 0; } }
 
-.hud-compass { position: absolute; top: calc(var(--u) * 2 + var(--safe-t)); left: calc(50% - var(--u) * 32); left: calc(round(down, 50%, var(--u)) - var(--u) * 32); width: calc(var(--u) * 64); display: flex; flex-direction: column; align-items: center; }
+.hud-compass { position: absolute; top: calc(var(--u) * 2 + var(--safe-t)); left: calc(50% - var(--u) * 32); left: calc(round(down, 50%, var(--u)) - var(--u) * 32); width: calc(var(--u) * 64); display: flex; flex-direction: column; align-items: center; transition: opacity 0.3s steps(3); }
+/* nowhere in particular to go: no compass */
+.hud-compass.off { opacity: 0; visibility: hidden; transition: opacity 0.3s steps(3), visibility 0s 0.3s; }
 .hud-compass-dial { width: calc(var(--u) * 44); height: calc(var(--u) * 44); }
 .hud-dist { box-sizing: border-box; width: calc(var(--u) * 64); height: calc(var(--u) * 24); margin-top: calc(var(--u) * -5); display: flex; align-items: center; gap: calc(var(--u) * 2); padding: 0 0 0 calc(var(--u) * 3); white-space: nowrap; }
 .hud-dist.off { visibility: hidden; }
@@ -80,9 +86,6 @@
 .skiphint { display: none; position: absolute; right: calc(var(--u) * 6 + var(--safe-r)); bottom: calc(var(--u) * 3 + var(--safe-b)); z-index: 2; align-items: center; gap: calc(var(--u) * 2); color: var(--k-cream2); }
 .letterbox .skiphint { display: flex; }
 .touchmode .skiphint { pointer-events: auto; padding: calc(var(--u) * 2); }
-
-/* ---------------------------------------------------------------- little tags over things in the world */
-.wtag { position: absolute; left: 0; top: 0; pointer-events: none; z-index: 2; }
 
 /* ---------------------------------------------------------------- classic dialogue box (unused by default) */
 /* the speech bubble's look (paper.css), docked along the bottom with a portrait */
@@ -127,9 +130,8 @@
 @keyframes vflash { 0% { background: rgba(255, 255, 255, 0.95); } 100% { background: transparent; } }
 
 /* ---------------------------------------------------------------- touch layout tweaks */
-.touchmode .hud-gauge { bottom: calc(var(--u) * 74 + var(--safe-b)); transform: none; }
-.touchmode .hud-gauge.away { transform: translateY(calc(var(--u) * 201)); }
-.touchmode .hud-speedo { width: calc(var(--u) * 72); height: calc(var(--u) * 72); }
+/* on touch screens the crank shows the gear and the wheel going round: no speedometer */
+.touchmode .hud-gauge { display: none; }
 .touchmode .hud-prompt { display: none !important; }
 .touchmode .hud-note .obj { display: none; }
 /* phones held upright: compass under the top row */

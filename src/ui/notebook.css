@@ -122,13 +122,23 @@
   border-image: var(--k-clipboard) 10 fill / calc(var(--u) * 10) / 0 repeat;
   padding: 0;
   image-rendering: pixelated;
+  pointer-events: auto;
+  cursor: pointer;
 }
 .hud-clip .clip { position: absolute; left: calc(50% - var(--u) * 17); left: calc(round(down, 50%, var(--u)) - var(--u) * 17); top: calc(var(--u) * -9); width: calc(var(--u) * 34); height: calc(var(--u) * 14); background: var(--k-clip) 0 0 / 100% 100% no-repeat; z-index: 3; }
 .hud-clip .pad { position: relative; padding: calc(var(--u) * 7) calc(var(--u) * 2) 0 calc(var(--u) * 16); --nb-y0: calc(var(--u) * 7); --nb-mx: calc(var(--u) * 14); box-shadow: 0 var(--u) 0 #c8b898, 0 calc(var(--u) * 2) 0 rgba(40, 24, 16, 0.4); }
 .hud-clip .pad::before { content: ''; position: absolute; left: calc(var(--u) * 3); right: calc(var(--u) * 3); top: calc(var(--u) * -7); height: calc(var(--u) * 14); background: var(--k-nb-coil) 0 0 / calc(var(--u) * 10) calc(var(--u) * 14) repeat-x; z-index: 2; }
-/* emptied: slides up out of the way (one jump: a stepped slide by a percentage would
-   stop between pixels) */
-.hud-note.hud-clip.empty { transform: translateY(calc(-100% + var(--u) * 10)); }
+/* emptied: gone (nothing carried, no favour on the go, no fresh objective) */
+.hud-note.hud-clip.empty { display: none; }
+/* tapped: folded down to its title (and how many lines are on it) */
+.hud-clip .ttl .n { margin-left: calc(var(--u) * 4); color: var(--nb-pencil); }
+.hud-clip:not(.folded) .ttl .n { display: none; }
+.hud-note.folded .rows, .hud-note.folded .obj { display: none !important; }
+/* riding fast: just the cups and their thermometers (no title, names, favours or
+   objective), or out of the way altogether when no cup is carried */
+#hud.fast .hud-note:not(.folded) .ttl, #hud.fast .hud-note:not(.folded) .qrow, #hud.fast .hud-note:not(.folded) .obj, #hud.fast .hud-note:not(.folded) .who { display: none !important; }
+#hud.fast .hud-note.hud-clip:not(.folded) { width: max-content; }
+#hud.fast .hud-note.hud-clip:not(.cups):not(.folded) { display: none; }
 .hud-clip .ttl { color: var(--nb-red); height: calc(var(--u) * 16); margin: 0; line-height: calc(var(--u) * 16); white-space: nowrap; }
 .hud-clip .nrow { display: flex; align-items: center; gap: calc(var(--u) * 2); height: calc(var(--u) * 16); white-space: nowrap; position: relative; color: var(--nb-blue); }
 .hud-clip .nrow .bx { position: absolute; left: calc(var(--u) * -15); top: calc(var(--u) * 1); width: calc(var(--u) * 12); height: calc(var(--u) * 12); background: var(--k-nb-box) 0 0 / 100% 100% no-repeat; }
@@ -141,9 +151,10 @@
 .hud-clip .heat.warm i { background: linear-gradient(180deg, #fff2a0 0 var(--u), #f0ae26 var(--u) calc(100% - var(--u)), #b86e12 calc(100% - var(--u))); }
 .hud-clip .heat.cool i { background: linear-gradient(180deg, #e6f2fc 0 var(--u), #8ab4e0 var(--u) calc(100% - var(--u)), #4a6aa0 calc(100% - var(--u))); }
 .hud-clip .qrow { height: auto; min-height: calc(var(--u) * 16); align-items: flex-start; white-space: normal; line-height: calc(var(--u) * 16); color: var(--nb-pencil); }
-.hud-clip .obj { display: none; padding-left: 0; color: var(--nb-red); white-space: normal; line-height: calc(var(--u) * 16); background: none; }
-.hud-clip .obj::before { content: ''; position: absolute; left: calc(var(--u) * 2); width: calc(var(--u) * 12); height: calc(var(--u) * 12); margin-top: calc(var(--u) * 2); background: var(--g-arrowR) 0 0 / 100% 100% no-repeat; }
-.hud-clip .obj.on { display: block; }
+/* the objective: a pencil note in the small print (the half-size grid), two lines at most */
+.hud-clip .obj { display: none; padding-left: 0; color: var(--nb-red); white-space: normal; font-size: var(--tfs); line-height: calc(var(--us) * 16); background: none; overflow: hidden; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; }
+.hud-clip .obj::before { content: ''; position: absolute; left: calc(var(--u) * 2); width: calc(var(--us) * 16); height: calc(var(--us) * 16); margin-top: 0; background: var(--g-arrowR) 0 0 / 100% 100% no-repeat; }
+.hud-clip .obj.on { display: -webkit-box; }
 .touchmode .hud-clip .obj.on { display: none; }
 .hud-clip .foot { height: calc(var(--u) * 4); }
 .k-portrait .hud-note.hud-clip { width: calc(var(--u) * 96); }

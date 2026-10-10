@@ -837,6 +837,35 @@ export function bubbleLeafArt() {
   LEAF9.forEach((r, y) => [...r].forEach((ch, x) => col[ch] && p.set(x, y, col[ch])));
   return p;
 }
+// A tiny thought cloud with three dots ("...") for someone talking too far off to read:
+// the speech bubble's cream, outline and hard shadow, two little puffs trailing down to the
+// head (the last one's middle at x 6). Four frames side by side, CLOUD_ART wide each: in
+// each of the first three one dot hops up a pixel, in the last they all rest.
+export const CLOUD_ART = [22, 22];
+export function thoughtCloudArt() {
+  const [W, H] = CLOUD_ART;
+  const p = new Pix(W * 4, H);
+  const blobs = [[5.5, 7, 3.6], [11, 5, 4.6], [16.5, 6.8, 3.8], [7, 9.5, 3], [11, 9.5, 3], [15, 9.5, 3]];
+  const puffs = [[8.5, 15.2, 1.5], [6.5, 18.5, 1.3]];
+  const inB = (x, y) => blobs.some(([cx, cy, r]) => Math.hypot(x + 0.5 - cx, y + 0.5 - cy) <= r);
+  const inP = (x, y) => puffs.some(([cx, cy, r]) => Math.hypot(x + 0.5 - cx, y + 0.5 - cy) <= r);
+  const P = BUB.round;
+  for (let f = 0; f < 4; f++) {
+    const ox = f * W;
+    for (const ins of [inB, inP]) {
+      const inside = (x, y) => x >= 0 && y >= 0 && x < W - 1 && y < H && ins(x, y);
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (!inside(x, y) && inside(x - 1, y - 2) && !p.alpha(ox + x, y)) p.put(ox + x, y, BUB_SHADOW, BUB_SHADOW_A);
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+        if (!inside(x, y)) continue;
+        const edge = !inside(x - 1, y) || !inside(x + 1, y) || !inside(x, y - 1) || !inside(x, y + 1);
+        p.set(ox + x, y, edge ? P.out : !inside(x, y + 2) ? P.low : P.fill);
+      }
+    }
+    // the dots: 2x2, outline brown
+    for (let k = 0; k < 3; k++) p.rect(ox + 6 + k * 4, k === f ? 6 : 7, 2, 2, BUB_OUT);
+  }
+  return p;
+}
 
 // ---------------------------------------------------------------- book pages (9-slice 32x32, slice 10)
 export function pageArt(side = 'l') {
