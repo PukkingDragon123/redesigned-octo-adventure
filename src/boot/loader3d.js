@@ -1,8 +1,5 @@
-// The loading screen: plain black and wordless, with the real 3D voxel Hank running
-// on the spot above a pixel-art skull - his own, red toque and all - that fills up
-// bone-white from the jaw to the pom-pom as the village builds; at 100% its eyes
-// light up a warm orange and a gust of leaves sweeps the loading screen away.
-// The little stage (RunStage) is a tiny scene of
+// The loading screen: a plain dark background, Hank's pixel skull and a thin
+// progress bar, then a quick fade. The little stage (RunStage) is a tiny scene of
 // its own: one skeleton, a blob shadow and a few road dashes slipping past, lit
 // by a studio key light. It renders through the game's pipeline (so it gets the
 // same outlines and grading) while the world builds, and the title screen reuses
@@ -10,7 +7,7 @@
 import * as THREE from 'three';
 import { VoxelCharacter } from '../game/vchar.js';
 import { G } from '../render/shaderlib.js';
-import { leafCover, leafReveal, warmLeaves } from '../ui/leaves.js';
+import { leafCover, leafReveal } from '../ui/leaves.js';
 
 const DASHES = 14, DASH_GAP = 0.9;
 
@@ -208,6 +205,7 @@ function skullArt() {
 }
 
 // ---------------------------------------------------------------- the loading screen
+// Plain dark background, Hank's pixel skull and a thin progress bar. No words.
 export class Loader3D {
   constructor(pipeline) {
     this.pl = pipeline;
@@ -215,58 +213,44 @@ export class Loader3D {
     this.shown = 0;
     this.running = false;
     this.last = 0;
-    this.glowT = 0;
-    this.key = '';
   }
 
   start() {
     if (this.running) return;
     this.running = true;
-    // the 3D stage draws into the game canvas, so the black boot cover goes
-    // (the game's own UI stays hidden until the loader is gone)
     const boot = document.getElementById('boot');
     if (boot) boot.style.display = 'none';
     this.ui = document.getElementById('ui');
     if (this.ui) this.ui.style.visibility = 'hidden';
     const root = document.createElement('div');
     root.id = 'loader3d';
-    root.style.cssText = 'position:fixed;inset:0;z-index:150;pointer-events:none;';
-    // no words anywhere: the skull is the progress bar
+    root.style.cssText = 'position:fixed;inset:0;z-index:150;pointer-events:none;background:#1a1014;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;';
     const skull = document.createElement('canvas');
     skull.width = SW;
     skull.height = SH;
-    skull.style.cssText = 'position:absolute;left:0;top:0;image-rendering:pixelated;';
-    root.appendChild(skull);
+    skull.style.cssText = 'image-rendering:pixelated;';
+    const ctx = skull.getContext('2d');
+    const img = ctx.createImageData(SW, SH);
+    img.data.set(skullArt().full);
+    ctx.putImageData(img, 0, 0);
+    const track = document.createElement('div');
+    track.style.cssText = 'width:min(180px,46vw);height:2px;background:#3a2a32;overflow:hidden;';
+    const bar = document.createElement('div');
+    bar.style.cssText = 'height:100%;width:100%;background:#e8dcc0;transform-origin:left;transform:scaleX(0);';
+    track.appendChild(bar);
+    root.append(skull, track);
     document.body.appendChild(root);
     this.dom = root;
-    this.skull = skull;
-    this.sctx = skull.getContext('2d');
-    this.simg = this.sctx.createImageData(SW, SH);
+    this.bar = bar;
     this.place = () => {
-      // a whole number of device pixels per art pixel, on whole device pixels
+      // a whole number of device pixels per art pixel
       const dpr = window.devicePixelRatio || 1;
-      const dw = innerWidth * dpr, dh = innerHeight * dpr;
-      const P = Math.max(1, Math.floor(Math.min(dw, dh) / 180));
-      const s = skull.style;
-      s.width = `${(SW * P) / dpr}px`;
-      s.height = `${(SH * P) / dpr}px`;
-      s.left = `${Math.round((dw - SW * P) / 2) / dpr}px`;
-      s.top = `${Math.round(dh * (innerWidth < innerHeight ? 0.64 : 0.68)) / dpr}px`;
+      const P = Math.max(1, Math.floor((Math.min(innerWidth, innerHeight) * dpr) / 220));
+      skull.style.width = `${(SW * P) / dpr}px`;
+      skull.style.height = `${(SH * P) / dpr}px`;
     };
     this.place();
     addEventListener('resize', this.place);
-    // the leaves that carry this screen away are painted while the village builds
-    setTimeout(warmLeaves, 400);
-    try {
-      this.stage = new RunStage({ bg: 0x000000 });
-      this.stage.fy = 0.12;
-      this.stage.size = innerWidth < innerHeight ? 0.22 : 0.3;
-    } catch (e) {
-      // no WebGL stage? the skull alone will do
-      console.warn(e);
-      this.stage = null;
-      root.style.background = '#000';
-    }
     this.last = performance.now();
     const loop = (now) => {
       if (!this.running) return;
@@ -280,7 +264,6 @@ export class Loader3D {
 
   progress(p, label) {
     this.p = Math.max(this.p, p);
-    // long synchronous build steps starve rAF; keep him running between them
     const now = performance.now();
     if (this.running && now - this.last > 50) {
       this.frame(Math.min(1 / 30, (now - this.last) / 1000));
@@ -289,76 +272,29 @@ export class Loader3D {
     void label;
   }
 
-  // the skull fills from the jaw up in whole art-pixel rows; redrawn only when a row changes
-  drawSkull(dt) {
-    const art = skullArt();
-    const rows = Math.round(Math.min(1, this.shown) * SH);
-    const done = this.shown >= 1;
-    if (done) this.glowT += dt;
-    const glow = done ? (Math.floor(this.glowT * 7) % 6 === 5 ? 1 : 2) : 0;
-    const key = `${rows}|${glow}`;
-    if (key === this.key) return;
-    this.key = key;
-    const d = this.simg.data, cut = SH - rows;
-    for (let y = 0; y < SH; y++) d.set((y >= cut ? art.full : art.empty).subarray(y * SW * 4, (y + 1) * SW * 4), y * SW * 4);
-    // the rising level catches the light
-    if (rows > 0 && rows < SH) for (let x = 0; x < SW; x++) {
-      const c = art.bone[cut * SW + x];
-      if (c < 0 || c === INK) continue;
-      const i = (cut * SW + x) * 4;
-      d[i] = 255; d[i + 1] = 251; d[i + 2] = 234; d[i + 3] = 255;
-    }
-    // full: the eyes light up a warm orange with a bright core (and flicker now and then)
-    if (glow) for (const [ex, ey] of art.eyes) {
-      const px = (x, y, c) => { const i = (y * SW + x) * 4; d[i] = (c >> 16) & 255; d[i + 1] = (c >> 8) & 255; d[i + 2] = c & 255; d[i + 3] = 255; };
-      const x0 = Math.floor(ex), y0 = Math.floor(ey);
-      const hot = glow === 2;
-      for (let y = y0 - 1; y <= y0 + 1; y++) for (let x = x0 - 2; x <= x0 + 1; x++) px(x, y, hot ? 0xc8461c : 0x8e2e16);
-      px(x0 - 1, y0, hot ? 0xff9a3a : 0xe86a26);
-      px(x0, y0, hot ? 0xff9a3a : 0xe86a26);
-      px(x0 - 1, y0 - 1, hot ? 0xffd84a : 0xffa040);
-      px(x0, y0 - 1, hot ? 0xfff2a0 : 0xffb347);
-    }
-    this.sctx.putImageData(this.simg, 0, 0);
-  }
-
   frame(dt) {
     if (!this.running) return;
     this.shown += (this.p - this.shown) * Math.min(1, dt * 6);
     if (this.p >= 1 && this.shown > 0.97) this.shown = 1;
-    this.drawSkull(dt);
-    if (this.stage) {
-      // never let the little stage break the world build that calls progress()
-      try {
-        this.stage.update(dt);
-        this.stage.render(this.pl);
-      } catch (e) {
-        console.warn(e);
-        this.stage = null;
-        this.dom.style.background = '#000';
-      }
-    }
+    this.bar.style.transform = `scaleX(${this.shown.toFixed(3)})`;
   }
 
-  // the skull fills and its eyes light up, then a gust of leaves sweeps the loading
-  // screen away and blows off the title underneath
+  // fill the bar, then fade away
   async finish(quick = false) {
     if (!this.running) return;
     this.p = 1;
     if (!quick) {
       const t0 = performance.now();
       await new Promise((r) => {
-        const wait = () => ((this.shown >= 1 && this.glowT > 0.35) || performance.now() - t0 > 1500 ? r() : requestAnimationFrame(wait));
+        const wait = () => (this.shown >= 1 || performance.now() - t0 > 1200 ? r() : requestAnimationFrame(wait));
         wait();
       });
-      await leafCover({ layer: 'front', dur: 0.6, dir: 1 });
+      await leafCover({ layer: 'front', dur: 0.3 });
     }
     this.running = false;
     removeEventListener('resize', this.place);
     this.dom.remove();
     if (this.ui) this.ui.style.visibility = '';
-    this.stage?.dispose();
-    this.stage = null;
-    if (!quick) leafReveal({ layer: 'front', dur: 0.85, dir: 1 });
+    if (!quick) leafReveal({ layer: 'front', dur: 0.4 });
   }
 }

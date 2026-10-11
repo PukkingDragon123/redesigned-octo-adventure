@@ -14,7 +14,6 @@ export const STEPS = [
   { id: 'home', icon: () => glyphURL('home') },
   { id: 'bed', icon: () => glyphURL('moon') },
 ];
-const INDEX = Object.fromEntries(STEPS.map((s, i) => [s.id, i]));
 
 // Hank's word on the first day, as each step comes up
 const GUIDE = {
@@ -61,81 +60,23 @@ export function planStep(g) {
   return { id: 'home', text: 'Free time! Home by dusk', target: null, free: true };
 }
 
-// ---------------------------------------------------------------- the strip
-const CSS = `
-.dp-strip { position: absolute; left: calc(var(--u) * 3 + var(--safe-l, 0px)); top: calc(var(--u) * 45 + var(--safe-t, 0px));
-  display: flex; flex-direction: column; gap: calc(var(--u) * 1); padding: calc(var(--u) * 3) calc(var(--u) * 4); pointer-events: none;
-  transition: opacity 0.3s steps(3); }
-.dp-strip.off { opacity: 0; }
-.dp-icons { display: flex; gap: calc(var(--u) * 2); align-items: center; }
-.dp-icons img { width: calc(var(--u) * 16); height: calc(var(--u) * 16); image-rendering: pixelated; opacity: 0.32; position: relative; }
-.dp-icons img.done { opacity: 0.55; filter: grayscale(0.6); }
-.dp-icons img.next { opacity: 0.6; }
-.dp-icons img.now { opacity: 1; animation: dp-bob 0.9s steps(2) infinite; }
-.dp-icons i { width: calc(var(--u) * 2); height: calc(var(--u) * 1); background: currentColor; opacity: 0.35; }
-@keyframes dp-bob { 0% { top: 0; } 50% { top: calc(var(--u) * -1); } }
-.dp-txt { white-space: nowrap; color: var(--k-gold, #f0c860); }
-#hud.fast .dp-txt { display: none; }
-.dp-strip.flash .dp-txt { animation: dp-flash 0.6s steps(2) 3; }
-@keyframes dp-flash { 50% { color: #fff8e0; } }
-`;
-
 export class DayPlan {
   constructor(game) {
     this.g = game;
     this.step = null;
     this.el = null;
   }
-  build() {
-    const ui = this.g.ui;
-    if (this.el || !ui?.hud) return;
-    const style = document.createElement('style');
-    style.textContent = CSS;
-    document.head.appendChild(style);
-    const el = document.createElement('div');
-    el.className = 'dp-strip k-plate k-dark off';
-    const icons = document.createElement('div');
-    icons.className = 'dp-icons';
-    this.imgs = STEPS.map((s, i) => {
-      if (i) icons.appendChild(document.createElement('i'));
-      const im = document.createElement('img');
-      im.src = s.icon();
-      im.alt = s.id;
-      icons.appendChild(im);
-      return im;
-    });
-    const txt = document.createElement('div');
-    txt.className = 'dp-txt';
-    el.append(icons, txt);
-    ui.hud.appendChild(el);
-    this.el = el;
-    this.txt = txt;
-  }
-  // per frame while riding: the step, the strip, and (first day) Hank's word on it
+  build() {}
+  // per frame while riding: track the step (the compass reads it) and Hank's word on it
   update() {
     const g = this.g;
-    if (!this.el) this.build();
-    if (!this.el) return;
-    // the contest's cocoa round (and Nana's cabin) have their own objective lines
     const busy = !!g.contest?.objective?.() || !g.state?.flags?.bike;
-    this.el.classList.toggle('off', busy);
     if (busy) return;
     const s = planStep(g);
     this.cur = s;
-    const key = `${s.id}|${s.text}`;
-    if (key === this.key) return;
-    const changed = this.step !== s.id;
-    this.key = key;
+    if (this.step === s.id) return;
     this.step = s.id;
-    const at = INDEX[s.id];
-    this.imgs.forEach((im, i) => { im.className = i < at ? 'done' : i === at ? 'now' : i === at + 1 ? 'next' : ''; });
-    this.txt.textContent = s.text;
-    if (changed) {
-      this.el.classList.remove('flash');
-      void this.el.offsetWidth;
-      this.el.classList.add('flash');
-      this.guide(s);
-    }
+    this.guide(s);
   }
   guide(s) {
     const g = this.g, f = g.state.flags;
