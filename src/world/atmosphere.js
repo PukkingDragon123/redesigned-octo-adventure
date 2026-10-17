@@ -45,6 +45,8 @@ export const WEATHERS = {
   misty: { cloud: 0.5, sun: 0.75, fog: 3.2, wet: 0.15, rain: 0, snow: 0, wind: 0.3, grey: 0.25 },
   overcast: { cloud: 0.85, sun: 0.4, fog: 1.6, wet: 0.1, rain: 0, snow: 0, wind: 0.8, grey: 0.45 },
   rain: { cloud: 0.95, sun: 0.22, fog: 2.2, wet: 1, rain: 1, snow: 0, wind: 1.1, grey: 0.6 },
+  // a soft autumn drizzle under low cloud (Hank's funeral)
+  drizzle: { cloud: 0.88, sun: 0.42, fog: 1.8, wet: 0.75, rain: 0.3, snow: 0, wind: 0.75, grey: 0.42 },
   snow: { cloud: 0.9, sun: 0.35, fog: 2.0, wet: 0, rain: 0, snow: 1, wind: 0.5, grey: 0.4 },
 };
 

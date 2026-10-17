@@ -2,6 +2,8 @@
 // yawning, mourning, crying, holding an umbrella, preaching, kneeling.
 import { extendVChar, POSE_KIT } from './vchar.js';
 import * as LORE from '../voxel/models/lore.js';
+import * as FOOD from '../voxel/models/food.js';
+import { CHARACTERS } from '../voxel/models/characters.js';
 
 const { arm, leg, idleArms, wob } = POSE_KIT;
 const S = Math.sin;
@@ -88,6 +90,28 @@ extendVChar({
       arm(T, 'L', 0.9, 0.05, 0.4); arm(T, 'R', 0.75, 0.05, 0.5);
       T.lean += 0.45; T.headX += 0.25;
     },
+    // a mug of cocoa held close in both hands, head bowed over it
+    cradle(c, t, T) {
+      arm(T, 'L', 0.78, 0.05, 1.35, 0.6);
+      arm(T, 'R', 0.82, 0.05, 1.25, 0.5);
+      T.headX += 0.22 + wob(t, 0.4, c.seed) * 0.03; T.lean += 0.05;
+    },
+    // down on one knee, setting something on the ground in front
+    kneelPlace(c, t, T) {
+      const k = ease(Math.min(1, t * 1.2));
+      leg(T, 'L', 1.5 * k, 0.08, 1.6 * k); leg(T, 'R', -0.15 * k, 0.08, 1.9 * k);
+      T.bodyY -= c.P.hipH * 0.42 * k;
+      arm(T, 'L', 0.55 + 0.2 * k, 0.1, 0.5, 0.2);
+      arm(T, 'R', 0.6 + 0.25 * k, 0.05, 0.25, 0.35);
+      T.lean += 0.5 * k; T.headX += 0.3 * k;
+    },
+    // a hand held out over the open grave, letting something fall
+    toss(c, t, T) {
+      idleArms(c, t, T, 'clasp');
+      const k = ease(Math.min(1, t * 1.6));
+      arm(T, 'R', 0.6 + 0.65 * k, 0.12, 0.3, 0.25);
+      T.lean += 0.12 * k; T.headX += 0.38;
+    },
     lower(c, t, T) {
       // paying out a rope hand over hand
       const k = S(t * 3);
@@ -101,11 +125,39 @@ extendVChar({
     flex: null,
     brolly: { fn: () => LORE.umbrella(), scale: 1, upright: true },
     preach: { fn: LORE.hymnBook, scale: 1.1 },
+    cradle: { fn: FOOD.cocoaClassic, scale: 1, upright: true },
+    kneelPlace: { fn: FOOD.cocoaClassic, scale: 1, upright: true },
   },
+  loco: ['brolly', 'mourn', 'cradle'],
   persona: {
     hankAlive: { idle: 'hips', walk: 'lumber', bounce: 1.0, gest: 1.2, fidgets: ['look', 'stretch', 'scratch'] },
     pastor: { idle: 'clasp', walk: 'slow', bounce: 0.7, gest: 0.9, fidgets: ['look', 'glasses'] },
+    // the funeral's mourners (below): their own walk, a little slower and heavier
+    grandmaMourn: { idle: 'clasp', walk: 'waddle', bounce: 0.9, gest: 0.8, fidgets: ['look', 'glasses'] },
+    louMourn: { idle: 'clasp', walk: 'lumber', bounce: 0.6, gest: 0.7, fidgets: ['look'] },
+    gusMourn: { idle: 'behind', walk: 'lumber', bounce: 0.6, gest: 0.6, fidgets: ['look', 'scratch'] },
+    marieMourn: { idle: 'cross', walk: 'normal', bounce: 0.7, gest: 0.9, fidgets: ['look', 'hair'] },
+    ingridMourn: { idle: 'cross', walk: 'normal', bounce: 0.7, gest: 0.8, fidgets: ['look', 'glasses'] },
+    agnesMourn: { idle: 'clasp', walk: 'waddle', bounce: 0.8, gest: 0.9, fidgets: ['look', 'glasses'] },
   },
 });
+
+// Funeral clothes: dark coats in place of the hi-vis, the plaid, the lab coat and the
+// apron (Doug keeps his red serge, Birdie her yellow slicker, the kids their jerseys).
+// Same faces and voices; the scene speaks for them under their own names.
+const MOURN = {
+  grandma: { top: { type: 'cardigan', color: 0x3a2a38, accent: 0xb0a0b0 }, apron: null },
+  lou: { top: { type: 'coat', color: 0x2a2830, accent: 0x55525e } },
+  gus: { top: { type: 'coat', color: 0x2e2b28, accent: 0x6a5a40 } },
+  marie: { top: { type: 'coat', color: 0x1e1c24, accent: 0x3e3a48 }, apron: null },
+  ingrid: { top: { type: 'coat', color: 0x262a36, accent: 0x4e566a }, stethoscope: false },
+  agnes: { top: { type: 'cardigan', color: 0x2e2836, accent: 0x6a6078 } },
+};
+for (const [id, o] of Object.entries(MOURN)) {
+  if (!CHARACTERS[id] || CHARACTERS[id + 'Mourn']) continue;
+  const spec = { ...CHARACTERS[id], ...o };
+  if (spec.skirt) spec.skirt = { ...spec.skirt, color: 0x24202c, dots: 0x3a3446 };
+  CHARACTERS[id + 'Mourn'] = spec;
+}
 
 export { LORE };

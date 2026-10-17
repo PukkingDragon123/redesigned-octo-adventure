@@ -283,7 +283,106 @@ export function leafPile({ seed = 1 } = {}) {
   return { vox: v, size: 0.05, origin: [W / 2, 0.5, L / 2] };
 }
 
+// ---------------------------------------------------------------- the funeral, remade
+// The open grave: earthen walls (topsoil, clay bands, roots and stones) round a hollow
+// w x l voxels across and d deep, with a lip of turned soil round the edge. The origin
+// is the middle of the opening at ground level, so the walls hang below it. The scene
+// cuts the opening out of the ground with a depth mask and draws this inside.
+export function gravePit({ w = 20, l = 46, d = 34, seed = 5 } = {}) {
+  const M = 4; // the lip of turned soil reaches this far past the walls
+  const W = w + 2 + M * 2, L = l + 2 + M * 2, H = d + 3;
+  const v = new Vox(W, H, L);
+  const x0 = M, x1 = M + w + 1, z0 = M, z1 = M + l + 1; // the wall ring
+  const soil = (x, y, z) => {
+    const n = vhash(x, y, z, seed), k = y / d; // k: 0 at the bottom, 1 at the top
+    // banded strata, a little wavy
+    const band = Math.floor((y + Math.sin((x + z) * 0.45) * 1.2) / 4) % 3;
+    let c = k > 0.9 ? 0x4a3222 : band === 0 ? 0x7a5636 : band === 1 ? 0x6a482c : 0x84603c;
+    if (n < 0.05) c = 0x8a8478; // a stone
+    else if (n < 0.09) c = 0x5a4430;
+    else if (n > 0.93) c = tone(c, 0.08);
+    // (darker the deeper it goes, never black)
+    return tone(c, -0.28 * (1 - k));
+  };
+  for (let z = z0; z <= z1; z++) for (let x = x0; x <= x1; x++) {
+    const wall = x === x0 || x === x1 || z === z0 || z === z1;
+    for (let y = 0; y <= d; y++) if (wall || y === 0) v.set(x, y, z, y === 0 ? tone(0x5a4030, vhash(x, 0, z, seed) * 0.1 - 0.12) : soil(x, y, z));
+  }
+  // roots poking out of the top of the walls
+  for (let i = 0; i < 26; i++) {
+    const t = vhash(i, 1, 2, seed);
+    const side = i % 4;
+    const y = d - 1 - Math.floor(vhash(i, 3, 4, seed) * 7);
+    const along = t;
+    let x, z, dx = 0, dz = 0;
+    if (side === 0) { x = x0 + 1; z = Math.round(z0 + 2 + along * (l - 3)); dx = 1; }
+    else if (side === 1) { x = x1 - 1; z = Math.round(z0 + 2 + along * (l - 3)); dx = -1; }
+    else if (side === 2) { z = z0 + 1; x = Math.round(x0 + 2 + along * (w - 3)); dz = 1; }
+    else { z = z1 - 1; x = Math.round(x0 + 2 + along * (w - 3)); dz = -1; }
+    const len = 1 + Math.floor(vhash(i, 5, 6, seed) * 2);
+    for (let k = 0; k < len; k++) v.set(x + dx * k, y - k, z + dz * k, k ? 0x4a3020 : 0x5a3a26);
+  }
+  // the lip: two layers of turned, wet soil round the opening, ragged at the outside
+  for (let z = 0; z < L; z++) for (let x = 0; x < W; x++) {
+    if (x > x0 && x < x1 && z > z0 && z < z1) continue;
+    const ex = Math.max(x0 - x, x - x1, 0), ez = Math.max(z0 - z, z - z1, 0);
+    const out = Math.hypot(ex, ez);
+    const n = vhash(x, 7, z, seed);
+    if (out > M - 0.5 - n * 1.5) continue;
+    const c = n < 0.3 ? 0x3e2a1c : n < 0.7 ? 0x4a3222 : 0x56402a;
+    v.set(x, d, z, c);
+    if (out < 1.6 + n * 1.2) v.set(x, d + 1, z, tone(c, 0.04));
+  }
+  return { vox: v, size: 0.05, origin: [x0 + 1 + w / 2, d + 1, z0 + 1 + l / 2] };
+}
+
+// Hank's green knit toque (as he wore it in the lumber camp), laid on the coffin lid
+export function toque({ color = 0x2f5e3a, band = 0xe8b23a, pom = 0xe8b23a } = {}) {
+  const R = 6;
+  const v = new Vox(R * 2 + 3, 13, R * 2 + 3);
+  const c = R + 1;
+  const knit = (x, y) => ((x + y) % 2 === 0 ? color : tone(color, -0.1));
+  // folded-up band
+  for (let x = 0; x < R * 2 + 3; x++) for (let z = 0; z < R * 2 + 3; z++) {
+    const r = Math.hypot(x - c, z - c);
+    if (r > R + 0.5) continue;
+    for (let y = 0; y < 3; y++) v.set(x, y, z, y === 2 ? tone(band, -0.06) : x % 2 ? band : tone(band, -0.1));
+  }
+  // the crown, a soft dome slouching a touch to one side
+  v.ellipsoid(c, 3, c, R - 0.2, 5, R - 0.2, (x, y) => (y >= 3 ? knit(x, y) : 0));
+  v.ellipsoid(c + 1, 7, c - 0.5, 3, 2, 3, (x, y) => (y >= 6 ? knit(x, y) : 0));
+  // the pompom
+  v.ellipsoid(c + 1.5, 10, c - 1, 2.3, 2.3, 2.3, (x, y, z) => ((x + y + z) % 2 ? pom : tone(pom, -0.1)));
+  return { vox: v, size: 0.05, origin: [c + 0.5, 0, c + 0.5] };
+}
+
+// a length of hemp rope one metre long along +z (stretched to fit by the scene)
+export function rope() {
+  const v = new Vox(1, 1, 20);
+  for (let z = 0; z < 20; z++) v.set(0, 0, z, z % 3 === 0 ? 0xa8946a : 0xc8b48a);
+  return { vox: v, size: 0.05, origin: [0.5, 0.5, 0] };
+}
+
+// a rough plank laid across the open grave (the coffin rests on two of them)
+export function plank({ len = 30 } = {}) {
+  const v = new Vox(len, 2, 5);
+  v.fill(0, 0, 0, len - 1, 1, 4, (x, y, z) => (vhash(x, y, z, 11) < 0.08 ? WOOD_D : y === 1 ? (z === 0 || z === 4 ? WOOD : WOOD_L) : WOOD));
+  return { vox: v, size: 0.05, origin: [len / 2, 0, 2.5] };
+}
+
+// a short stake the far ends of the lowering ropes are tied to
+export function stake() {
+  const v = new Vox(2, 9, 2);
+  v.fill(0, 0, 0, 1, 7, 1, (x, y) => (y === 7 ? WOOD_L : y < 2 ? WOOD_D : WOOD));
+  v.set(0, 8, 0, WOOD_L);
+  v.fill(0, 5, 0, 1, 5, 1, 0xc8b48a); // the rope's turn round it
+  return { vox: v, size: 0.05, origin: [1, 1, 1] };
+}
+
 export const PREVIEW = {
+  gravePit: () => gravePit({ w: 12, l: 20, d: 10 }),
+  toque: () => toque(),
+  plank: () => plank(),
   leafPile: () => leafPile(),
   axe: () => axe(),
   umbrella: () => umbrella(),
