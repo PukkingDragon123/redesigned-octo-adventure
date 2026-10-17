@@ -143,13 +143,13 @@ extendVChar({
 });
 
 // Funeral clothes: dark coats in place of the hi-vis, the plaid, the lab coat and the
-// apron (Doug keeps his red serge, Birdie her yellow slicker, the kids their jerseys).
+// apron, hats off (Doug keeps his red serge, Birdie her yellow slicker, the kids their jerseys).
 // Same faces and voices; the scene speaks for them under their own names.
 const MOURN = {
   grandma: { top: { type: 'cardigan', color: 0x3a2a38, accent: 0xb0a0b0 }, apron: null },
-  lou: { top: { type: 'coat', color: 0x2a2830, accent: 0x55525e } },
-  gus: { top: { type: 'coat', color: 0x2e2b28, accent: 0x6a5a40 } },
-  marie: { top: { type: 'coat', color: 0x1e1c24, accent: 0x3e3a48 }, apron: null },
+  lou: { top: { type: 'coat', color: 0x2a2830, accent: 0x55525e }, hat: null },
+  gus: { top: { type: 'coat', color: 0x2e2b28, accent: 0x6a5a40 }, hat: null },
+  marie: { top: { type: 'coat', color: 0x1e1c24, accent: 0x3e3a48 }, apron: null, hat: { type: 'beret', color: 0x2a2430 } },
   ingrid: { top: { type: 'coat', color: 0x262a36, accent: 0x4e566a }, stethoscope: false },
   agnes: { top: { type: 'cardigan', color: 0x2e2836, accent: 0x6a6078 } },
 };
