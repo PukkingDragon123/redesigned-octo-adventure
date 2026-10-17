@@ -1,211 +1,160 @@
-// The loading screen: a plain dark background, Hank's pixel skull and a thin
-// progress bar, then a quick fade. The little stage (RunStage) is a tiny scene of
-// its own: one skeleton, a blob shadow and a few road dashes slipping past, lit
-// by a studio key light. It renders through the game's pipeline (so it gets the
-// same outlines and grading) while the world builds, and the title screen reuses
-// it on a dark plum background.
+// The loading screen: a dark, warm room with Hank's voxel skull (red toque and all)
+// turning slowly in a soft hearth-coloured rim light, and a thin progress bar. No words.
+//
+// The skull has a tiny renderer of its own (a second, small WebGL canvas: one mesh, two
+// little shaders), drawn at a low resolution and scaled up by whole pixels with a one-pixel
+// ink outline, so it reads as crisp pixel art like the game. It costs a few milliseconds to
+// set up and well under one to draw, so it never holds up the world being built behind it;
+// it is torn down (and its context released) as soon as the loading screen goes.
 import * as THREE from 'three';
-import { VoxelCharacter } from '../game/vchar.js';
-import { G } from '../render/shaderlib.js';
+import { CHARACTERS, buildHead, buildJaw, VS } from '../voxel/models/characters.js';
+import { meshVox } from '../voxel/mesh.js';
+import { EMIT } from '../voxel/vox.js';
 import { leafCover, leafReveal } from '../ui/leaves.js';
 
-const DASHES = 14, DASH_GAP = 0.9;
+const ART = 104; // the skull's canvas, in art pixels (square)
+const INK = [0x1e / 255, 0x14 / 255, 0x18 / 255];
+const BG = '#1a1014';
 
-// ---------------------------------------------------------------- the running stage
-export class RunStage {
-  constructor({ bg = 0x000000, dash = 0x4a3c42, speed = 4.2 } = {}) {
-    const scene = (this.scene = new THREE.Scene());
-    scene.background = new THREE.Color(bg);
-    this.camera = new THREE.PerspectiveCamera(30, 1, 0.1, 80);
-    this.speed = speed;
-    this.t = 0;
-    // framing: fx/fy slide Hank across the screen (fractions of the half-size),
-    // size is his height as a fraction of the screen height
-    this.fx = 0;
-    this.fy = 0.1;
-    this.size = 0.3;
-    this.ang = 0.95;
-    this.fade = null; // own fade to black (null: follow the pipeline's)
-    this.hank = new VoxelCharacter(null, 'hank', { parent: scene, y: 0, shadow: false });
-    this.hank.scripted = true;
-    // a soft blob shadow that runs with him
-    this.shadow = new THREE.Mesh(new THREE.CircleGeometry(0.34, 20), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.55, depthWrite: false }));
-    this.shadow.rotation.x = -Math.PI / 2;
-    this.shadow.position.y = 0.004;
-    scene.add(this.shadow);
-    // road dashes: recycled ahead of him as he passes them
-    this.dashes = [];
-    const dg = new THREE.BoxGeometry(0.05, 0.01, 0.45);
-    const dm = new THREE.MeshBasicMaterial({ color: dash });
-    for (let i = 0; i < DASHES; i++) {
-      const m = new THREE.Mesh(dg, dm);
-      m.position.set(0.32, 0.005, (i - 5) * DASH_GAP);
-      scene.add(m);
-      this.dashes.push(m);
+// voxel colours carry baked AO (rgb) and glow (a); lit by a warm key, a plum sky fill and
+// a strong warm rim from behind, output straight to sRGB
+const VERT = /* glsl */ `
+attribute vec4 color4;
+varying vec4 vC;
+varying vec3 vN;
+varying vec3 vV;
+void main() {
+  vC = color4;
+  vN = normalize(mat3(modelMatrix) * normal);
+  vec4 w = modelMatrix * vec4(position, 1.0);
+  vV = normalize(cameraPosition - w.xyz);
+  gl_Position = projectionMatrix * viewMatrix * w;
+}`;
+const FRAG = /* glsl */ `
+precision highp float;
+varying vec4 vC;
+varying vec3 vN;
+varying vec3 vV;
+uniform vec3 uKey;
+uniform vec3 uRim;
+uniform float uGlow;
+void main() {
+  vec3 n = normalize(vN);
+  float key = max(dot(n, uKey), 0.0);
+  float rim = max(dot(n, uRim), 0.0);
+  float edge = pow(1.0 - max(dot(n, normalize(vV)), 0.0), 2.0);
+  float sky = 0.5 + 0.5 * n.y;
+  // the hearth sits behind and to the right: faces turning away catch it, and anything
+  // seen edge-on picks up a warm fringe (stronger on the hearth's side)
+  vec3 light = vec3(1.0, 0.84, 0.64) * key * 1.05
+    + mix(vec3(0.04, 0.02, 0.03), vec3(0.13, 0.09, 0.15), sky)
+    + vec3(1.0, 0.42, 0.14) * (rim * 1.9 + edge * (0.35 + 1.1 * rim));
+  vec3 c = vC.rgb * light;
+  c = mix(c, vC.rgb * (1.4 + uGlow * 0.6), vC.a);
+  c = c / (1.0 + c * 0.18); // soft shoulder so the rim never clips flat
+  gl_FragColor = vec4(pow(max(c, 0.0), vec3(1.0 / 2.2)), 1.0);
+}`;
+// the low-res frame, upscaled 1:1 with a one-pixel ink line around the silhouette
+const OUT_VERT = /* glsl */ `
+varying vec2 vUv;
+void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`;
+const OUT_FRAG = /* glsl */ `
+precision highp float;
+uniform sampler2D uTex;
+uniform vec2 uPx;
+uniform vec3 uInk;
+varying vec2 vUv;
+void main() {
+  vec4 c = texture2D(uTex, vUv);
+  if (c.a > 0.5) { gl_FragColor = vec4(c.rgb, 1.0); return; }
+  float a = texture2D(uTex, vUv + vec2(uPx.x, 0.0)).a + texture2D(uTex, vUv - vec2(uPx.x, 0.0)).a
+    + texture2D(uTex, vUv + vec2(0.0, uPx.y)).a + texture2D(uTex, vUv - vec2(0.0, uPx.y)).a;
+  gl_FragColor = a > 0.5 ? vec4(uInk, 1.0) : vec4(0.0);
+}`;
+
+// ---------------------------------------------------------------- the skull stage
+class SkullStage {
+  constructor(canvas) {
+    const r = (this.renderer = new THREE.WebGLRenderer({ canvas, antialias: false, alpha: true, premultipliedAlpha: false, powerPreference: 'low-power' }));
+    r.setPixelRatio(1);
+    r.setSize(ART, ART, false);
+    r.setClearColor(0x000000, 0);
+    this.rt = new THREE.WebGLRenderTarget(ART, ART, { magFilter: THREE.NearestFilter, minFilter: THREE.NearestFilter, depthBuffer: true });
+    this.scene = new THREE.Scene();
+    this.camera = new THREE.PerspectiveCamera(24, 1, 0.1, 20);
+    this.camera.position.set(0, 0.12, 2.95);
+    this.camera.lookAt(0, 0.0, 0);
+    this.mat = new THREE.ShaderMaterial({
+      vertexShader: VERT, fragmentShader: FRAG,
+      uniforms: { uKey: { value: new THREE.Vector3(-0.55, 0.55, 0.65).normalize() }, uRim: { value: new THREE.Vector3(0.9, 0.3, -0.3).normalize() }, uGlow: { value: 0 } },
+    });
+    // Hank's own head (the game's model), with a warm ember in each socket
+    const spec = CHARACTERS.hank;
+    const head = buildHead(spec);
+    for (const s of head.face.sockets) {
+      const x = Math.round(s.x - 1), z = head.face.z - 1;
+      for (const dx of [0, 1]) for (const y of [5, 6]) head.vox.set(x + dx, y, z, (y === 6 && dx === 0 ? 0xfff0c0 : 0xffb050) | EMIT);
     }
-    this.geos = [this.shadow.geometry, dg];
-    this.mats = [this.shadow.material, dm];
-    // studio lights (swapped into the shared uniforms only while this stage renders)
-    this.pl = Array.from({ length: 8 }, () => new THREE.Vector4(0, -999, 0, 1));
-    this.plc = Array.from({ length: 8 }, () => new THREE.Vector3(0, 0, 0));
-    this.plc[0].set(0.95, 0.5, 0.22); // a warm back glow, like a hearth behind him
-    this.plc[1].set(0.2, 0.26, 0.45); // a cool fill from the other side
-    this.update(0);
+    const jaw = buildJaw(spec);
+    this.geos = [meshVox(head.vox, { size: VS, origin: head.origin }), meshVox(jaw.vox, { size: VS, origin: jaw.origin })];
+    // spin about the skull's middle: the pivot sits half a head up, toque included
+    this.pivot = new THREE.Group();
+    this.scene.add(this.pivot);
+    const off = -0.47;
+    this.head = new THREE.Mesh(this.geos[0], this.mat);
+    this.head.position.y = off;
+    this.pivot.add(this.head);
+    this.jawJ = new THREE.Group();
+    this.jawJ.position.set(0, off, (3 - spec.head.d / 2) * VS);
+    this.pivot.add(this.jawJ);
+    this.jawJ.add(new THREE.Mesh(this.geos[1], this.mat));
+    // the outline pass
+    this.outMat = new THREE.ShaderMaterial({
+      vertexShader: OUT_VERT, fragmentShader: OUT_FRAG, transparent: true, depthTest: false, depthWrite: false,
+      uniforms: { uTex: { value: this.rt.texture }, uPx: { value: new THREE.Vector2(1 / ART, 1 / ART) }, uInk: { value: new THREE.Vector3(...INK) } },
+    });
+    this.quadGeo = new THREE.PlaneGeometry(2, 2);
+    this.quad = new THREE.Mesh(this.quadGeo, this.outMat);
+    this.quad.frustumCulled = false;
+    this.outScene = new THREE.Scene();
+    this.outScene.add(this.quad);
+    this.t = 0;
   }
 
-  update(dt) {
+  draw(dt) {
     this.t += dt;
-    const h = this.hank;
-    // he really runs forward (so his scarf streams); the camera keeps pace
-    h.pos.z += this.speed * dt;
-    h.speedOverride = this.speed;
-    h.targetYaw = 0;
-    h.update(dt, this.camera.position);
-    this.shadow.position.x = h.pos.x;
-    this.shadow.position.z = h.pos.z + 0.03;
-    const s = 1 - Math.min(0.4, h.hop * 0.8);
-    this.shadow.scale.set(s, s, 1);
-    for (const d of this.dashes) if (d.position.z < h.pos.z - 5 * DASH_GAP - 0.5) d.position.z += DASHES * DASH_GAP;
-    this.frame();
-  }
-
-  frame() {
-    const cam = this.camera, h = this.hank;
-    const W = Math.max(1, innerWidth), H = Math.max(1, innerHeight);
-    cam.aspect = W / H;
-    const tan = Math.tan(THREE.MathUtils.degToRad(cam.fov / 2));
-    const height = h.P.height;
-    const r = height / (this.size * 2 * tan);
-    const ang = this.ang + Math.sin(this.t * 0.23) * 0.12;
-    const cy = h.pos.y + height * 0.52;
-    cam.position.set(h.pos.x + Math.sin(ang) * r, cy + r * 0.12, h.pos.z + Math.cos(ang) * r);
-    cam.lookAt(h.pos.x, cy, h.pos.z);
-    // slide the lens so he sits where the layout wants him
-    cam.translateX(-this.fx * r * tan * cam.aspect);
-    cam.translateY(-this.fy * r * tan);
-    cam.updateProjectionMatrix();
-  }
-
-  // render through the game's pipeline with studio lighting, then put the world's back
-  render(pipeline) {
-    const h = this.hank, P = pipeline.post;
-    this.pl[0].set(h.pos.x - 1.1, h.pos.y + 1.5, h.pos.z - 1.3, 4.5);
-    this.pl[1].set(h.pos.x - 2.2, h.pos.y + 1.0, h.pos.z + 0.6, 4);
-    const keep = {
-      dir: G.uSunDir.value.clone(), sun: G.uSunColor.value.clone(), sky: G.uSkyAmb.value.clone(), gnd: G.uGroundAmb.value.clone(),
-      night: G.uNight.value, wet: G.uWet.value, snow: G.uSnow.value, pl: G.uPL.value, plc: G.uPLc.value,
-      fog: P.uFogDensity.value, rays: P.uRays.value, cold: P.uCold.value, sat: P.uSaturation.value, fade: P.uFade.value, refl: pipeline.reflections,
-    };
-    G.uSunDir.value.set(0.55, 0.75, 0.45).normalize();
-    G.uSunColor.value.setRGB(1.2, 0.98, 0.78);
-    G.uSkyAmb.value.setRGB(0.34, 0.37, 0.56);
-    G.uGroundAmb.value.setRGB(0.16, 0.1, 0.08);
-    G.uNight.value = 0;
-    G.uWet.value = 0;
-    G.uSnow.value = 0;
-    G.uPL.value = this.pl;
-    G.uPLc.value = this.plc;
-    P.uFogDensity.value = 0;
-    P.uRays.value = 0;
-    P.uCold.value = 0;
-    P.uSaturation.value = 1.1;
-    if (this.fade != null) P.uFade.value = this.fade;
-    pipeline.reflections = false;
-    pipeline.render(this.scene, this.camera);
-    G.uSunDir.value.copy(keep.dir);
-    G.uSunColor.value.copy(keep.sun);
-    G.uSkyAmb.value.copy(keep.sky);
-    G.uGroundAmb.value.copy(keep.gnd);
-    G.uNight.value = keep.night;
-    G.uWet.value = keep.wet;
-    G.uSnow.value = keep.snow;
-    G.uPL.value = keep.pl;
-    G.uPLc.value = keep.plc;
-    P.uFogDensity.value = keep.fog;
-    P.uRays.value = keep.rays;
-    P.uCold.value = keep.cold;
-    P.uSaturation.value = keep.sat;
-    P.uFade.value = keep.fade;
-    pipeline.reflections = keep.refl;
+    const t = this.t;
+    // a slow turn that lingers a little when the face comes round, a gentle bob and nod
+    const p = this.pivot;
+    p.rotation.y = t * 0.7 - Math.sin(t * 0.7) * 0.22 + 0.5;
+    p.rotation.x = Math.sin(t * 0.9) * 0.05;
+    p.rotation.z = Math.sin(t * 0.6 + 1) * 0.06;
+    p.position.y = Math.sin(t * 1.4) * 0.025;
+    // now and then a little clack of the jaw
+    const c = (t % 3.4) / 3.4;
+    this.jawJ.rotation.x = c > 0.86 ? Math.sin(((c - 0.86) / 0.14) * Math.PI * 2) ** 2 * 0.28 : 0;
+    this.mat.uniforms.uGlow.value = 0.5 + 0.5 * Math.sin(t * 2.2);
+    const r = this.renderer;
+    r.setRenderTarget(this.rt);
+    r.clear();
+    r.render(this.scene, this.camera);
+    r.setRenderTarget(null);
+    r.clear();
+    r.render(this.outScene, this.camera);
   }
 
   dispose() {
-    this.hank.dispose();
     for (const g of this.geos) g.dispose();
-    for (const m of this.mats) m.dispose();
+    this.quadGeo.dispose();
+    this.mat.dispose();
+    this.outMat.dispose();
+    this.rt.dispose();
+    this.renderer.dispose();
+    this.renderer.forceContextLoss();
   }
-}
-
-// ---------------------------------------------------------------- the skull progress bar
-// Hank's skull in his red toque, 30 x 32 art pixels, painted in code: `full` is the
-// finished picture, `empty` its dark silhouette, `eyes` the socket centres.
-const SW = 30, SH = 32;
-const INK = 0x1e1418;
-const BONE = [0xfff4dc, 0xe8dcc0, 0xc8b898, 0x9a8a72];
-const RED = [0xf05a3a, 0xc8361f, 0x8a1e14];
-const CREAM = [0xfffbea, 0xf2e6c8, 0xc8b898];
-let SKULL = null;
-function skullArt() {
-  if (SKULL) return SKULL;
-  const col = new Int32Array(SW * SH).fill(-1);
-  const set = (x, y, c) => { if (x >= 0 && y >= 0 && x < SW && y < SH) col[y * SW + x] = c; };
-  const cx = 14.5;
-  for (let y = 0; y < SH; y++) for (let x = 0; x < SW; x++) {
-    const px = x + 0.5, py = y + 0.5;
-    // cranium and cheekbones, then the jaw
-    const cr = ((px - cx) / 11) ** 2 + ((py - 19) / 9) ** 2 <= 1 && (py < 23 || Math.abs(px - cx) <= 10.2 - (py - 23) * 1.3);
-    const jaw = py >= 23 && py <= 30 && Math.abs(px - cx) <= (py > 28.5 ? 5.5 : 6.5);
-    if (cr || jaw) {
-      const l = -(px - cx) * 0.55 - (py - 18) * 0.7;
-      set(x, y, l > 4.5 ? BONE[0] : l > -3.5 ? BONE[1] : l > -7.5 ? BONE[2] : BONE[3]);
-    }
-  }
-  // teeth and the mouth line
-  for (let x = 9; x <= 20; x++) {
-    set(x, 25, INK);
-    if (x % 2 === 0) { set(x, 24, BONE[3]); set(x, 26, BONE[3]); }
-  }
-  // the nose
-  set(14, 22, INK); set(15, 22, INK); set(14, 23, INK); set(15, 23, BONE[3]);
-  // eye sockets
-  const eyes = [[9.5, 19.5], [19.5, 19.5]];
-  for (const [ex, ey] of eyes) for (let y = 15; y < 24; y++) for (let x = Math.floor(ex - 4); x < ex + 4; x++) {
-    if (((x + 0.5 - ex) / 3.1) ** 2 + ((y + 0.5 - ey) / 2.7) ** 2 <= 1) set(x, y, INK);
-  }
-  // the toque: a ribbed red dome, a cream turned-up band and a pom-pom
-  for (let y = 4; y <= 12; y++) for (let x = 0; x < SW; x++) {
-    if (((x + 0.5 - cx) / 11.5) ** 2 + ((y + 0.5 - 12.5) / 8.2) ** 2 > 1) continue;
-    set(x, y, (x + 1) % 3 === 0 ? RED[2] : x < 11 && y < 10 ? RED[0] : RED[1]);
-  }
-  for (let y = 11; y <= 14; y++) for (let x = 3; x <= 26; x++) {
-    if ((y === 11 || y === 14) && (x === 3 || x === 26)) continue;
-    set(x, y, y === 14 ? CREAM[2] : x % 2 ? CREAM[1] : CREAM[0]);
-  }
-  for (let y = 0; y < 7; y++) for (let x = 10; x < 20; x++) {
-    const d = Math.hypot(x + 0.5 - cx, y + 0.5 - 3.4);
-    if (d <= 3.1) set(x, y, d < 1.6 && x < 15 ? CREAM[0] : x + y > 19 ? CREAM[2] : CREAM[1]);
-  }
-  // an ink outline around everything
-  const out = col.slice();
-  for (let y = 0; y < SH; y++) for (let x = 0; x < SW; x++) {
-    if (col[y * SW + x] >= 0) continue;
-    if ((x > 0 && col[y * SW + x - 1] >= 0) || (x < SW - 1 && col[y * SW + x + 1] >= 0) || (y > 0 && col[(y - 1) * SW + x] >= 0) || (y < SH - 1 && col[(y + 1) * SW + x] >= 0)) out[y * SW + x] = INK;
-  }
-  const full = new Uint8ClampedArray(SW * SH * 4), empty = new Uint8ClampedArray(SW * SH * 4);
-  const put = (d, i, c) => { d[i * 4] = (c >> 16) & 255; d[i * 4 + 1] = (c >> 8) & 255; d[i * 4 + 2] = c & 255; d[i * 4 + 3] = 255; };
-  for (let i = 0; i < SW * SH; i++) {
-    const c = out[i];
-    if (c < 0) continue;
-    put(full, i, c);
-    // the empty skull: a dim plum silhouette with a slightly lighter rim
-    put(empty, i, col[i] < 0 ? 0x4a3842 : c === INK ? 0x140c10 : 0x2a1e26);
-  }
-  SKULL = { full, empty, eyes, bone: col };
-  return SKULL;
 }
 
 // ---------------------------------------------------------------- the loading screen
-// Plain dark background, Hank's pixel skull and a thin progress bar. No words.
 export class Loader3D {
   constructor(pipeline) {
     this.pl = pipeline;
@@ -224,15 +173,12 @@ export class Loader3D {
     if (this.ui) this.ui.style.visibility = 'hidden';
     const root = document.createElement('div');
     root.id = 'loader3d';
-    root.style.cssText = 'position:fixed;inset:0;z-index:150;pointer-events:none;background:#1a1014;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;';
+    root.style.cssText = `position:fixed;inset:0;z-index:150;pointer-events:none;background:${BG};display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;`;
+    // a warm glow in the middle of the dark, like a hearth just out of sight
+    root.style.backgroundImage = 'radial-gradient(circle at 50% 46%, rgba(120,52,30,0.38) 0%, rgba(70,30,26,0.2) 22%, rgba(26,16,20,0) 48%)';
     const skull = document.createElement('canvas');
-    skull.width = SW;
-    skull.height = SH;
+    skull.width = skull.height = ART;
     skull.style.cssText = 'image-rendering:pixelated;';
-    const ctx = skull.getContext('2d');
-    const img = ctx.createImageData(SW, SH);
-    img.data.set(skullArt().full);
-    ctx.putImageData(img, 0, 0);
     const track = document.createElement('div');
     track.style.cssText = 'width:min(180px,46vw);height:2px;background:#3a2a32;overflow:hidden;';
     const bar = document.createElement('div');
@@ -242,12 +188,19 @@ export class Loader3D {
     document.body.appendChild(root);
     this.dom = root;
     this.bar = bar;
+    try {
+      this.stage = new SkullStage(skull);
+    } catch (e) {
+      // no WebGL for a second canvas: the bar alone will do
+      console.warn('loader skull', e);
+      skull.remove();
+      this.stage = null;
+    }
     this.place = () => {
       // a whole number of device pixels per art pixel
       const dpr = window.devicePixelRatio || 1;
-      const P = Math.max(1, Math.floor((Math.min(innerWidth, innerHeight) * dpr) / 220));
-      skull.style.width = `${(SW * P) / dpr}px`;
-      skull.style.height = `${(SH * P) / dpr}px`;
+      const P = Math.max(1, Math.round((Math.min(innerWidth, innerHeight) * dpr * 0.42) / ART));
+      skull.style.width = skull.style.height = `${(ART * P) / dpr}px`;
     };
     this.place();
     addEventListener('resize', this.place);
@@ -262,6 +215,8 @@ export class Loader3D {
     this.frame(0);
   }
 
+  // the world calls this between building steps (the main thread is busy in between, so
+  // the skull also turns here)
   progress(p, label) {
     this.p = Math.max(this.p, p);
     const now = performance.now();
@@ -277,6 +232,12 @@ export class Loader3D {
     this.shown += (this.p - this.shown) * Math.min(1, dt * 6);
     if (this.p >= 1 && this.shown > 0.97) this.shown = 1;
     this.bar.style.transform = `scaleX(${this.shown.toFixed(3)})`;
+    try {
+      this.stage?.draw(dt);
+    } catch (e) {
+      console.warn('loader skull', e);
+      this.stage = null;
+    }
   }
 
   // fill the bar, then fade away
@@ -293,6 +254,8 @@ export class Loader3D {
     }
     this.running = false;
     removeEventListener('resize', this.place);
+    this.stage?.dispose();
+    this.stage = null;
     this.dom.remove();
     if (this.ui) this.ui.style.visibility = '';
     if (!quick) leafReveal({ layer: 'front', dur: 0.4 });
