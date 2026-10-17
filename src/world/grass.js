@@ -222,7 +222,7 @@ export function buildGrassMask(terrain, blockers = []) {
           if (i < 0 || j < 0 || i >= N || j >= N) continue;
           const o = (j * N + i) * 4;
           data[o] = Math.round(data[o] * (b.keep ?? 0));
-          if (b.short) data[o + 1] = Math.min(data[o + 1], 90);
+          if (b.short) data[o + 1] = Math.min(data[o + 1], b.short === true ? 90 : b.short); // (a number: how short)
         }
       }
     }

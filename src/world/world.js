@@ -83,6 +83,8 @@ export class World {
     const lc = L.POI.lumberCamp;
     if (lc) blockers.push({ x: lc.x, z: lc.z, w: lc.r * 2 + 4, d: lc.r * 2 + 4, yaw: Math.PI / 4, keep: 0.4, short: true });
     blockers.push({ x: L.POI.grave.x, z: L.POI.grave.z, w: 20, d: 20, yaw: Math.PI / 4, keep: 0.4, short: true });
+    // the title screen's knoll: Hank sits in short grass
+    if (L.TITLE_HILL) blockers.push({ x: L.TITLE_HILL.x, z: L.TITLE_HILL.z, w: 13, d: 13, yaw: L.TITLE_HILL.yaw, keep: 0.55, short: 30 });
     blockers.push({ x: L.POI.graveyard.x, z: L.POI.graveyard.z, w: 30, d: 30, yaw: 0, keep: 0.9, short: true });
     blockers.push({ x: L.POI.garage.x + 6, z: L.POI.garage.z, w: 12, d: 10, yaw: 0, keep: 0.7, short: true });
     for (const b of this.deco2d?.lawns || []) blockers.push(b); // mown patches under the 2D furniture
