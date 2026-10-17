@@ -281,7 +281,8 @@ export class Compass3D {
       if (this.cornerOn()) this.openFP();
     });
     ui.root.appendChild(hit);
-    this.label = el('div', 'k-plate k-dark cmp-lbl off');
+    // (a little tag hanging under the compass)
+    this.label = el('div', 'k-tag cmp-lbl off');
     ui.root.appendChild(this.label);
     // the first-person view's own little bar: what to do, and an X
     this.fpEl = el('div', 'cmp-fp', '<div class="k-plate k-dark cmp-fp-hint"><span class="k-key">Esc</span><span>put it away</span><span class="sep"></span><span>drag to look about</span></div>');

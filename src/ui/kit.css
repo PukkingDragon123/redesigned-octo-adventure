@@ -174,7 +174,7 @@
 .k-btn.k-green:hover, .k-btn.k-green.sel { border-image-source: var(--k-btn-green-hover); }
 .k-btn:active, .k-btn.down { border-image-source: var(--k-btn-down) !important; padding-top: calc(var(--u) * 6); padding-bottom: 0; color: var(--k-cream2); }
 .k-btn:disabled, .k-btn.off { border-image-source: var(--k-btn-off) !important; color: #d8d0c4; text-shadow: 0 var(--u) 0 #4a443e; cursor: default; }
-/* keyboard / gamepad focus: Hank's bony finger points at it */
+/* keyboard / gamepad focus: a little gold arrow board points at it */
 .k-btn.sel::before, .k-point::before {
   content: '';
   position: absolute;
@@ -184,7 +184,7 @@
   top: round(down, calc(50% - var(--u) * 8), var(--u));
   width: calc(var(--u) * 16);
   height: calc(var(--u) * 16);
-  background: var(--g-hand) 0 0 / 100% 100% no-repeat;
+  background: var(--k-pointer) 0 0 / 100% 100% no-repeat;
   image-rendering: pixelated;
   animation: k-poke 0.6s steps(1) infinite;
   pointer-events: none;
@@ -409,6 +409,32 @@
 /* a leather strap with a brass buckle down the edge of a book */
 .k-strap { position: absolute; top: calc(var(--u) * 6); bottom: calc(var(--u) * 6); width: calc(var(--u) * 14); background: var(--k-strap) 0 0 / calc(var(--u) * 14) calc(var(--u) * 16) repeat-y; pointer-events: none; z-index: 2; }
 .k-strap::after { content: ''; position: absolute; left: calc(var(--u) * -4); top: calc(50% - var(--u) * 9); top: round(down, calc(50% - var(--u) * 9), var(--u)); width: calc(var(--u) * 22); height: calc(var(--u) * 18); background: var(--k-buckle) 0 0 / 100% 100% no-repeat; }
+
+/* ---------------------------------------------------------------- hanging tag (24x20, slice 7) */
+/* what Hank can do right here: a cream board on a string over his head, pointing at him */
+.k-tag {
+  position: relative;
+  box-sizing: border-box;
+  border-style: solid;
+  border-color: transparent;
+  border-width: calc(var(--u) * 3) calc(var(--u) * 4) calc(var(--u) * 4);
+  border-image: var(--k-tag) 7 fill / calc(var(--u) * 7) / 0 repeat;
+  padding: 0 calc(var(--u) * 2);
+  color: #3e2414;
+  text-shadow: none;
+  image-rendering: pixelated;
+  white-space: nowrap;
+}
+.k-tag::before {
+  content: ''; position: absolute; left: calc(50% - var(--u) * 7); left: calc(round(down, 50%, var(--u)) - var(--u) * 7);
+  top: calc(var(--u) * -11); width: calc(var(--u) * 14); height: calc(var(--u) * 9);
+  background: var(--k-tag-rope) 0 0 / 100% 100% no-repeat; image-rendering: pixelated; pointer-events: none;
+}
+.k-tag::after {
+  content: ''; position: absolute; left: calc(50% - var(--u) * 4); left: calc(round(down, 50%, var(--u)) - var(--u) * 4);
+  bottom: calc(var(--u) * -9); width: calc(var(--u) * 9); height: calc(var(--u) * 6);
+  background: var(--k-tag-tail) 0 0 / 100% 100% no-repeat; image-rendering: pixelated; pointer-events: none;
+}
 
 /* ---------------------------------------------------------------- key caps (16px, slice 5 5 7 5) */
 .k-key {

@@ -1,12 +1,14 @@
-// On-screen controls for phones & tablets, drawn as chunky pixel-art wood and brass.
+// On-screen controls for phones & tablets: as few as will do, drawn as round log slices
+// (bark round the edge, the tree rings, a dab of paint with the picture on it), the same
+// wood and paint as the signboards everywhere else.
 // Riding: the left thumb steers with a floating stick (put your thumb down anywhere on
 // the left and slide; it has a dead zone, a gentle response curve and springs back to
 // centre). Pull it down to lean back (wheelie / manual / backflip), push it up to lean
 // forward (stoppie / nose / frontflip). On the right the thumb pedals by turning the
 // crank (ui/crank.js: drag round the chainring, as fast as you like; backwards is a coaster
-// brake), with the gear shifter just left of it (up over down; the gear number, with an A
-// while the box is still automatic, is on the crank beside it: the first tap takes it
-// over), the brake, hop, the bell and one TRICK button (Hank pulling a wheelie): hold
+// brake; tap the rear cogs to change gear, up on the top half and down on the bottom, and
+// tap the chainring to ring the bell), the brake, hop and one TRICK button (Hank pulling a
+// wheelie): hold
 // TRICK to drift (or strike a pose in the air) and slide your thumb off it to pick a
 // direction from the little radial.
 // On foot the stick walks (a gentle push ambles, half way walks briskly, all the way out
@@ -23,7 +25,7 @@
 import { input } from '../core/input.js';
 import { el, scale, onScale } from './kit.js';
 import { CrankHUD } from './crank.js';
-import { field, paintBands, paintMetal, RAMP, C } from './kitart.js';
+import { field, paintBands, PAINT, C } from './kitart.js';
 import { iconAt } from '../art/icons.js';
 import { Pix } from '../art/pixel.js';
 
@@ -37,57 +39,71 @@ const toURL = (p) => {
 };
 
 // ---------------------------------------------------------------- pixel art
+// paint for the middle of each button (the signboards' paints, kitart.js PAINT)
 const FACES = {
-  green: RAMP.green, red: RAMP.red, gold: RAMP.gold, blue: RAMP.blue, cream: RAMP.cream,
-  leather: RAMP.leather, purple: [0xd8b0ff, 0xa878e8, 0x7c4ab8, 0x52307e, 0x2e1a4a],
+  green: PAINT.green, red: PAINT.red, gold: PAINT.gold, blue: PAINT.leather, cream: PAINT.cream,
+  leather: PAINT.leather, purple: [0xdcc0f4, 0xb08ad8, 0x8460b4, 0x5e4288, 0x3a2858],
 };
-const WOOD = [0xd8a060, 0xb87a44, 0x9a5e30, 0x74421c, 0x4a2810];
-// a round button: gold rim, domed coloured face, icon; pressed sinks 2px into its lip
-// (iconSize: draw the icon at its own design size, one design pixel to one art pixel)
+const WOOD = [0xe8c088, 0xd09a5e, 0xb07a44, 0x8a5a30, 0x5e3a1e];
+const BARK = [0x7a5a40, 0x5a3e2a, 0x3e2a1c];
+// A round button: a slice of log. Bark round the edge, pale sapwood, the tree rings, and a
+// dab of paint in the middle with the picture on it; the cut's edge is a lip underneath.
+// Pressed sinks 3px into it. (iconSize: draw the icon at its own design size, one design
+// pixel to one art pixel)
 function buttonArt(size, face, icon, pressed, iconSize = 0) {
   const S = size, H = size + 4;
   const p = new Pix(S, H);
   const R = FACES[face] || FACES.leather;
   const r = S / 2 - 0.5;
   const top = pressed ? 3 : 0;
-  // lip (the button's side)
+  // lip (the log's side: bark)
   const lip = (x, y) => Math.hypot(x + 0.5 - S / 2, y + 0.5 - (S / 2 + (pressed ? 3 : 4))) <= r;
   const faceM = (x, y) => Math.hypot(x + 0.5 - S / 2, y + 0.5 - (S / 2 + top)) <= r;
   const fl = field(S, H, lip, 2);
-  for (let y = 0; y < H; y++) for (let x = 0; x < S; x++) if (fl.D[y * S + x] && !faceM(x, y)) p.set(x, y, fl.D[y * S + x] < 1.5 ? C.ink : C.goldDD);
+  for (let y = 0; y < H; y++) for (let x = 0; x < S; x++) if (fl.D[y * S + x] && !faceM(x, y)) p.set(x, y, fl.D[y * S + x] < 1.5 ? C.ink : (x * 5 + y) % 4 === 0 ? BARK[2] : BARK[1]);
   const f = field(S, H, faceM, 6);
   const cx = S / 2, cy = S / 2 + top;
-  paintBands(p, f, [
-    () => C.ink,
-    (l) => (l > 0.45 ? C.goldHi : l > -0.2 ? C.goldL : C.goldD),
-    (l) => (l > 0.2 ? C.goldD : C.gold),
-    () => C.ink,
-    (l, x, y) => {
-      // domed face: lit from the top left
-      const dx = (x + 0.5 - cx) / r, dy = (y + 0.5 - cy) / r;
-      const d = -dx * 0.6 - dy * 0.75;
-      const k = pressed ? d - 0.35 : d;
-      return R[k > 0.55 ? 0 : k > 0.1 ? 1 : k > -0.45 ? 2 : 3];
-    },
-  ]);
+  const paintR = r * 0.7;
+  for (let y = 0; y < H; y++) for (let x = 0; x < S; x++) {
+    const d = f.D[y * S + x];
+    if (!d) continue;
+    const dx = x + 0.5 - cx, dy = y + 0.5 - cy, rr = Math.hypot(dx, dy);
+    const l = f.L[y * S + x];
+    let c;
+    if (d < 1.5) c = C.ink;
+    else if (d < 3.5) c = (Math.floor(Math.atan2(dy, dx) * 5) + Math.floor(d)) % 3 === 0 ? BARK[0] : l > 0.2 ? BARK[0] : BARK[1];
+    else if (d < 4.5) c = l > 0.1 ? WOOD[0] : WOOD[1];
+    else if (rr > paintR + 1) {
+      // the rings, with a soft light across the cut face
+      const ring = Math.floor(rr * 0.75 + Math.sin(Math.atan2(dy, dx) * 3) * 0.4) % 2;
+      const k = (-dx * 0.6 - dy * 0.75) / r - (pressed ? 0.4 : 0);
+      c = ring ? (k > 0.35 ? WOOD[1] : WOOD[2]) : k > 0.35 ? WOOD[0] : k > -0.4 ? WOOD[1] : WOOD[2];
+    } else if (rr > paintR) c = C.ink;
+    else {
+      // the paint: a gently domed dab, lit from the top left
+      const k = (-dx * 0.6 - dy * 0.75) / paintR - (pressed ? 0.35 : 0);
+      c = R[k > 0.6 ? 0 : k > 0.1 ? 1 : k > -0.5 ? 2 : 3];
+    }
+    p.set(x, y, c);
+  }
   if (icon) {
-    const ic = iconAt(icon, iconSize || Math.round(S * 0.62 / 2) * 2);
+    const ic = iconAt(icon, iconSize || Math.round((S * 0.5) / 2) * 2);
     p.blit(ic, Math.round((S - ic.w) / 2), Math.round((S - ic.h) / 2) + top);
   }
   return p;
 }
 
-// the riding stick's base: a turned wooden plate in a brass ring, a brass slot for steering,
-// carved arrows top (lean forward) and bottom (lean back), four brass nails (72x72)
+// the riding stick's base: a turned wooden plate with a bark rim, a dark slot for steering,
+// carved arrows top (lean forward) and bottom (lean back), four iron nails (72x72)
 function plateArt(lit = 0) {
   const S = 72, c = 36;
   const p = new Pix(S, S);
   const f = field(S, S, (x, y) => Math.hypot(x + 0.5 - c, y + 0.5 - c) <= 35.5, 7);
   paintBands(p, f, [
     () => C.ink,
-    (l) => (l > 0.4 ? C.goldHi : l > -0.2 ? C.goldL : C.goldD),
-    (l) => (l > 0.1 ? C.gold : C.goldD),
-    () => C.goldDD,
+    (l) => (l > 0.3 ? BARK[0] : BARK[1]),
+    (l, x, y) => ((x * 3 + y * 5) % 7 === 0 ? BARK[2] : l > 0.1 ? BARK[0] : BARK[1]),
+    (l) => (l > 0.1 ? WOOD[0] : WOOD[1]),
     () => C.ink,
     (l, x, y) => {
       // turned wood: rings round the centre, a soft bowl shading, grain flecks
@@ -98,21 +114,21 @@ function plateArt(lit = 0) {
       return WOOD[k > 0.45 ? 0 : k > 0.05 ? 1 : k > -0.35 ? 2 : 3];
     },
   ]);
-  // the steering slot: a dark groove with a brass lip
+  // the steering slot: a dark groove
   for (let x = 13; x <= 58; x++) {
-    p.set(x, 33, C.goldD);
+    p.set(x, 33, WOOD[3]);
     p.set(x, 34, C.ink);
     p.set(x, 35, WOOD[4]);
     p.set(x, 36, WOOD[4]);
     p.set(x, 37, WOOD[3]);
-    p.set(x, 38, C.goldL);
+    p.set(x, 38, WOOD[0]);
   }
   for (const x of [12, 59]) for (let y = 33; y <= 38; y++) p.set(x, y, C.ink);
-  // carved arrows: up = lean forward, down = lean back (lit while leaning)
+  // carved arrows: up = lean forward, down = lean back (painted gold while leaning)
   const arrow = (cy, dir, on) => {
     for (let k = 0; k < 6; k++) {
       const y = cy + dir * k;
-      for (let x = c - 6 + k; x <= c + 5 - k; x++) p.set(x, y, on ? (k < 2 ? C.goldHi : C.goldL) : k < 2 ? WOOD[4] : WOOD[3]);
+      for (let x = c - 6 + k; x <= c + 5 - k; x++) p.set(x, y, on ? (k < 2 ? PAINT.gold[0] : PAINT.gold[1]) : k < 2 ? WOOD[4] : WOOD[3]);
       p.set(c - 7 + k, y, C.ink);
       p.set(c + 6 - k, y, C.ink);
     }
@@ -121,40 +137,36 @@ function plateArt(lit = 0) {
   arrow(58, -1, lit > 0);
   for (const [x, y] of [[13, 13], [58, 13], [13, 58], [58, 58]]) {
     p.rect(x - 1, y - 1, 3, 3, C.ink);
-    p.set(x, y, C.goldL);
-    p.set(x - 1, y - 1, C.goldHi);
+    p.set(x, y, 0x5a5458);
+    p.set(x - 1, y - 1, 0x8a8488);
   }
   return p;
 }
-// the walking stick's base: a dark ring with four gold studs
+// the walking stick's base: a ring of bark with four pale studs
 function stickArt() {
   const S = 72, p = new Pix(S, S);
   const f = field(S, S, (x, y) => { const d = Math.hypot(x + 0.5 - 36, y + 0.5 - 36); return d <= 34 && d >= 22; }, 4);
-  paintBands(p, f, [() => C.ink, (l) => (l > 0.3 ? 0x6a4a36 : 0x3a2418), () => 0x2a1810]);
-  for (let k = 0; k < 4; k++) { const a = (k / 4) * Math.PI * 2; p.rect(Math.round(36 + Math.cos(a) * 28) - 1, Math.round(36 + Math.sin(a) * 28) - 1, 3, 3, C.goldL); }
+  paintBands(p, f, [() => C.ink, (l) => (l > 0.3 ? BARK[0] : BARK[1]), (l, x, y) => ((x + y * 3) % 5 === 0 ? BARK[2] : BARK[1])]);
+  for (let k = 0; k < 4; k++) { const a = (k / 4) * Math.PI * 2; p.rect(Math.round(36 + Math.cos(a) * 28) - 1, Math.round(36 + Math.sin(a) * 28) - 1, 3, 3, WOOD[0]); }
   return p;
 }
-// the thumb knob: a brass dome with a leather cap
+// the thumb knob: a painted cream peg on a wooden collar
 function knobArt() {
   const p = new Pix(28, 28);
-  paintMetal(p, 28, 28, (x, y) => Math.hypot(x + 0.5 - 14, y + 0.5 - 14) <= 13.5, RAMP.gold);
-  const cap = field(28, 28, (x, y) => Math.hypot(x + 0.5 - 14, y + 0.5 - 14) <= 7.5, 3);
-  paintBands(p, cap, [() => C.goldDD, (l) => (l > 0.2 ? RAMP.leather[1] : RAMP.leather[2]), () => RAMP.leather[2]]);
-  for (const [x, y] of [[8, 7], [9, 6], [7, 8]]) p.set(x, y, 0xffffff);
+  const f = field(28, 28, (x, y) => Math.hypot(x + 0.5 - 14, y + 0.5 - 14) <= 13.5, 5);
+  paintBands(p, f, [() => C.ink, (l) => (l > 0.2 ? WOOD[0] : WOOD[2]), (l) => (l > 0.2 ? WOOD[1] : WOOD[3]), () => C.ink, (l) => (l > 0.3 ? PAINT.cream[0] : l < -0.3 ? PAINT.cream[3] : PAINT.cream[1]), () => PAINT.cream[2]]);
+  for (const [x, y] of [[9, 8], [10, 7], [8, 9]]) p.set(x, y, 0xffffff);
   return p;
 }
 
 // [id, label, action, icon, face, size, right, bottom, mode, iconSize]
 // (riding, the crank sits in the bottom right corner: 88 x 68, its chainring ~32 in from the
-// right, the gear number in its top left corner; the gear shifter stands just left of it, up
-// over down). No labels: the pictures say it (brake, hop arrow, wheelie, bell, run, camera)
+// right, the gear number in its top left corner; the gears and the bell are on the crank
+// itself). No labels: the pictures say it (brake, hop arrow, wheelie, run, camera)
 const BUTTONS = [
   ['brake', '', 'brake', 't_brake', 'red', 42, 126, 8, 'ride'],
   ['jump', '', 'jump', 't_hop', 'blue', 44, 12, 90, 'ride'],
   ['trick', '', 'drift', 't_wheelie', 'purple', 48, 62, 84, 'ride', 32],
-  ['bell', '', 'bell', 't_bell', 'cream', 26, 8, 146, 'ride'],
-  ['gearup', '', 'shiftUp', 't_up', 'leather', 26, 96, 38, 'ride'],
-  ['geardn', '', 'shiftDown', 't_down', 'leather', 26, 96, 4, 'ride'],
   ['fjump', '', 'jump', 't_hop', 'blue', 50, 12, 18, 'foot'],
   ['sprint', '', 'sprint', 't_run', 'gold', 44, 68, 18, 'foot'],
   ['photo', '', 'camera', 't_photo', 'cream', 32, 74, 84, 'foot'],
@@ -270,17 +282,11 @@ export class TouchControls {
     this.trickPtr = null;
     this.trickDir = null;
     this.trickT = 0;
-    // context action: a plate that says what it'll do (a pointing finger, no key cap)
-    this.talk = el('div', 'k-plate k-dark t-talk', '<i class="tg"></i><span class="tt"></span>');
+    // context action: a little wooden tag over Hank's head that says what it'll do (tap it)
+    this.talk = el('div', 'k-tag t-talk', '<span class="tt"></span>');
     this.talkText = this.talk.querySelector('.tt');
     this.root.appendChild(this.talk);
     this.buttons.talk = { el: this.talk, action: 'interact', held: false, plate: true };
-    // journal & map either side of the compass
-    for (const [id, action, icon] of [['pause', 'pause', 't_journal'], ['map', 'map', 't_map']]) {
-      const b = el('div', `tbtn tsq t-${id}`, '<img class="ti">');
-      this.root.appendChild(b);
-      this.buttons[id] = { el: b, action, icon, face: 'leather', size: 28, mode: 'any', img: b.querySelector('.ti'), held: false };
-    }
 
     // every finger is hit-tested against every visible button
     this.pointers = new Map();

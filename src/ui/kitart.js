@@ -447,56 +447,95 @@ export function paperArt(kind = 'note') {
 }
 
 // ---------------------------------------------------------------- buttons
-// 40x30 9-slice (slice 11 top, 10 right, 12 bottom, 10 left): an oak plank face
-// with grain, a walnut rim (brass when hot), brass nails and a 4px lip; pressed sinks 3px.
+// 40x30 9-slice (slice 11 top, 10 right, 12 bottom, 10 left): a little painted signboard,
+// the same as the arrow boards on the title's signpost. Planks painted a soft autumn colour
+// (slate blue; red to stop, green to go), a darker band of paint round the edge, worn back
+// to the wood at the corners, a seam between the planks, two iron nails and the plank's
+// raw edge as a 4px lip underneath. Hot: the paint warms and a lantern-gold rim lights
+// round it; pressed: it sinks 3px.
 export const BTN_SLICE = [11, 10, 12, 10];
-const FACES = {
-  leather: WOOD.oak,
-  red: [C.redHi, C.redL, C.red, C.redD, C.redDD, 0x3e0a08],
-  green: [C.greenHi, C.greenL, C.green, C.greenD, C.greenDD, 0x0e2a12],
-  gold: [...RAMP.gold, C.goldDD],
-  cream: [...RAMP.cream, C.greyDD],
+// paint ramps: hi, light, base, dark, deep
+export const PAINT = {
+  leather: [0xb4cce4, 0x86a4c8, 0x5f7fab, 0x48628a, 0x2f4266],
+  red: [0xf6ac92, 0xdc6a4c, 0xbc4630, 0x902f1f, 0x5e1a12],
+  green: [0xc0e4a2, 0x88bc6a, 0x5c9648, 0x407234, 0x284c22],
+  gold: [0xfff2b8, 0xf8d274, 0xe4ac3e, 0xb67e22, 0x7a4e12],
+  cream: [0xfffaf0, 0xf6ead0, 0xeadab4, 0xcbb48a, 0x9a845e],
+  grey: [0xd4ccbc, 0xb4ab9a, 0x968c7a, 0x766c5c, 0x544c42],
 };
+const IRON = [0x8a8488, 0x5a5458, 0x3a3438];
+const LANTERN = [0xfff4c0, 0xffd25a, 0xe09a2a];
+// warm a paint ramp a little (the hot state)
+// one step lighter (the hot state)
+const warm = (R) => [R[0], mixC(R[0], R[1], 0.5), mixC(R[1], R[2], 0.45), R[2], R[3]];
+function ironNail(p, x, y) {
+  p.set(x, y, IRON[0]); p.set(x + 1, y, IRON[1]); p.set(x, y + 1, IRON[1]); p.set(x + 1, y + 1, IRON[2]);
+}
+// paint a board face: f the face mask's field, R the paint; wear: worn spots near corners
+function paintBoard(p, f, R, { rim = null, seamY = -1, seed = 3, wear = true, cornerR = 6 } = {}) {
+  const W = f.w, H = f.h;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const i = y * W + x, d = f.D[i];
+    if (!d) continue;
+    const b = band(d), l = f.L[i];
+    let c;
+    if (b === 0) c = rim ? rim[2] : C.ink;
+    else if (b === 1) c = rim ? (l > 0.2 ? rim[0] : rim[1]) : l > 0.35 ? R[1] : l < -0.3 ? R[4] : R[3];
+    else if (b === 2 && rim) c = l > 0.2 ? R[1] : R[3];
+    else {
+      // brushed paint: a light first row, faint streaks along the planks
+      const top = y <= 3 + (rim ? 1 : 0);
+      c = top ? R[1] : hash(x >> 2, y, seed) < 0.07 ? mixC(R[2], R[3], 0.5) : R[2];
+      if (y === seamY && hash(x >> 1, 1, seed + 5) < 0.85) c = mixC(R[2], R[3], 0.75);
+    }
+    // worn back to the wood where hands and weather get at it (the corners only, so a
+    // 9-slice never repeats it)
+    if (wear && b >= 1) {
+      const cx = Math.min(x, W - 1 - x), cy = Math.min(y, H - 1 - y);
+      if (cx + cy < cornerR && hash(x, y, seed + 9) < 0.55 - (cx + cy) * 0.08) c = b === 1 ? WOOD.oak[3] : WOOD.oak[2];
+    }
+    p.set(x, y, c);
+  }
+}
 export function buttonArt(state = 'normal', face = 'leather') {
   const W = 40, H = 30;
   const p = new Pix(W, H);
   const pressed = state === 'pressed';
   const lip = pressed ? 1 : 4;
   const top = pressed ? 3 : 0;
-  let Fr = FACES[face] || FACES.leather;
-  let rim = WOOD.walnut;
-  if (state === 'hover') {
-    Fr = Fr.map((c, i) => (i < 3 ? mixC(c, 0xfff4d0, 0.22 - i * 0.04) : c));
-    rim = BRASS;
-  }
-  if (state === 'disabled') { Fr = WOOD.grey; rim = [0xb0a48c, 0x968a74, 0x7c705e, 0x625848, 0x4a4238, 0x342e28]; }
-  if (pressed) Fr = [Fr[1], Fr[2], Fr[3], Fr[3], Fr[4], Fr[5]];
+  let R = PAINT[face] || PAINT.leather;
+  if (state === 'hover') R = warm(R);
+  if (state === 'disabled') R = PAINT.grey;
+  if (pressed) R = [R[1], R[2], R[3], R[3], R[4]];
   const faceM = stepRect(0, top, W, H - lip - top, [3, 1]);
   const all = stepRect(0, top, W, H - top, [3, 1]);
-  const f = field(W, H, faceM);
   const fa = field(W, H, all);
-  // the lip (the plank's edge): end grain going darker, ink outline
+  // the lip: the plank's raw edge, end grain and a dark underside
+  const side = WOOD.walnut;
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
     const d = fa.D[y * W + x];
-    if (!d || f.D[y * W + x]) continue;
-    p.set(x, y, band(d) === 0 ? C.ink : y >= H - 2 ? rim[4] : x % 3 === 0 ? rim[4] : rim[3]);
+    if (!d || faceM(x, y)) continue;
+    p.set(x, y, band(d) === 0 ? C.ink : y >= H - 2 ? side[4] : (x * 7 + y * 3) % 9 === 0 ? side[4] : side[2]);
   }
-  // grain repeats with the 9-slice middle (20 px across, 7 down)
-  const gx = (x) => (((x - 10) % 20) + 20) % 20, gy = (y) => (((y - 11) % 7) + 7) % 7;
-  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-    const i = y * W + x, d = f.D[i];
-    if (!d) continue;
-    const b = band(d), l = f.L[i], lit = l > 0.1;
-    let c;
-    if (b === 0 || b === 3) c = C.ink;
-    else if (b === 1) c = l > 0.45 ? rim[0] : l > -0.15 ? rim[1] : l > -0.6 ? rim[2] : rim[3];
-    else if (b === 2) c = lit ? rim[3] : rim[2];
-    else if (b === 4) c = l > 0.15 ? Fr[0] : l < -0.45 ? Fr[3] : Fr[1];
-    else c = pick6(Fr, (y < 11 ? 1 : 2) + grain(gx(x), gy(y) + (y < 11 ? 0 : 9), 20, face === 'leather' ? 71 : 73));
-    p.set(x, y, c);
-  }
-  // brass nails in the face corners
-  if (state !== 'disabled') for (const [x, y] of [[5, top + 5], [W - 7, top + 5]]) nail(p, x, y, BRASS, Fr[4]);
+  const f = field(W, H - lip, faceM);
+  const face0 = new Pix(W, H - lip);
+  paintBoard(face0, f, R, { rim: state === 'hover' ? LANTERN : null, seamY: top + 14, seed: face === 'red' ? 7 : face === 'green' ? 11 : 3, wear: state !== 'disabled' });
+  p.blit(face0, 0, 0);
+  // two iron nails, one near each end
+  for (const x of [5, W - 7]) ironNail(p, x, top + 5);
+  return p;
+}
+
+// a little arrow board pointing at whatever is chosen (16x16)
+export function pointerArt() {
+  const S = 16;
+  const p = new Pix(S, S);
+  const R = PAINT.gold;
+  const shape = (x, y) => (x >= 1 && x <= 9 && y >= 4 && y <= 11) || (x >= 9 && x <= 14 && Math.abs(y + 0.5 - 8) <= 14.5 - x + 0.2);
+  const f = field(S, S, shape);
+  paintBands(p, f, [() => C.ink, (l) => (l > 0.3 ? R[0] : l < -0.3 ? R[3] : R[1]), (l, x, y) => (y < 7 ? R[1] : R[2])]);
+  ironNail(p, 3, 7);
+  for (let x = 2; x < 10; x++) p.set(x, 12, C.shadow, 90);
   return p;
 }
 
@@ -530,26 +569,20 @@ export function slotArt(state = 'filled', size = 46) {
 }
 
 // ---------------------------------------------------------------- tabs (9-slice 24x20, slice 8 8 2 8; open bottom)
+// little painted board tabs: the open one in fresh paint with a lantern-gold top edge,
+// the others in faded paint
 export function tabArt(on = false) {
   const W = 24, H = 20;
   const p = new Pix(W, H);
-  const fillR = on ? RAMP.leather : [0x8a5a34, 0x6e4224, 0x5a341c, 0x46281a, 0x341c10];
-  const rim = on ? WOOD.oak : WOOD.walnut;
-  const shape = stepRect(0, 0, W, H + 8, [3, 2, 1]);
-  const f = field(W, H + 8, shape);
+  const R = on ? PAINT.leather : PAINT.leather.map((c) => mixC(c, 0x6a5a52, 0.45));
+  const f = field(W, H + 8, stepRect(0, 0, W, H + 8, [3, 1]));
+  const fp = new Pix(W, H + 8);
+  paintBoard(fp, f, R, { rim: on ? LANTERN : null, seed: on ? 13 : 17, cornerR: 5 });
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-    const d = f.D[y * W + x];
-    if (!d) continue;
-    const l = f.L[y * W + x];
-    const b = band(d);
-    let c;
-    if (b === 0) c = C.ink;
-    else if (b === 1) c = l > 0.4 ? rim[0] : l > -0.3 ? rim[1] : rim[3];
-    else if (b === 2) c = l > 0.3 ? rim[2] : rim[3];
-    else if (b === 3) c = C.ink;
-    else c = b === 4 && l > 0.2 ? fillR[4] : on ? TEX.leather(x, y) : TEX.leatherDark(x, y);
-    p.set(x, y, c);
+    const i = (y * W + x) * 4;
+    if (fp.data[i + 3]) p.set(x, y, (fp.data[i] << 16) | (fp.data[i + 1] << 8) | fp.data[i + 2]);
   }
+  ironNail(p, Math.floor(W / 2) - 1, 4);
   return p;
 }
 
@@ -622,60 +655,106 @@ export function ribbonArt(ramp = RAMP.red) {
 }
 
 // ---------------------------------------------------------------- key cap (9-slice 16x16, slice 5 5 7 5)
+// a little maple tile, like a game piece: pale wood face, its edge underneath; hot: gold paint
 export function keyArt(hot = false) {
   const S = 16;
   const p = new Pix(S, S);
-  const R = hot ? RAMP.gold : RAMP.cream;
+  const R = hot ? PAINT.gold : [0xfff6e0, 0xf6e2b8, 0xeccf9a, 0xc8a26c, 0x8e6a3e];
   const f = field(S, S, stepRect(0, 0, S, S - 3, [2, 1]));
   const fa = field(S, S, stepRect(0, 0, S, S, [2, 1]));
-  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) if (fa.D[y * S + x] && !f.D[y * S + x]) p.set(x, y, band(fa.D[y * S + x]) === 0 ? C.ink : R[3]);
-  paintBands(p, f, [() => C.ink, (l) => (l > 0.3 ? R[0] : l < -0.4 ? R[2] : R[1]), () => R[1]]);
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) if (fa.D[y * S + x] && !f.D[y * S + x]) p.set(x, y, band(fa.D[y * S + x]) === 0 ? C.ink : y === S - 2 ? WOOD.oak[3] : WOOD.oak[2]);
+  paintBands(p, f, [() => C.ink, (l) => (l > 0.3 ? R[0] : l < -0.4 ? R[3] : R[1]), (l, x, y) => (hash(x >> 1, y, 21) < 0.1 ? R[1] : R[2])]);
   return p;
 }
 
-// ---------------------------------------------------------------- toggle (lever) 26x14
+// ---------------------------------------------------------------- toggle 26x14
+// a painted peg that slides along a wooden slot: green and to the right for on, red and to
+// the left for off
 export function toggleArt(on) {
   const W = 26, H = 14;
   const p = new Pix(W, H);
-  const T = on ? RAMP.green : RAMP.red;
+  const T = on ? PAINT.green : PAINT.red;
   const f = field(W, H, stepRect(0, 1, W, H - 2, [3, 1]));
-  paintBands(p, f, [() => C.ink, (l) => (l > 0.1 ? T[4] : T[2]), (l) => (l > 0.1 ? T[3] : T[2]), () => T[2]]);
-  const lx = on ? 6 : W - 8;
-  p.rect(lx, 5, 2, 3, on ? C.greenHi : C.redHi);
-  p.set(lx, 5, 0xffffff);
+  paintBands(p, f, [() => C.ink, (l) => (l > 0.2 ? WOOD.walnut[1] : WOOD.walnut[3]), () => C.ink, () => 0x2a1810]);
+  // the lit half of the slot shows the paint colour
+  for (let y = 4; y < H - 4; y++) for (let x = on ? 3 : 13; x < (on ? 13 : W - 3); x++) p.set(x, y, T[3]);
   const kx = on ? W - 13 : 0;
-  paintMetal(p, 13, H, stepRect(0, 0, 13, H, [3, 1]), RAMP.gold, kx, 0);
-  for (const y of [5, 8]) for (let x = 4; x < 9; x++) { p.set(kx + x, y, C.goldD); p.set(kx + x, y + 1, C.goldHi); }
+  const k = field(13, H, stepRect(0, 0, 13, H, [3, 1]));
+  const kp = new Pix(13, H);
+  paintBoard(kp, k, T, { seed: on ? 31 : 37, cornerR: 4 });
+  p.blit(kp, kx, 0);
+  ironNail(p, kx + 5, 5);
   return p;
 }
 
 // ---------------------------------------------------------------- slider knob 12x16
+// a turned wooden peg with a point; hot: gold paint
 export function knobArt(hot = false) {
   const W = 12, H = 16;
   const p = new Pix(W, H);
-  const r = hot ? [C.goldHi, C.goldHi, C.goldL, C.gold, C.goldD] : RAMP.gold;
+  const R = hot ? PAINT.gold : PAINT.cream;
   const shape = (x, y) => (y < 11 ? stepRect(0, 0, W, 11, [2, 1])(x, y) : Math.abs(x + 0.5 - W / 2) <= 6 - (y - 10) * 1.25);
-  paintMetal(p, W, H, shape, r);
-  for (let y = 3; y < 8; y++) { p.set(5, y, C.goldD); p.set(6, y, C.goldHi); }
+  const f = field(W, H, shape);
+  paintBands(p, f, [() => C.ink, (l) => (l > 0.3 ? R[0] : l < -0.3 ? R[3] : R[1]), (l, x, y) => (y < 4 ? R[1] : R[2])]);
+  for (let y = 3; y < 8; y++) { p.set(5, y, R[3]); p.set(6, y, R[0]); }
   return p;
 }
 
 // ---------------------------------------------------------------- close button 18x18
+// a round painted board with an X, a ring of raw wood round it
 export function closeArt(hot = false) {
   const S = 18;
   const p = new Pix(S, S);
   const f = field(S, S, (x, y) => Math.hypot(x + 0.5 - 9, y + 0.5 - 9) <= 8.7);
-  const R = hot ? [C.redHi, C.redHi, C.redL, C.red, C.redD] : RAMP.red;
+  const R = hot ? warm(PAINT.red) : PAINT.red;
+  const rim = hot ? LANTERN : [WOOD.oak[1], WOOD.oak[2], WOOD.oak[3]];
   paintBands(p, f, [
     () => C.ink,
-    (l) => (l > 0.4 ? C.goldHi : l > -0.3 ? C.goldL : C.goldD),
-    (l) => (l > 0.2 ? C.goldD : C.gold),
+    (l) => (l > 0.3 ? rim[0] : l > -0.3 ? rim[1] : rim[2]),
     () => C.ink,
-    (l) => (l > 0.2 ? R[3] : l < -0.4 ? R[1] : R[2]),
+    (l) => (l > 0.2 ? R[1] : l < -0.4 ? R[3] : R[2]),
     () => R[2],
   ]);
   for (let k = -3; k <= 3; k++) for (const [x, y] of [[9 + k, 9 + k], [9 + k, 8 - k]]) p.set(x - 1, y + 1, R[4]);
   for (let k = -3; k <= 3; k++) for (const [x, y] of [[9 + k, 9 + k], [9 + k, 8 - k]]) { p.set(x, y, C.cream); p.set(x - 1, y, C.cream); }
+  return p;
+}
+
+// ---------------------------------------------------------------- the hanging tag (9-slice 24x20, slice 7)
+// what Hank can do right here, on a little cream-painted board that hangs over his head
+// on a string (tagRopeArt, 14x9) and points down at him (tagTailArt, 9x6)
+export function tagArt() {
+  const W = 24, H = 20;
+  const p = new Pix(W, H);
+  const f = field(W, H, stepRect(0, 0, W, H - 1, [2, 1]));
+  const fp = new Pix(W, H);
+  paintBoard(fp, f, PAINT.cream, { seed: 41, cornerR: 4 });
+  p.blit(fp, 0, 0);
+  for (let x = 2; x < W - 1; x++) p.set(x, H - 1, C.shadow, 100);
+  return p;
+}
+export function tagRopeArt() {
+  const W = 14, H = 9;
+  const p = new Pix(W, H);
+  // a string looped over a nail, down to the two top corners
+  for (let y = 2; y < H; y++) {
+    const k = (y - 2) / (H - 3);
+    for (const [x, o] of [[6 - k * 5, -1], [7 + k * 5, 1]]) {
+      p.set(Math.round(x), y, 0xe0c890);
+      p.set(Math.round(x) + o, y, 0x3e2a1c);
+    }
+  }
+  p.rect(5, 0, 4, 3, C.ink);
+  p.set(6, 1, 0x8a8488); p.set(7, 1, 0x5a5458);
+  return p;
+}
+export function tagTailArt() {
+  const W = 9, H = 6;
+  const p = new Pix(W, H);
+  for (let y = 0; y < 5; y++) for (let x = 0; x < W; x++) {
+    const dx = Math.abs(x - 4), w = 4 - y;
+    if (dx <= w) p.set(x, y, dx === w || y === 4 ? C.ink : y === 0 ? PAINT.cream[3] : PAINT.cream[2]);
+  }
   return p;
 }
 
