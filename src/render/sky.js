@@ -48,8 +48,12 @@ void main() {
   float sd = dot(d, uSunDir);
   float sunGlow = pow(max(sd, 0.0), 6.0) * 0.45 + pow(max(sd, 0.0), 48.0) * 0.9;
   col += uSunGlow * sunGlow;
-  // pixel sun disk
+  // a low sun scatters its colour all along the horizon, not just round its disc
+  float low = 1.0 - smoothstep(0.05, 0.4, uSunDir.y);
+  col += uSunGlow * (1.0 - smoothstep(0.0, 0.22, abs(h))) * (0.35 + 0.65 * max(sd, 0.0)) * low * 0.35;
+  // pixel sun disk, with a hot corona (bright enough to bloom) round it
   float disk = smoothstep(0.9988, 0.9992, sd);
+  col += vec3(1.0, 0.86, 0.64) * (pow(max(sd, 0.0), 600.0) * 1.6 + pow(max(sd, 0.0), 2400.0) * 2.0) * (1.0 - uNight);
   col = mix(col, vec3(1.0, 0.97, 0.88) * 4.0, disk * (1.0 - uNight));
 
   // moon
@@ -82,6 +86,8 @@ void main() {
     vec3 cc = mix(uCloudShade, uCloudLit, lit);
     // silver lining near the sun
     cc += uSunGlow * pow(max(sd, 0.0), 10.0) * (1.0 - c * 0.6) * 0.9;
+    // sunset: low cloud bellies catch the glow from below, in the sun's half of the sky
+    cc += uSunGlow * low * (1.0 - lit * 0.5) * (0.25 + 0.75 * max(sd, 0.0)) * (1.0 - smoothstep(0.0, 0.5, h)) * 0.55;
     float fade = smoothstep(0.0, 0.18, h);
     float edge = step(cover + 0.02, dens) * 0.5 + c * 0.5;
     col = mix(col, cc, clamp(edge, 0.0, 1.0) * fade * 0.95);

@@ -429,8 +429,15 @@ export class Game {
       // (never above: a browser-filtered downscale blurs the picture)
       P.maxDpr = touch ? (hi ? 2 : lo ? 1 : 1.5) : 3;
       P.maxPixels = touch ? (hi ? 2.4e6 : lo ? 0.9e6 : 1.4e6) : lo ? 1.6e6 : q === 'medium' ? 3.2e6 : 5.2e6;
-      P.bloom = hi;
-      P.rays = hi && !touch;
+      // phones: medium and low skip the extra passes (bloom, contact AO) and keep the
+      // single hard shadow tap; desktops (and phones on high) get the soft 9-tap edge
+      const rich = hi || (q === 'medium' && !touch);
+      P.bloom = rich;
+      P.rays = rich && !touch;
+      P.raySteps = hi ? 24 : 12;
+      P.ao = rich;
+      P.post.uGrain.value = hi && !touch ? 0.022 : 0;
+      sun.shadow.radius = lo || (touch && !hi) ? 0 : 1;
       P.shadowEvery = hi && !touch ? 1 : lo ? 3 : 2;
       P.resize();
       this.camera.aspect = P.w / P.h;

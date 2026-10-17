@@ -1,6 +1,6 @@
 // Render pipeline:
-//   scene -> HDR target (with depth) -> bloom -> composite (fog, god rays,
-//   grading, cartoon outlines) -> FXAA -> canvas.
+//   scene -> HDR target (with depth) -> contact AO (half res) -> bloom ->
+//   composite (AO, fog, god rays, grading, cartoon outlines) -> canvas.
 // Renders at device pixels (or a whole fraction of them, upscaled nearest);
 // 'Retro' pixel sizes (>= 2) bring back the chunky dithered, posterised look.
 import * as THREE from 'three';
@@ -8,6 +8,93 @@ import { G, NOISE_GLSL } from './shaderlib.js';
 import { SKY } from './sky.js';
 
 const _v1 = new THREE.Vector3(), _v2 = new THREE.Vector3();
+
+// Sun shadows: three's basic lookup (one hard tap), patched so a light whose shadow.radius
+// is 1 or more filters its edge instead: nine taps weighted by a quadratic B-spline over
+// the texel grid, a smooth edge about three texels wide that stays continuous as the light
+// moves (no dither noise, no stair steps). The quality setting picks by radius alone
+// (phones keep the single tap) without recompiling a shader.
+{
+  const C = THREE.ShaderChunk;
+  const src = C.shadowmap_pars_fragment;
+  // (three's build strips the chunks' comments: find the basic lookup's one hard tap itself)
+  const tap = 'float depth = texture2D( shadowMap, shadowCoord.xy ).r;';
+  const b = src.indexOf(tap) === src.lastIndexOf(tap) ? src.indexOf(tap) : -1;
+  const soft = /* glsl */ `if ( shadowRadius >= 0.5 ) {
+					vec2 q = shadowCoord.xy * shadowMapSize;
+					vec2 c = floor( q ) + 0.5;
+					vec2 d = q - c;
+					vec2 w0 = 0.5 * ( 0.5 - d ) * ( 0.5 - d ), w1 = 0.75 - d * d, w2 = 0.5 * ( 0.5 + d ) * ( 0.5 + d );
+					vec2 ts = 1.0 / shadowMapSize;
+					vec2 cu = c * ts;
+					float acc = 0.0;
+					for ( int j = -1; j <= 1; j ++ ) {
+						float wy = j < 0 ? w0.y : ( j == 0 ? w1.y : w2.y );
+						for ( int i = -1; i <= 1; i ++ ) {
+							float wx = i < 0 ? w0.x : ( i == 0 ? w1.x : w2.x );
+							float sd = texture2D( shadowMap, cu + vec2( float( i ), float( j ) ) * ts ).r;
+							#ifdef USE_REVERSED_DEPTH_BUFFER
+							acc += wx * wy * step( sd, shadowCoord.z );
+							#else
+							acc += wx * wy * step( shadowCoord.z, sd );
+							#endif
+						}
+					}
+					return mix( 1.0, acc, shadowIntensity );
+				}
+				`;
+  if (b > 0) C.shadowmap_pars_fragment = src.slice(0, b) + soft + src.slice(b);
+  else console.warn('pipeline: shadow chunk not patched');
+}
+
+// Contact ambient occlusion from the depth buffer, at half resolution: the dark seam where a
+// house meets the ground, under the eaves, round a lamp post's foot, in the crooks of the
+// voxels. Normal-oriented (from the neighbouring depths) so flat ground stays clean; 8 taps
+// rotated through a 4x4 pattern that the composite's 4x4 depth-aware filter averages away.
+const AO_FRAG = /* glsl */ `
+${NOISE_GLSL}
+uniform sampler2D tDepth;
+uniform vec4 uProj;   // 1/P00, 1/P11, near, far
+uniform vec2 uTexel;  // full-res texel (uv)
+uniform float uRadius;
+varying vec2 vUv;
+float viewZ(float d) { return (uProj.z * uProj.w) / ((uProj.w - uProj.z) * d - uProj.w); }
+vec3 viewPos(vec2 uv) {
+  float z = viewZ(texture2D(tDepth, uv).r);
+  return vec3((uv * 2.0 - 1.0) * uProj.xy * -z, z);
+}
+void main() {
+  float d = texture2D(tDepth, vUv).r;
+  vec3 P = viewPos(vUv);
+  float far = -P.z;
+  if (d >= 0.99999 || far > 75.0) { gl_FragColor = vec4(1.0, far, 0.0, 1.0); return; }
+  vec2 tx = uTexel * 2.0;
+  vec3 pr = viewPos(vUv + vec2(tx.x, 0.0)), pl = viewPos(vUv - vec2(tx.x, 0.0));
+  vec3 pu = viewPos(vUv + vec2(0.0, tx.y)), pd = viewPos(vUv - vec2(0.0, tx.y));
+  vec3 dx = abs(pr.z - P.z) < abs(P.z - pl.z) ? pr - P : P - pl;
+  vec3 dy = abs(pu.z - P.z) < abs(P.z - pd.z) ? pu - P : P - pd;
+  vec3 N = normalize(cross(dx, dy));
+  // world radius -> uv radius (capped so a face against the lens doesn't fetch the whole screen)
+  float R = uRadius * (1.0 + far * 0.012);
+  vec2 ruv = min(R / (far * uProj.xy) * 0.5, vec2(0.08));
+  float rot = bayer4(gl_FragCoord.xy) * 6.2831853;
+  float occ = 0.0;
+  for (int i = 0; i < 8; i++) {
+    float fi = float(i);
+    float r = sqrt((fi + 0.5) / 8.0);
+    float th = fi * 2.3999632 + rot;
+    vec3 S = viewPos(vUv + vec2(cos(th), sin(th)) * r * ruv);
+    vec3 v = S - P;
+    float L = length(v);
+    float c = max(dot(v / max(L, 1e-4), N) - 0.12, 0.0);
+    occ += c * (1.0 - smoothstep(R * 0.6, R * 1.4, L));
+  }
+  float ao = 1.0 - occ / 8.0 * 1.6;
+  ao = clamp(ao, 0.0, 1.0);
+  ao = mix(ao, 1.0, smoothstep(45.0, 75.0, far));
+  gl_FragColor = vec4(ao, far, 0.0, 1.0);
+}
+`;
 
 const FS_VERT = /* glsl */ `
 varying vec2 vUv;
@@ -23,9 +110,11 @@ void main() {
   vec3 c = vec3(0.0);
   for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) c += texture2D(tColor, vUv + vec2(x, y) * uTexel).rgb;
   c /= 9.0;
+  // only real light sources bloom (lamps, the sun's disc, glints): sunlit white paint
+  // tops out round 2 and stays crisp; a soft knee so lamps swell in rather than pop
   float l = max(max(c.r, c.g), c.b);
-  float k = smoothstep(uThreshold, uThreshold + 0.6, l);
-  gl_FragColor = vec4(c * k, 1.0);
+  float k = smoothstep(uThreshold, uThreshold * 1.8, l);
+  gl_FragColor = vec4(c * k * k, 1.0);
 }
 `;
 
@@ -94,6 +183,7 @@ uniform float uFogMax;
 uniform float uRays;
 uniform float uBloom;
 uniform float uExposure;
+uniform float uDayExp;
 uniform float uSaturation;
 uniform float uContrast;
 uniform vec3 uShadowTint;
@@ -108,7 +198,17 @@ uniform vec3 uFadeColor;
 uniform float uFlash;
 uniform float uTime;
 uniform float uCold;
+uniform sampler2D tAO;
+uniform float uAOOn;
+uniform float uAO;
+uniform vec2 uAOTexel;
+uniform vec4 uProj;
+uniform float uGrain;
+uniform float uWarm;
+uniform vec3 uVigTint;
 varying vec2 vUv;
+
+float luma(vec3 c) { return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
 
 vec3 worldFromDepth(vec2 uv, float d) {
   vec4 ndc = vec4(uv * 2.0 - 1.0, d * 2.0 - 1.0, 1.0);
@@ -127,6 +227,24 @@ void main() {
   vec3 col = texture2D(tColor, uv).rgb;
   float depth = texture2D(tDepth, uv).r;
   bool sky = depth >= 0.99999;
+
+  // --- contact AO: four bilinear taps cover a 4x4 block of the half-res AO (its 4x4
+  // rotation pattern averages out), each weighted by how close its depth is to ours
+  if (uAOOn > 0.0 && !sky) {
+    float myF = -(uProj.z * uProj.w) / ((uProj.w - uProj.z) * depth - uProj.w);
+    float s = 0.0, ws = 0.0;
+    for (int i = 0; i < 4; i++) {
+      vec2 o = vec2(i == 0 || i == 2 ? -1.0 : 1.0, i < 2 ? -1.0 : 1.0);
+      vec2 a = texture2D(tAO, uv + o * uAOTexel).rg;
+      float w = max(0.01, 1.0 - abs(a.g - myF) / (myF * 0.06 + 0.05));
+      s += a.r * w;
+      ws += w;
+    }
+    float ao = s / ws;
+    // the darkening sits mostly in the ambient light: full in shade, gentler in sunshine
+    float lum = luma(col);
+    col *= mix(1.0, ao, uAO * (1.0 - 0.35 * smoothstep(0.4, 1.6, lum)));
+  }
 
   // --- atmospheric fog with sun in-scattering
   vec3 wp = worldFromDepth(uv, sky ? 0.9999 : depth);
@@ -163,13 +281,17 @@ void main() {
   if (uRaysOn > 0.0 && uRays > 0.0 && uSunVisible > 0.0) {
     vec2 delta = (uSunScreen - uv);
     float dl = length(delta);
+    // uRaysOn is the march's share of 24 steps (medium settings take 12, twice as long)
     const int N = 24;
-    vec2 stepv = delta / float(N) * min(1.0, 0.85 / max(dl, 1e-3));
+    float n = floor(float(N) * uRaysOn + 0.5);
+    vec2 stepv = delta / n * min(1.0, 0.85 / max(dl, 1e-3));
+    float decay = pow(0.945, float(N) / n);
     vec2 p = uv;
     float acc = 0.0, w = 1.0;
     float jit = bayer4(gl_FragCoord.xy);
     p += stepv * jit;
     for (int i = 0; i < N; i++) {
+      if (float(i) >= n) break;
       p += stepv;
       if (p.x < 0.0 || p.y < 0.0 || p.x > 1.0 || p.y > 1.0) break;
       float sd = texture2D(tDepth, p).r;
@@ -177,9 +299,9 @@ void main() {
         vec3 sc = texture2D(tColor, p).rgb;
         acc += w * smoothstep(0.6, 2.2, dot(sc, vec3(0.33)));
       }
-      w *= 0.945;
+      w *= decay;
     }
-    acc /= float(N);
+    acc /= n;
     float aspectFix = 1.0 - smoothstep(0.0, 1.1, dl);
     col += uSunColor * uSunGlow * acc * uRays * 2.6 * aspectFix * uSunVisible;
   }
@@ -187,31 +309,49 @@ void main() {
   // --- bloom
   if (uBloomOn > 0.0) col += texture2D(tBloom, uv).rgb * uBloom;
 
-  // --- exposure & tonemap
-  col *= uExposure;
+  // --- exposure & filmic tonemap
+  col *= uExposure * uDayExp;
   col = aces(col);
 
-  // --- grading: split toning, contrast, saturation
-  float l = dot(col, vec3(0.299, 0.587, 0.114));
-  col = mix(col, col * uShadowTint * 1.4, (1.0 - smoothstep(0.0, 0.45, l)) * 0.55);
-  col = mix(col, col * uHighTint, smoothstep(0.45, 1.0, l) * 0.6);
-  col = (col - 0.5) * uContrast + 0.5;
-  l = dot(col, vec3(0.299, 0.587, 0.114));
+  // --- grading, LUT-style but analytic (in display space, where it reads evenly):
+  col = pow(clamp(col, 0.0, 1.0), vec3(1.0 / 2.2));
+  float l = luma(col);
+  // split toning that keeps luminance: plum-blue shade, warm cream light
+  vec3 sh = uShadowTint / luma(uShadowTint), hi = uHighTint / luma(uHighTint);
+  col *= mix(vec3(1.0), sh, (1.0 - smoothstep(0.05, 0.55, l)) * 0.5);
+  col *= mix(vec3(1.0), hi, smoothstep(0.4, 1.0, l) * 0.45);
+  // the autumn palette: ambers and reds a touch richer, raw greens leaning to olive gold
+  float mx = max(col.r, max(col.g, col.b)), mn = min(col.r, min(col.g, col.b));
+  float sat = (mx - mn) / max(mx, 1e-3);
+  float amber = clamp((col.r - col.b) / max(mx, 1e-3) * 1.4, 0.0, 1.0) * step(col.g, col.r);
+  float green = clamp((col.g - max(col.r, col.b)) / max(mx, 1e-3) * 3.0, 0.0, 1.0);
+  col = mix(col, col * vec3(1.05, 1.0, 0.93), amber * sat * uWarm);
+  col.r = mix(col.r, col.g * 0.96, green * 0.28 * uWarm);
+  // a soft S-curve round the mid grey (toe and shoulder, never a hard clip)
+  vec3 sc = clamp(col, 0.0, 1.0);
+  col = mix(sc, sc * sc * (3.0 - 2.0 * sc), uContrast - 1.0);
+  l = luma(col);
   col = mix(vec3(l), col, uSaturation);
   // cold, desaturated blue for the freezing intro
   col = mix(col, vec3(l * 0.75, l * 0.85, l * 1.15), uCold);
 
-  // vignette
-  vec2 vc = uv - 0.5;
-  col *= 1.0 - dot(vc, vc) * uVignette;
+  // vignette: round (aspect-true), soft, sinking into a dusky plum rather than grey
+  vec2 vc = (uv - 0.5) * vec2(uRes.x / uRes.y, 1.0);
+  float vr = length(vc) / length(vec2(uRes.x / uRes.y, 1.0) * 0.5);
+  col *= mix(vec3(1.0), uVigTint, smoothstep(0.5, 1.1, vr) * uVignette);
+
+  // film grain: fine, per pixel, mostly in the mid-tones (it never softens an edge)
+  if (uGrain > 0.0) {
+    float gn = hash12(gl_FragCoord.xy + fract(uTime * 7.31) * 517.0) - 0.5;
+    col += gn * uGrain * (1.0 - abs(l - 0.5) * 1.6);
+  }
 
   // fade & flash
-  col = mix(col, uFadeColor, uFade);
+  col = mix(col, pow(uFadeColor, vec3(1.0 / 2.2)), uFade);
   col = mix(col, vec3(1.0), uFlash);
 
-  // --- linear -> sRGB, then ordered dither + quantise (pixel-art palette feel)
+  // --- ordered dither + quantise (pixel-art palette feel)
   col = clamp(col, 0.0, 1.0);
-  col = pow(col, vec3(1.0 / 2.2));
   float b = bayer4(gl_FragCoord.xy) - 0.5;
   col = floor(col * uLevels + 0.5 + b * uDither) / uLevels;
   gl_FragColor = vec4(col, 1.0);
@@ -225,6 +365,7 @@ export class Pipeline {
     this.renderer.setPixelRatio(1);
     this.renderer.autoClear = true;
     this.renderer.shadowMap.enabled = true;
+    // basic depth lookups; the sun's shadow.radius picks a soft filtered edge or one hard tap (see above)
     this.renderer.shadowMap.type = THREE.BasicShadowMap;
     this.renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
     this.renderer.toneMapping = THREE.NoToneMapping;
@@ -239,6 +380,8 @@ export class Pipeline {
     this.reflections = !touch;
     this.bloom = !touch;
     this.rays = !touch;
+    this.raySteps = 24; // god-ray march steps (12 or 24)
+    this.ao = !touch; // contact AO (half-res depth pass)
     this.shadowEvery = touch ? 2 : 1; // shadow map refresh every N frames
     this._frame = 0;
     this.fsCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
@@ -249,7 +392,7 @@ export class Pipeline {
     this.fsScene.add(this.fsMesh);
 
     this.brightMat = new THREE.ShaderMaterial({
-      uniforms: { tColor: { value: null }, uTexel: { value: new THREE.Vector2() }, uThreshold: { value: 1.05 } },
+      uniforms: { tColor: { value: null }, uTexel: { value: new THREE.Vector2() }, uThreshold: { value: 1.9 } },
       vertexShader: FS_VERT, fragmentShader: BRIGHT_FRAG, depthTest: false, depthWrite: false,
     });
     this.blurMat = new THREE.ShaderMaterial({
@@ -276,10 +419,12 @@ export class Pipeline {
       uRays: { value: 1 },
       uBloom: { value: 0.6 },
       uExposure: { value: 1.0 },
+      uDayExp: { value: 1.0 }, // the time of day's own exposure (atmosphere.js); uExposure is the scenes'
       uSaturation: { value: 1.12 },
-      uContrast: { value: 1.06 },
-      uShadowTint: { value: new THREE.Color(0.75, 0.62, 0.95) },
-      uHighTint: { value: new THREE.Color(1.06, 0.98, 0.88) },
+      uContrast: { value: 1.16 },
+      // split tones (normalised to keep luminance): blue-plum shade, warm cream light
+      uShadowTint: { value: new THREE.Color(0.84, 0.82, 1.0) },
+      uHighTint: { value: new THREE.Color(1.0, 0.96, 0.9) },
       uVignette: { value: 0.9 },
       uLevels: { value: 255 },
       uDither: { value: 0.5 },
@@ -291,12 +436,24 @@ export class Pipeline {
       uFlash: { value: 0 },
       uTime: G.uTime,
       uCold: { value: 0 },
+      tAO: { value: null },
+      uAOOn: { value: 0 },
+      uAO: { value: 0.75 },
+      uAOTexel: { value: new THREE.Vector2() },
+      uProj: { value: new THREE.Vector4(1, 1, 0.1, 2400) },
+      uGrain: { value: 0 },
+      uWarm: { value: 1 },
+      uVigTint: { value: new THREE.Color(0.74, 0.66, 0.74) },
       tColor: { value: null },
       tDepth: { value: null },
       tBloom: { value: null },
     };
     this.compMat = new THREE.ShaderMaterial({
       uniforms: this.post, vertexShader: FS_VERT, fragmentShader: COMP_FRAG, depthTest: false, depthWrite: false,
+    });
+    this.aoMat = new THREE.ShaderMaterial({
+      uniforms: { tDepth: { value: null }, uProj: this.post.uProj, uTexel: { value: new THREE.Vector2() }, uRadius: { value: 0.55 } },
+      vertexShader: FS_VERT, fragmentShader: AO_FRAG, depthTest: false, depthWrite: false,
     });
     this.fxaaMat = new THREE.ShaderMaterial({
       uniforms: { tColor: { value: null }, uTexel: { value: new THREE.Vector2() } },
@@ -317,6 +474,7 @@ export class Pipeline {
     this.bloomA?.dispose();
     this.bloomB?.dispose();
     this.ldrRT?.dispose();
+    this.aoRT?.dispose();
     const depthTexture = new THREE.DepthTexture(w, h);
     depthTexture.type = THREE.UnsignedIntType;
     this.sceneRT = new THREE.WebGLRenderTarget(w, h, {
@@ -329,6 +487,12 @@ export class Pipeline {
     const bw = Math.max(2, Math.floor(w / 4)), bh = Math.max(2, Math.floor(h / 4));
     this.bloomA = new THREE.WebGLRenderTarget(bw, bh, { type: THREE.HalfFloatType, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, depthBuffer: false });
     this.bloomB = this.bloomA.clone();
+    // contact AO at half resolution: r = occlusion, g = view distance (for the depth-aware filter)
+    const aw = Math.max(2, Math.ceil(w / 2)), ah = Math.max(2, Math.ceil(h / 2));
+    this.aoRT = new THREE.WebGLRenderTarget(aw, ah, { type: THREE.HalfFloatType, format: THREE.RGFormat, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, depthBuffer: false });
+    this.post.tAO.value = this.aoRT.texture;
+    this.post.uAOTexel.value.set(1 / aw, 1 / ah);
+    this.aoMat.uniforms.uTexel.value.set(1 / w, 1 / h);
     this.ldrRT = new THREE.WebGLRenderTarget(w, h, { type: THREE.UnsignedByteType, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, depthBuffer: false });
     this.fxaaMat.uniforms.tColor.value = this.ldrRT.texture;
     this.fxaaMat.uniforms.uTexel.value.set(1 / w, 1 / h);
@@ -383,7 +547,7 @@ export class Pipeline {
     P.uLevels.value = this.retro ? 40 : 255;
     P.uDither.value = this.retro ? 0.85 : 0.5;
     P.uOutlineW.value = this.retro ? 1 : Math.max(1, Math.round(this.h / 620));
-    P.uVignette.value = this.retro ? 0.9 : 0.55;
+    P.uVignette.value = this.retro ? 1.0 : 0.8;
     // the see-through dissolve dithers in cells about as big as a retro pixel
     G.uSeePx.value = this.retro ? 1 : Math.max(1, Math.round(this.h / 400));
     this.makeTargets();
@@ -451,8 +615,15 @@ export class Pipeline {
     r.setRenderTarget(this.sceneRT);
     r.render(scene, camera);
     const P = this.post;
-    P.uRaysOn.value = this.rays ? 1 : 0;
+    P.uRaysOn.value = this.rays ? this.raySteps / 24 : 0;
     P.uBloomOn.value = this.bloom ? 1 : 0;
+    P.uAOOn.value = this.ao ? 1 : 0;
+    const pm = camera.projectionMatrix.elements;
+    P.uProj.value.set(1 / pm[0], 1 / pm[5], camera.near, camera.far);
+    if (this.ao) {
+      this.aoMat.uniforms.tDepth.value = this.sceneRT.depthTexture;
+      this.fs(this.aoMat, this.aoRT);
+    }
     if (this.bloom) this.renderBloom();
     this.composite(camera);
   }
