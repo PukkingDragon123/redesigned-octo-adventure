@@ -1678,7 +1678,8 @@ export class VoxelCharacter {
     // expression priority: temporary > base
     let expr = this.tmpExpr?.e || this.expr || 'neutral';
     if (this.broken) expr = 'dizzy';
-    const blink = this.blinkT < 0 && expr === 'neutral' ? 1 : 0;
+    // every open-eyed face blinks (faces.js keeps the lid slant, so a cross blink stays cross)
+    const blink = this.blinkT < 0 ? 1 : 0;
     // talk mouth: syllable-ish noise
     let talk = 0;
     if (this.talking > 0) {
