@@ -1,6 +1,25 @@
 /* Pixel UI kit (see src/ui/kit.js). One art pixel = var(--u) CSS px, always a whole
-   number of device pixels. Fonts sit at 16 art px (their native size) with their
-   ascent/descent forced to whole pixels so the baseline never lands between pixels. */
+   number of device pixels. Text is set in Pixelify Sans (by Stefie Justprince, SIL OFL 1.1,
+   src/ui/fonts/PixelifySans-OFL.txt): a soft, rounded pixel face about 11 art pixels to the
+   em, so it sits at 11 * --u with its ascent/descent forced to whole art pixels (10 up, 2
+   down) and the baseline never lands between pixels. Monogram (CC0) stays behind it as the
+   fallback for the odd symbol Pixelify doesn't have. */
+@font-face {
+  font-family: 'Pixelify';
+  src: url('./fonts/pixelify-sans-400.woff2') format('woff2');
+  ascent-override: 90.9091%;
+  descent-override: 18.1818%;
+  line-gap-override: 0%;
+  font-display: block;
+}
+@font-face {
+  font-family: 'PixelifyBold';
+  src: url('./fonts/pixelify-sans-700.woff2') format('woff2');
+  ascent-override: 90.9091%;
+  descent-override: 18.1818%;
+  line-gap-override: 0%;
+  font-display: block;
+}
 @font-face {
   font-family: 'Monogram';
   src: url('./fonts/monogram-extended.ttf') format('truetype');
@@ -9,7 +28,7 @@
   line-gap-override: 0%;
   font-display: block;
 }
-/* BoldPixels by YukiPixels (CC BY-SA 4.0) */
+/* BoldPixels by YukiPixels (CC BY-SA 4.0): only the tiny print on the village TV */
 @font-face {
   font-family: 'BoldPixels';
   src: url('./fonts/boldpixels.woff2') format('woff2');
@@ -21,7 +40,9 @@
 
 :root {
   --u: 2px;
-  --tf: calc(var(--u) * 16);
+  --tf: calc(var(--u) * 11);
+  --font: 'Pixelify', 'Monogram', monospace;
+  --font-b: 'PixelifyBold', 'Pixelify', 'Monogram', monospace;
   --k-ink: #1e1418;
   --k-ink2: #3a2418;
   --k-cream: #fff4dc;
@@ -35,7 +56,7 @@
 
 /* ---------------------------------------------------------------- type */
 .k-text, .k-panel, .k-plate, .k-tip, .k-list, .k-page {
-  font-family: 'Monogram', monospace;
+  font-family: var(--font);
   font-size: var(--tf);
   line-height: calc(var(--u) * 12);
   letter-spacing: 0;
@@ -47,7 +68,7 @@
   text-rendering: optimizeSpeed;
 }
 .k-bold, .k-btn, .k-ribbon, .k-count, .k-tab, .k-h {
-  font-family: 'BoldPixels', 'Monogram', monospace;
+  font-family: var(--font-b);
   font-size: var(--tf);
   line-height: calc(var(--u) * 14);
   font-weight: normal;
@@ -55,7 +76,7 @@
   font-kerning: none;
 }
 /* big title text: 2x the native size */
-.k-big { font-size: calc(var(--u) * 32) !important; line-height: calc(var(--u) * 28) !important; }
+.k-big { font-size: calc(var(--u) * 22) !important; line-height: calc(var(--u) * 24) !important; }
 .k-shadow { text-shadow: 0 var(--u) 0 var(--k-ink); }
 .k-h { color: var(--k-gold); text-shadow: 0 var(--u) 0 var(--k-ink); margin: 0 0 calc(var(--u) * 4); }
 .k-parchment .k-h, .k-page .k-h { color: #8a2a14; text-shadow: none; }
@@ -143,7 +164,7 @@
   -webkit-tap-highlight-color: transparent;
   outline: none;
 }
-.k-btn small { display: block; font-family: 'Monogram', monospace; font-size: var(--tf); line-height: calc(var(--u) * 12); color: var(--k-cream2); }
+.k-btn small { display: block; font-family: var(--font); font-size: var(--tf); line-height: calc(var(--u) * 12); color: var(--k-cream2); }
 .k-btn .k-ico { width: calc(var(--u) * 16); height: calc(var(--u) * 16); image-rendering: pixelated; flex: none; }
 .k-btn.k-col { flex-direction: column; gap: 0; }
 .k-btn:hover, .k-btn.sel { border-image-source: var(--k-btn-hover); color: #fffbea; }
@@ -400,7 +421,7 @@
   border-width: calc(var(--u) * 1) calc(var(--u) * 4) calc(var(--u) * 3);
   border-image: var(--k-key) 5 5 7 5 fill / calc(var(--u) * 5) calc(var(--u) * 5) calc(var(--u) * 7) / 0 repeat;
   padding: 0;
-  font-family: 'Monogram', monospace;
+  font-family: var(--font);
   font-size: var(--tf);
   line-height: calc(var(--u) * 12);
   color: var(--k-ink);

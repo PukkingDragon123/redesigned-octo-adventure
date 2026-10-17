@@ -108,7 +108,7 @@
   right: 0;
   bottom: calc(var(--u) * 42 + var(--safe-b, 0px));
   text-align: center;
-  font-family: 'Monogram', monospace;
+  font-family: var(--font);
   font-size: var(--tf);
   line-height: calc(var(--u) * 12);
   color: var(--k-cream2);

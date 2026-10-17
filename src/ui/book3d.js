@@ -10,6 +10,7 @@
 // are laid out in (src/ui/book.js), so the menu pages sit on the paper pixel for pixel
 // and the pixel fonts stay crisp. quad() says where each page is on screen.
 import * as THREE from 'three';
+import { cfont, fontsReady } from './type.js';
 import { BonyHand } from './hands3d.js';
 import { ease } from './view3d.js';
 
@@ -133,8 +134,8 @@ function leatherTexture(w, h, { front = false, title = '', sub = '' } = {}) {
     const cx = w / 2;
     g.textAlign = 'center';
     g.textBaseline = 'middle';
-    const gold = (txt, y, px, font = 'BoldPixels') => {
-      g.font = `${px}px ${font}, monospace`;
+    const gold = (txt, y, px, bold = true) => {
+      g.font = cfont(px, bold);
       g.fillStyle = 'rgba(20,6,2,0.6)';
       g.fillText(txt, cx + 2, y + 3);
       g.fillStyle = '#e8bc4c';
@@ -142,8 +143,8 @@ function leatherTexture(w, h, { front = false, title = '', sub = '' } = {}) {
       g.fillStyle = 'rgba(255,240,180,0.55)';
       g.fillText(txt, cx - 1, y - 1);
     };
-    gold(title, h * 0.3, Math.round(w * 0.11));
-    if (sub) gold(sub, h * 0.3 + w * 0.12, Math.round(w * 0.065), 'Monogram');
+    gold(title, h * 0.3, Math.round(w * 0.088));
+    if (sub) gold(sub, h * 0.3 + w * 0.12, Math.round(w * 0.058), false);
     // the emblem: a skull over a steaming mug, in gold
     const ey = h * 0.62, s = w * 0.0042;
     g.save();
@@ -285,7 +286,7 @@ export class Book3D {
     this.frontC = leatherTexture(512, 704, { front: true, title: "HANK'S", sub: 'journal' });
     this.front = new THREE.MeshStandardMaterial({ map: tex(this.frontC), bumpMap: grain, bumpScale: 0.6, roughness: 0.58, metalness: 0.04 });
     // repaint the title once the pixel fonts are in
-    document.fonts?.load?.('40px BoldPixels').then(() => document.fonts.load('30px Monogram')).then(() => {
+    fontsReady().then(() => {
       const c2 = leatherTexture(512, 704, { front: true, title: "HANK'S", sub: 'journal' });
       this.front.map.image = c2;
       this.front.map.needsUpdate = true;

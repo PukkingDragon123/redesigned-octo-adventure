@@ -25,7 +25,7 @@
 
 /* headings in red ink with a pencil note under them */
 .bk-head { margin: 0 0 calc(var(--u) * 4); }
-.bk-h { color: #8a2a14; font-family: 'BoldPixels', monospace; line-height: calc(var(--u) * 14); white-space: nowrap; overflow: hidden; }
+.bk-h { color: #8a2a14; font-family: var(--font-b); line-height: calc(var(--u) * 14); white-space: nowrap; overflow: hidden; }
 .bk-sub { color: #6e6070; line-height: calc(var(--u) * 12); white-space: nowrap; overflow: hidden; }
 .bk-page .k-h { color: #8a2a14; text-shadow: none; margin: calc(var(--u) * 4) 0 calc(var(--u) * 2); }
 .bk-page .hint { color: #6e5038; white-space: normal; margin: calc(var(--u) * 3) 0 0; }

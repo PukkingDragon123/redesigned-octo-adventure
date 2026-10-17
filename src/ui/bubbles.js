@@ -23,6 +23,7 @@ import { sound } from '../game/sound.js';
 import { bubbleArt, bubbleTailArt, nameTabArt, BUBBLE_JOIN, BUBBLE_TAIL, CLOUD_ART } from './kitart.js';
 import { glyphURL } from '../art/icons.js';
 import { el, scale, snap } from './kit.js';
+import { EM, artWidth } from './type.js';
 
 // ---------------------------------------------------------------- art (cached data URLs)
 const URLS = new Map();
@@ -412,13 +413,13 @@ export class Bubbles {
 // one sits right on top of its speaker's head, found once when the line is said and
 // followed every frame. Far off, or crowded out by nearer talk, it is a tiny thought
 // cloud with three dots instead, which pops open into the words as Hank comes closer.
-const W_LINE = 14; // characters a line (Monogram is 6 px a character)
+const W_LINE = 15; // characters a line (Pixelify is about 5-6 px a character)
 const W_LINES = 2; // lines a bubble
 const W_NEAR = 17, W_FAR = 21; // m from the camera: nearer opens the words, further makes a cloud
 const W_GONE = 48; // m: further off than this, nothing at all
 const W_OPEN = 3; // at most this many open at once (the nearest)
 const CLOUD_TIP = 6.5; // x of the middle of the cloud's last little puff (it hangs over the head)
-const CH = 6, LH = 12; // a character's width and a line's height (art px)
+const LH = 12; // a line's height (art px); widths are measured (type.js artWidth)
 const BOX_X = 11, BOX_Y = 10; // the bubble frame's borders and padding across / down
 const SETTLE = 220; // ms a change between words and cloud has to hold before it shows
 
@@ -506,21 +507,12 @@ export class WorldBubbles {
     this.list.clear();
   }
 
-  // The pixel font's advance as the browser lays it out: some round it to whole CSS
-  // pixels (5 instead of 4.57 on a 2.625x phone), which would push the letters off the
-  // grid and out of the box. A letter-spacing makes up the difference, so every letter
-  // is exactly 6 pixels of the grid. (Measured once the font is in, again on a rescale.)
+  // (the box is sized to its words, measured in art pixels once the font is in)
   fitFont() {
-    const us = scale.us;
-    if (this.fitFor === us || !document.fonts?.check?.(`${16 * us}px Monogram`)) return;
-    this.fitFor = us;
-    const s = el('span', 'wb-box');
-    s.style.cssText = 'display:inline;position:absolute;left:0;top:0;visibility:hidden;border:0;padding:0;letter-spacing:0';
-    s.textContent = 'MMMMMMMMMM';
-    this.layer.appendChild(s);
-    const w = s.getBoundingClientRect().width / 10;
-    s.remove();
-    this.layer.style.setProperty('--wb-ls', `${(CH * us - w).toFixed(4)}px`);
+    if (this.fitFor) return;
+    if (!document.fonts?.check?.(`${EM * 2}px Pixelify`)) return;
+    this.fitFor = true;
+    for (const t of this.list.values()) t.textKey = null;
   }
 
   // once a frame, after the camera and everyone in the world have moved
@@ -564,7 +556,7 @@ export class WorldBubbles {
       if (pg !== t.page) {
         t.page = pg;
         t.lines = t.pages[pg];
-        t.cols = Math.max(...t.lines.map((l) => l.length));
+        t.cols = Math.max(...t.lines.map((l) => artWidth(l)));
         if (pg > 0 && t.shown === 'text') t.repop = true;
       }
       let want = t.d < W_NEAR ? 'text' : t.d > W_FAR ? 'cloud' : t.mode || 'cloud';
@@ -603,7 +595,7 @@ export class WorldBubbles {
 
   // where the open bubble for t goes: [x0, y0, x1, y1] round the box and its tail
   textRect(t, W, m, us) {
-    const bw = (t.cols * CH + BOX_X) * us, bh = (t.lines.length * LH + BOX_Y) * us;
+    const bw = (t.cols + BOX_X) * us, bh = (t.lines.length * LH + BOX_Y) * us;
     const hang = (TAIL_H - BUBBLE_JOIN) * us; // the tail's tip hangs this far under the box
     const x = Math.max(m, Math.min(W - bw - m, Math.round((t.sx - bw / 2) / us) * us));
     const y = Math.max(m, Math.round((t.sy - hang - bh) / us) * us);
@@ -637,7 +629,7 @@ export class WorldBubbles {
       if (t.textKey !== key) {
         t.textKey = key;
         t.box.textContent = key;
-        t.box.style.width = `calc(var(--us) * ${t.cols * CH + BOX_X})`;
+        t.box.style.width = `calc(var(--us) * ${t.cols + BOX_X})`;
         t.box.style.height = `calc(var(--us) * ${t.lines.length * LH + BOX_Y})`;
       }
       // the tail's tip right over the head: just off the middle of the bottom edge, or

@@ -53,7 +53,7 @@ export function applyScale() {
   r.setProperty('--S', `${s.S}`);
   // a half-size grid for small print (credits): still whole device pixels per pixel
   r.setProperty('--us', `${s.us}px`);
-  r.setProperty('--tfs', `${s.us * 16}px`);
+  r.setProperty('--tfs', `${s.us * 11}px`);
   // the 48px food sprites sit in 24-art-pixel spots: show them at the biggest WHOLE
   // multiple of their own pixels that fits (24u is only a whole multiple when S is even)
   r.setProperty('--food', `${(s.S >= 2 ? Math.floor(s.S / 2) * 48 : 24) / s.dpr}px`);

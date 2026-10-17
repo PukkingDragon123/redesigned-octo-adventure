@@ -3,6 +3,7 @@
 // harvest pumpkins as kickable physics props, and the fall-fair extras (lawn
 // bowling on the green, Nana's porch TV...).
 import * as THREE from 'three';
+import { cfont, fontsReady } from '../ui/type.js';
 import BuildWorker from './buildWorker.js?worker&inline';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import * as L from './layout.js';
@@ -324,7 +325,7 @@ export class VoxelWorld {
       mesh.matrixAutoUpdate = false;
       this.scene.add(mesh);
       // fonts may arrive after the first paint
-      document.fonts?.load?.('16px BoldPixels').then(() => { draw(); tex.needsUpdate = true; });
+      fontsReady().then(() => { draw(); tex.needsUpdate = true; });
     }
     this.signQueue = [];
   }
@@ -617,7 +618,7 @@ function drawSign(g, sg, pad) {
   }
   let lines = chalk ? text.split(/\s*\n\s*|(?<=JOUR)\s/) : [text];
   const fits = (ls, size) => {
-    g.font = `${size}px BoldPixels`;
+    g.font = cfont(size, true);
     return Math.max(...ls.map((l) => g.measureText(l).width)) <= W - 12 && size * ls.length * 1.05 <= H - 8;
   };
   const sizes = [56, 48, 40, 32, 28, 24, 20, 16, 12, 10, 8];
@@ -629,7 +630,7 @@ function drawSign(g, sg, pad) {
     const size2 = sizes.find((z) => fits(two, z)) ?? 8;
     if (size2 > size * 1.3) { lines = two; size = size2; }
   }
-  g.font = `${size}px BoldPixels`;
+  g.font = cfont(size, true);
   g.textBaseline = 'middle';
   g.textAlign = 'center';
   const lh = size * 1.05;

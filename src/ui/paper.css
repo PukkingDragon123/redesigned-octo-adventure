@@ -60,7 +60,7 @@
   border-image-width: calc(var(--u) * 5) calc(var(--u) * 4);
   border-image-repeat: stretch;
   padding: 0 var(--u) var(--u);
-  font-family: 'BoldPixels', 'Monogram', monospace;
+  font-family: var(--font-b);
   line-height: calc(var(--u) * 12);
   color: #fff8ea;
   text-shadow: 0 var(--u) 0 #3e2218;
@@ -134,7 +134,7 @@
   border-width: calc(var(--us) * 4) calc(var(--us) * 5) calc(var(--us) * 6) calc(var(--us) * 4);
   border-image: var(--k-bub) 8 fill / calc(var(--us) * 8) / 0 repeat;
   padding: 0 var(--us);
-  font-family: 'Monogram', monospace;
+  font-family: var(--font);
   font-size: var(--tfs);
   line-height: calc(var(--us) * 12);
   letter-spacing: var(--wb-ls, 0px);
