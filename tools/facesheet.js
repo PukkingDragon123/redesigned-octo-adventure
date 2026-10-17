@@ -2,12 +2,12 @@
 // /tools/facesheet.html?only=grandma,marie&exprs=neutral,happy&scale=4&blink=1&talk=2&crowd=6&look=1,0
 import { CHARACTERS, buildHead } from '../src/voxel/models/characters.js';
 import { FaceTex, EXPRESSIONS, hexRGB } from '../src/voxel/faces.js';
-import { dressTownsperson, ROSTER } from '../src/game/crowdGen.js';
+import { makeCrowd } from '../src/game/crowdGen.js';
 
 const P = new URLSearchParams(location.search);
 const scale = +(P.get('scale') || 4);
 const specs = (P.get('only') ? P.get('only').split(',') : Object.keys(CHARACTERS)).map((id) => [id, CHARACTERS[id]]);
-for (let i = 0; i < +(P.get('crowd') || 0); i++) specs.push([`crowd${i}`, dressTownsperson(ROSTER[i % ROSTER.length], i + 1)]);
+if (P.get('crowd')) for (const c of makeCrowd().slice(0, +P.get('crowd'))) specs.push([c.name, c.spec]);
 const exprs = P.get('exprs') ? P.get('exprs').split(',') : EXPRESSIONS;
 const look = (P.get('look') || '0,0').split(',').map(Number);
 const cells = specs.map(([id, spec]) => {
