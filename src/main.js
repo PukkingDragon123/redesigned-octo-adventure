@@ -89,6 +89,8 @@ async function boot() {
       warmed = true;
       if (ov) ov.render(pipeline);
     }
+    // the 3D interface on top: the book or compass Hank holds up, the corner things
+    game?.view3d?.render();
     window.__frames = (window.__frames || 0) + 1;
     if (window.__frames < maxFrames) requestAnimationFrame(loop);
     else window.__done = true;
@@ -106,6 +108,7 @@ window.__step = (n = 1, dt = 1 / 30) => {
   }
   if (game?.overrideScene) game.overrideScene.render(pipeline);
   else pipeline.render(world.scene, camera);
+  game?.view3d?.render();
 };
 boot().catch((e) => {
   console.error(e);

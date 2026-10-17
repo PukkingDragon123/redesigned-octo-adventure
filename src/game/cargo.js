@@ -105,7 +105,10 @@ export class Cargo {
   updateSteam() {
     const fx = this.game.effects;
     if (!fx) return;
-    fx.cups = this.spilled ? [] : this.cups.filter((c) => c.o.quality > 35).map((c) => c.steam);
+    // (how hot each cup is: effects.js puffs more, bigger and longer-lived steam the
+    // hotter it is, a thin wisp when it's only warm, none once it's cold)
+    for (const c of this.cups) c.steam.userData.heat = c.o.quality;
+    fx.cups = this.spilled ? [] : this.cups.filter((c) => c.o.quality > 12).map((c) => c.steam);
   }
 
   kick(power) {

@@ -347,7 +347,7 @@ export class UI {
     const cur = m.items[m.sel];
     cur?.dispatchEvent(new CustomEvent('focus-item'));
     // keep the focused row in view inside a scrolling list or menu (never scroll the page)
-    const box = cur?.closest('.k-list, .menu');
+    const box = cur?.closest('.k-list, .menu, .bk-c');
     if (box && box.scrollHeight > box.clientHeight) {
       const r = cur.getBoundingClientRect(), b = box.getBoundingClientRect();
       if (r.top < b.top) box.scrollTop -= b.top - r.top + 8;

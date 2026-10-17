@@ -30,6 +30,9 @@ import { UI } from '../ui/ui.js';
 import { sound } from './sound.js';
 import { TouchControls } from '../ui/touch.js';
 import { TitleScreen } from '../ui/title.js';
+import { View3D } from '../ui/view3d.js';
+import { BookUI } from '../ui/book.js';
+import { Compass3D } from '../ui/compass3d.js';
 import { Skills, SKILLS } from './skills.js';
 import { newState, saveGame, loadGame, loadSettings, saveSettings } from './state.js';
 import { riverInfo, forestNoise } from '../world/terrain.js';
@@ -93,6 +96,11 @@ export class Game {
     this.sfx = (name, pos, vol = 1) => this.spatial(name, pos, vol);
     this.ui = new UI(this);
     this.touch = new TouchControls(this);
+    // the 3D interface: the journal every menu is written in, the brass compass, and the
+    // first-person camera for holding them up (src/ui/view3d.js)
+    this.view3d = new View3D(this);
+    this.book = new BookUI(this, this.view3d);
+    this.compass3d = new Compass3D(this.view3d, this);
     this.menus = new Menus(this);
     this.orders = new Orders(this);
     this.cargo = new Cargo(this);
@@ -755,6 +763,7 @@ export class Game {
     }
     this.tweens = this.tweens.filter((tw) => tw.t < tw.dur);
     this.ui.update(dt);
+    this.book.update(dt);
     this.touch.update(dt);
 
     const busy = this.ui.dialogueTick || this.ui.menuStack.length;
@@ -762,8 +771,8 @@ export class Game {
       this.world.atmosphere.hour += (dt * GAME_MIN_PER_SEC) / 60;
       const free = !this.ui.inputSwallowed();
       if (free && input.pressed('pause')) this.openMenu(() => this.menus.pause());
-      else if (free && input.pressed('map')) this.openMenu(() => this.wrapClose(this.menus.map()));
-      else if (free && input.pressed('keepsakes')) this.openMenu(() => this.wrapClose(this.menus.keepsakes()));
+      else if (free && input.pressed('map')) this.openMenu(() => this.menus.map());
+      else if (free && input.pressed('keepsakes')) this.openMenu(() => this.menus.keepsakes());
       if (input.pressed('bell')) {
         sound.play(this.bike.stats.bellType || 'bell');
         this.villagers.onBell();
@@ -851,6 +860,12 @@ export class Game {
       this.ui.setObjective(this.objective());
       this.plan.update();
     }
+    // the held things move, the camera goes into his skull if something is held up, the
+    // compass reads the final view, and the book's pages are pinned onto the paper
+    this.view3d.update(dt);
+    this.view3d.late(dt);
+    this.compass3d.update(dt);
+    this.book.place();
     if (this.fpsEl) {
       this.fpsFrames++;
       this.fpsT += dt;
@@ -878,18 +893,6 @@ export class Game {
       if (e.type === 'land') { sound.play('land_foot', { volume: Math.min(1, e.impact / 8) }); ch.kick('sq', 0.75); }
       if (e.type === 'kick') { ch.play('kick'); ch.animT = 0; if (!this.interior?.active) this.world.interactables?.kick(W.pos, W.yaw); }
     }
-  }
-
-  wrapClose(m) {
-    const close = m.onBack;
-    m.onBack = () => {
-      close();
-      this.resumeFromMenu();
-    };
-    for (const b of m.ov.querySelectorAll('.btn')) {
-      if (b.textContent.trim() === 'Close') b.addEventListener('click', () => this.resumeFromMenu());
-    }
-    return m;
   }
 
   async forceHome() {

@@ -1,15 +1,8 @@
-// The HUD as physical things, drawn as pixel art at the kit's integer scale:
-// Harold's brass pocket watch, the day plate, a coin pouch, a brass compass in a
-// turned-wood case whose needle points at the next stop, Nana's list (a little
-// spiral notepad on a clipboard) and the handlebar speedometer.
-import { iconURL, glyphURL, iconSmallURL } from '../art/icons.js';
-import { CHARACTERS } from '../art/characters.js';
+// The HUD: just the prompt now (see buildPaperHUD). The pixel-art instruments that
+// used to sit round the screen (Harold's brass pocket watch, a brass compass in a
+// turned-wood case, the handlebar speedometer) are kept for the UI previews.
 import { Pix } from '../art/pixel.js';
-import { el, esc } from './kit.js';
-import { cupTemp } from '../game/orders.js';
-import { foodIconURL } from '../art/foodsprites.js';
-import { tempMood, tempFaceURL } from '../art/tempfaces.js';
-import { leaves } from './leaves.js';
+import { el } from './kit.js';
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const INK = 0x1e1418;
@@ -221,241 +214,27 @@ export class Gauge extends PixCanvas {
 }
 
 // ---------------------------------------------------------------- the HUD
+// Almost nothing is on the screen any more: what Hank can do right here (the prompt),
+// and the two 3D things in the top corners (the brass compass, src/ui/compass3d.js,
+// and the little journal, src/ui/book.js) that open into first-person views. The
+// watch, the day, the money and Nana's list live in the journal; how hot the cups
+// are shows in how much they steam in Bessie's crate. (The pixel watch, compass and
+// speedometer above are still here for the UI previews.)
 export function buildPaperHUD(ui) {
   const h = el('div', 'k-hud k-text');
   h.id = 'hud';
   ui.hud = h;
-  // pocket watch, day plate and coin pouch (top left). Only the watch stays: the day
-  // plate shows as a day starts (and in menus), the pouch when the money changes (and
-  // in menus); tapping the watch peeks at both
-  const tl = el('div', 'hud-tl');
-  ui.watch = new PocketWatch();
-  tl.appendChild(ui.watch.c);
-  const col = el('div', 'hud-tlcol');
-  const day = el('div', 'k-plate k-dark hud-day off', '<img class="k-g wx"><span class="d">Day 1</span>');
-  const money = el('div', 'hud-money off', `<img class="pouch" src="${iconURL('pouch')}"><span class="k-plate k-dark k-bold m"></span>`);
-  col.append(day, money);
-  tl.appendChild(col);
-  h.appendChild(tl);
-  ui.dayEl = day;
-  ui.elDay = day.querySelector('.d');
-  ui.elWx = day.querySelector('.wx');
-  ui.elMoney = money.querySelector('.m');
-  ui.pouchEl = money;
   ui.hudT = { day: 0, cash: 0, peek: 0, fast: 0, slow: 0, obj: 0 };
-  ui.watch.c.addEventListener('pointerdown', (e) => {
-    e.stopPropagation();
-    ui.hudT.peek = ui.hudT.peek > 0 ? 0 : 4;
-  });
-  // compass (top centre)
-  // (only while there's somewhere to go: see updateCompassP)
-  const cw = el('div', 'hud-compass off');
-  ui.compassEl = cw;
-  ui.compassP = new Compass();
-  cw.appendChild(ui.compassP.c);
-  ui.compassLbl = el('div', 'k-plate k-dark hud-dist');
-  cw.appendChild(ui.compassLbl);
-  h.appendChild(cw);
-  // centred with 50%: kit.js keeps it on whole device pixels (.hud-compass is in its snap list)
-  // Nana's list (top right): only while there's something on it; tap it to fold it
-  // down to its title
-  const note = el('div', 'hud-note hud-clip empty');
-  note.innerHTML = '<i class="clip"></i><div class="pad nb-ruled"><div class="ttl k-bold">Nana\'s list<span class="n"></span></div><div class="rows"></div><div class="obj"></div><div class="foot"></div></div>';
-  h.appendChild(note);
-  note.addEventListener('pointerdown', (e) => {
-    if (note.classList.contains('empty')) return;
-    e.stopPropagation();
-    note.classList.toggle('folded');
-  });
-  ui.noteEl = note;
-  ui.noteRows = note.querySelector('.rows');
-  ui.objective = note.querySelector('.obj');
+  // the objective's text (the compass tag pencils it in for a while when it changes)
+  ui.objective = el('div', 'hud-obj');
   ui.orderCards = new Map();
-  // handlebar speedometer (bottom left)
-  const g = el('div', 'hud-gauge');
-  g.appendChild(ui.gauge.canvas);
-  h.appendChild(g);
-  ui.gaugeEl = g;
   // prompt: what E does right now
   ui.promptEl = el('div', 'k-plate k-dark hud-prompt');
   h.appendChild(ui.promptEl);
   ui.root.appendChild(h);
 }
 
-const WX = { clear: 'sun', breezy: 'wind', misty: 'fog', overcast: 'cloud', rain: 'rain', snow: 'snow' };
 export function updatePaperHUD(ui, dt) {
-  const g = ui.game;
-  const st = g.state;
-  if (!st || !g.bike) return;
-  const atm = g.world.atmosphere;
-  const hr = atm.hour;
   const T = ui.hudT;
-  ui.watch.draw(hr);
-  const day = `Day ${st.day}`;
-  if (ui.elDay.textContent !== day) { ui.elDay.textContent = day; T.day = 6; }
-  const night = hr < 6.5 || hr > 19.6;
-  let wx = WX[atm.weatherTarget] || 'sun';
-  if (wx === 'sun' && night) wx = 'moon';
-  if (ui.elWx.dataset.i !== wx) { ui.elWx.src = glyphURL(wx); ui.elWx.dataset.i = wx; }
-  const money = `$${Math.floor(st.money)}`;
-  if (ui.elMoney.textContent !== money) {
-    if (ui.elMoney.textContent) { T.cash = 4; ui.pouchEl.classList.remove('jingle'); void ui.pouchEl.offsetWidth; ui.pouchEl.classList.add('jingle'); }
-    ui.elMoney.textContent = money;
-  }
-  // riding fast, the HUD gets out of the way (the watch fades, the list shrinks to its
-  // cups); slow down or stop and it all comes back
-  const sp = g.onFoot ? g.walker?.speed || 0 : g.bike.speed || 0;
-  T.fastT = sp > (g.onFoot ? 6.5 : 4.5) ? (T.fastT || 0) + dt : 0;
-  T.slowT = sp < 2.2 ? (T.slowT || 0) + dt : 0;
-  if (!T.fast && T.fastT > 1.2) T.fast = true;
-  else if (T.fast && T.slowT > 0.6) T.fast = false;
-  const menu = ui.menuStack.length > 0;
-  T.day -= dt;
-  T.cash -= dt;
-  T.peek -= dt;
-  const peek = T.peek > 0 || menu;
-  ui.hud.classList.toggle('fast', !!T.fast && !peek);
-  ui.dayEl.classList.toggle('off', !(peek || T.day > 0));
-  ui.pouchEl.classList.toggle('off', !(peek || T.cash > 0));
-  // the speedometer only matters on the bike
-  const gaugeOn = !g.onFoot;
-  ui.gaugeEl.classList.toggle('away', !gaugeOn);
-  if (gaugeOn) ui.gauge.draw(g.bike, dt);
-  updateNote(ui, dt);
-  updateCompassP(ui);
-  // now and then a leaf blows in and gets caught on the clipboard's clip for a while
-  ui._leafT = (ui._leafT ?? 14 + Math.random() * 10) - dt;
-  if (ui._leafT <= 0) {
-    ui._leafT = 35 + Math.random() * 45;
-    if (g.mode === 'ride' && !ui.noteEl.classList.contains('empty') && !ui.hud.classList.contains('hidden')) leaves.catchOn(ui.noteEl.querySelector('.clip'));
-  }
-}
-
-const SHORT = { birdie: 'Birdie', ingrid: 'Dr. Ingrid', doug: 'Doug', lou: 'Big Lou', ollie: 'Ollie', marie: 'Marie', grandma: 'Nana', pip: 'Pip & Pop', gus: 'Gus', agnes: 'Agnes', mo: 'Mo' };
-const MUGS = new Set(['classic', 'maple', 'mint', 'pumpkin', 'cinnamon', 'mocha']);
-function mugOf(o) {
-  if (MUGS.has(o.cocoa)) return o.cocoa;
-  const l = (o.label || '').toLowerCase();
-  for (const k of MUGS) if (l.includes(k)) return k;
-  if (l.includes('spice')) return 'pumpkin';
-  if (l.includes('lumberjack')) return 'mocha';
-  return 'classic';
-}
-
-// Nana's list: the cups being carried (a tick box, the mug, who, a little
-// thermometer), ticked off and crossed out for a few seconds once delivered,
-// then quest lines written underneath.
-const DONE_MS = 8000;
-const HEAT_CSS = 'width:calc(var(--u)*30);height:calc(var(--u)*6);margin-left:calc(var(--u)*12);background:linear-gradient(90deg,#d8e8f6,#f6e6c8)';
-// a little drawn face at the bar's end: beaming while hot, frozen once cold
-const FACE_CSS = 'position:absolute;left:calc(var(--u)*-14);top:calc(var(--u)*-5);width:calc(var(--u)*16);height:calc(var(--u)*16);image-rendering:pixelated';
-function updateNote(ui, dt) {
-  const g = ui.game;
-  const list = g.orders?.list || [];
-  const now = performance.now();
-  ui._doneAt = ui._doneAt || new Map();
-  const orders = list.filter((o) => o.state === 'carried' || (o.state === 'delivered' && ui.orderCards.has(o.id) && now - (ui._doneAt.get(o.id) ?? now) < DONE_MS));
-  const extra = g.quests?.noteLines?.() || [];
-  const seen = new Set();
-  for (const o of orders) {
-    seen.add(o.id);
-    let r = ui.orderCards.get(o.id);
-    if (!r) {
-      r = el('div', 'nrow');
-      const who = SHORT[o.customer] || CHARACTERS[o.customer]?.name?.split(' ')[0] || o.customer;
-      r.innerHTML = `<i class="bx"></i><img class="k-food" src="${foodIconURL(`cocoa_${mugOf(o)}`)}"><span class="who">${esc(who)}</span>${o.rush ? `<img class="k-g rush" src="${glyphURL('rush')}">` : ''}<span class="heat" style="${HEAT_CSS}"><i style="border-radius:0"></i><img style="${FACE_CSS}" alt=""></span>`;
-      const firstQuest = ui.noteRows.querySelector('.qrow');
-      ui.noteRows.insertBefore(r, firstQuest);
-      ui.orderCards.set(o.id, r);
-    }
-    if (o.state === 'delivered') {
-      if (!ui._doneAt.has(o.id)) {
-        ui._doneAt.set(o.id, now);
-        // ticked off: a burst of leaves off the line, and out of the coin pouch
-        leaves.burstFrom(r, 14);
-        leaves.burstFrom(ui.pouchEl, 6);
-      }
-      r.classList.add('done');
-      continue;
-    }
-    // a temperature bar from hot red-orange down to cold blue, with a face on the end
-    const q = clamp(o.quality, 0, 100);
-    const px = Math.round((q / 100) * 30);
-    const hEl = r.querySelector('.heat');
-    // a crash knocked the heat out of it: the thermometer shivers and flashes cold
-    if ((o.chills || 0) !== (+r.dataset.chills || 0)) {
-      r.dataset.chills = o.chills || 0;
-      hEl.animate?.([
-        { transform: 'translateX(0)', filter: 'none' }, { transform: 'translateX(calc(var(--u) * -2))', filter: 'hue-rotate(160deg) brightness(1.3)' },
-        { transform: 'translateX(calc(var(--u) * 2))', filter: 'hue-rotate(160deg) brightness(1.3)' }, { transform: 'translateX(calc(var(--u) * -1))', filter: 'hue-rotate(100deg)' },
-        { transform: 'translateX(0)', filter: 'none' },
-      ], { duration: 700, easing: 'steps(4, jump-end)' }); // lands on the keyframes: whole pixels only
-    }
-    if (hEl.dataset.p !== String(px)) {
-      hEl.dataset.p = px;
-      const T = cupTemp(q);
-      const f = hEl.firstChild;
-      f.style.width = `calc(var(--u) * ${px})`;
-      f.style.background = `linear-gradient(180deg, rgba(255,255,255,0.45) 0 var(--u), ${T.color} var(--u) calc(100% - var(--u)), rgba(0,0,0,0.25) calc(100% - var(--u)))`;
-      const mood = tempMood(q);
-      if (hEl.lastChild.dataset.m !== mood) { hEl.lastChild.dataset.m = mood; hEl.lastChild.src = tempFaceURL(mood); }
-      hEl.title = `${T.word} (${T.deg}\u00b0C)`;
-      hEl.className = `heat ${q > 60 ? '' : q > 30 ? 'warm' : 'cool'}`;
-      r.classList.toggle('cold', q <= 12);
-    }
-  }
-  for (const [id, r] of ui.orderCards) if (!seen.has(id)) { r.remove(); ui.orderCards.delete(id); ui._doneAt.delete(id); }
-  // quest lines (lost cats, saplings...) written under the orders
-  const key = extra.join('|');
-  if (ui._extraKey !== key) {
-    ui._extraKey = key;
-    ui.noteRows.querySelectorAll('.qrow').forEach((e) => e.remove());
-    for (const t of extra) ui.noteRows.appendChild(el('div', 'nrow qrow', `<i class="bx"></i><span>${esc(t)}</span>`));
-  }
-  // the objective line: for a while after it changes, and again once Hank stops for a
-  // moment ("all done" lines only the once)
-  const T = ui.hudT, txt = ui.objective.textContent;
-  T.obj -= dt;
-  const objOn = !!txt && (T.obj > 0 || (T.slowT > 2.5 && !/^all done\b/i.test(txt)));
-  if (ui.objective.classList.contains('on') !== objOn) ui.objective.classList.toggle('on', objOn);
-  const n = orders.filter((o) => o.state === 'carried').length + extra.length;
-  const ns = n ? String(n) : '';
-  const nEl = ui.noteEl.querySelector('.ttl .n');
-  if (nEl.textContent !== ns) nEl.textContent = ns;
-  // (touch screens keep the objective off the list: see notebook.css)
-  const empty = !orders.length && !extra.length && !(objOn && !ui.root.classList.contains('touchmode'));
-  if (ui.noteEl.classList.contains('empty') !== empty) ui.noteEl.classList.toggle('empty', empty);
-  const cups = orders.length > 0;
-  if (ui.noteEl.classList.contains('cups') !== cups) ui.noteEl.classList.toggle('cups', cups);
-}
-
-// a 16px picture for a compass target
-const SMALL = { cocoa: () => glyphURL('cocoa'), home: () => glyphURL('home'), star: () => glyphURL('star'), coin: () => glyphURL('coin') };
-const markIcon = (name) => (SMALL[name] ? SMALL[name]() : iconSmallURL(name));
-
-function updateCompassP(ui) {
-  const g = ui.game;
-  const cam = g.camera;
-  const dir = cam.getWorldDirection(ui._dir || (ui._dir = new cam.position.constructor()));
-  const heading = (Math.atan2(dir.x, -dir.z) * 180) / Math.PI;
-  const marks = g.compassMarkers ? g.compassMarkers() : [];
-  const p = g.playerPos;
-  let best = null;
-  for (const m of marks) {
-    const d = Math.hypot(m.x - p.x, m.z - p.z);
-    if (!best || d < best.d) best = { ...m, d };
-  }
-  // just the way home, with nothing to fetch there and the day still young, is no target
-  const goal = !!best && (marks.some((m) => m.id !== 'home') || g.world.atmosphere.hour >= 17 || (g.orders?.board?.().length || 0) > 0);
-  if (ui.compassEl.classList.contains('off') === goal) ui.compassEl.classList.toggle('off', !goal);
-  if (!goal) return;
-  const needle = (Math.atan2(best.x - p.x, -(best.z - p.z)) * 180) / Math.PI - heading;
-  ui.compassP.draw(heading, needle);
-  const txt = best ? (best.d < 1000 ? `${Math.round(best.d)} m` : `${(best.d / 1000).toFixed(1)} km`) : '';
-  const k = txt + (best?.icon || '');
-  if (ui.compassLbl.dataset.t !== k) {
-    ui.compassLbl.dataset.t = k;
-    ui.compassLbl.innerHTML = best ? `<img class="k-g" src="${markIcon(best.icon)}"><span>${txt}</span>` : '';
-    ui.compassLbl.classList.toggle('off', !best);
-  }
+  if (T) T.obj -= dt;
 }
