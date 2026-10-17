@@ -275,12 +275,16 @@ its heat, more the harder the crash.
   crank to spin as fast as you like (`crank.js`, with Hank's wind as a bone and
   the gear number on it), a gear shifter, brake, hop and one trick button (a
   skeleton pulling a wheelie); on foot a jump and a sprint button.
-- **Rendering** (`src/render`): three.js renders at native resolution (or
-  above it on high-DPI screens) into an HDR target. A post pass adds height fog
+- **Rendering** (`src/render`): three.js renders at the screen's own pixels
+  (or a whole fraction of them, upscaled nearest) into an HDR target. Sun
+  shadows get a soft filtered edge on desktops; a half-resolution contact-AO
+  pass darkens where things meet the ground. The composite adds height fog
   with sun scattering, cartoon depth-edge outlines, screen-space god rays,
-  bloom, colour grading and FXAA. The 'Retro' and 'Chunky' resolution settings
-  bring back the old low-resolution, dithered pixel look. Water uses planar
-  reflections.
+  bloom on real light sources only, a filmic tonemap and an autumn grade
+  (cool shade, warm light, a plum vignette, fine grain on high). The 'Retro'
+  and 'Chunky' resolution settings bring back the old low-resolution, dithered
+  pixel look. Water uses planar reflections (an analytic sky without them).
+  Phones on medium/low skip AO, bloom and the soft shadow edge.
 - **Game** (`src/game`): bicycle physics with momentum, a crank the rider turns
   himself (no cadence cap) through three gears that shift by themselves or by
   hand (`src/core/pedal.js` turns keys, sticks and drags into crank turns), a

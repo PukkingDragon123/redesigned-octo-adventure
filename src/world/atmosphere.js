@@ -149,13 +149,12 @@ export class Atmosphere {
     P.uFogDensity.value = 0.0016 * W.fog;
     P.uFogMax.value = clamp(0.82 + (W.fog - 1) * 0.06, 0.5, 0.97);
     P.uRays.value = (1 - grey) * (1 - night);
-    P.uBloom.value = lerp(0.55, 0.3, grey);
+    P.uBloom.value = lerp(0.55, 0.3, grey) + 0.2 * night;
     P.uCold.value = this.cold;
     P.uSaturation.value = lerp(1.24, 0.95, grey);
-    // the eye adapts: a high sun is pulled down a little so whites keep their shape, the
-    // night opened up so the lamp pools read against a blue (never black) village
+    // the eye adapts: a high sun is pulled down a little so whites keep their shape
     const sy = this.sunDir.y;
-    P.uDayExp.value = (1 - 0.06 * smoothstep(0.25, 0.7, sy) * (1 - grey * 0.6)) * (1 + 0.1 * night);
+    P.uDayExp.value = (1 - 0.06 * smoothstep(0.25, 0.7, sy) * (1 - grey * 0.6));
     // the autumn grade leans hardest into golden hour, least in grey weather
     const golden = smoothstep(0.42, 0.12, sy) * (1 - night);
     P.uWarm.value = (0.65 + 0.5 * golden) * (1 - grey * 0.7);

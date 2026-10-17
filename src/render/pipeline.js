@@ -333,9 +333,9 @@ void main() {
   col = mix(sc, sc * sc * (3.0 - 2.0 * sc), uContrast - 1.0);
   l = luma(col);
   col = mix(vec3(l), col, uSaturation);
-  // night vision: the moonlit world loses its colour towards a cool blue, while lamp-lit
-  // and glowing things (the brighter pixels) keep theirs
-  col = mix(col, l * vec3(0.78, 0.9, 1.18), uNightGrade * 0.3 * (1.0 - smoothstep(0.3, 0.75, l)));
+  // night vision: the moonlit world gives up its own colours for a deep moon blue, while
+  // lamp-lit and glowing things (the brighter pixels) keep theirs
+  col = mix(col, l * vec3(0.58, 0.74, 1.75), uNightGrade * 0.42 * (1.0 - smoothstep(0.3, 0.72, l)));
   // cold, desaturated blue for the freezing intro
   col = mix(col, vec3(l * 0.75, l * 0.85, l * 1.15), uCold);
 
@@ -629,6 +629,9 @@ export class Pipeline {
       this.aoMat.uniforms.tDepth.value = this.sceneRT.depthTexture;
       this.fs(this.aoMat, this.aoRT);
     }
+    // by day only real lights bloom (sunlit paint reaches ~2); at night there's no sunlit
+    // paint, so the lamps, windows and fires bloom from a lower level
+    this.brightMat.uniforms.uThreshold.value = 1.9 - 0.7 * G.uNight.value;
     if (this.bloom) this.renderBloom();
     this.composite(camera);
   }
