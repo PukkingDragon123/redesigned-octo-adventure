@@ -572,10 +572,11 @@ export class FaceTex {
       }
     }
     if (X.gloom) {
-      const yEnd = eL.y - this.style.h - 5;
-      for (let i = 0; i < 4; i++) {
-        const gx = this.W / 2 - 9 + i * 6;
-        for (let y = 0; y < yEnd - (i % 2) * 2; y++) if ((y & 1) === 0 || y < yEnd * 0.6) this.px(gx, y, GLOOM);
+      // blue shock lines hanging between the brows
+      const yEnd = Math.round(eL.y - this.style.h - 1);
+      for (let i = -1; i <= 1; i++) {
+        const gx = Math.round(this.W / 2 + i * 4 - 0.5);
+        for (let y = 1; y < yEnd - Math.abs(i) * 2; y++) if (y < yEnd * 0.55 || (y & 1) === 0) this.px(gx, y, GLOOM);
       }
     }
     // blush: every cheek has a little, the mood decides how much
@@ -761,8 +762,8 @@ const HUMAN = {
   cry: { eye: { kind: 'squeeze' }, brow: [-1.2, 0.5, 0.1], mouth: ['wail0', 'wail1'], fx: ['tears'] },
   angry: { eye: O({ top: 0.3, slant: 3.2, pk: 0.8 }), brow: [1.4, -0.5, 0.1], mouth: 'grit', talk: 'talkAngry', fx: ['vein'] },
   surprised: { eye: O({ k: 1.15, whites: true, pk: 0.9 }), brow: [-0.3, 3, 1.1], mouth: 'o', talk: 'talkO' },
-  shock: { eye: O({ k: 1.3, whites: true, pk: 0.45, hi: false }), brow: [-0.5, 4, 1.2], mouth: 'shock', fx: ['gloom'], gloom: true },
-  scared: { eye: O({ k: 1.2, whites: true, pk: 0.55, hi: false, lx: 0 }), brow: [-1.2, 3, 0.4], mouth: 'wave', fx: ['sweat'], gloom: true },
+  shock: { eye: O({ k: 1.3, whites: true, pk: 0.45, hi: false, noBlink: true }), brow: [-0.5, 4, 1.2], mouth: 'shock', fx: ['gloom'], gloom: true },
+  scared: { eye: O({ k: 1.2, whites: true, pk: 0.55, hi: false, noBlink: true }), brow: [-1.2, 3, 0.4], mouth: 'wave', fx: ['sweat'], gloom: true },
   sheepish: { eye: { kind: 'up' }, brow: [-0.8, 1.5, 0.4], blush: 3, mouth: 'sheepish', talk: 'talkSad', fx: ['sweat'] },
   smug: { eye: O({ top: 0.5, lx: 1 }), browL: [0.3, 0, 0.4], browR: [-0.6, 2.5, 1.2], blush: 1, mouth: 'smirk', talk: 'talkDef' },
   love: { eye: { kind: 'heart' }, brow: [-0.4, 2.5, 1], blush: 2, mouth: 'grin', talk: 'talkHappy' },
