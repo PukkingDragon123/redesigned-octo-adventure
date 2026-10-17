@@ -1,9 +1,12 @@
-// Screens: title, Hank's journal (pause), settings, controls, Nana's order book and
-// customer book (spiral notebooks), the Skill Book (Harold's garage), keepsakes,
-// the paper map, recipes, the Moose & Goose shop and the day's receipt. All built
-// from the pixel UI kit (src/ui/kit.js, styles in src/ui/menus.css and notebook.css).
+// Every screen is written on the pages of Hank's journal (src/ui/book.js lifts the 3D
+// book into view, src/ui/book3d.js is the book): the journal itself (pause), Nana's
+// order book and customers, the paper map, Nana's recipes, Harold's Skill Book, the
+// keepsakes, settings, controls, Mo's shop list and the day's receipt. Each section
+// writes a left and a right page with the pixel UI kit (src/ui/kit.js; styles in
+// src/ui/book.css, menus.css and notebook.css) and hands back its menu items for the
+// keyboard / pad; the bookmarks down the fore-edge turn between them.
 import { el } from '../ui/ui.js';
-import { kPanel, kSign, kClose, kBook, kBar, kSlider, kToggle, kSlot, kKey, esc, scale, snap, snapBox, setUIScaleOffset } from '../ui/kit.js';
+import { kBar, kSlider, kToggle, kSlot, kKey, esc, scale, setUIScaleOffset } from '../ui/kit.js';
 import { iconURL, iconSmallURL, glyphURL } from '../art/icons.js';
 import { LivePortrait } from '../ui/live3d.js';
 import { CHARACTERS } from '../art/characters.js';
@@ -14,6 +17,7 @@ import { tempBarHTML, cupTemp } from './orders.js';
 import { foodIconURL, FOOD_INFO } from '../art/foodsprites.js';
 import { QUESTS, SHOP, RECIPES, LOST, BIRD_NAMES } from './quests.js';
 import { RIBBONS } from './carveScore.js';
+import { markName } from '../ui/compass3d.js';
 
 const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V'];
 
@@ -25,28 +29,24 @@ const STUB_SKILLS = [
   { id: 'drift', name: 'Drift', icon: 'skill_drift', how: 'At speed, hold drift and steer into a corner.', desc: 'The cocoa stays (mostly) in the cup.', tier: 3, maxTier: 3, goal: 'Mastered!', progress: 1 },
 ];
 
+// the bookmarks, in order down the fore-edge
+const TABS = ['journal', 'orders', 'map', 'customers', 'recipes', 'skills', 'keepsakes', 'settings', 'controls'];
+
 export class Menus {
   constructor(game) {
     this.game = game;
     this.ui = game.ui;
+    this.boardMode = false;
+    this.register();
+  }
+  get book() {
+    return this.game.book;
   }
 
   // ---------------------------------------------------------------- building blocks
-  // a carved wooden frame with a wood-burned sign for a title and a close button; body is the scrolling part
-  sheet(title, { kind = 'leather', cls = '', ribbon = 'oak', onClose = null } = {}) {
-    const p = kPanel(kind, `menu ${cls}`);
-    const rb = kSign(title, ribbon, 'm-title');
-    p.appendChild(rb);
-    if (onClose) {
-      const x = kClose(() => { this.game.sound?.play('ui_click'); onClose(); });
-      x.classList.add('m-close');
-      p.appendChild(x);
-    }
-    const body = el('div', 'm-body');
-    p.appendChild(body);
-    // the sign is centred by layout (no transforms on pixel art); kit.js keeps its text on whole pixels
-    requestAnimationFrame(() => snapBox(p));
-    return { p, body };
+  // a heading in red ink, with a pencilled line under it
+  head(page, title, sub = '') {
+    page.appendChild(el('div', 'bk-head', `<div class="bk-h k-bold">${title}</div>${sub ? `<div class="bk-sub">${sub}</div>` : ''}`));
   }
   // a selectable row (index entries, list rows): glyph + label (+ right side)
   item(label, onClick, { icon = '', right = '', cls = '' } = {}) {
@@ -54,8 +54,590 @@ export class Menus {
     b.addEventListener('click', () => { this.game.sound?.play('ui_click'); onClick?.(b); });
     return this.ui.hoverSelect(b);
   }
+  // open the book on a section (or turn to it if the book is already up)
+  open(id, opts = {}) {
+    const g = this.game;
+    if (!g.book) return null;
+    return g.book.open(id, opts);
+  }
+  // the usual way out of a menu opened during play
+  resume() {
+    return () => this.game.resumeFromMenu();
+  }
 
-  // ---------------------------------------------------------------- title (the lead's screen; built from the kit)
+  // ---------------------------------------------------------------- the old entry points
+  pause() { return this.open('journal', { onClose: this.resume() }); }
+  map() { return this.open('map', { onClose: this.resume() }); }
+  keepsakes() { return this.open('keepsakes', { onClose: this.resume() }); }
+  recipes() { return this.open('recipes', { onClose: this.resume() }); }
+  customers() { return this.open('customers', { onClose: this.resume() }); }
+  // from the title screen only settings and controls are bookmarked
+  settings(onClose) {
+    const title = this.game.mode === 'title';
+    return this.open('settings', { onClose: () => { this.game.saveSettings(); onClose?.(); }, tabs: title ? ['settings', 'controls'] : null });
+  }
+  controls() {
+    const title = this.game.mode === 'title';
+    return this.open('controls', { tabs: title ? ['settings', 'controls'] : null, onClose: title ? null : this.resume() });
+  }
+  // Nana's order book on the kitchen table: ticking a line packs that cup
+  orderBoard(onDone) {
+    this.boardMode = true;
+    return this.open('orders', { onClose: () => { this.boardMode = false; onDone?.(); }, tabs: ['orders', 'recipes', 'customers', 'map', 'journal', 'settings', 'controls'] });
+  }
+  garage(onDone) { return this.skillBook(onDone); }
+  skillBook(onDone) { return this.open('skills', { onClose: onDone }); }
+  // Mo's: the shopping list pinned into the book (no bookmarks: pay or leave)
+  shop(onDone) {
+    this.cart = {};
+    this.game.sound.play('shop_bell');
+    return this.open('shop', { tabs: false, onClose: () => onDone?.() });
+  }
+  // the day's receipt before bed
+  summary(onDone) { return this.open('receipt', { tabs: false, noClose: true, onClose: onDone }); }
+  // the pumpkin-carving page went with the Halloween decorations; an old caller just gets "not now"
+  carve(onDone) { onDone?.(null); }
+
+  // ---------------------------------------------------------------- the sections
+  register() {
+    const B = this.game.book;
+    if (!B) return;
+    const sec = (id, title, icon, build, extra = {}) => B.register(id, { title, icon, build: (L, R, ctx) => build.call(this, L, R, ctx), ...extra });
+    sec('journal', "Hank's Journal", 't_journal', this.pJournal);
+    sec('orders', "Nana's Orders", 'cocoa', this.pOrders);
+    sec('map', 'The Map', 'map', this.pMap);
+    sec('customers', "Nana's Customers", 'home', this.pCustomers);
+    sec('recipes', "Nana's Recipes", 'mug_classic', this.pRecipes);
+    sec('skills', 'The Skill Book', 'skill_wheelie', this.pSkills);
+    sec('keepsakes', "Harold's Keepsakes", 'lantern', this.pKeepsakes);
+    sec('settings', 'Settings', 'gear', this.pSettings);
+    sec('controls', 'Controls', 'pad', this.pControls);
+    sec('shop', 'Moose & Goose', 'basket', this.pShop, { hidden: true });
+    sec('receipt', 'Receipt', 'coin', this.pReceipt, { hidden: true });
+    B.order = TABS.slice();
+  }
+
+  // ---- the journal (pause): today on the left, the contents on the right
+  pJournal(L, R, ctx) {
+    const g = this.game;
+    const st = g.state;
+    const d = st.stats || {};
+    const hr = g.world.atmosphere.hour;
+    const hh = Math.floor(hr), mm = Math.floor((hr - hh) * 60);
+    const time = `${((hh + 11) % 12) + 1}:${String(mm).padStart(2, '0')} ${hh < 12 ? 'am' : 'pm'}`;
+    this.head(L, `Day ${st.day}`, `${time}, ${esc(g.world.atmosphere.weatherTarget || 'clear')}`);
+    L.appendChild(el('div', 'jdate', `<img class="k-g" src="${glyphURL('coin')}"><b>$${Math.floor(st.money)}</b><img class="k-g" src="${glyphURL('cocoa')}"><span>${d.deliveries || 0} cups delivered</span>`));
+    // the cups on Bessie right now, and how hot they still are
+    const carried = g.orders?.carried?.() || [];
+    if (carried.length) {
+      L.appendChild(el('div', 'k-h k-bold', 'In the crate'));
+      for (const o of carried) L.appendChild(el('div', 'jcup', `<img class="k-food" src="${foodIconURL(`cocoa_${mugOf(o)}`)}"><span class="nm">${esc(SHORT_NAME[o.customer] || o.customer)}</span>${tempBarHTML(o.quality)}`));
+    }
+    L.appendChild(el('div', 'k-h k-bold', 'Errands'));
+    const Q = st.quests || {};
+    const lines = [];
+    const row = (done, text) => `<div class="jq${done ? ' done' : ''}"><img class="k-g" src="${glyphURL(done ? 'boxOn' : 'box')}"><span>${text}</span></div>`;
+    for (const [id, def] of Object.entries(QUESTS)) {
+      const q = Q[id];
+      if (q?.state === 'active') lines.push(row(false, def.title));
+      else if (q?.state === 'done') lines.push(row(true, def.title));
+    }
+    for (const Lo of LOST) {
+      const q = Q[`lost_${Lo.id}`];
+      if (q?.state === 'active') lines.push(row(false, `${q.found ? 'Return' : 'Find'} the ${Lo.name}`));
+      else if (q?.state === 'done') lines.push(row(true, `Found the ${Lo.name}`));
+    }
+    L.appendChild(el('div', 'jlist', lines.length ? lines.join('') : '<p class="hint">Nothing yet. Chat with folks around town!</p>'));
+    if (st.photos && Object.keys(st.photos).length) {
+      L.insertAdjacentHTML('beforeend', `<div class="k-h k-bold">Bird book</div><div class="jphotos">${Object.keys(st.photos).map((k) => `<span class="jph"><img class="k-g" src="${glyphURL('camera')}">${esc(BIRD_NAMES[k] || k)}</span>`).join('')}</div>`);
+    }
+    const pr = st.carving?.ribbons;
+    if (pr && Object.values(pr).some((n) => n)) {
+      const medal = { first: 'medalG', second: 'medalS', third: 'medalB', part: 'medalNone' };
+      L.insertAdjacentHTML('beforeend', `<div class="k-h k-bold">Pumpkin ribbons</div><div class="jphotos">${Object.keys(RIBBONS).filter((k) => pr[k]).map((k) => `<span class="jph"><img class="k-g" src="${glyphURL(medal[k])}">${pr[k] > 1 ? `${pr[k]} x ` : ''}${esc(RIBBONS[k].name)}</span>`).join('')}<span class="jph">Best: ${st.carving.best || 0} pts</span></div>`);
+    }
+    // the contents page
+    this.head(R, 'Contents');
+    const go = (k) => () => ctx.go(k);
+    const items = [
+      this.item('Back to the road', () => ctx.close(), { icon: glyphURL('arrowR') }),
+      this.item('The map', go('map'), { icon: iconSmallURL('map') }),
+      this.item("Nana's orders", go('orders'), { icon: glyphURL('cocoa') }),
+      this.item("Harold's keepsakes", go('keepsakes'), { icon: iconSmallURL('lantern') }),
+      this.item('Skill book', go('skills'), { icon: iconSmallURL('skill_wheelie') }),
+      this.item("Nana's customers", go('customers'), { icon: glyphURL('home') }),
+      this.item("Nana's recipes", go('recipes'), { icon: glyphURL('mug_classic') }),
+      this.item('Settings', go('settings'), { icon: glyphURL('gear') }),
+      this.item('Controls', go('controls'), { icon: glyphURL('pad') }),
+      this.item('Save & quit', () => { g.save(); location.href = location.pathname; }, { icon: glyphURL('home'), cls: 'quit' }),
+    ];
+    const idx = el('div', 'jindex');
+    items.forEach((b) => idx.appendChild(b));
+    R.appendChild(idx);
+    return { items };
+  }
+
+  // ---- Nana's order book: today's orders down the left, the one under the finger on the right
+  pOrders(L, R, ctx) {
+    const g = this.game;
+    const ui = this.ui;
+    const O = g.orders;
+    const board = this.boardMode;
+    const head = el('div', 'nb-head');
+    L.appendChild(head);
+    const list = el('div', 'nb-list');
+    L.appendChild(list);
+    const rows = [];
+    const all = O.list.filter((o) => o.state === 'board' || o.state === 'carried' || o.state === 'delivered');
+    const detail = (o) => nbCard(R, {
+      id: o.customer, spot: o.spot,
+      stamp: o.state === 'delivered' ? ['DONE', 'ok'] : o.state === 'carried' ? ['PACKED', 'ok'] : o.rush ? ['RUSH', ''] : null,
+      lines: [`<div class="nb-line wrap"><img class="k-food" src="${foodIconURL(`cocoa_${mugOf(o)}`)}"><span class="v">${esc(o.label)}</span></div>`, heatLine(o)],
+      quote: o.note,
+    });
+    let m = null;
+    all.forEach((o, i) => {
+      const r = el('button', 'nb-row pick', `<i class="bx"></i><img class="k-food" src="${foodIconURL(`cocoa_${mugOf(o)}`)}"><span class="nm">${esc(SHORT_NAME[o.customer] || (CHARACTERS[o.customer]?.name || o.customer).split(' ')[0])}</span><span class="rt">${o.rush ? `<img class="k-g rush" src="${glyphURL('rush')}">` : ''}$${o.price}</span>`);
+      const sync = () => { r.classList.toggle('packed', o.state === 'carried'); r.classList.toggle('done', o.state === 'delivered'); };
+      sync();
+      r.addEventListener('focus-item', () => detail(o));
+      r.addEventListener('click', () => {
+        detail(o);
+        if (!board || o.state === 'delivered') return;
+        let packed = false;
+        if (o.state === 'carried') { O.unpack(o); g.sound.play('pencil_scribble'); }
+        else if (!O.pack(o)) {
+          g.sound.play('ui_error');
+          const miss = O.missing ? O.missing(o) : [];
+          if (miss.length) {
+            ui.pop(`We're out of *${miss.map((k) => FOOD_INFO[k]?.label || k).join(' & ')}*, dear! Could you pop over to Moose & Goose?`, { who: 'grandma', expr: 'worried', key: 'pack' });
+            const q = g.quests.q('groceries');
+            if (q.state !== 'active') { q.state = 'active'; g.sound.play('quest_new'); }
+          } else ui.pop(`Bessie only holds ${O.capacity()} cocoas: two in the basket, one in the crate.`, { expr: 'sheepish', key: 'pack' });
+        } else {
+          g.sound.play('cup');
+          packed = true;
+        }
+        sync();
+        upd();
+        detail(o);
+        // after packing, hop to the next open line, or to "Let's ride!" once the basket is full
+        m = ui.menuStack[ui.menuStack.length - 1];
+        if (packed && m?.book) {
+          const full = O.carried().length >= O.capacity();
+          const open = (e) => !e.classList.contains('packed') && !e.classList.contains('done');
+          const next = rows.findIndex((e, k) => k > i && open(e));
+          const later = next >= 0 ? next : rows.findIndex(open);
+          m.sel = full || later < 0 ? rows.length : later;
+          ui.highlight(m);
+        }
+      });
+      ui.hoverSelect(r);
+      list.appendChild(r);
+      rows.push(r);
+    });
+    if (!all.length) list.appendChild(el('p', 'nb-pencil-note', 'No orders yet. Check back after breakfast!'));
+    list.appendChild(el('div', 'nb-pencil-note nb-tip', board ? 'Tick what to pack. Cocoa cools as you ride!' : 'Packing happens at Nana\'s kitchen table.'));
+    const upd = () => {
+      const n = O.carried().length, cap = O.capacity();
+      head.innerHTML = `<div class="t k-bold">Orders, day ${g.state.day}</div><div class="sub"><span class="cups">${Array.from({ length: cap }, (_, k) => `<img class="k-g${k < n ? '' : ' empty'}" src="${glyphURL('mug_classic')}">`).join('')}</span><span>${n}/${cap} packed</span></div>`;
+    };
+    upd();
+    doodles(L, R, g.state.day);
+    if (all[0]) detail(all[0]);
+    else nbCard(R, { id: 'grandma', where: 'The cabin by the woods', quote: 'Breakfast first, dear. Then the orders.' });
+    const items = rows.slice();
+    if (board) {
+      const go = ui.button("Let's ride!", () => ctx.close(), { small: 'load up the cocoa', face: 'green' });
+      R.appendChild(el('div', 'm-foot')).appendChild(go);
+      items.push(go);
+    }
+    return { items };
+  }
+
+  // ---- Nana's customers
+  pCustomers(L, R) {
+    const g = this.game;
+    const ui = this.ui;
+    const today = g.orders?.list || [];
+    L.appendChild(el('div', 'nb-head', `<div class="t k-bold">Regulars</div><div class="sub">${Object.keys(CUSTOMERS).length} on the round</div>`));
+    const list = el('div', 'nb-list');
+    L.appendChild(list);
+    const rows = Object.entries(CUSTOMERS).map(([spot, c]) => {
+      const o = today.find((x) => x.spot === spot);
+      const id = spot === 'kids' ? 'pip' : spot === 'lou_lh' ? 'ollie' : spot;
+      const r = el('button', `nb-row pick${o?.state === 'delivered' ? ' done' : o?.state === 'carried' ? ' packed' : ''}`, `<i class="bx"></i><span class="nm">${esc(c.name)}</span><span class="rt">${o ? `<img class="k-food" src="${foodIconURL(`cocoa_${mugOf(o)}`)}">` : ''}</span>`);
+      const show = () => nbCard(R, {
+        id, spot,
+        stamp: o?.state === 'delivered' ? ['DONE', 'ok'] : null,
+        lines: [
+          `<div class="nb-line wrap nb-pencil-note">${esc(NANA_NOTE[spot] || '')}</div>`,
+          o ? `<div class="nb-line wrap"><span class="lbl">Today:</span><img class="k-food" src="${foodIconURL(`cocoa_${mugOf(o)}`)}"><span class="v">${esc(o.label)}</span></div>` : '<div class="nb-line"><span class="lbl">Today:</span><span class="v">no order</span></div>',
+        ],
+      });
+      r.addEventListener('focus-item', show);
+      r.addEventListener('click', show);
+      ui.hoverSelect(r);
+      list.appendChild(r);
+      return r;
+    });
+    doodles(L, R, 7);
+    return { items: rows };
+  }
+
+  // ---- Harold's Skill Book
+  pSkills(L, R) {
+    const g = this.game;
+    const list = g.skills?.list ? g.skills.list() : STUB_SKILLS;
+    const mastered = list.reduce((n, s) => n + (s.tier || 0), 0), total = list.reduce((n, s) => n + (s.maxTier || 3), 0);
+    this.head(L, "Harold's riding notes");
+    L.appendChild(el('div', 'sbtotal', `<img class="k-g" src="${glyphURL('medalG')}"><span>${mastered} / ${total} medals</span>`));
+    const rows = el('div', 'sblist');
+    L.appendChild(rows);
+    const medals = (s, big = false) => Array.from({ length: s.maxTier || 3 }, (_, k) => `<img class="k-g${big ? ' big' : ''}" src="${glyphURL(k < s.tier ? ['medalB', 'medalS', 'medalG', 'medalG', 'medalG'][k] : 'medalNone')}">`).join('');
+    const detail = (s) => {
+      const done = s.tier >= (s.maxTier || 3);
+      const best = s.best != null && s.unit != null ? `${fmtNum(s.best)}${s.unit ? ` ${s.unit}` : ''}` : '';
+      R.innerHTML = `<div class="sbhead"><div class="k-slot"><img src="${iconURL(s.icon || s.id)}"></div><div><div class="sbname k-bold">${esc(s.name)}${s.tier ? ` ${ROMAN[s.tier]}` : ''}</div><div class="sbmedals">${medals(s, true)}</div></div></div>
+        <div class="sbgoal"><span class="lbl">${done ? 'Mastered!' : 'Next:'}</span> ${done ? '' : esc(s.goal || '')}</div>
+        <div class="sbbar"></div>${best ? `<div class="sbbest">Best: <b>${esc(best)}</b></div>` : ''}
+        <div class="sbhow">${esc(s.how || '')}</div>
+        <div class="sbdesc">${esc(s.desc || '')}</div>${s.note ? `<div class="sbnote">${esc(s.note)}</div>` : ''}`;
+      R.querySelector('.sbbar').appendChild(kBar(done ? 1 : s.progress || 0, done ? 'grow' : 'gold'));
+    };
+    const items = list.map((s) => {
+      const r = this.item(esc(s.name), () => detail(s), { icon: iconSmallURL(s.icon || s.id), right: medals(s), cls: s.tier >= (s.maxTier || 3) ? 'master' : s.tier ? '' : 'new' });
+      r.addEventListener('focus-item', () => detail(s));
+      rows.appendChild(r);
+      return r;
+    });
+    if (list[0]) detail(list[0]);
+    return { items };
+  }
+
+  // ---- keepsakes: the slots on the left, the story on the right
+  pKeepsakes(L, R, ctx) {
+    const g = this.game;
+    const ui = this.ui;
+    const st = g.state;
+    const n = Object.keys(st.keepsakes).length;
+    this.head(L, "Harold's Keepsakes", `${n} / ${KEEPSAKES.length} found`);
+    const grid = el('div', 'slots');
+    L.appendChild(grid);
+    L.appendChild(el('p', 'hint', 'Bring them home: Nana has a story for each one.'));
+    const detail = el('div', 'kdetail');
+    R.appendChild(detail);
+    const slots = KEEPSAKES.map((k) => {
+      const have = st.keepsakes[k.id];
+      const s = kSlot(iconURL(KEEPSAKE_ICON[k.id]), { state: have ? '' : 'locked', badge: have === 'given' ? ' ' : '', cls: 'pick' });
+      if (have === 'given') s.querySelector('.k-badge').classList.add('given');
+      s.addEventListener('focus-item', () => {
+        detail.innerHTML = have ? `<div class="bk-h k-bold">${esc(k.name)}</div><p>${esc(k.note)}</p>${have === 'found' ? '<p class="warn">Bring it home to Nana!</p>' : '<p class="okay">Nana has it on the mantel.</p>'}` : '<div class="bk-h k-bold">???</div><p>Somewhere out in the wilds... Harold always did wander.</p>';
+      });
+      s.addEventListener('click', () => s.dispatchEvent(new CustomEvent('focus-item')));
+      ui.hoverSelect(s);
+      grid.appendChild(s);
+      return s;
+    });
+    // as many columns as fit on the page
+    const cols = Math.max(2, Math.min(4, Math.floor((g.book.lay.aw - 22) / 48)));
+    grid.style.gridTemplateColumns = `repeat(${cols}, calc(var(--u) * 46))`;
+    return { items: slots, grid: cols };
+  }
+
+  // ---- the paper map on the left, where everything is on the right
+  pMap(L, R) {
+    const g = this.game;
+    const lay = g.book.lay;
+    this.head(L, 'Maple Cove', 'and the backcountry');
+    // paint the map at exactly the art-pixel size it is shown at, so it stays crisp
+    const avail = Math.min(lay.aw - 24, lay.ah - 52);
+    const N = Math.max(96, Math.min(300, Math.floor(avail / 4) * 4));
+    this.mapCanvases = this.mapCanvases || new Map();
+    const c = this.mapCanvases.get(N) || paintMap(g.world.terrain, N);
+    this.mapCanvases.set(N, c);
+    const wrap = el('div', 'mapwrap');
+    const img = el('canvas');
+    img.width = c.width;
+    img.height = c.height;
+    img.getContext('2d').drawImage(c, 0, 0);
+    img.style.width = img.style.height = `calc(var(--u) * ${N})`;
+    wrap.appendChild(img);
+    const at = (x, z) => [((x - WORLD_X0) / (WORLD_HALF * 2)) * N, ((z - WORLD_Z0) / (WORLD_HALF * 2)) * N];
+    const pin = (x, z, src, cls = '') => {
+      const e = el('img', `pin ${cls}`);
+      e.src = src;
+      const [px, py] = at(x, z);
+      e.style.left = `calc(var(--u) * ${Math.round(px) - 8 + 3})`;
+      e.style.top = `calc(var(--u) * ${Math.round(py) - 8 + 3})`;
+      wrap.appendChild(e);
+    };
+    const labels = [];
+    const label = (x, z, text, cls = '') => {
+      const e = el('div', `lbl ${cls}`, text);
+      const [px, py] = at(x, z);
+      e.dataset.x = px;
+      e.dataset.y = py;
+      wrap.appendChild(e);
+      labels.push(e);
+    };
+    label(POI.plaza.x, POI.plaza.z - 22, 'Maple Cove', 'big');
+    label(POI.cabin.x, POI.cabin.z + 14, "Nana's");
+    if (N >= 160) {
+      label(POI.graveyard.x, POI.graveyard.z - 14, 'Old Pine Cemetery');
+      if (POI.lighthouse) label(POI.lighthouse.x - 8, POI.lighthouse.z - 14, 'Lighthouse');
+      if (POI.sawmill) label(POI.sawmill.x, POI.sawmill.z + 12, 'Sawmill');
+      if (POI.lake) label(POI.lake.x, POI.lake.z - 4, 'Lac des Huards');
+      if (POI.marsh) label(POI.marsh.x, POI.marsh.z + 36, 'Moose Marsh');
+    }
+    if (N >= 220) {
+      if (POI.lookout) label(POI.lookout.x, POI.lookout.z - 12, 'Sunset Lookout');
+      if (POI.pond) label(POI.pond.x, POI.pond.z - 12, 'Beaver Pond');
+      if (POI.station) label(POI.station.x + 6, POI.station.z - 16, 'Gare Ste-Rose');
+      if (POI.firetower) label(POI.firetower.x, POI.firetower.z - 18, 'Mont Écho');
+      if (POI.cafeHut) label(POI.cafeHut.x + 4, POI.cafeHut.z - 14, 'Café');
+    }
+    pin(POI.cabin.x, POI.cabin.z, glyphURL('home'));
+    for (const o of g.orders.carried()) { const c2 = CUSTOMERS[o.spot]; if (c2) pin(c2.x, c2.z, glyphURL('cocoa')); }
+    for (const k of KEEPSAKES) if (g.state.keepsakes[k.id]) pin(k.x, k.z, iconSmallURL(KEEPSAKE_ICON[k.id]));
+    if (g.catEventActive) { const c3 = g.story.stray?.pos || POI.catLog; pin(c3.x, c3.z, iconSmallURL('cat')); }
+    for (const q of g.quests?.markers() || []) pin(q.x, q.z, iconSmallURL(q.icon), 'quest');
+    pin(g.playerPos.x, g.playerPos.z, iconSmallURL('skull'), 'me');
+    L.appendChild(wrap);
+    // centre the labels on whole art pixels once they have a width
+    requestAnimationFrame(() => {
+      const u = scale.u;
+      for (const e of labels) {
+        const w = Math.round(e.offsetWidth / u), h = Math.round(e.offsetHeight / u);
+        const lx = Math.max(1, Math.min(N - w - 1, Math.round(+e.dataset.x - w / 2)));
+        const ly = Math.max(1, Math.min(N - h - 1, Math.round(+e.dataset.y - h / 2)));
+        e.style.left = `${(lx + 3) * u}px`;
+        e.style.top = `${(ly + 3) * u}px`;
+        e.style.visibility = 'visible';
+      }
+    });
+    // the right page: where's what, nearest first, with which way and how far
+    this.head(R, "Where's what");
+    const p = g.playerPos;
+    const places = [];
+    let marks = [];
+    try { marks = g.compassMarkers?.() || []; } catch { marks = []; }
+    for (const m of marks) places.push({ name: markName(g, m), x: m.x, z: m.z, icon: m.icon });
+    const fixed = [["Nana's cabin", POI.cabin, 'home'], ['Maple Cove', POI.plaza, 'star']];
+    for (const [name, q, icon] of fixed) if (q && !places.some((x) => x.name === name)) places.push({ name, x: q.x, z: q.z, icon });
+    places.forEach((x) => (x.d = Math.hypot(x.x - p.x, x.z - p.z)));
+    places.sort((a, b) => a.d - b.d);
+    const heading = (() => { const d = g.camera.getWorldDirection(g.camera.position.clone()); return Math.atan2(d.x, -d.z); })();
+    const arrow = (x) => {
+      const a = Math.atan2(x.x - p.x, -(x.z - p.z)) - heading;
+      const k = ((Math.round(a / (Math.PI / 4)) % 8) + 8) % 8;
+      return ['arrowU', 'arrowR', 'arrowR', 'arrowR', 'arrowD', 'arrowL', 'arrowL', 'arrowL'][k];
+    };
+    const iconOf = (n) => ({ cocoa: glyphURL('cocoa'), home: glyphURL('home'), star: glyphURL('star') }[n] || iconSmallURL(n));
+    const ul = el('div', 'mplaces');
+    for (const x of places.slice(0, 9)) {
+      ul.appendChild(el('div', 'mplace', `<img class="k-g" src="${iconOf(x.icon)}"><span class="nm">${esc(x.name)}</span><span class="d">${x.d < 1000 ? `${Math.round(x.d)} m` : `${(x.d / 1000).toFixed(1)} km`}</span><img class="k-g ar" src="${glyphURL(arrow(x))}">`));
+    }
+    R.appendChild(ul);
+    R.appendChild(el('div', 'maplegend', `<span><img class="k-g" src="${glyphURL('cocoa')}">cocoa</span><span><img class="k-g" src="${iconSmallURL('skull')}">you</span><span><img class="k-g" src="${glyphURL('home')}">home</span>`));
+    g.sound.play('paper_unfold');
+    return { items: [] };
+  }
+
+  // ---- Nana's recipes & pantry: three cards a page
+  pRecipes(L, R) {
+    const g = this.game;
+    const pantry = g.state.pantry || {};
+    const names = { classic: 'Classic Cocoa', maple: 'Maple Mallow', cinnamon: 'Cinnamon Fire', mint: 'Peppermint', pumpkin: 'Pumpkin Spice', mocha: 'Lumberjack' };
+    this.head(L, "Nana's Recipes", 'one of each per cup');
+    const ids = Object.keys(RECIPES);
+    const card = (id) => {
+      const ing = RECIPES[id];
+      const can = ing.every((k) => (pantry[k] || 0) > 0);
+      const c = el('div', `rcard${can ? '' : ' short'}`);
+      c.innerHTML = `<img class="big" src="${foodIconURL('cocoa_' + id)}"><div class="rtext"><div class="rn k-bold">${names[id] || id}</div><div class="ri">${ing.map((k) => `<div class="${(pantry[k] || 0) > 0 ? 'ok' : 'out'}"><img class="k-g" src="${glyphURL((pantry[k] || 0) > 0 ? 'check' : 'cross')}"><span>${esc(SHORT_FOOD[k] || FOOD_INFO[k]?.label || k)}</span><b>${pantry[k] || 0}</b></div>`).join('')}</div></div>`;
+      return c;
+    };
+    const half = Math.ceil(ids.length / 2);
+    const gl = el('div', 'rgrid'), gr = el('div', 'rgrid');
+    ids.slice(0, half).forEach((id) => gl.appendChild(card(id)));
+    ids.slice(half).forEach((id) => gr.appendChild(card(id)));
+    L.appendChild(gl);
+    R.appendChild(gr);
+    R.appendChild(el('p', 'hint', 'Low? Mo at Moose &amp; Goose has it all.'));
+    return { items: [] };
+  }
+
+  // ---- settings: the picture on the left, the sound and the camera on the right
+  pSettings(L, R) {
+    const g = this.game;
+    const ui = this.ui;
+    const s = g.settings;
+    const rows = [];
+    if (s.uiSize === undefined) s.uiSize = 0;
+    // a row is the menu item: left/right nudges its control, confirm clicks it
+    const row = (page, label, ctrl, icon) => {
+      const r = el('div', 'k-setrow pick', `${icon ? `<img class="k-g" src="${icon}">` : '<i class="k-g"></i>'}<span class="lbl">${label}</span>`);
+      r.appendChild(ctrl);
+      r.nudge = (d) => ctrl.nudge?.(d);
+      r.addEventListener('click', (e) => { if (e.target === r || e.target.classList.contains('lbl')) ctrl.nudge?.(1); });
+      ui.hoverSelect(r);
+      page.appendChild(r);
+      rows.push(r);
+      return r;
+    };
+    const slider = (key, min, max, step) => kSlider(s[key], min, max, step, (v) => { s[key] = v; g.applySettings(); });
+    const cycle = (key, opts, labels, after) => {
+      const c = el('div', 'k-cycle', '<i class="l"></i><span class="v"></span><i class="r"></i>');
+      const v = c.querySelector('.v');
+      const show = () => (v.textContent = labels[opts.indexOf(s[key])] ?? labels[0]);
+      c.nudge = (d) => {
+        let i = opts.indexOf(s[key]);
+        if (i < 0) i = 0;
+        s[key] = opts[(i + d + opts.length) % opts.length];
+        // a hand-picked look wins over the automatic quality governor
+        if (key === 'pixel' || key === 'quality') s.autoQuality = false;
+        show();
+        after ? after(s[key]) : g.applySettings();
+        g.sound?.play('ui_hover');
+      };
+      c.querySelector('.l').addEventListener('click', (e) => { e.stopPropagation(); c.nudge(-1); });
+      c.querySelector('.r').addEventListener('click', (e) => { e.stopPropagation(); c.nudge(1); });
+      v.addEventListener('click', (e) => { e.stopPropagation(); c.nudge(1); });
+      show();
+      return c;
+    };
+    this.head(L, 'Settings', 'the picture');
+    // resolution: HD renders every real screen pixel, Balanced a little under; Retro and Chunky are the pixel looks
+    row(L, 'Resolution', cycle('pixel', [1, 1.5, 2, 3], ['HD', 'Balanced', 'Retro', 'Chunky']), glyphURL('eye'));
+    row(L, 'Graphics', cycle('quality', ['low', 'medium', 'high'], ['Low', 'Medium', 'High']), glyphURL('gear'));
+    row(L, 'Interface size', cycle('uiSize', [-1, 0, 1, 2], ['Small', 'Normal', 'Big', 'Huge'], (v) => { setUIScaleOffset(v); g.saveSettings(); }), glyphURL('size'));
+    // Bessie's gears: automatic until the first shift by hand (which sets this to By hand)
+    row(L, 'Gears', cycle('gears', ['auto', 'manual'], ['Automatic', 'By hand']), glyphURL('gear'));
+    row(L, 'Show FPS', kToggle(!!s.fps, (on) => { s.fps = on; g.applySettings(); }), glyphURL('dot'));
+    this.head(R, 'Sound', 'and the camera');
+    row(R, 'Master volume', slider('master', 0, 1, 0.05), glyphURL('speaker'));
+    row(R, 'Music', slider('music', 0, 1, 0.05), glyphURL('note'));
+    row(R, 'Sound effects', slider('sfx', 0, 1, 0.05), glyphURL('bones'));
+    row(R, 'Camera distance', slider('camDist', 0.8, 1.5, 0.05), glyphURL('camera'));
+    const ok = ui.button('Done', () => { g.saveSettings(); g.book.close(); }, { face: 'green' });
+    R.appendChild(el('div', 'm-foot')).appendChild(ok);
+    return { items: [...rows, ok] };
+  }
+
+  // ---- controls: on the bike on the left, on foot on the right
+  pControls(L, R) {
+    const touch = document.getElementById('ui')?.classList.contains('touchmode');
+    const K = (...k) => k.map((x) => kKey(x)).join('');
+    const ride = [
+      [K('W', 'S'), 'Pedal: alternate them, each one a half turn of the crank (or drag the crank round). Faster is faster, and tiring'],
+      [K('Z', 'X'), 'Gear down / up'],
+      [K('S'), 'Hold on its own to brake / roll back'], [K('A', 'D'), 'Steer; spin in the air'],
+      [K('Space'), 'Hop (hold to crouch, let go to pop)'], [K('Shift'), 'Drift; with a direction in the air: poses'],
+      [K('Q'), 'Lean back: wheelie, manual, backflip'], [K('F'), 'Lean forward: stoppie, nose, frontflip'],
+      [K('E'), 'Talk, deliver, hop off / on'], [K('R'), 'Ring the bell'],
+    ];
+    const foot = [
+      [K('W', 'A', 'S', 'D'), 'Walk (hold Shift to sprint)'], [K('Space'), 'Jump (tap for a hop)'], [K('E'), 'Do what the tag says: talk, hop on, kick it...'],
+      [K('C'), 'Camera (once you have one)'], [K('M'), 'The map'], [K('Esc'), 'This journal / skip a scene'], [K('Tab'), 'Turn to the next bookmark'],
+    ];
+    const col = (page, title, lines) => {
+      this.head(page, title);
+      page.insertAdjacentHTML('beforeend', lines.map(([k, v]) => `<div class="crow"><span class="ck">${k}</span><span>${v}</span></div>`).join(''));
+    };
+    col(L, 'On the bike', ride);
+    col(R, 'On foot & anywhere', foot);
+    R.appendChild(el('p', 'hint', touch
+      ? 'Touch: the left stick steers (pull back: wheelie, push up: stoppie). Circle your thumb round the crank to pedal (backwards brakes). Tap the little journal or the compass up top.'
+      : 'Gamepad: circle the right stick to pedal (or alternate RT and LT), d-pad up / down shifts, LT brakes, A hops, RB drifts, X talks, Start opens this journal, LB / RB turn its pages.'));
+    return { items: [] };
+  }
+
+  // ---- Moose & Goose: the shelf on the left, the basket and the till on the right
+  pShop(L, R, ctx) {
+    const g = this.game;
+    const ui = this.ui;
+    const st = g.state;
+    st.bag = st.bag || {};
+    const cart = (this.cart = this.cart || {});
+    const total = () => Object.entries(cart).reduce((s, [k, n]) => s + n * (FOOD_INFO[k]?.price || 3), 0);
+    const done = (pay) => {
+      if (pay && total() > 0) {
+        st.money -= total();
+        for (const [k, n] of Object.entries(cart)) st.bag[k] = (st.bag[k] || 0) + n * 2;
+        g.sound.play('cash_coins');
+        ui.pop('Groceries bagged! Now home to Nana before the milk gets ideas.', { expr: 'happy' });
+        g.save();
+      }
+      this.cart = {};
+      ctx.close();
+    };
+    this.head(L, 'Moose & Goose', 'each item makes two cups');
+    const shelf = el('div', 'shoplist');
+    L.appendChild(shelf);
+    const bar = el('div', 'shopbar');
+    const basket = el('div', 'shopbasket');
+    this.head(R, 'Your basket');
+    R.append(bar, basket);
+    const items = [];
+    const render = () => {
+      bar.innerHTML = `<span><img class="k-g" src="${glyphURL('coin')}">Pocket <b>$${Math.floor(st.money)}</b></span><span><img class="k-g" src="${iconSmallURL('basket')}">Total <b>$${total()}</b></span>`;
+      const lines = Object.entries(cart).filter(([, n]) => n > 0);
+      basket.innerHTML = lines.length ? lines.map(([k, n]) => `<div class="bline"><img class="k-g" src="${foodIconURL(k)}"><span class="nm">${esc(SHOP_NAME[k] || FOOD_INFO[k]?.label || k)}</span><span>${n} x $${FOOD_INFO[k]?.price || 3}</span></div>`).join('') : '<p class="hint">Nothing yet. Tap what you need.</p>';
+      items.forEach((e) => e.sync?.());
+    };
+    for (const k of SHOP) {
+      const info = FOOD_INFO[k] || { label: k, price: 3 };
+      const have = (st.pantry || {})[k] || 0;
+      const e = el('button', 'shoprow pick', `<img class="k-food" src="${foodIconURL(k)}"><span class="nm">${esc(SHOP_NAME[k] || info.label)}</span><span class="have">${have ? `${have} left` : 'none'}</span><span class="pr">$${info.price}</span><span class="k-count qty"></span>`);
+      e.sync = () => { const q = e.querySelector('.qty'); q.textContent = cart[k] ? `${cart[k]}` : ''; q.style.visibility = cart[k] ? '' : 'hidden'; e.classList.toggle('taken', !!cart[k]); };
+      e.addEventListener('click', () => {
+        if (total() + info.price > st.money) { g.sound.play('ui_error'); ui.pop("That's a little more than you've got, Hank!", { who: 'mo', name: 'Mo', expr: 'sheepish', key: 'shop' }); return; }
+        cart[k] = (cart[k] || 0) + 1;
+        g.sound.play('register', { volume: 0.5 });
+        render();
+      });
+      e.nudge = (d) => {
+        if (d < 0 && cart[k]) { cart[k]--; g.sound.play('ui_hover'); render(); } else if (d > 0) e.click();
+      };
+      ui.hoverSelect(e);
+      shelf.appendChild(e);
+      items.push(e);
+    }
+    const foot = el('div', 'm-foot');
+    const pay = ui.button('Pay & bag it', () => done(true), { face: 'green' });
+    const leave = ui.button('Never mind', () => done(false));
+    foot.append(pay, leave);
+    R.appendChild(foot);
+    render();
+    return { items: [...items, pay, leave], onBack: () => done(false) };
+  }
+
+  // ---- the day's receipt
+  pReceipt(L, R, ctx) {
+    const g = this.game;
+    const st = g.state;
+    const s = st.stats;
+    this.head(L, `Day ${st.day}`, 'all done');
+    L.appendChild(el('p', 'rnote', 'Nana: “Well done, dear. Off to bed.”'));
+    L.appendChild(el('i', 'nb-doodle dl')).style.backgroundImage = 'var(--k-dd-mug)';
+    const r = el('div', 'k-paper receipt');
+    r.appendChild(el('div', 'rhead k-bold', 'NANA MARGUERITE’S COCOA'));
+    const line = (a, b, cls = '', icon = '') => r.appendChild(el('div', `line ${cls}`, `<span>${icon ? `<img class="k-g" src="${icon}">` : ''}${a}</span><span>${b}</span>`));
+    line('Cups delivered', s.dayDeliveries || 0, '', glyphURL('cocoa'));
+    line('Tips', `$${s.dayTips || 0}`, '', glyphURL('coin'));
+    const w = s.dayWarm;
+    if (w) line(`Warmest: ${SHORT_NAME[w.who] || CHARACTERS[w.who]?.name || w.who}`, `${cupTemp(w.q).deg}°C`, '', glyphURL('heart'));
+    if ((s.dayAir || 0) >= 1) line('Best air', `${s.dayAir.toFixed(1)}s`, '', glyphURL('star'));
+    line('Earned today', `$${s.dayEarned || 0}`, 'total');
+    line('Savings', `$${Math.floor(st.money)}`);
+    R.appendChild(r);
+    const ok = this.ui.button('Sleep', () => ctx.close(), { icon: glyphURL('moon') });
+    R.appendChild(el('div', 'm-foot')).appendChild(ok);
+    return { items: [ok], onBack: () => ctx.close() };
+  }
+
+  // ---------------------------------------------------------------- title (an old hook; title.js draws the title now)
   title({ onContinue, onNew, onSettings }) {
     const ui = this.ui;
     const t = el('div');
@@ -85,567 +667,6 @@ export class Menus {
     };
     return m;
   }
-
-  // ---------------------------------------------------------------- pause: Hank's journal
-  pause() {
-    const g = this.game;
-    const ui = this.ui;
-    const st = g.state;
-    let m;
-    const close = () => {
-      g.sound.play('book_close');
-      ui.closeOverlay(m);
-      g.resumeFromMenu();
-    };
-    const { p, body } = this.sheet("Hank's Journal", { cls: 'journal', onClose: close });
-    const { book, left, right } = kBook('jbook');
-    body.appendChild(book);
-    p.appendChild(el('i', 'k-strap'));
-    // left page: today + favours
-    const d = st.stats || {};
-    left.innerHTML = `<div class="jdate"><img class="k-g" src="${glyphURL('coin')}"><b>$${Math.floor(st.money)}</b><img class="k-g" src="${glyphURL('cocoa')}">${d.deliveries || 0}</div><div class="k-h k-bold">Day ${st.day} &middot; Errands</div>`;
-    const Q = st.quests || {};
-    const lines = [];
-    const row = (done, text) => `<div class="jq${done ? ' done' : ''}"><img class="k-g" src="${glyphURL(done ? 'boxOn' : 'box')}"><span>${text}</span></div>`;
-    for (const [id, def] of Object.entries(QUESTS)) {
-      const q = Q[id];
-      if (q?.state === 'active') lines.push(row(false, def.title));
-      else if (q?.state === 'done') lines.push(row(true, def.title));
-    }
-    for (const L of LOST) {
-      const q = Q[`lost_${L.id}`];
-      if (q?.state === 'active') lines.push(row(false, `${q.found ? 'Return' : 'Find'} the ${L.name}`));
-      else if (q?.state === 'done') lines.push(row(true, `Found the ${L.name}`));
-    }
-    const list = el('div', 'jlist');
-    list.innerHTML = lines.length ? lines.join('') : '<p class="hint">Nothing yet. Chat with folks around town!</p>';
-    left.appendChild(list);
-    if (st.photos && Object.keys(st.photos).length) {
-      left.insertAdjacentHTML('beforeend', `<div class="k-h k-bold">Bird book</div><div class="jphotos">${Object.keys(st.photos).map((k) => `<span class="jph"><img class="k-g" src="${glyphURL('camera')}">${esc(BIRD_NAMES[k] || k)}</span>`).join('')}</div>`);
-    }
-    // the pumpkin carving contest: the ribbons Hank has won (src/game/carving.js)
-    const pr = st.carving?.ribbons;
-    if (pr && Object.values(pr).some((n) => n)) {
-      const medal = { first: 'medalG', second: 'medalS', third: 'medalB', part: 'medalNone' };
-      left.insertAdjacentHTML('beforeend', `<div class="k-h k-bold">Pumpkin ribbons</div><div class="jphotos">${Object.keys(RIBBONS).filter((k) => pr[k]).map((k) => `<span class="jph"><img class="k-g" src="${glyphURL(medal[k])}">${pr[k] > 1 ? `${pr[k]} x ` : ''}${esc(RIBBONS[k].name)}</span>`).join('')}<span class="jph">Best: ${st.carving.best || 0} pts</span></div>`);
-    }
-    // right page: an index of where to go
-    right.insertAdjacentHTML('beforeend', '<div class="k-h k-bold">Contents</div>');
-    const items = [
-      this.item('Back to the road', close, { icon: glyphURL('arrowR') }),
-      this.item('The map', () => this.map(), { icon: iconSmallURL('map') }),
-      this.item("Harold's keepsakes", () => this.keepsakes(), { icon: iconSmallURL('lantern') }),
-      this.item('Skill book', () => this.skillBook(), { icon: iconSmallURL('skill_wheelie') }),
-      this.item("Nana's customers", () => this.customers(), { icon: glyphURL('home') }),
-      this.item("Nana's recipes", () => this.recipes(), { icon: glyphURL('mug_classic') }),
-      this.item('Settings', () => this.settings(), { icon: glyphURL('gear') }),
-      this.item('Controls', () => this.controls(), { icon: glyphURL('pad') }),
-      this.item('Save & quit', () => { g.save(); location.href = location.pathname; }, { icon: glyphURL('home'), cls: 'quit' }),
-    ];
-    const idx = el('div', 'jindex');
-    items.forEach((b) => idx.appendChild(b));
-    right.appendChild(idx);
-    g.sound.play('book_open');
-    m = ui.openOverlay(p, { onBack: close, items });
-    return m;
-  }
-
-  // the pumpkin-carving page went with the Halloween decorations; an old caller just gets "not now"
-  carve(onDone) {
-    onDone?.(null);
-  }
-
-  // ---------------------------------------------------------------- Nana's recipes & pantry
-  recipes() {
-    const g = this.game;
-    const ui = this.ui;
-    const pantry = g.state.pantry || {};
-    let m;
-    const close = () => ui.closeOverlay(m);
-    const { p, body } = this.sheet("Nana's Recipe Book", { kind: 'parchment', cls: 'recipes', onClose: close });
-    const names = { classic: 'Classic Cocoa', maple: 'Maple Mallow', cinnamon: 'Cinnamon Fire', mint: 'Peppermint', pumpkin: 'Pumpkin Spice', mocha: 'Lumberjack' };
-    const grid = el('div', 'rgrid');
-    for (const [id, ing] of Object.entries(RECIPES)) {
-      const can = ing.every((k) => (pantry[k] || 0) > 0);
-      const card = el('div', `k-paper rcard${can ? '' : ' short'}`);
-      card.innerHTML = `<img class="big" src="${foodIconURL('cocoa_' + id)}"><div class="rtext"><div class="rn k-bold">${names[id] || id}</div><div class="ri">${ing.map((k) => `<div class="${(pantry[k] || 0) > 0 ? 'ok' : 'out'}"><img class="k-g" src="${glyphURL((pantry[k] || 0) > 0 ? 'check' : 'cross')}"><span>${esc(SHORT_FOOD[k] || FOOD_INFO[k]?.label || k)}</span><b>${pantry[k] || 0}</b></div>`).join('')}</div></div>`;
-      grid.appendChild(card);
-    }
-    body.appendChild(grid);
-    body.appendChild(el('p', 'hint', 'One of each per cup. Low? Mo at Moose &amp; Goose has it all.'));
-    g.sound.play('page_flip');
-    m = ui.openOverlay(p, { onBack: close, items: [p.querySelector('.m-close')] });
-    return m;
-  }
-
-  // ---------------------------------------------------------------- Moose & Goose
-  shop(onDone) {
-    const g = this.game;
-    const ui = this.ui;
-    const st = g.state;
-    st.bag = st.bag || {};
-    let m;
-    const cart = {};
-    const total = () => Object.entries(cart).reduce((s, [k, n]) => s + n * (FOOD_INFO[k]?.price || 3), 0);
-    const done = (pay) => {
-      if (pay && total() > 0) {
-        st.money -= total();
-        for (const [k, n] of Object.entries(cart)) st.bag[k] = (st.bag[k] || 0) + n * 2;
-        g.sound.play('cash_coins');
-        ui.pop('Groceries bagged! Now home to Nana before the milk gets ideas.', { expr: 'happy' });
-        g.save();
-      }
-      ui.closeOverlay(m);
-      onDone?.();
-    };
-    const { p, body } = this.sheet('Moose & Goose', { cls: 'shop', ribbon: 'green', onClose: () => done(false) });
-    const money = el('div', 'shopbar');
-    body.appendChild(money);
-    const grid = el('div', 'shopgrid');
-    body.appendChild(grid);
-    const items = [];
-    const render = () => {
-      money.innerHTML = `<span><img class="k-g" src="${glyphURL('coin')}">Pocket <b>$${Math.floor(st.money)}</b></span><span><img class="k-g" src="${iconSmallURL('basket')}">Basket <b>$${total()}</b></span>`;
-      items.forEach((e) => e.sync());
-    };
-    for (const k of SHOP) {
-      const info = FOOD_INFO[k] || { label: k, price: 3 };
-      const e = el('button', 'k-plate k-parchment shopitem pick', `<img class="fi" src="${foodIconURL(k)}"><span class="nm">${esc(SHOP_NAME[k] || info.label)}</span><span class="pr"><b>$${info.price}</b></span><span class="k-count qty"></span>`);
-      e.sync = () => { const q = e.querySelector('.qty'); q.textContent = cart[k] ? `${cart[k]}` : ''; q.style.visibility = cart[k] ? '' : 'hidden'; e.classList.toggle('taken', !!cart[k]); };
-      e.addEventListener('click', () => {
-        if (total() + info.price > st.money) { g.sound.play('ui_error'); ui.pop("That's a little more than you've got, Hank!", { who: 'mo', name: 'Mo', expr: 'sheepish', key: 'shop' }); return; }
-        cart[k] = (cart[k] || 0) + 1;
-        g.sound.play('register', { volume: 0.5 });
-        render();
-      });
-      ui.hoverSelect(e);
-      grid.appendChild(e);
-      items.push(e);
-    }
-    const foot = el('div', 'm-foot');
-    const pay = ui.button('Pay & bag it', () => done(true), { small: 'each item makes two cups', face: 'green' });
-    const leave = ui.button('Never mind', () => done(false));
-    foot.append(pay, leave);
-    body.appendChild(foot);
-    render();
-    g.sound.play('shop_bell');
-    m = ui.openOverlay(p, { onBack: () => done(false), items: [...items, pay, leave], grid: shopCols() });
-    autoGrid(m, items);
-    return m;
-  }
-
-  // ---------------------------------------------------------------- settings
-  settings(onClose) {
-    const g = this.game;
-    const ui = this.ui;
-    const s = g.settings;
-    let m;
-    const close = () => {
-      g.saveSettings();
-      ui.closeOverlay(m);
-      onClose?.();
-    };
-    const { p, body } = this.sheet('Settings', { cls: 'settings', onClose: close });
-    const rows = [];
-    if (s.uiSize === undefined) s.uiSize = 0;
-    // a row is the menu item: left/right nudges its control, confirm clicks it
-    const row = (label, ctrl, icon) => {
-      const r = el('div', 'k-setrow pick', `${icon ? `<img class="k-g" src="${icon}">` : '<i class="k-g"></i>'}<span class="lbl">${label}</span>`);
-      r.appendChild(ctrl);
-      r.nudge = (d) => ctrl.nudge?.(d);
-      r.addEventListener('click', (e) => { if (e.target === r || e.target.classList.contains('lbl')) ctrl.nudge?.(1); });
-      ui.hoverSelect(r);
-      body.appendChild(r);
-      rows.push(r);
-      return r;
-    };
-    const slider = (key, min, max, step) => kSlider(s[key], min, max, step, (v) => { s[key] = v; g.applySettings(); });
-    const cycle = (key, opts, labels, after) => {
-      const c = el('div', 'k-cycle', '<i class="l"></i><span class="v"></span><i class="r"></i>');
-      const v = c.querySelector('.v');
-      const show = () => (v.textContent = labels[opts.indexOf(s[key])] ?? labels[0]);
-      c.nudge = (d) => {
-        let i = opts.indexOf(s[key]);
-        if (i < 0) i = 0;
-        s[key] = opts[(i + d + opts.length) % opts.length];
-        // a hand-picked look wins over the automatic quality governor
-        if (key === 'pixel' || key === 'quality') s.autoQuality = false;
-        show();
-        after ? after(s[key]) : g.applySettings();
-        g.sound?.play('ui_hover');
-      };
-      c.querySelector('.l').addEventListener('click', (e) => { e.stopPropagation(); c.nudge(-1); });
-      c.querySelector('.r').addEventListener('click', (e) => { e.stopPropagation(); c.nudge(1); });
-      v.addEventListener('click', (e) => { e.stopPropagation(); c.nudge(1); });
-      show();
-      return c;
-    };
-    // resolution: HD renders every real screen pixel, Balanced a little under; Retro and Chunky are the pixel looks
-    const res = [1, 1.5, 2, 3], resL = ['HD', 'Balanced', 'Retro', 'Chunky'];
-    row('Resolution', cycle('pixel', res, resL), glyphURL('eye'));
-    row('Graphics', cycle('quality', ['low', 'medium', 'high'], ['Low', 'Medium', 'High']), glyphURL('gear'));
-    row('Interface size', cycle('uiSize', [-1, 0, 1, 2], ['Small', 'Normal', 'Big', 'Huge'], (v) => { setUIScaleOffset(v); requestAnimationFrame(() => snapBox(p)); }), glyphURL('size'));
-    row('Master volume', slider('master', 0, 1, 0.05), glyphURL('speaker'));
-    row('Music', slider('music', 0, 1, 0.05), glyphURL('note'));
-    row('Sound effects', slider('sfx', 0, 1, 0.05), glyphURL('bones'));
-    row('Camera distance', slider('camDist', 0.8, 1.5, 0.05), glyphURL('camera'));
-    // Bessie's gears: automatic until the first shift by hand (which sets this to By hand)
-    row('Gears', cycle('gears', ['auto', 'manual'], ['Automatic', 'By hand']), glyphURL('gear'));
-    const fps = kToggle(!!s.fps, (on) => { s.fps = on; g.applySettings(); });
-    row('Show FPS', fps, glyphURL('dot'));
-    const foot = el('div', 'm-foot');
-    const ok = ui.button('Done', close, { face: 'green' });
-    foot.appendChild(ok);
-    body.appendChild(foot);
-    m = ui.openOverlay(p, { onBack: close, items: [...rows, ok] });
-    return m;
-  }
-
-  // ---------------------------------------------------------------- controls
-  controls() {
-    const ui = this.ui;
-    let m;
-    const close = () => ui.closeOverlay(m);
-    const { p, body } = this.sheet('Controls', { cls: 'controls', onClose: close });
-    const touch = document.getElementById('ui')?.classList.contains('touchmode');
-    const K = (...k) => k.map((x) => kKey(x)).join('');
-    const ride = [
-      [K('W', 'S'), 'Pedal: alternate them, each one a half turn of the crank (or drag the crank round). Faster is faster, and tiring'],
-      [K('Z', 'X'), 'Gear down / up (low gear climbs and gets going, top gear flies)'],
-      [K('S'), 'Hold on its own to brake / roll back'], [K('A', 'D'), 'Steer; spin in the air'],
-      [K('Space'), 'Hop (hold to crouch, let go to pop)'], [K('Shift'), 'Drift; with a direction in the air: poses'],
-      [K('Q'), 'Lean back: wheelie, manual, backflip'], [K('F'), 'Lean forward: stoppie, nose, frontflip'],
-      [K('E'), 'Talk, deliver, hop off / on'], [K('R'), 'Ring the bell'],
-    ];
-    const foot = [
-      [K('W', 'A', 'S', 'D'), 'Walk (hold Shift to sprint)'], [K('Space'), 'Jump (tap for a hop)'], [K('E'), 'Do what the tag says: talk, hop on, kick it...'],
-      [K('C'), 'Camera (once you have one)'], [K('M'), 'Map'], [K('Tab'), "Harold's keepsakes"], [K('Esc'), 'Journal / skip a scene'],
-    ];
-    const col = (title, lines) => {
-      const c = el('div', 'ccol');
-      c.innerHTML = `<div class="k-h k-bold">${title}</div>` + lines.map(([k, v]) => `<div class="crow"><span class="ck">${k}</span><span>${v}</span></div>`).join('');
-      return c;
-    };
-    const cols = el('div', 'ccols');
-    cols.append(col('On the bike', ride), col('On foot & anywhere', foot));
-    body.appendChild(cols);
-    body.appendChild(el('p', 'hint', touch
-      ? 'Touch: the left stick steers (pull back: wheelie, push up: stoppie). Circle your thumb round the crank to pedal (backwards brakes); stop and Bessie coasts. The arrows by the crank shift gear. The bone under it is Hank\'s wind: coast to get it back. The wheelie button drifts and poses. On foot the stick walks (all the way out jogs), the runner button sprints, and the tag does what it says.'
-      : 'Gamepad: turn the right stick in circles to pedal (or alternate RT and LT), d-pad up / down changes gear (LB down too), hold LT to brake, A hop, RB drift (sprint on foot), left stick up/down leans, X talk, Start journal. Spin flat out and Hank runs out of puff (the bone under the crank): coast to get it back.'));
-    const ok = ui.button('Got it', close);
-    body.appendChild(el('div', 'm-foot')).appendChild(ok);
-    m = ui.openOverlay(p, { onBack: close, items: [ok] });
-    return m;
-  }
-
-  // ---------------------------------------------------------------- order board: Nana's order book
-  // An open spiral notebook on the kitchen table: today's orders down the left
-  // page (tick boxes, who, which cocoa), the one under Hank's finger written up on
-  // the right page with a photo, where they live, what they ordered and how hot.
-  orderBoard(onDone) {
-    const g = this.game;
-    const ui = this.ui;
-    const O = g.orders;
-    let m;
-    const done = () => {
-      ui.closeOverlay(m);
-      onDone?.();
-    };
-    const { p, body } = this.sheet("Nana's Order Book", { kind: 'wood', cls: 'nbsheet board', onClose: done });
-    const { nb, left, right } = notebook();
-    body.appendChild(nb);
-    const head = el('div', 'nb-head');
-    left.appendChild(head);
-    const rows = [];
-    const all = O.list.filter((o) => o.state === 'board' || o.state === 'carried' || o.state === 'delivered');
-    const detail = (o) => nbCard(right, {
-      id: o.customer, spot: o.spot,
-      stamp: o.state === 'delivered' ? ['DONE', 'ok'] : o.state === 'carried' ? ['PACKED', 'ok'] : o.rush ? ['RUSH', ''] : null,
-      lines: [
-        `<div class="nb-line wrap"><img class="k-food" src="${foodIconURL(`cocoa_${mugOf(o)}`)}"><span class="v">${esc(o.label)}</span></div>`,
-        heatLine(o),
-      ],
-      quote: o.note,
-    });
-    all.forEach((o, i) => {
-      const r = el('button', 'nb-row pick', `<i class="bx"></i><img class="k-food" src="${foodIconURL(`cocoa_${mugOf(o)}`)}"><span class="nm">${esc(SHORT_NAME[o.customer] || (CHARACTERS[o.customer]?.name || o.customer).split(' ')[0])}</span><span class="rt">${o.rush ? `<img class="k-g rush" src="${glyphURL('rush')}">` : ''}$${o.price}</span>`);
-      const sync = () => { r.classList.toggle('packed', o.state === 'carried'); r.classList.toggle('done', o.state === 'delivered'); };
-      sync();
-      r.addEventListener('focus-item', () => detail(o));
-      r.addEventListener('click', () => {
-        if (o.state === 'delivered') return;
-        let packed = false;
-        if (o.state === 'carried') { O.unpack(o); g.sound.play('pencil_scribble'); }
-        else if (!O.pack(o)) {
-          g.sound.play('ui_error');
-          const miss = O.missing ? O.missing(o) : [];
-          if (miss.length) {
-            ui.pop(`We're out of *${miss.map((k) => FOOD_INFO[k]?.label || k).join(' & ')}*, dear! Could you pop over to Moose & Goose?`, { who: 'grandma', expr: 'worried', key: 'pack' });
-            const q = g.quests.q('groceries');
-            if (q.state !== 'active') { q.state = 'active'; g.sound.play('quest_new'); }
-          } else ui.pop(`Bessie only holds ${O.capacity()} cocoas: two in the basket, one in the crate.`, { expr: 'sheepish', key: 'pack' });
-        } else {
-          g.sound.play('cup');
-          packed = true;
-        }
-        sync();
-        upd();
-        detail(o);
-        // after packing, hop to the next open line, or to "Let's ride!" once the basket is full
-        if (packed && m) {
-          const full = O.carried().length >= O.capacity();
-          const open = (e) => !e.classList.contains('packed') && !e.classList.contains('done');
-          const next = rows.findIndex((e, k) => k > i && open(e));
-          const later = next >= 0 ? next : rows.findIndex(open);
-          m.sel = full || later < 0 ? rows.length : later;
-          ui.highlight(m);
-        }
-      });
-      ui.hoverSelect(r);
-      left.appendChild(r);
-      rows.push(r);
-    });
-    if (!all.length) left.appendChild(el('p', 'nb-pencil-note', 'No orders yet. Check back after breakfast!'));
-    left.appendChild(el('div', 'nb-pencil-note nb-tip', 'Tick what to pack. Cocoa cools as you ride!'));
-    const upd = () => {
-      const n = O.carried().length, cap = O.capacity();
-      head.innerHTML = `<div class="t k-bold">Orders, day ${g.state.day}</div><div class="sub"><span class="cups">${Array.from({ length: cap }, (_, k) => `<img class="k-g${k < n ? '' : ' empty'}" src="${glyphURL('mug_classic')}">`).join('')}</span><span>${n}/${cap} packed</span></div>`;
-    };
-    upd();
-    doodles(left, right, g.state.day);
-    if (all[0]) detail(all[0]);
-    else nbCard(right, { id: 'grandma', where: 'The cabin by the woods', quote: 'Breakfast first, dear. Then the orders.' });
-    const go = ui.button("Let's ride!", done, { small: 'load up the cocoa', face: 'green' });
-    body.appendChild(el('div', 'm-foot')).appendChild(go);
-    g.sound.play('page_flip');
-    m = ui.openOverlay(p, { onBack: done, items: [...rows, go] });
-    return m;
-  }
-
-  // ---------------------------------------------------------------- Nana's customer book (from the journal)
-  customers() {
-    const g = this.game;
-    const ui = this.ui;
-    let m;
-    const close = () => ui.closeOverlay(m);
-    const { p, body } = this.sheet("Nana's Customers", { kind: 'wood', cls: 'nbsheet custbook', onClose: close });
-    const { nb, left, right } = notebook();
-    body.appendChild(nb);
-    const today = g.orders?.list || [];
-    left.appendChild(el('div', 'nb-head', `<div class="t k-bold">Regulars</div><div class="sub">${Object.keys(CUSTOMERS).length} on the round</div>`));
-    const rows = Object.entries(CUSTOMERS).map(([spot, c]) => {
-      const o = today.find((x) => x.spot === spot);
-      const id = spot === 'kids' ? 'pip' : spot === 'lou_lh' ? 'ollie' : spot;
-      const r = el('button', `nb-row pick${o?.state === 'delivered' ? ' done' : o?.state === 'carried' ? ' packed' : ''}`, `<i class="bx"></i><span class="nm">${esc(c.name)}</span><span class="rt">${o ? `<img class="k-food" src="${foodIconURL(`cocoa_${mugOf(o)}`)}">` : ''}</span>`);
-      r.addEventListener('focus-item', () => nbCard(right, {
-        id, spot,
-        stamp: o?.state === 'delivered' ? ['DONE', 'ok'] : null,
-        lines: [
-          `<div class="nb-line wrap nb-pencil-note">${esc(NANA_NOTE[spot] || '')}</div>`,
-          o ? `<div class="nb-line wrap"><span class="lbl">Today:</span><img class="k-food" src="${foodIconURL(`cocoa_${mugOf(o)}`)}"><span class="v">${esc(o.label)}</span></div>` : '<div class="nb-line"><span class="lbl">Today:</span><span class="v">no order</span></div>',
-        ],
-      }));
-      ui.hoverSelect(r);
-      left.appendChild(r);
-      return r;
-    });
-    doodles(left, right, 7);
-    g.sound.play('page_flip');
-    m = ui.openOverlay(p, { onBack: close, items: rows });
-    return m;
-  }
-
-  // ---------------------------------------------------------------- Harold's garage: the Skill Book
-  garage(onDone) {
-    return this.skillBook(onDone);
-  }
-  skillBook(onDone) {
-    const g = this.game;
-    const ui = this.ui;
-    const list = g.skills?.list ? g.skills.list() : STUB_SKILLS;
-    let m;
-    const close = () => {
-      g.sound?.play('book_close');
-      ui.closeOverlay(m);
-      onDone?.();
-    };
-    const { p, body } = this.sheet('The Skill Book', { cls: 'skillbook', onClose: close });
-    const { book, left, right } = kBook('sbook');
-    body.appendChild(book);
-    p.appendChild(el('i', 'k-strap'));
-    const mastered = list.reduce((n, s) => n + (s.tier || 0), 0), total = list.reduce((n, s) => n + (s.maxTier || 3), 0);
-    left.innerHTML = `<div class="k-h k-bold">Harold's riding notes</div><div class="sbtotal"><img class="k-g" src="${glyphURL('medalG')}"><span>${mastered} / ${total} medals</span></div>`;
-    const rows = el('div', 'sblist');
-    left.appendChild(rows);
-    const medals = (s, big = false) => Array.from({ length: s.maxTier || 3 }, (_, k) => `<img class="k-g${big ? ' big' : ''}" src="${glyphURL(k < s.tier ? ['medalB', 'medalS', 'medalG', 'medalG', 'medalG'][k] : 'medalNone')}">`).join('');
-    const detail = (s) => {
-      const done = s.tier >= (s.maxTier || 3);
-      const best = s.best != null && s.unit != null ? `${fmtNum(s.best)}${s.unit ? ` ${s.unit}` : ''}` : '';
-      right.innerHTML = `<div class="sbhead"><div class="k-slot"><img src="${iconURL(s.icon || s.id)}"></div><div><div class="sbname k-bold">${esc(s.name)}${s.tier ? ` ${ROMAN[s.tier]}` : ''}</div><div class="sbmedals">${medals(s, true)}</div></div></div>
-        <div class="sbgoal"><span class="lbl">${done ? 'Mastered!' : 'Next:'}</span> ${done ? '' : esc(s.goal || '')}</div>
-        <div class="sbbar"></div>${best ? `<div class="sbbest">Best: <b>${esc(best)}</b></div>` : ''}
-        <div class="sbhow">${esc(s.how || '')}</div>
-        <div class="sbdesc">${esc(s.desc || '')}</div>${s.note ? `<div class="sbnote">${esc(s.note)}</div>` : ''}`;
-      right.querySelector('.sbbar').appendChild(kBar(done ? 1 : s.progress || 0, done ? 'grow' : 'gold'));
-    };
-    const items = list.map((s) => {
-      const r = this.item(esc(s.name), () => detail(s), { icon: iconSmallURL(s.icon || s.id), right: medals(s), cls: s.tier >= (s.maxTier || 3) ? 'master' : s.tier ? '' : 'new' });
-      r.addEventListener('focus-item', () => detail(s));
-      rows.appendChild(r);
-      return r;
-    });
-    if (list[0]) detail(list[0]);
-    g.sound?.play('book_open');
-    m = ui.openOverlay(p, { onBack: close, items });
-    return m;
-  }
-
-  // ---------------------------------------------------------------- keepsakes
-  keepsakes() {
-    const g = this.game;
-    const ui = this.ui;
-    const st = g.state;
-    let m;
-    const close = () => ui.closeOverlay(m);
-    const { p, body } = this.sheet("Harold's Keepsakes", { cls: 'keeps', onClose: close });
-    const n = Object.keys(st.keepsakes).length;
-    body.appendChild(el('p', 'keepbar', `<b>${n} / ${KEEPSAKES.length}</b> found. Bring them home: Nana has a story for each one.`));
-    const split = el('div', 'split');
-    body.appendChild(split);
-    const grid = el('div', 'slots');
-    split.appendChild(grid);
-    const detail = el('div', 'k-plate k-parchment detail');
-    split.appendChild(detail);
-    const slots = KEEPSAKES.map((k) => {
-      const have = st.keepsakes[k.id];
-      const s = kSlot(iconURL(KEEPSAKE_ICON[k.id]), { state: have ? '' : 'locked', badge: have === 'given' ? ' ' : '', cls: 'pick' });
-      if (have === 'given') s.querySelector('.k-badge').classList.add('given');
-      s.addEventListener('focus-item', () => {
-        detail.innerHTML = have ? `<div class="k-h k-bold">${esc(k.name)}</div><p>${esc(k.note)}</p>${have === 'found' ? '<p class="warn">Bring it home to Nana!</p>' : '<p class="okay">Nana has it on the mantel.</p>'}` : '<div class="k-h k-bold">???</div><p>Somewhere out in the wilds... Harold always did wander.</p>';
-      });
-      s.addEventListener('click', () => s.dispatchEvent(new CustomEvent('focus-item')));
-      ui.hoverSelect(s);
-      grid.appendChild(s);
-      return s;
-    });
-    const back = ui.button('Close', close);
-    body.appendChild(el('div', 'm-foot')).appendChild(back);
-    m = ui.openOverlay(p, { onBack: close, items: [...slots, back], grid: 4 });
-    autoGrid(m, slots);
-    return m;
-  }
-
-  // ---------------------------------------------------------------- map
-  map() {
-    const g = this.game;
-    const ui = this.ui;
-    let m;
-    const close = () => ui.closeOverlay(m);
-    const { p, body } = this.sheet('Maple Hollow & Maple Cove', { cls: 'mapsheet', onClose: close });
-    // paint the map at exactly the art-pixel size it is shown at, so it stays crisp
-    const N = Math.max(120, Math.min(300, Math.floor(Math.min(scale.rows - 74, scale.cols - 40) / 4) * 4));
-    this.mapCanvases = this.mapCanvases || new Map();
-    const c = this.mapCanvases.get(N) || paintMap(g.world.terrain, N);
-    this.mapCanvases.set(N, c);
-    const wrap = el('div', 'k-paper mapwrap');
-    const img = el('canvas');
-    img.width = c.width;
-    img.height = c.height;
-    img.getContext('2d').drawImage(c, 0, 0);
-    img.style.width = img.style.height = `calc(var(--u) * ${N})`;
-    wrap.appendChild(img);
-    const at = (x, z) => [((x - WORLD_X0) / (WORLD_HALF * 2)) * N, ((z - WORLD_Z0) / (WORLD_HALF * 2)) * N];
-    const pin = (x, z, src, cls = '') => {
-      const e = el('img', `pin ${cls}`);
-      e.src = src;
-      const [px, py] = at(x, z);
-      e.style.left = `calc(var(--u) * ${Math.round(px) - 8 + 3})`;
-      e.style.top = `calc(var(--u) * ${Math.round(py) - 8 + 3})`;
-      wrap.appendChild(e);
-    };
-    const labels = [];
-    const label = (x, z, text, cls = '') => {
-      const e = el('div', `lbl ${cls}`, text);
-      const [px, py] = at(x, z);
-      e.dataset.x = px;
-      e.dataset.y = py;
-      wrap.appendChild(e);
-      labels.push(e);
-    };
-    label(POI.plaza.x, POI.plaza.z - 22, 'Maple Cove', 'big');
-    label(POI.cabin.x, POI.cabin.z + 14, "Nana's");
-    label(POI.graveyard.x, POI.graveyard.z - 14, 'Old Pine Cemetery');
-    if (POI.lookout) label(POI.lookout.x, POI.lookout.z - 12, 'Sunset Lookout');
-    if (POI.lighthouse) label(POI.lighthouse.x - 8, POI.lighthouse.z - 14, 'Lighthouse');
-    if (POI.sawmill) label(POI.sawmill.x, POI.sawmill.z + 12, 'Sawmill');
-    if (POI.pond) label(POI.pond.x, POI.pond.z - 12, 'Beaver Pond');
-    if (POI.trapper) label(POI.trapper.x, POI.trapper.z + 12, "Trapper's Hut");
-    if (POI.bridge) label(POI.bridge.x + 18, POI.bridge.z + 12, 'Covered Bridge');
-    // the backcountry
-    if (POI.lake) label(POI.lake.x, POI.lake.z - 4, 'Lac des Huards');
-    if (POI.station) label(POI.station.x + 6, POI.station.z - 16, 'Gare Ste-Rose');
-    if (POI.firetower) label(POI.firetower.x, POI.firetower.z - 18, 'Mont Écho');
-    if (POI.orchard) label(POI.orchard.x, POI.orchard.z + 24, 'Verger');
-    if (POI.marsh) label(POI.marsh.x, POI.marsh.z + 36, 'Moose Marsh');
-    if (POI.cafeHut) label(POI.cafeHut.x + 4, POI.cafeHut.z - 14, 'Café');
-    pin(POI.cabin.x, POI.cabin.z, glyphURL('home'));
-    for (const o of g.orders.carried()) { const c2 = CUSTOMERS[o.spot]; if (c2) pin(c2.x, c2.z, glyphURL('cocoa')); }
-    for (const k of KEEPSAKES) if (g.state.keepsakes[k.id]) pin(k.x, k.z, iconSmallURL(KEEPSAKE_ICON[k.id]));
-    if (g.catEventActive) { const c = g.story.stray?.pos || POI.catLog; pin(c.x, c.z, iconSmallURL('cat')); }
-    for (const q of g.quests?.markers() || []) pin(q.x, q.z, iconSmallURL(q.icon), 'quest');
-    pin(g.playerPos.x, g.playerPos.z, iconSmallURL('skull'), 'me');
-    const legend = el('div', 'maplegend', `<span><img class="k-g" src="${glyphURL('cocoa')}">cocoa</span><span><img class="k-g" src="${iconSmallURL('skull')}">you</span><span><img class="k-g" src="${glyphURL('home')}">home</span>`);
-    body.appendChild(wrap);
-    body.appendChild(legend);
-    const ok = ui.button('Fold it up', close);
-    body.appendChild(el('div', 'm-foot')).appendChild(ok);
-    g.sound.play('paper_unfold');
-    m = ui.openOverlay(p, { onBack: close, items: [ok] });
-    // centre the labels on whole art pixels once they have a width
-    requestAnimationFrame(() => {
-      const u = scale.u;
-      for (const e of labels) {
-        const w = Math.round(e.offsetWidth / u), h = Math.round(e.offsetHeight / u);
-        const lx = Math.max(1, Math.min(N - w - 1, Math.round(+e.dataset.x - w / 2)));
-        const ly = Math.max(1, Math.min(N - h - 1, Math.round(+e.dataset.y - h / 2)));
-        e.style.left = `${(lx + 3) * u}px`;
-        e.style.top = `${(ly + 3) * u}px`;
-        e.style.visibility = 'visible';
-      }
-    });
-    return m;
-  }
-
-  // ---------------------------------------------------------------- day summary
-  summary(onDone) {
-    const g = this.game;
-    const ui = this.ui;
-    const st = g.state;
-    let m;
-    const done = () => {
-      ui.closeOverlay(m);
-      onDone?.();
-    };
-    const { p, body } = this.sheet(`Day ${st.day} receipt`, { cls: 'summary' });
-    const r = el('div', 'k-paper receipt');
-    const s = st.stats;
-    r.appendChild(el('div', 'rhead k-bold', 'NANA MARGUERITE’S COCOA'));
-    const line = (a, b, cls = '', icon = '') => r.appendChild(el('div', `line ${cls}`, `<span>${icon ? `<img class="k-g" src="${icon}">` : ''}${a}</span><span>${b}</span>`));
-    // short: the cups, the tips, the warmest hand-over, the money
-    line('Cups delivered', s.dayDeliveries || 0, '', glyphURL('cocoa'));
-    line('Tips', `$${s.dayTips || 0}`, '', glyphURL('coin'));
-    const w = s.dayWarm;
-    if (w) line(`Warmest: ${SHORT_NAME[w.who] || CHARACTERS[w.who]?.name || w.who}`, `${cupTemp(w.q).deg}\u00b0C`, '', glyphURL('heart'));
-    if ((s.dayAir || 0) >= 1) line('Best air', `${s.dayAir.toFixed(1)}s`, '', glyphURL('star'));
-    line('Earned today', `$${s.dayEarned || 0}`, 'total');
-    line('Savings', `$${Math.floor(st.money)}`);
-    body.appendChild(r);
-    body.appendChild(el('p', 'hint', 'Nana: “Well done, dear. Off to bed.”'));
-    const ok = ui.button('Sleep', done, { icon: glyphURL('moon') });
-    body.appendChild(el('div', 'm-foot')).appendChild(ok);
-    m = ui.openOverlay(p, { onBack: done, items: [ok] });
-    return m;
-  }
 }
 
 // ---------------------------------------------------------------- helpers
@@ -659,12 +680,6 @@ function faceCanvas(id) {
   }
   BOOK_FACE.set(id, 'happy');
   return BOOK_FACE.canvas;
-}
-// ---------------------------------------------------------------- the spiral notebook
-// an open notebook: two ruled pages either side of the spiral
-function notebook() {
-  const nb = el('div', 'nb', '<div class="nb-page nb-l nb-ruled"></div><div class="nb-gutter"></div><div class="nb-page nb-r nb-ruled"></div>');
-  return { nb, left: nb.children[0], right: nb.children[2] };
 }
 // where everybody lives, in Nana's handwriting
 const WHERE = {
@@ -705,21 +720,11 @@ function doodles(left, right, seed) {
   left.parentElement.appendChild(el('i', 'nb-pencil'));
 }
 
-// arrow-key grids follow the real column count once the grid is laid out
-function autoGrid(m, items) {
-  requestAnimationFrame(() => {
-    if (!items.length) return;
-    const top = items[0].offsetTop;
-    const n = items.filter((e) => e.offsetTop === top).length;
-    if (n > 0) m.grid = n;
-  });
-}
 const SHORT_NAME = { birdie: 'Birdie', ingrid: 'Dr. Ingrid', doug: 'Doug', lou: 'Big Lou', ollie: 'Ollie', marie: 'Marie', grandma: 'Nana', pip: 'Pip & Pop', gus: 'Gus', agnes: 'Agnes', mo: 'Mo' };
 // short pantry names that fit a recipe card; shop names with soft hyphens for two lines
 const SHORT_FOOD = { milk_bottle: 'Milk', cocoa_powder: 'Cocoa', sugar: 'Sugar', marshmallows: 'Mallows', maple_syrup: 'Syrup', cinnamon: 'Cinnamon', mint: 'Mint', cream: 'Cream', pumpkin: 'Pumpkin', nutmeg: 'Nutmeg', coffee_beans: 'Coffee', dark_chocolate: 'Chocolate' };
 const SHOP_NAME = { milk_bottle: 'Milk', marshmallows: 'Marsh­mallows', dark_chocolate: 'Dark Choco­late', cinnamon: 'Cinna­mon', mint: 'Fresh Mint' };
 const fmtNum = (v) => (Math.abs(v - Math.round(v)) < 0.01 ? String(Math.round(v)) : v.toFixed(1));
-const shopCols = () => (scale.cols < 330 ? 3 : scale.cols < 420 ? 4 : 6);
 const MUGS = ['classic', 'maple', 'mint', 'pumpkin', 'cinnamon', 'mocha'];
 function mugOf(o) {
   if (MUGS.includes(o.cocoa)) return o.cocoa;

@@ -48,6 +48,9 @@ const BINDINGS = {
   // the gears by hand (on the bike): X / . up, Z / , down
   shiftUp: ['KeyX', 'Period'],
   shiftDown: ['KeyZ', 'Comma'],
+  // the book's bookmarks (in a menu): previous / next section
+  tabPrev: ['PageUp', 'BracketLeft'],
+  tabNext: ['PageDown', 'BracketRight', 'Tab'],
 };
 const FOOT_A = ['KeyW', 'ArrowUp'], FOOT_B = ['KeyS', 'ArrowDown'];
 
@@ -66,6 +69,8 @@ const PAD = {
   shiftUp: [12], // d-pad up / down change gear on the bike (LB drops one too)
   shiftDown: [13, 4],
   camera: [11],
+  tabPrev: [4], // LB / RB turn the book's pages
+  tabNext: [5],
 };
 
 class Input {

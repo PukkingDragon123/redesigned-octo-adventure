@@ -1,0 +1,139 @@
+/* The pages of the 3D journal (src/ui/book.js pins them onto the paper of the book
+   drawn by src/ui/book3d.js) and the little 3D things in the corners
+   (src/ui/compass3d.js). All sizes in whole art pixels. */
+.bk-layer { position: absolute; inset: 0; display: none; pointer-events: auto; z-index: 4; overflow: hidden; }
+.bk-layer.on { display: block; }
+.bk-page {
+  position: absolute; left: 0; top: 0; transform-origin: 0 0; visibility: hidden;
+  color: #3a2418; text-shadow: none; pointer-events: none; opacity: 0;
+  transition: opacity 0.14s steps(3);
+}
+.bk-page.shown { opacity: 1; }
+.bk-layer.live .bk-page { pointer-events: auto; }
+/* the writing area inside the page's margins (the bottom one leaves room for his thumbs) */
+.bk-c {
+  position: absolute; top: calc(var(--u) * 6); bottom: calc(var(--u) * 14);
+  left: calc(var(--u) * 9); right: calc(var(--u) * 6);
+  overflow-x: hidden; overflow-y: auto; scrollbar-width: none;
+}
+.bk-c::-webkit-scrollbar { display: none; }
+.bk-r .bk-c { left: calc(var(--u) * 6); right: calc(var(--u) * 9); }
+.bk-in { position: relative; min-height: 100%; isolation: isolate; }
+.single .bk-in { min-height: 0; }
+.single .bk-c { bottom: calc(var(--u) * 30); }
+.single .bk-in + .bk-in { margin-top: calc(var(--u) * 6); padding-top: calc(var(--u) * 6); background: linear-gradient(90deg, rgba(90, 58, 34, 0.4) 0 calc(var(--u) * 3), transparent calc(var(--u) * 3)) 0 0 / calc(var(--u) * 6) var(--u) repeat-x; }
+
+/* headings in red ink with a pencil note under them */
+.bk-head { margin: 0 0 calc(var(--u) * 4); }
+.bk-h { color: #8a2a14; font-family: 'BoldPixels', monospace; line-height: calc(var(--u) * 14); white-space: nowrap; overflow: hidden; }
+.bk-sub { color: #6e6070; line-height: calc(var(--u) * 12); white-space: nowrap; overflow: hidden; }
+.bk-page .k-h { color: #8a2a14; text-shadow: none; margin: calc(var(--u) * 4) 0 calc(var(--u) * 2); }
+.bk-page .hint { color: #6e5038; white-space: normal; margin: calc(var(--u) * 3) 0 0; }
+.bk-page p { margin: calc(var(--u) * 2) 0; white-space: normal; }
+
+/* rows and things on paper (the kit's dark-panel highlights don't read on cream) */
+.bk-page .k-item:hover, .bk-page .k-item.sel { background: rgba(168, 50, 30, 0.12); color: #8a2214; }
+.bk-page .k-setrow { flex-wrap: wrap; height: auto; min-height: calc(var(--u) * 20); row-gap: 0; padding-top: var(--u); padding-bottom: var(--u); }
+.bk-page .k-setrow .lbl { flex: 1 1 auto; min-width: calc(var(--u) * 60); }
+.bk-page .k-setrow > :last-child { margin-left: auto; }
+.bk-page .k-setrow.sel, .bk-page .k-setrow:hover { background: rgba(168, 50, 30, 0.12); color: #8a2214; }
+.bk-page .k-setrow .k-slider { width: calc(var(--u) * 72); }
+.bk-page .m-foot { margin-top: calc(var(--u) * 6); }
+.bk-page .m-foot .k-btn { min-width: calc(var(--u) * 70); }
+
+/* the journal */
+.jcup { display: flex; align-items: center; gap: calc(var(--u) * 2); min-height: calc(var(--u) * 16); }
+.jcup .nm { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; }
+.jcup .k-food { margin-top: calc(var(--u) * -4); margin-bottom: calc(var(--u) * -4); }
+
+/* the notebook pages: tick boxes in the margin */
+.nb-list { padding-left: calc(var(--u) * 16); }
+.bk-page .nb-head { height: auto; margin-bottom: calc(var(--u) * 2); }
+.bk-page .nb-card { margin-bottom: calc(var(--u) * 4); }
+.bk-page .nb-tip { padding-right: 0; margin-top: calc(var(--u) * 4); }
+.bk-page .nb-pencil { right: calc(var(--u) * 4); bottom: calc(var(--u) * -10); }
+
+/* the map */
+.bk-page .mapwrap { margin: 0 auto; padding: calc(var(--u) * 3); background: #f0e2c0; box-shadow: 0 0 0 var(--u) #b89a70, var(--u) var(--u) 0 var(--u) rgba(60, 40, 30, 0.25); }
+.mplaces { display: flex; flex-direction: column; }
+.mplace { display: flex; align-items: center; gap: calc(var(--u) * 2); min-height: calc(var(--u) * 16); white-space: nowrap; }
+.mplace .nm { flex: 1; min-width: 0; overflow: hidden; }
+.mplace .d { color: #6e6070; }
+.bk-page .maplegend { justify-content: flex-start; gap: calc(var(--u) * 6); margin-top: calc(var(--u) * 6); flex-wrap: wrap; }
+
+/* recipes: one card a row */
+.bk-page .rgrid { display: flex; flex-direction: column; gap: calc(var(--u) * 3); }
+.bk-page .rcard { padding: calc(var(--u) * 1) 0; background: linear-gradient(90deg, rgba(90, 58, 34, 0.3) 0 calc(var(--u) * 2), transparent calc(var(--u) * 2)) 0 100% / calc(var(--u) * 4) var(--u) repeat-x; }
+.bk-page .rcard .big { margin: calc(var(--u) * -2) 0 0 calc(var(--u) * -4); }
+
+/* keepsakes */
+.bk-page .slots { gap: calc(var(--u) * 2); justify-content: start; }
+.kdetail .warn { color: #a8321e; }
+.kdetail .okay { color: #2f6e2c; }
+
+/* controls */
+.bk-page .crow { min-height: calc(var(--u) * 16); align-items: flex-start; }
+.bk-page .crow .ck { min-width: calc(var(--u) * 44); padding-top: var(--u); }
+
+/* Mo's shelf: a list on paper */
+.shoplist { display: flex; flex-direction: column; }
+.shoprow { position: relative; display: flex; align-items: center; gap: calc(var(--u) * 2); width: 100%; min-height: calc(var(--u) * 18); padding: 0 calc(var(--u) * 2); border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; outline: none; white-space: nowrap; }
+.shoprow .k-food { margin-top: calc(var(--u) * -5); margin-bottom: calc(var(--u) * -3); }
+.shoprow .nm { flex: 1; min-width: 0; overflow: hidden; }
+.shoprow .have { color: #8a7a6a; }
+.shoprow .pr { color: #2f6e2c; min-width: calc(var(--u) * 16); text-align: right; }
+.shoprow .qty { position: static; margin-left: calc(var(--u) * 1); }
+.shoprow:hover, .shoprow.sel { background: rgba(168, 50, 30, 0.12); color: #8a2214; }
+.shoprow.taken .nm { color: #2f6e2c; }
+.bk-page .shopbar { margin-bottom: calc(var(--u) * 4); }
+.shopbasket .bline { display: flex; align-items: center; gap: calc(var(--u) * 2); min-height: calc(var(--u) * 16); white-space: nowrap; }
+.shopbasket .bline .nm { flex: 1; overflow: hidden; }
+
+/* the receipt */
+.bk-page .receipt { margin-top: calc(var(--u) * 2); }
+.rnote { color: #2e4c9e; }
+
+/* the bookmark tabs: icons on the 3D leather tabs sticking out of the fore-edge */
+.bk-tabs { position: absolute; left: 0; top: 0; width: 0; height: 0; }
+.bk-tab { position: absolute; display: flex; align-items: center; justify-content: center; padding: 0; margin: 0; border: 0; background: none; cursor: pointer; outline: none; }
+.bk-tab img { width: calc(var(--u) * 16); height: calc(var(--u) * 16); image-rendering: pixelated; filter: drop-shadow(var(--u) var(--u) 0 rgba(20, 8, 4, 0.55)); opacity: 0.86; }
+.bk-tab.on img, .bk-tab:hover img { opacity: 1; }
+.bk-x { position: absolute; right: calc(var(--u) * -12); top: calc(var(--u) * -12); z-index: 3; }
+.single .bk-x { right: calc(var(--u) * -6); }
+
+/* ---------------------------------------------------------------- the corner things */
+/* the compass (top right) and the little journal (top left): 3D, drawn on the game
+   canvas; these are only their tap targets */
+.cmp-hit, .jr-hit {
+  position: absolute; top: calc(var(--u) * 4 + var(--safe-t, 0px));
+  width: calc(var(--u) * 46); height: calc(var(--u) * 46);
+  padding: 0; margin: 0; border: 0; background: none; pointer-events: auto; cursor: pointer; outline: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.cmp-hit { right: calc(var(--u) * 4 + var(--safe-r, 0px)); }
+.jr-hit { left: calc(var(--u) * 4 + var(--safe-l, 0px)); width: calc(var(--u) * 34); height: calc(var(--u) * 34); }
+.cmp-hit.hide, .jr-hit.hide { visibility: hidden; }
+/* a small pencilled tag under the compass now and then */
+.cmp-lbl {
+  position: absolute; top: calc(var(--u) * 50 + var(--safe-t, 0px)); right: calc(var(--u) * 4 + var(--safe-r, 0px));
+  display: flex; align-items: center; gap: calc(var(--u) * 2); height: calc(var(--u) * 18); max-width: calc(var(--u) * 160);
+  white-space: nowrap; overflow: hidden; pointer-events: none;
+}
+.cmp-lbl.off { display: none; }
+/* the compass held up: an X and a short hint */
+.cmp-fp { position: absolute; inset: 0; display: none; pointer-events: auto; z-index: 3; touch-action: none; cursor: grab; }
+.cmp-fp.on { display: block; }
+.cmp-fp-hint { position: absolute; left: 0; right: 0; margin: 0 auto; width: max-content; bottom: calc(var(--u) * 6 + var(--safe-b, 0px)); display: flex; align-items: center; gap: calc(var(--u) * 2); height: calc(var(--u) * 18); white-space: nowrap; opacity: 0.85; }
+.cmp-fp-hint .sep { width: calc(var(--u) * 6); }
+.touchmode .cmp-fp-hint .k-key, .touchmode .cmp-fp-hint .k-key + span { display: none; }
+.cmp-fp-x { position: absolute; top: calc(var(--u) * 6 + var(--safe-t, 0px)); right: calc(var(--u) * 6 + var(--safe-r, 0px)); }
+
+/* ---------------------------------------------------------------- less on the screen */
+/* the touch controls stay, but see-through until a thumb is on them; the journal and map
+   buttons went (the 3D journal and compass in the corners do that now) */
+#touch .twheel, #touch .tbtn, #touch .t-talk { opacity: 0.6; transition: opacity 0.18s; }
+#touch .twheel:active, #touch .tbtn.down, #touch.foot .twheel { opacity: 0.92; }
+#touch .tbtn.tsq { display: none; }
+.crank-hud { opacity: 0.55; transition: opacity 0.25s; }
+.crank-hud:hover, .crank-hud.held, .touchmode .crank-hud.on { opacity: 0.9; }
+.pop.bk-hide { visibility: hidden; }

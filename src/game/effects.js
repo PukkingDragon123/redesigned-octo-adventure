@@ -568,14 +568,18 @@ export class Effects {
         ps.spawn({ x: w.x, y: w.y, z: w.z, vx: -fx * rng.range(3, 6) + b.vel.x * 0.5, vy: rng.range(-0.2, 0.8), vz: -fz * rng.range(3, 6) + b.vel.z * 0.5, life: rng.range(0.5, 0.95), size: 0.24, size1: 0.95, sprite: rng.next() < 0.55 ? P.foam : P.bubble, color: rng.next() < 0.5 ? [0.55, 0.32, 0.18] : [0.97, 0.9, 0.78], drag: 2.2, gravity: 1, ground: true });
       }
     }
-    // steam off the cocoa cups
-    this.acc.steam += dt * 3;
+    // steam off the cocoa cups: how much shows how hot each one still is (the HUD's
+    // thermometers went; the cups in Bessie's crate tell you): piping hot ones billow,
+    // warm ones give a thin wisp now and then, cold ones nothing
+    this.acc.steam += dt * 6;
     while (this.acc.steam > 1) {
       this.acc.steam -= 1;
       for (const c of this.cups) {
         if (!c.visible) continue;
+        const h = Math.max(0, Math.min(1, ((c.userData.heat ?? 100) - 12) / 88));
+        if (rng.next() > 0.12 + h * h * 0.88) continue;
         const w = c.getWorldPosition(_v);
-        ps.spawn({ x: w.x + rng.range(-0.03, 0.03), y: w.y + 0.1, z: w.z, vy: rng.range(0.25, 0.45), life: 1.6, size: 0.08, size1: 0.22, sprite: P.steam, color: [1, 1, 1], drag: 0.5, wind: 0.25, alpha: 0.55, fadeIn: 0.3, flutter: 0.1 });
+        ps.spawn({ x: w.x + rng.range(-0.03, 0.03), y: w.y + 0.1, z: w.z, vy: rng.range(0.2, 0.32) + h * 0.2, life: 0.9 + h * 1.1, size: 0.05 + h * 0.05, size1: 0.12 + h * 0.16, sprite: P.steam, color: [1, 1, 1], drag: 0.5, wind: 0.25, alpha: 0.25 + h * 0.4, fadeIn: 0.3, flutter: 0.1 });
       }
     }
   }
