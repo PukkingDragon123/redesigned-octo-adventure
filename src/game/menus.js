@@ -420,7 +420,9 @@ export class Menus {
     this.head(R, "Where's what");
     const p = g.playerPos;
     const places = [];
-    for (const m of g.compassMarkers?.() || []) places.push({ name: markName(g, m), x: m.x, z: m.z, icon: m.icon });
+    let marks = [];
+    try { marks = g.compassMarkers?.() || []; } catch { marks = []; }
+    for (const m of marks) places.push({ name: markName(g, m), x: m.x, z: m.z, icon: m.icon });
     const fixed = [["Nana's cabin", POI.cabin, 'home'], ['Maple Cove', POI.plaza, 'star']];
     for (const [name, q, icon] of fixed) if (q && !places.some((x) => x.name === name)) places.push({ name, x: q.x, z: q.z, icon });
     places.forEach((x) => (x.d = Math.hypot(x.x - p.x, x.z - p.z)));

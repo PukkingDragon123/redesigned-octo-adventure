@@ -316,7 +316,8 @@ export class Compass3D {
   // with nothing to fetch there, is no goal)
   pick() {
     const g = this.g;
-    const marks = g.compassMarkers ? g.compassMarkers() : [];
+    let marks = [];
+    try { marks = g.compassMarkers ? g.compassMarkers() : []; } catch { marks = []; }
     const p = g.playerPos;
     let best = null;
     for (const m of marks) {

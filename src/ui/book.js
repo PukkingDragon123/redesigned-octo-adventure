@@ -10,7 +10,7 @@
 // turning over; clicks and touches land on the pages themselves; Esc or the X closes it.
 import * as THREE from 'three';
 import './book.css';
-import { el, scale, onScale, snap } from './kit.js';
+import { el, scale, onScale, snap, kitReady } from './kit.js';
 import { Book3D } from './book3d.js';
 import { iconSmallURL } from '../art/icons.js';
 import { input } from '../core/input.js';
@@ -158,6 +158,7 @@ export class BookUI {
       return this.m;
     }
     this.isOpen = true;
+    kitReady(); // (the rest of the kit's art: buttons, levers...)
     this.opts = { fp: true, tabs: null, ...opts };
     this.tabs = this.opts.tabs === false ? [] : this.opts.tabs || this.order.filter((k) => !this.sections[k].hidden);
     if (!this.tabs.includes(id) && this.tabs.length) this.tabs = [...this.tabs];
