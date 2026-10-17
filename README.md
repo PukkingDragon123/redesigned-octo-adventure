@@ -168,15 +168,17 @@ its heat, more the harder the crash.
   Reaper notices the paperwork mistake. Scenes use real actors, scene-only
   voxel props (`src/voxel/models/lore.js`), front-on face shots and timed
   effects.
-- **Loading and title** (`src/boot/loader3d.js`, `src/ui/title.js`): the
-  loading screen is plain black with no text: the 3D voxel Hank runs on the
-  spot over a pixel-art skull in a red toque that fills bone-white as the game
-  loads, its eyes lighting up at the end. The title is a live establishing shot of Maple
-  Cove on an autumn morning, drawn by the world renderer: three slow camera
-  moves (Main Street from over the sea, the pumpkin carving contest, the
-  harbour), the villagers on their routines, Hank pedalling Bessie through town
-  with a crate of cocoa and the snow-capped ranges (`createMountains` in
-  `src/render/sky.js`, land side only) beyond, under a pixel logo painted in
+- **Loading and title** (`src/boot/loader3d.js`, `src/ui/title.js`,
+  `src/game/titleHill.js`): the loading screen is dark and warm with no text:
+  Hank's voxel skull in his red toque turns slowly in a hearth-coloured rim
+  light (a tiny renderer of its own, drawn low-res and scaled up by whole
+  pixels), its eye sockets glowing, over a thin progress bar. The title is a
+  live shot drawn by the world renderer at golden hour: Hank sits in the grass
+  on the knoll above Maple Cove (`TITLE_HILL` in `src/world/layout.js`) sipping
+  a steaming mug of cocoa, the rink, the green and the rooftops below; now and
+  then a blue jay flutters in and lands on his toque, he freezes, eyes up, then
+  turns and smiles while it hops, chirps and fluffs, and waves when it flies
+  off. The camera drifts slowly over his shoulder, under a pixel logo painted in
   code. At the end of each day a bedtime scene
   (`src/game/bedtime.js`, `Story.bedtime`) puts him in striped pajamas and
   Nana tucks him in on the sofa.
@@ -310,8 +312,7 @@ These are useful while developing:
   beats; `?scene=lumberCamp|funeral|yearsPass|revival|nanaFindsHank` plays one part of
   the prologue; `?scene=cabinNight|morning|garageReveal|townEntry|villagePanic|cocoaRound|carveInvite|catRescue|ending`
   plays a later story beat (add `&autotalk` to advance the dialogue by itself)
-- `?loaderonly=60` shows just the loading scene for 60 seconds (`&pop=1` drops
-  the head sooner)
+- `?loaderonly=60` shows just the loading scene for 60 seconds
 - `?critters=deer:2:10,robin:4:5` places animals in front of the camera
   (`&calm` stops them fleeing)
 - `?hour=19.5&weather=rain|snow|misty|overcast|breezy|clear`
