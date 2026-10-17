@@ -135,3 +135,4 @@
 #touch .tbtn.tsq { display: none; }
 .crank-hud { opacity: 0.55; transition: opacity 0.25s; }
 .crank-hud:hover, .crank-hud.held, .touchmode .crank-hud.on { opacity: 0.9; }
+.pop.bk-hide { visibility: hidden; }

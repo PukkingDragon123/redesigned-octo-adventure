@@ -167,6 +167,8 @@ export class BookUI {
     this.m = { ov: this.layer, items: [], sel: 0, onBack: () => this.close(), grid: 0, book: true };
     ui.menuStack.push(this.m);
     this.layer.classList.add('on');
+    // whatever Hank was saying out on the road ducks out of the way of the pages
+    this.ui.popups?.layer?.querySelectorAll('.pop').forEach((e) => e.classList.add('bk-hide'));
     this.xBtn.style.display = this.opts.noClose ? 'none' : '';
     this.fill(id);
     this.b3.show();

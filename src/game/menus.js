@@ -125,7 +125,7 @@ export class Menus {
     const hr = g.world.atmosphere.hour;
     const hh = Math.floor(hr), mm = Math.floor((hr - hh) * 60);
     const time = `${((hh + 11) % 12) + 1}:${String(mm).padStart(2, '0')} ${hh < 12 ? 'am' : 'pm'}`;
-    this.head(L, `Day ${st.day}`, `${time} &middot; ${esc(g.world.atmosphere.weatherTarget || 'clear')}`);
+    this.head(L, `Day ${st.day}`, `${time}, ${esc(g.world.atmosphere.weatherTarget || 'clear')}`);
     L.appendChild(el('div', 'jdate', `<img class="k-g" src="${glyphURL('coin')}"><b>$${Math.floor(st.money)}</b><img class="k-g" src="${glyphURL('cocoa')}"><span>${d.deliveries || 0} cups delivered</span>`));
     // the cups on Bessie right now, and how hot they still are
     const carried = g.orders?.carried?.() || [];

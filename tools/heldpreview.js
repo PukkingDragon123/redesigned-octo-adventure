@@ -3,9 +3,11 @@
 //   tools/heldpreview.html?what=book&open=1&lift=1&flip=0.4
 //   tools/heldpreview.html?what=hand&ry=0.5
 import * as THREE from 'three';
+import '../src/ui/kit.css';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { Book3D } from '../src/ui/book3d.js';
 import { BonyHand } from '../src/ui/hands3d.js';
+import { heldCompass, buildCompass, drawTag } from '../src/ui/compass3d.js';
 
 const q = new URLSearchParams(location.search);
 const canvas = document.getElementById('c');
@@ -60,6 +62,30 @@ if (what === 'hand') {
   h.root.position.set(0, -0.06, -0.32);
   h.root.rotation.set(+(q.get('rx') ?? 0), +(q.get('ry') ?? 0), 0);
   scene.add(h.root);
+}
+if (what === 'compass') {
+  const { H, root, hand } = heldCompass();
+  scene.add(root);
+  const nums = (k) => q.get(k)?.split(',').map(Number);
+  if (q.has('th') || q.has('wr') || q.has('curl')) { const c = nums('curl'); hand.pose({ thumb: nums('th'), wrist: nums('wr'), ...(c ? { curl: [c, c, c, c] } : {}) }); }
+  if (q.has('hp')) hand.root.position.set(...nums('hp'));
+  if (q.has('hr')) hand.root.rotation.set(...nums('hr'));
+  root.position.set(0.012, -0.04, -0.18);
+  root.rotation.set(+(q.get('rx') ?? 1.02), -0.08, 0.04);
+  H.needle.rotation.y = 0.6;
+  const tr = nums('tr') || [-0.87, 0, -0.9];
+  H.tagG.rotation.set(...tr);
+  document.fonts.load('32px BoldPixels').finally(() => { drawTag(H.tagCanvas, 'Cocoa for Birdie', '354 m'); H.tagTex.needsUpdate = true; });
+  cam.fov = 60; cam.updateProjectionMatrix();
+}
+if (what === 'corner') {
+  const C = buildCompass();
+  scene.add(C.root);
+  cam.fov = 30; cam.aspect = 1; cam.updateProjectionMatrix();
+  r.setSize(300, 300);
+  cam.position.set(0, 0.105, 0.088);
+  cam.lookAt(0, 0.002, -0.004);
+  C.root.rotation.set(0.05, 0, -0.15);
 }
 window.__ready = true;
 const loop = () => { r.render(scene, cam); requestAnimationFrame(loop); };

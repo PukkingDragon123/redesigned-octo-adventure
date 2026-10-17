@@ -55,6 +55,24 @@ audio starts.
 | Tab | | Harold's keepsakes |
 | Mouse drag (right button) | Right stick (on foot) | Look around |
 | Esc | Start | Hank's journal (pause); skips a cutscene while one is playing |
+| Tab, [ ], PgUp / PgDn | LB / RB | In the journal: turn to the next / previous bookmark |
+
+There is almost nothing on the screen while you play: what you can do right here (the
+prompt), a little leather journal in the top left corner and Harold's brass compass in
+the top right, both real 3D things. The compass needle swings round to wherever you
+should go next (it lags and overshoots as you turn, and the case tilts into the
+corners); click or tap it and the camera goes into Hank's skull while he holds it up in
+his bony hand, the place it points to inked on a paper tag (drag to look about, Esc to
+put it away). How hot the cups are shows in how much they steam in Bessie's crate.
+
+Every screen is written in Hank's journal: Esc (or the little journal) takes the camera
+into first person while his hands lift a leather-bound book, open it and hold it up.
+Its bookmark tabs turn to the journal (the day, money, errands), Nana's orders, the
+map, her customers and recipes, the Skill Book, the keepsakes, settings and controls;
+Nana's order board, Mo's shop list and the day's receipt open in the same book. The
+pages are the pixel UI laid exactly onto the 3D paper (`src/ui/book.js`,
+`src/ui/book3d.js`, `src/ui/view3d.js`, `src/ui/compass3d.js`; preview the held things
+with `tools/heldpreview.html`).
 
 Landings have to match the ground: roughly level with the slope and pointing
 the way you're travelling. A perfect landing gives a little burst of speed; a

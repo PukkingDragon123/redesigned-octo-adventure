@@ -10,7 +10,7 @@
 // little paper tag tied to its bow. Drag to look about; Esc / the X puts it away.
 import * as THREE from 'three';
 import { BonyHand } from './hands3d.js';
-import { el, scale, onScale } from './kit.js';
+import { el, onScale } from './kit.js';
 import { iconSmallURL, glyphURL } from '../art/icons.js';
 import { CUSTOMERS } from '../world/layout.js';
 import { CHARACTERS } from '../art/characters.js';
@@ -80,37 +80,37 @@ function cardTexture() {
 // the paper tag: the place's name in Nana's ink, the distance in pencil
 function tagCanvas() {
   const c = document.createElement('canvas');
-  c.width = 256;
-  c.height = 128;
+  c.width = 512;
+  c.height = 256;
   return c;
 }
 function drawTag(c, name, sub) {
   const g = c.getContext('2d');
-  g.clearRect(0, 0, 256, 128);
+  g.clearRect(0, 0, 512, 256);
   // a luggage tag: clipped corners, a reinforced hole on the left
   g.fillStyle = '#efe2c0';
   g.beginPath();
-  g.moveTo(28, 6); g.lineTo(250, 6); g.lineTo(250, 122); g.lineTo(28, 122); g.lineTo(6, 98); g.lineTo(6, 30); g.closePath();
+  g.moveTo(56, 12); g.lineTo(500, 12); g.lineTo(500, 244); g.lineTo(56, 244); g.lineTo(12, 196); g.lineTo(12, 60); g.closePath();
   g.fill();
   g.strokeStyle = '#b8a07a';
-  g.lineWidth = 3;
+  g.lineWidth = 6;
   g.stroke();
   g.fillStyle = '#c8a050';
-  g.beginPath(); g.arc(26, 64, 11, 0, Math.PI * 2); g.fill();
+  g.beginPath(); g.arc(52, 128, 22, 0, Math.PI * 2); g.fill();
   g.fillStyle = '#3a2a20';
-  g.beginPath(); g.arc(26, 64, 5, 0, Math.PI * 2); g.fill();
+  g.beginPath(); g.arc(52, 128, 10, 0, Math.PI * 2); g.fill();
   g.textBaseline = 'middle';
   g.textAlign = 'left';
-  // whole-pixel pixel fonts at twice their size
-  let px = 32;
+  // whole-pixel pixel fonts at a whole multiple of their size
+  let px = 64;
   g.font = `${px}px BoldPixels, monospace`;
-  while (g.measureText(name).width > 205 && px > 16) { px -= 16; g.font = `${px}px BoldPixels, monospace`; }
+  while (g.measureText(name).width > 412 && px > 32) { px -= 16; g.font = `${px}px BoldPixels, monospace`; }
   g.fillStyle = '#7a1a10';
-  g.fillText(name, 44, sub ? 48 : 64);
+  g.fillText(name, 88, sub ? 96 : 128);
   if (sub) {
-    g.font = '32px Monogram, monospace';
+    g.font = '64px Monogram, monospace';
     g.fillStyle = '#4a4a5a';
-    g.fillText(sub, 44, 88);
+    g.fillText(sub, 88, 176);
   }
 }
 
@@ -191,18 +191,34 @@ function buildCompass({ tag = false } = {}) {
     t.magFilter = THREE.LinearFilter;
     t.anisotropy = 4;
     const tagG = new THREE.Group();
-    const paper = new THREE.Mesh(new THREE.PlaneGeometry(0.056, 0.028), new THREE.MeshStandardMaterial({ map: t, transparent: true, alphaTest: 0.5, roughness: 0.9, side: THREE.DoubleSide }));
+    const paper = new THREE.Mesh(new THREE.PlaneGeometry(0.064, 0.032), new THREE.MeshStandardMaterial({ map: t, transparent: true, alphaTest: 0.5, roughness: 0.9, side: THREE.DoubleSide }));
     // the hole at the tag's left end hangs from the string
-    paper.position.set(0.0228, -0.0005, 0);
+    paper.position.set(0.0263, -0.0005, 0);
     tagG.add(paper);
     root.add(tagG);
-    const str = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([new THREE.Vector3(-0.004, 0.006, -0.042), new THREE.Vector3(-0.02, 0.012, -0.036), new THREE.Vector3(-0.038, 0.016, -0.018), new THREE.Vector3(-0.05, 0.016, -0.002)]), 16, 0.0005, 5), new THREE.MeshStandardMaterial({ color: 0xc8b890, roughness: 0.9 }));
+    const str = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([new THREE.Vector3(-0.004, 0.006, -0.043), new THREE.Vector3(-0.02, 0.01, -0.05), new THREE.Vector3(-0.042, 0.014, -0.052), new THREE.Vector3(-0.066, 0.016, -0.05)]), 16, 0.0005, 5), new THREE.MeshStandardMaterial({ color: 0xc8b890, roughness: 0.9 }));
     root.add(str);
-    tagG.position.set(-0.05, 0.016, -0.002);
+    tagG.position.set(-0.066, 0.016, -0.05);
     Object.assign(out, { tagG, tagCanvas: c, tagTex: t });
   }
   return out;
 }
+
+// the compass held up in his bony right hand (the tag on its string), for first person
+export function heldCompass() {
+  const H = buildCompass({ tag: true });
+  const root = new THREE.Group();
+  root.add(H.root);
+  const hand = new BonyHand();
+  // lying in his palm: the wrist off to the right, the fingers curled up round the left
+  // of the case, the thumb resting on the bezel by the bow
+  hand.pose({ curl: [[0.15, 1.45, 0.9], [0.1, 1.5, 0.9], [0.15, 1.5, 0.9], [0.25, 1.4, 0.8]], spread: -0.3, thumb: [0.2, -0.3, -0.35, 0.3, 0.2], wrist: [0.6, -0.5] });
+  hand.root.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(new THREE.Vector3(0, 0, -1), new THREE.Vector3(-1, 0, 0), new THREE.Vector3(0, 1, 0)));
+  hand.root.position.set(0.084, -0.016, 0.004);
+  H.root.add(hand.root);
+  return { H, root, hand };
+}
+export { buildCompass, drawTag };
 
 export class Compass3D {
   constructor(view, game) {
@@ -230,16 +246,10 @@ export class Compass3D {
     this.widget = { root: this.cornerRoot, cam, box: () => this.box(), visible: () => this.cornerOn(), update: () => {} };
     view.widgets.push(this.widget);
     // the held one, with the hand and the tag
-    const H = buildCompass({ tag: true });
+    const { H, root, hand } = heldCompass();
     this.h = H;
-    this.heldRoot = new THREE.Group();
-    this.heldRoot.add(H.root);
-    this.hand = new BonyHand();
-    // cupped underneath: palm up, fingers curling round the far edge, thumb on the right
-    this.hand.pose({ curl: [[0.55, 0.8, 0.5], [0.5, 0.8, 0.55], [0.55, 0.85, 0.55], [0.65, 0.85, 0.5]], spread: 0.2, thumb: [0.6, -0.4, -0.5, 0.5, 0.3], wrist: [0.5, 0] });
-    this.hand.root.rotation.x = -Math.PI / 2;
-    this.hand.root.position.set(0.004, -0.009, 0.052);
-    H.root.add(this.hand.root);
+    this.heldRoot = root;
+    this.hand = hand;
     view.scene.add(this.heldRoot);
     this.heldRoot.visible = false;
     this.held = { root: this.heldRoot, visible: () => this.fpK > 0.001, update: () => {} };
@@ -376,7 +386,7 @@ export class Compass3D {
     const show = on && G && (this.lblT > 0 || this.stillT > 2.5);
     if (L.classList.contains('off') === !!show) L.classList.toggle('off', !show);
     if (!show) return;
-    const txt = `${obj && this.lblT > 0 ? obj : markName(g, G)} · ${fmtD(G.d)}`;
+    const txt = `${obj && this.lblT > 0 ? obj : markName(g, G)}  ${fmtD(G.d)}`;
     if (L.dataset.t !== txt) {
       L.dataset.t = txt;
       const icon = { cocoa: () => glyphURL('cocoa'), home: () => glyphURL('home'), star: () => glyphURL('star') }[G.icon]?.() || iconSmallURL(G.icon);
@@ -428,12 +438,12 @@ export class Compass3D {
     const H = this.h;
     // held up below the eye, face tipped towards it; it rises from below as it comes up
     const r = this.heldRoot;
-    r.position.set(0.012, -0.075 - (1 - k) * 0.16, -0.235);
+    r.position.set(0.016, -0.058 - (1 - k) * 0.2, -0.27);
     r.rotation.set(1.02 - (1 - k) * 0.6, -0.08, 0.04 + Math.sin(this.time * 1.3) * 0.006);
     r.position.y += Math.sin(this.time * 1.9) * 0.0012;
     this.place(H, h);
     // the tag swings a little
-    H.tagG.rotation.set(0.3 + Math.sin(this.time * 1.4) * 0.05, 0, -0.25 + Math.sin(this.time * 1.1 + 1) * 0.06);
+    H.tagG.rotation.set(-r.rotation.x + 0.15 + Math.sin(this.time * 1.4) * 0.05, 0, -0.35 + Math.sin(this.time * 1.1 + 1) * 0.06);
     const G = this.goal;
     const name = G ? markName(this.g, G) : 'Nowhere just now';
     const sub = G ? fmtD(G.d) : 'free time!';

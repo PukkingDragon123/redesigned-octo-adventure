@@ -149,7 +149,7 @@ export class View3D {
       if (sc) L.key.color.setRGB(0.75 + Math.min(0.25, sc.r * 0.2), 0.7 + Math.min(0.25, sc.g * 0.2), 0.62 + Math.min(0.3, sc.b * 0.2));
       L.rim.intensity = 0.7 + night * 0.5;
     }
-    const e = 1 - night * 0.55;
+    const e = 0.45 - night * 0.2;
     this.scene.environmentIntensity = e;
     this.corner.environmentIntensity = e;
   }
