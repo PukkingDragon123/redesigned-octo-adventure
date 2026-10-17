@@ -205,6 +205,7 @@ uniform vec2 uAOTexel;
 uniform vec4 uProj;
 uniform float uGrain;
 uniform float uWarm;
+uniform float uNightGrade;
 uniform vec3 uVigTint;
 varying vec2 vUv;
 
@@ -318,7 +319,7 @@ void main() {
   float l = luma(col);
   // split toning that keeps luminance: plum-blue shade, warm cream light
   vec3 sh = uShadowTint / luma(uShadowTint), hi = uHighTint / luma(uHighTint);
-  col *= mix(vec3(1.0), sh, (1.0 - smoothstep(0.05, 0.55, l)) * 0.5);
+  col *= mix(vec3(1.0), sh, (1.0 - smoothstep(0.05, 0.5, l)) * 0.4);
   col *= mix(vec3(1.0), hi, smoothstep(0.4, 1.0, l) * 0.45);
   // the autumn palette: ambers and reds a touch richer, raw greens leaning to olive gold
   float mx = max(col.r, max(col.g, col.b)), mn = min(col.r, min(col.g, col.b));
@@ -332,6 +333,9 @@ void main() {
   col = mix(sc, sc * sc * (3.0 - 2.0 * sc), uContrast - 1.0);
   l = luma(col);
   col = mix(vec3(l), col, uSaturation);
+  // night vision: the moonlit world loses its colour towards a cool blue, while lamp-lit
+  // and glowing things (the brighter pixels) keep theirs
+  col = mix(col, l * vec3(0.78, 0.9, 1.18), uNightGrade * 0.3 * (1.0 - smoothstep(0.3, 0.75, l)));
   // cold, desaturated blue for the freezing intro
   col = mix(col, vec3(l * 0.75, l * 0.85, l * 1.15), uCold);
 
@@ -421,7 +425,7 @@ export class Pipeline {
       uExposure: { value: 1.0 },
       uDayExp: { value: 1.0 }, // the time of day's own exposure (atmosphere.js); uExposure is the scenes'
       uSaturation: { value: 1.12 },
-      uContrast: { value: 1.16 },
+      uContrast: { value: 1.28 },
       // split tones (normalised to keep luminance): blue-plum shade, warm cream light
       uShadowTint: { value: new THREE.Color(0.84, 0.82, 1.0) },
       uHighTint: { value: new THREE.Color(1.0, 0.96, 0.9) },
@@ -443,6 +447,7 @@ export class Pipeline {
       uProj: { value: new THREE.Vector4(1, 1, 0.1, 2400) },
       uGrain: { value: 0 },
       uWarm: { value: 1 },
+      uNightGrade: G.uNight,
       uVigTint: { value: new THREE.Color(0.74, 0.66, 0.74) },
       tColor: { value: null },
       tDepth: { value: null },
