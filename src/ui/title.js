@@ -1,80 +1,28 @@
-// Title screen: a live establishing shot of Maple Cove on an autumn morning, drawn by
-// the real world renderer. The camera drifts through three slow shots (Main Street from
-// over the sea with the mountains beyond, the pumpkin carving contest at the west end
-// of Main Street, the harbour and the boardwalk), dipping to black between them; the
-// villagers keep their routines, Hank rides Bessie through town with a crate of cocoa,
-// geese and gulls fly over. On top: a hand-made pixel-art logo and the leather-and-
-// brass menu, over a soft darkening where they sit (no blur: the scene stays crisp).
+// Title screen: a live shot in the real world at golden hour. Hank sits in the grass on the
+// knoll above Maple Cove (layout.js TITLE_HILL) with a steaming mug of Nana's cocoa, the
+// village, the green and the harbour below him, the wind in the grass and the leaves; now
+// and then a chickadee flutters in and lands on his toque (game/titleHill.js runs the
+// little scene). The camera sits behind him over his left shoulder and drifts slowly. On
+// top: a hand-made pixel-art logo and the leather-and-brass menu, over a soft darkening
+// where they sit (no blur: the scene stays crisp).
 import * as THREE from 'three';
 import { hasSave } from '../game/state.js';
-import { clamp, damp, lerp, smoothstep, wrapAngle } from '../core/math.js';
+import { HillScene } from '../game/titleHill.js';
+import { clamp, smoothstep } from '../core/math.js';
 
-// The light of an early autumn morning: the low sun comes in off the sea and lights the
-// shopfronts, the forest and the snow on the mountains. The villagers keep each shot's
-// own hour (`sched`), so the contest can be on while the light stays golden.
-const LIGHT_HOUR = 8.35;
-const SHOT_LEN = 15;
-const FADE_OUT = 0.8;
-const FADE_IN = 1.1;
-const SHADOW_SIZE = 120; // a wider shadow box for the wide shots (gameplay uses 70)
-
-// Each shot: the camera dollies from -> to, facing the point look (xz) drifting to lookTo;
-// hor is where the horizon sits (fraction of the screen from the top; horTall on portrait
-// screens), hfov the horizontal field of view (degrees); sched the villagers' hour; ride
-// is Hank's path (xz points), speed and metres in at the start; birds cross on cue (s).
-const SHOTS = [
-  {
-    // Main Street from over the sea at its east end: the shops, the rink, the green and
-    // the chapel, the forest, the lookout hill and the mountains beyond
-    sched: 7.8,
-    from: [338, 28, 54.5], to: [324, 25.5, 52.5], look: [214, 49], lookTo: [212, 48.5],
-    hor: 0.56, horTall: 0.5, hfov: 64,
-    ride: { path: [[150, 52.2], [266, 52.2]], speed: 5.2, start: 18 },
-    birds: [{ at: 1.5, geese: { start: [238, -30], dir: [0, 1], alt: 41 } }],
-  },
-  {
-    // the pumpkin carving contest at the west end of Main Street: Hank rides in from
-    // Nana's road, down the middle between the carvers' tables, towards the camera
-    sched: 10.5,
-    from: [160, 5.6, 48.3], to: [164.5, 5.9, 48.7], look: [112, 50.4], lookTo: [112, 50.2],
-    hor: 0.53, horTall: 0.52, hfov: 70,
-    ride: { path: [[72, 47.2], [92, 49.9], [106, 51], [114, 50.6], [121, 50], [146, 50], [158, 50.6], [196, 51.2]], speed: 5.3, start: 0 },
-    birds: [{ at: 3, geese: { start: [64, -40], dir: [0.15, 1], alt: 26 } }],
-  },
-  {
-    // the harbour: boats at the docks, Birdie fishing off the boardwalk, the backs of the
-    // houses, the green and the chapel steeple, the ridge and the northern ranges
-    sched: 7.8,
-    from: [210, 21, 167], to: [197, 23.5, 159], look: [186, 34], lookTo: [180, 30],
-    hor: 0.53, horTall: 0.5, hfov: 66,
-    ride: { path: [[138, 85.3], [258, 85.3]], speed: 5, start: 25 },
-    birds: [{ at: 0.5, gulls: true }, { at: 4, gulls: true }],
-  },
-];
-
-// a polyline in xz, walked by distance
-function makePath(pts) {
-  const seg = [];
-  let len = 0;
-  for (let i = 0; i < pts.length - 1; i++) {
-    const [ax, az] = pts[i], [bx, bz] = pts[i + 1];
-    const l = Math.hypot(bx - ax, bz - az);
-    seg.push({ ax, az, dx: (bx - ax) / l, dz: (bz - az) / l, l, s0: len });
-    len += l;
-  }
-  return { seg, len };
-}
-function pathAt(P, s, out) {
-  s = clamp(s, 0, P.len);
-  let q = P.seg[P.seg.length - 1];
-  for (const g of P.seg) if (s <= g.s0 + g.l) { q = g; break; }
-  const t = s - q.s0;
-  out.x = q.ax + q.dx * t;
-  out.z = q.az + q.dz * t;
-  out.dx = q.dx;
-  out.dz = q.dz;
-  return out;
-}
+// the light: a low autumn sun in the west-southwest, gold on the rooftops; the villagers
+// keep a late-afternoon routine
+const LIGHT_HOUR = 17.8;
+const SCHED_HOUR = 16.6;
+const FADE_IN = 1.8;
+const SHADOW_SIZE = 90; // a wider shadow box so the village below keeps its shadows (gameplay uses 70)
+// The camera, around Hank: its bearing from where he faces (a, radians towards his left;
+// lean: the bearing it drifts round to while the bird visits, so his smile shows), distance
+// d and height y (m), how far across the screen he sits (sx, 0 left .. 1 right), the pitch
+// (radians, down < 0) and the horizontal field of view (degrees). Tall screens get him in
+// the middle, a bit further off.
+const CAM_WIDE = { a: 2.5, lean: 2.3, d: 4.7, y: 2.0, sx: 0.68, pitch: -0.19, hfov: 64 };
+const CAM_TALL = { a: 2.7, lean: 2.5, d: 4.9, y: 2.3, sx: 0.53, pitch: -0.22, hfov: 58 };
 
 const INK = '#1e1418';
 
@@ -179,13 +127,10 @@ export class TitleScreen {
   constructor(game) {
     this.g = game;
     this.t = 0;
-    this.shot = null;
-    this.shotI = -1;
-    this.shotT = 0;
+    this.scene = null;
     this._pos = new THREE.Vector3();
     this._look = new THREE.Vector3();
-    this._p = { x: 0, z: 0, dx: 0, dz: 1 };
-    this._q = { x: 0, z: 0, dx: 0, dz: 1 };
+    this._rest = new THREE.Vector3();
   }
 
   async show({ onContinue, onNew, onSettings, onControls }) {
@@ -272,20 +217,22 @@ export class TitleScreen {
     this.selI = i;
   }
 
-  // Set the world up for the title: golden morning light, a friendly village, Hank on
-  // Bessie with a crate of cocoa, and the first shot. (restore() puts it all back.)
+  // Set the world up for the title: golden-hour light, a friendly village, Bessie tucked
+  // away out of sight and Hank on his hill with his cocoa. (restore() puts it all back.)
   stage() {
     const g = this.g;
     if (this.staged) return;
     this.staged = true;
     const W = g.world, A = W.atmosphere;
     A.lightHour = LIGHT_HOUR;
+    A.hour = SCHED_HOUR;
     A.setWeather('breezy', true);
     // everyone already knows Hank (a save or a new game sets the real feelings when the title closes)
     const st = g.state;
     st.flags.village1 = true;
     st.flags.contestScream = true;
     st.npc = { _day: st.day, _base: 70 };
+    g.villagers.syncState();
     // no speech bubbles or voices over the title
     g.villagers.bubble = () => {};
     const sc = W.sun?.shadow?.camera;
@@ -295,91 +242,38 @@ export class TitleScreen {
       sc.right = sc.top = SHADOW_SIZE;
       sc.updateProjectionMatrix();
     }
-    g.setBikeVisible(true);
-    g.rider.visible = true;
-    g.orders.list = ['classic', 'maple', 'pumpkin'].map((cocoa, i) => ({ id: 9000 + i, customer: 'title', spot: 'title', cocoa, state: 'carried', loaded: true, quality: 100 }));
-    g.cargo?.sync();
+    // Bessie (and the riding Hank) wait out of sight up the hill behind him
+    this.bikeWas = g.bikeModel.root.visible;
+    this.riderWas = g.rider.visible;
+    g.setBikeVisible(false);
+    this.scene = new HillScene(g);
+    const b = this.scene.local(0, 0, -26, new THREE.Vector3());
+    g.parkBike(b.x, b.z, this.scene.yaw);
     g.pipeline.post.uFade.value = 1;
-    this.shotI = -1;
-    this.next(true);
-  }
-
-  next(first = false) {
-    const g = this.g;
-    this.shotI = (this.shotI + 1) % SHOTS.length;
-    const S = (this.shot = SHOTS[this.shotI]);
-    this.shotT = 0;
-    this.first = first;
-    this.birdsFired = 0;
-    // the villagers jump to this shot's hour of their day (hidden by the dip to black)
-    const A = g.world.atmosphere;
-    if (first || A.hour !== S.sched) {
-      A.hour = S.sched;
-      g.villagers.syncState();
-    }
-    this.path = makePath(S.ride.path);
-    this.rideS = S.ride.start;
-    this.ride(0);
     this.frame(0, true);
   }
 
-  // Hank pedals Bessie along the shot's path (placed directly: no physics, no controls)
-  ride(dt) {
-    const g = this.g, b = g.bike, P = this.path;
-    if (!P) return;
-    const v = this.rideS < P.len ? this.shot.ride.speed : 0;
-    this.rideS = Math.min(P.len, this.rideS + v * dt);
-    const p = pathAt(P, this.rideS, this._p);
-    // head for a point a little ahead, so corners come out round
-    const q = pathAt(P, this.rideS + 3.5, this._q);
-    let hx = q.x - p.x, hz = q.z - p.z;
-    if (hx * hx + hz * hz < 1e-6) { hx = p.dx; hz = p.dz; }
-    const yaw = Math.atan2(hx, hz);
-    const fresh = dt <= 0;
-    const turn = fresh ? 0 : wrapAngle(yaw - b.yaw) / dt;
-    const fx = Math.sin(yaw), fz = Math.cos(yaw);
-    const ph = g.physics;
-    const y = ph.groundAt(p.x, p.z).h;
-    const hF = ph.groundAt(p.x + fx * 0.46, p.z + fz * 0.46).h, hB = ph.groundAt(p.x - fx * 0.46, p.z - fz * 0.46).h;
-    b.pos.set(p.x, y, p.z);
-    b.yaw = yaw;
-    b.vel.set(fx * v, 0, fz * v);
-    b.speed = b.fwdSpeed = v;
-    b.grounded = true;
-    b.crash = 0;
-    b.throttleIn = v > 0 ? 1 : 0;
-    b.brakeIn = 0;
-    b.yawRate = turn;
-    b.cadence = v > 0 ? 0.72 : 0; // an easy Sunday-morning pedal
-    b.crank += b.cadence * 9.5 * dt;
-    b.wheelAngle += (v / 0.34) * dt;
-    b.slopePitch = Math.atan2(hF - hB, 0.92);
-    b.pitch = fresh ? b.slopePitch : damp(b.pitch, b.slopePitch, 12, dt);
-    b.lean = fresh ? 0 : damp(b.lean, clamp(Math.atan((-turn * v) / 9.8) * 1.15, -0.45, 0.45), 6, dt);
-    b.wheelie = b.stoppie = 0;
-    // draw Bessie where she is now (the game posed her before the title moved her)
-    b.lerpView(1);
-    g.bikeModel.update(0, b, 0);
-  }
-
-  // the slow dolly, framed so the horizon sits where the shot wants it on any screen shape
+  // over his left shoulder, framed by the screen's shape, drifting slowly
   frame(dt, snap = false) {
-    const g = this.g, S = this.shot, cam = g.camera;
-    const k = smoothstep(0, SHOT_LEN, this.shotT);
-    const pos = this._pos.set(lerp(S.from[0], S.to[0], k), lerp(S.from[1], S.to[1], k), lerp(S.from[2], S.to[2], k));
-    pos.x += Math.sin(this.t * 0.31) * 0.22;
-    pos.y += Math.sin(this.t * 0.23 + 1) * 0.12;
-    const lx = lerp(S.look[0], S.lookTo[0], k), lz = lerp(S.look[1], S.lookTo[1], k);
+    const g = this.g, H = this.scene, cam = g.camera;
+    if (!H) return;
     const aspect = cam.aspect || innerWidth / innerHeight;
     const tall = aspect < 1;
-    const vfov = clamp(2 * Math.atan(Math.tan((S.hfov * Math.PI) / 360) / aspect), 0.5, tall ? 1.25 : 1.05);
-    const pitch = Math.atan((2 * (tall ? S.horTall : S.hor) - 1) * Math.tan(vfov / 2));
-    let dx = lx - pos.x, dz = lz - pos.z;
-    const d = Math.hypot(dx, dz) || 1;
-    dx /= d;
-    dz /= d;
+    const K = tall ? CAM_TALL : CAM_WIDE;
+    const t = this.t;
+    const a = K.a + (K.lean - K.a) * H.camLean + Math.sin(t * 0.06) * 0.05;
+    const d = K.d + Math.sin(t * 0.067 + 2) * 0.15;
+    const pos = H.local(Math.sin(a) * d, K.y + Math.sin(t * 0.083 + 1) * 0.08, Math.cos(a) * d, this._pos);
+    const vfov = clamp(2 * Math.atan(Math.tan((K.hfov * Math.PI) / 360) / aspect), 0.5, tall ? 1.25 : 1.05);
+    const hfov = 2 * Math.atan(Math.tan(vfov / 2) * aspect);
+    // the yaw that puts Hank at sx across the screen (from where the camera rests: drifting
+    // round to his side, it keeps looking the same way and he slides over a little)
+    const s = H.spot, rest = H.local(Math.sin(K.a) * K.d, 0, Math.cos(K.a) * K.d, this._rest);
+    const yawH = Math.atan2(s.x - rest.x, s.z - rest.z);
+    const yaw = yawH + Math.atan((2 * K.sx - 1) * Math.tan(hfov / 2)) + Math.sin(t * 0.05) * 0.015;
+    const pitch = K.pitch + Math.sin(t * 0.07) * 0.008;
     const c = Math.cos(pitch) * 60;
-    const look = this._look.set(pos.x + dx * c, pos.y + Math.sin(pitch) * 60, pos.z + dz * c);
+    const look = this._look.set(pos.x + Math.sin(yaw) * c, pos.y + Math.sin(pitch) * 60, pos.z + Math.cos(yaw) * c);
     const C = g.chase, fov = (vfov * 180) / Math.PI;
     if (snap || C.mode !== 'shot') C.cut(pos, look, fov);
     else {
@@ -390,35 +284,14 @@ export class TitleScreen {
     C.apply(dt);
   }
 
-  spawnBirds(b) {
-    const C = this.g.critters;
-    if (!C) return;
-    try {
-      if (b.geese) {
-        const [dx, dz] = b.geese.dir, l = Math.hypot(dx, dz);
-        C.spawnGeese({ start: { x: b.geese.start[0], z: b.geese.start[1] }, dir: { x: dx / l, z: dz / l }, alt: b.geese.alt });
-      }
-      if (b.gulls) C.spawnGulls();
-    } catch (e) {
-      console.warn('title birds', e);
-    }
-  }
-
   update(dt) {
-    const S = this.shot;
-    if (!S) return;
+    if (!this.scene) return;
     const g = this.g;
     this.t += dt;
-    this.shotT += dt;
-    if (this.shotT >= SHOT_LEN) this.next();
-    const T = this.shotT;
-    // dip to black between shots (the first one fades in from the loading screen more slowly)
-    const fin = this.first ? 1.8 : FADE_IN;
-    g.pipeline.post.uFade.value = T < fin ? 1 - smoothstep(0, fin, T) : smoothstep(SHOT_LEN - FADE_OUT, SHOT_LEN, T);
-    this.ride(dt);
-    const birds = this.shot.birds || [];
-    while (this.birdsFired < birds.length && T >= birds[this.birdsFired].at) this.spawnBirds(birds[this.birdsFired++]);
+    // fade in from the loading screen
+    g.pipeline.post.uFade.value = 1 - smoothstep(0, FADE_IN, this.t);
     this.frame(dt);
+    this.scene.update(dt);
     if (!this.root) return;
     if (this.t < 2) this.root.style.opacity = String(clamp((this.t - 0.4) / 0.9, 0, 1));
     else if (this.root.style.opacity !== '1') this.root.style.opacity = '1';
@@ -443,8 +316,8 @@ export class TitleScreen {
   // hand the world back to the game the way the title found it
   restore() {
     const g = this.g, W = g.world;
-    this.shot = null;
-    this.path = null;
+    this.scene?.dispose();
+    this.scene = null;
     W.atmosphere.lightHour = null;
     const sc = W.sun?.shadow?.camera;
     if (sc && this.shadowWas) {
@@ -453,8 +326,10 @@ export class TitleScreen {
       sc.updateProjectionMatrix();
     }
     delete g.villagers.bubble;
-    g.orders.list = [];
-    g.cargo?.sync();
+    if (this.bikeWas !== undefined) {
+      g.bikeModel.root.visible = this.bikeWas;
+      g.rider.visible = this.riderWas;
+    }
     g.parkBike();
     g.pipeline.post.uFade.value = 0;
   }

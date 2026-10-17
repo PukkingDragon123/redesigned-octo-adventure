@@ -372,6 +372,7 @@ export const CLEARINGS = [
   { x: -62, z: 22, r: 9, soft: 5 }, { x: 6, z: 2, r: 8, soft: 5 }, { x: 112, z: -82, r: 9, soft: 5 }, // houses along the roads
   { x: 250, z: -46, r: 10, soft: 6 }, // fish & chips
   { x: 180, z: -107, r: 9, soft: 5 }, // rest area & the giant goose
+  { x: 195, z: -24, r: 7, soft: 6 }, // the knoll over the village (the title screen's hilltop: see TITLE_HILL)
   { x: -181, z: 16, r: 12, soft: 2.5, ring: 10, bare: true }, // lumber camp: open inside (no undergrowth either), thick forest right at its edge
   // the backcountry
   { x: -398, z: -146, r: 16, soft: 8 }, // the station
@@ -381,6 +382,10 @@ export const CLEARINGS = [
   { x: -304, z: 12, r: 10, soft: 6 }, // Café du Rang
   { x: -176, z: 288, r: 36, soft: 8 }, // the orchard & cider house
 ];
+// The grassy knoll on the ridge north of the village where Hank sits with a mug of cocoa on
+// the title screen, looking south over the rooftops, the green and the harbour (yaw: facing)
+export const TITLE_HILL = { x: 196, z: -21, yaw: 0.72 };
+
 // Trees planted on purpose (the big maple on the green, maples lining the green)
 export const PLANTED = [
   { x: 176, z: 14, species: 'maple', H: 13.5 },

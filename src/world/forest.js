@@ -57,18 +57,21 @@ function bareClearing(x, z) {
 const VISTAS = [
   { poi: 'lookout', dir: 1.0, near: 75, far: 125 }, // dir: radians from +x toward +z
   { poi: 'firetower', dir: Math.PI / 2 + 0.35, near: 70, far: 120 },
+  // the grassy knoll on the ridge just north of the village, open down the slope over the
+  // rooftops (where Hank sits with his cocoa on the title screen)
+  { at: L.TITLE_HILL, dir: Math.PI / 2 - 0.35, near: 30, far: 55, w0: 0.55, w1: 0.8 },
 ];
 function vistaFactor(x, z) {
   let f = 1;
   for (const V of VISTAS) {
-    const P = L.POI[V.poi];
+    const P = V.at || L.POI[V.poi];
     if (!P) continue;
     const dx = x - P.x, dz = z - P.z;
     const d = Math.hypot(dx, dz);
     if (d < 4 || d > V.far) continue;
     let da = Math.atan2(dz, dx) - V.dir;
     da = Math.atan2(Math.sin(da), Math.cos(da));
-    const inWedge = 1 - smoothstep(0.42, 0.62, Math.abs(da));
+    const inWedge = 1 - smoothstep(V.w0 ?? 0.42, V.w1 ?? 0.62, Math.abs(da));
     const fall = d < V.near ? 1 : 1 - (d - V.near) / (V.far - V.near);
     f = Math.min(f, 1 - inWedge * fall * 0.96);
   }
