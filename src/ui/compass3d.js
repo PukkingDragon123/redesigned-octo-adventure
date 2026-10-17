@@ -264,7 +264,7 @@ export class Compass3D {
   // ---------------------------------------------------------------- DOM: the tap target and the little label
   buildDom() {
     const ui = this.g.ui;
-    const hit = (this.hitEl = el('button', 'cmp-hit'));
+    const hit = (this.hitEl = el('button', 'cmp-hit hide'));
     hit.setAttribute('aria-label', 'Compass');
     hit.addEventListener('pointerdown', (e) => {
       e.stopPropagation();
@@ -366,6 +366,9 @@ export class Compass3D {
     this.c.root.rotation.set(T.p, 0, -T.r);
     this.updateLabel(dt);
     this.updateFP(dt, h);
+    // (the tap target only while the compass is there to tap)
+    const on = this.cornerOn();
+    if (this.hitEl.classList.contains('hide') === on) this.hitEl.classList.toggle('hide', !on);
   }
   // the needle and the card, relative to the case (which faces the way Hank looks)
   place(C, h) {
@@ -438,7 +441,9 @@ export class Compass3D {
     const H = this.h;
     // held up below the eye, face tipped towards it; it rises from below as it comes up
     const r = this.heldRoot;
-    r.position.set(0.016, -0.058 - (1 - k) * 0.2, -0.27);
+    // (further off on a tall screen, so it fits across)
+    const P = this.g.pipeline, far = Math.max(1, 1.15 / Math.max(0.3, P.w / P.h)) ** 0.85;
+    r.position.set(0.016 / far, -0.058 - (1 - k) * 0.2, -0.27 * far);
     r.rotation.set(1.02 - (1 - k) * 0.6, -0.08, 0.04 + Math.sin(this.time * 1.3) * 0.006);
     r.position.y += Math.sin(this.time * 1.9) * 0.0012;
     this.place(H, h);

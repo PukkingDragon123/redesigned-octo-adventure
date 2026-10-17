@@ -20,6 +20,7 @@
 .bk-r .bk-c { left: calc(var(--u) * 6); right: calc(var(--u) * 9); }
 .bk-in { position: relative; min-height: 100%; isolation: isolate; }
 .single .bk-in { min-height: 0; }
+.single .bk-c { bottom: calc(var(--u) * 30); }
 .single .bk-in + .bk-in { margin-top: calc(var(--u) * 6); padding-top: calc(var(--u) * 6); background: linear-gradient(90deg, rgba(90, 58, 34, 0.4) 0 calc(var(--u) * 3), transparent calc(var(--u) * 3)) 0 0 / calc(var(--u) * 6) var(--u) repeat-x; }
 
 /* headings in red ink with a pencil note under them */

@@ -105,7 +105,7 @@ export class BookUI {
     const cam = new THREE.PerspectiveCamera(30, 1, 0.01, 3);
     cam.position.set(0, 0.0, 0.33);
     cam.lookAt(0, -0.006, 0);
-    const hit = (this.iconEl = el('button', 'jr-hit'));
+    const hit = (this.iconEl = el('button', 'jr-hit hide'));
     hit.setAttribute('aria-label', "Hank's journal");
     hit.addEventListener('pointerdown', (e) => {
       e.stopPropagation();
@@ -172,7 +172,9 @@ export class BookUI {
     this.xBtn.style.display = this.opts.noClose ? 'none' : '';
     this.fill(id);
     this.b3.show();
-    if (this.opts.fp) this.view.fp.enter({ pitch: -0.14, fov: 56 });
+    // into his skull when the camera is following him; over a cutscene's shot (the
+    // breakfast table, the receipt at bedtime) the book just comes up in front of it
+    if (this.opts.fp && this.g.chase?.mode === 'chase') this.view.fp.enter({ pitch: -0.14, fov: 56 });
     this.title = document.getElementById('title3d');
     if (this.title) this.title.style.visibility = 'hidden';
     this.g.sound?.play('book_open');
@@ -271,7 +273,7 @@ export class BookUI {
     if (single) {
       pageW = Math.min(cols - 12, 260);
       pageW = Math.floor(pageW - tabsW(pageW * 1.4) - 4);
-      pageH = Math.min(rows - 40, Math.round(pageW * 1.5));
+      pageH = Math.min(rows - 40, Math.round(pageW * 1.75));
     }
     pageW = Math.max(60, pageW);
     pageH = Math.max(80, pageH);
@@ -293,8 +295,10 @@ export class BookUI {
   }
 
   // ---------------------------------------------------------------- per frame
-  update(dt) {
+  update() {
     if (this.isOpen) this.layout();
+    const ic = this.iconOn();
+    if (this.iconEl.classList.contains('hide') === ic) this.iconEl.classList.toggle('hide', !ic);
     // keyboard / pad: the bookmarks
     if (this.isOpen && this.ui.menuStack[this.ui.menuStack.length - 1] === this.m && this.tabs.length > 1 && !this.b3.flipping) {
       const i = this.tabs.indexOf(this.cur);

@@ -587,7 +587,7 @@ export class Menus {
     for (const k of SHOP) {
       const info = FOOD_INFO[k] || { label: k, price: 3 };
       const have = (st.pantry || {})[k] || 0;
-      const e = el('button', 'shoprow pick', `<img class="k-food" src="${foodIconURL(k)}"><span class="nm">${esc(SHOP_NAME[k] || info.label)}</span><span class="have">${have ? `${have} at home` : 'none home'}</span><span class="pr">$${info.price}</span><span class="k-count qty"></span>`);
+      const e = el('button', 'shoprow pick', `<img class="k-food" src="${foodIconURL(k)}"><span class="nm">${esc(SHOP_NAME[k] || info.label)}</span><span class="have">${have ? `${have} left` : 'none'}</span><span class="pr">$${info.price}</span><span class="k-count qty"></span>`);
       e.sync = () => { const q = e.querySelector('.qty'); q.textContent = cart[k] ? `${cart[k]}` : ''; q.style.visibility = cart[k] ? '' : 'hidden'; e.classList.toggle('taken', !!cart[k]); };
       e.addEventListener('click', () => {
         if (total() + info.price > st.money) { g.sound.play('ui_error'); ui.pop("That's a little more than you've got, Hank!", { who: 'mo', name: 'Mo', expr: 'sheepish', key: 'shop' }); return; }
