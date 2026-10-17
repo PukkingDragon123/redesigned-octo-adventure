@@ -151,8 +151,10 @@ vec3 pointLightsAt(vec3 p, vec3 n, float wrap) {
     vec3 d = uPL[i].xyz - p;
     float r = uPL[i].w;
     float dist = length(d);
-    float att = clamp(1.0 - dist / r, 0.0, 1.0);
-    att = att * att;
+    // windowed inverse square: a hot pool under the lamp that fades softly to nothing at r
+    float q = dist / r;
+    float win = clamp(1.0 - q * q * q * q, 0.0, 1.0);
+    float att = win * win * 1.6 / (1.0 + dist * dist * 0.25);
     float ndl = mix(max(dot(n, d / max(dist, 1e-3)), 0.0), 1.0, wrap);
     acc += uPLc[i] * att * ndl;
   }

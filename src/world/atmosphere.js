@@ -58,6 +58,7 @@ export class Atmosphere {
     this.weatherTarget = 'clear';
     this.snowCover = 0;
     this.cold = 0;
+    this.indoors = false; // (game.js) under a roof the night grade mostly stands aside
     this.sunDir = new THREE.Vector3();
     this.moonDir = new THREE.Vector3();
   }
@@ -131,6 +132,14 @@ export class Atmosphere {
     G.uSkyAmb.value.multiplyScalar(1.5);
     lerpKey(h, 'gnd', G.uGroundAmb.value);
     G.uGroundAmb.value.multiplyScalar(1.6);
+    // bounce: sunlit ground (warm autumn grass, sand, leaf litter) throws its colour back up
+    // into the undersides and the shaded walls; strongest with a high, clear sun
+    if (!useMoon) {
+      const bounce = 0.13 * clamp(this.sunDir.y * 2.2, 0, 1) * W.sun;
+      G.uGroundAmb.value.r += G.uSunColor.value.r * bounce * 0.95;
+      G.uGroundAmb.value.g += G.uSunColor.value.g * bounce * 0.72;
+      G.uGroundAmb.value.b += G.uSunColor.value.b * bounce * 0.45;
+    }
     G.uWet.value = W.wet;
     G.uSnow.value = this.snowCover;
     G.uWindStrength.value = W.wind;
@@ -141,9 +150,16 @@ export class Atmosphere {
     P.uFogDensity.value = 0.0016 * W.fog;
     P.uFogMax.value = clamp(0.82 + (W.fog - 1) * 0.06, 0.5, 0.97);
     P.uRays.value = (1 - grey) * (1 - night);
-    P.uBloom.value = lerp(0.55, 0.3, grey);
+    P.uBloom.value = lerp(0.55, 0.3, grey) + 0.2 * night;
     P.uCold.value = this.cold;
-    P.uSaturation.value = lerp(1.14, 0.92, grey);
+    P.uNightGrade.value = night * (this.indoors ? 0.2 : 1);
+    P.uSaturation.value = lerp(1.24, 0.95, grey);
+    // the eye adapts: a high sun is pulled down a little so whites keep their shape
+    const sy = this.sunDir.y;
+    P.uDayExp.value = (1 - 0.06 * smoothstep(0.25, 0.7, sy) * (1 - grey * 0.6));
+    // the autumn grade leans hardest into golden hour, least in grey weather
+    const golden = smoothstep(0.42, 0.12, sy) * (1 - night);
+    P.uWarm.value = (0.65 + 0.5 * golden) * (1 - grey * 0.7);
     // light shadows follow the light direction
     if (this.sun) this.sun.intensity = 1;
   }

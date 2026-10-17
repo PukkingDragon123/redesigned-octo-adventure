@@ -132,6 +132,7 @@ uniform float uDbg;
 uniform vec3 uFoam;
 uniform vec3 uHorizon;
 uniform vec3 uZenith;
+uniform vec3 uSunGlow;
 uniform float uReflOn;
 uniform vec2 uWind;
 uniform float uRain;
@@ -192,7 +193,14 @@ void main() {
   vec2 rdist = vec2(n.x * 0.6 + r3 * 0.35, n.z * 0.4) * 0.03;
   rc.xy += rdist * rc.w;
   if (uReflOn > 0.5) refl = texture2DProj(tRefl, rc).rgb;
-  else refl = mix(uHorizon, uZenith, 0.4);
+  else {
+    // no mirror pass (phones, lower settings): reflect the sky itself, its gradient, the
+    // sunset glow towards the sun and the zenith's colour overhead, so the sea still holds the sky
+    vec3 rr = reflect(-v, n);
+    float ry = clamp(rr.y, 0.0, 1.0);
+    refl = mix(uHorizon, uZenith, pow(ry, 0.5));
+    refl += uSunGlow * (pow(max(dot(rr, uSunDir), 0.0), 6.0) * 0.45 + pow(max(dot(rr, uSunDir), 0.0), 40.0) * 0.8);
+  }
   refl *= mix(mix(vec3(0.5, 0.62, 0.56), vec3(0.5, 0.66, 0.72), vExpo), vec3(0.8, 0.86, 0.9), fres);
   vec3 col = mix(body, refl, clamp(fres * 0.8 + 0.12, 0.0, 0.7));
 
@@ -370,6 +378,7 @@ export function createWater(pipeline, terrain) {
     uFoam: { value: new THREE.Color(0xeef4ec) },
     uHorizon: SKY.uHorizon,
     uZenith: SKY.uZenith,
+    uSunGlow: SKY.uSunGlow,
     uReflOn: { value: 1 },
     uRain: { value: 0 },
     uGridCenter: { value: new THREE.Vector2() },
