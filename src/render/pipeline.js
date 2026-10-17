@@ -447,7 +447,7 @@ export class Pipeline {
       uProj: { value: new THREE.Vector4(1, 1, 0.1, 2400) },
       uGrain: { value: 0 },
       uWarm: { value: 1 },
-      uNightGrade: G.uNight,
+      uNightGrade: { value: 0 }, // how far into the moon-blue night grade (atmosphere.js)
       uVigTint: { value: new THREE.Color(0.74, 0.66, 0.74) },
       tColor: { value: null },
       tDepth: { value: null },

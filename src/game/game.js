@@ -935,6 +935,7 @@ export class Game {
   }
 
   updateLamp() {
+    this.world.atmosphere.indoors = !!this.interior?.indoors;
     const night = G.uNight.value > 0.25;
     this.bikeModel.setLamp?.(night);
     const on = !!this.bike.stats.light && night && this.bikeModel.root.visible;
