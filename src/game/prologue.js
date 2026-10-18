@@ -498,9 +498,9 @@ function funeral(story) {
       const cw = V(crow.x, crow.y, crow.z);
       const d = V(cw.x - pc.x, 0, cw.z - pc.z).normalize();
       const sd = V(-d.z, 0, d.x);
-      const cp = cw.clone().addScaledVector(d, 1.15).addScaledVector(sd, 0.42);
-      cp.y += 0.32;
-      await S.cam(cp, V(pc.x, top + 0.7, pc.z), 0, 30, cw.clone().add(V(0, 0.2, 0)), { creep: 0.05 });
+      const cp = cw.clone().addScaledVector(d, 1.0).addScaledVector(sd, 0.3);
+      cp.y += 0.55;
+      await S.cam(cp, V(pc.x, top + 0.7, pc.z), 0, 34, cw.clone().add(V(0, 0.2, 0)), { creep: 0.05 });
       await S.wait(0.9);
       caw(0.7);
       await S.wait(1.7);
@@ -517,8 +517,8 @@ function funeral(story) {
     const lowering = S.anim(8.5, (k) => (coffin.position.y = cy0 + (cy1 - cy0) * smooth(k)));
     await S.wait(4.6);
     // looking straight down into the grave as it settles
-    await S.cam(lowerCam(1.75, 0.55, 2.4), lowerCam(-0.1, 0.3, -1.5), 0, 44, coffin.position, { creep: 0 });
-    S.cam(lowerCam(1.5, 0.4, 2.1), lowerCam(-0.1, 0.3, -1.55), 5, 42, coffin.position, { ease: 'glide' });
+    await S.cam(lowerCam(0.15, -1.95, 1.9), lowerCam(0, 0.55, -1.3), 0, 44, coffin.position, { creep: 0 });
+    S.cam(lowerCam(0.12, -1.75, 1.75), lowerCam(0, 0.55, -1.45), 5, 42, coffin.position, { ease: 'glide' });
     await lowering;
     S.sfx('coffin_thud', { volume: 0.3 });
     await S.wait(0.8);
@@ -537,7 +537,7 @@ function funeral(story) {
       if (q) q.groundHit = false;
     }
     await S.wait(0.9);
-    await S.cam(lowerCam(1.5, 0.4, 2.1), lowerCam(-0.1, 0.35, -1.5), 0, 42, coffin.position, { creep: 0.04 });
+    await S.cam(lowerCam(0.12, -1.75, 1.75), lowerCam(0, 0.55, -1.45), 0, 42, coffin.position, { creep: 0.04 });
     await S.wait(3.4);
     await S.fade(1, 1.8);
 
@@ -559,13 +559,14 @@ function funeral(story) {
     N.play('mourn', 'sad');
     // 10. one by one they go home; Nana stays
     const EXIT = [[-3.4, -1.2], [-7.4, -5.5], [-10.2, -7.4], [-15.0, -9.4]];
+    const FAR = [[0.9, 3.8], [-2.4, 3.6], [-3.6, 1.0]]; // round the back, for those on the far side
     const leave = (a, via = []) => {
       const pts = [...via, ...EXIT].map(([lx, lz]) => { const p = at(lx, lz); return [p.x, p.z]; });
       const umb = a.anim === 'brolly';
       a.walkTo(pts, 1.1, umb ? 'walk+brolly' : 'walk').then(() => (a.visible = false));
       a.setExpr('sad');
     };
-    await S.cam(L3(-6.2, -2.6, 1.5), L3(-0.6, 0.8, 0.9), 0, 44, N, { creep: 0.03 });
+    await S.cam(L3(-6.9, -1.7, 1.6), L3(-0.6, 0.8, 0.9), 0, 44, N, { creep: 0.03 });
     S.fade(0, 1.6);
     await S.wait(1.2);
     leave(who.ollie);
@@ -580,9 +581,9 @@ function funeral(story) {
     await S.wait(0.4);
     leave(who.pip);
     await S.wait(1.2);
-    leave(who.birdie, [[0.6, 3.6]]);
+    leave(who.birdie, FAR);
     await S.wait(1.0);
-    leave(who.ingrid, [[0.6, 3.6]]);
+    leave(who.ingrid, FAR);
     await S.wait(1.4);
     // Lou and Gus last, with Marie
     turnTo(Lou, -0.1, 2.05);
@@ -597,14 +598,15 @@ function funeral(story) {
     await S.wait(0.6);
     leave(Lou);
     await S.wait(0.6);
-    leave(who.marie, [[0.6, 3.6]]);
+    leave(who.marie, FAR);
     leave(Pa, [[1.0, -2.3], [-1.6, -2.2]]);
     // Nana watches them go
     await S.ots(N, Lou, { side: 1, back: 1.0, up: 0.35, fov: 44 });
-    await S.wait(5);
+    await S.wait(7);
     // Nana alone, small, as the others reach the gate
     await S.cam(L3(4.6, -1.6, 2.6), L3(-1.2, 0.6, 0.7), 0, 42, N, { creep: 0.03 });
     turnTo(N, 0, 0);
+    for (const a of Object.values(who)) if (a !== N && a.pos.distanceTo(N.pos) < 10) a.visible = false;
     A.setWeather('clear');
     await S.wait(5);
 
