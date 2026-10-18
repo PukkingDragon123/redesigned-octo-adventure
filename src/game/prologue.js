@@ -428,7 +428,7 @@ function funeral(story) {
     // steam off a mug of cocoa (held, or set down)
     const steam = (p, k = 1) => g.effects.ps.spawn({
       x: p.x + (Math.random() - 0.5) * 0.03, y: p.y, z: p.z + (Math.random() - 0.5) * 0.03, vy: 0.2 + Math.random() * 0.12,
-      life: 1.6 + Math.random() * 0.8, size: 0.06 * k, size1: 0.2 * k, sprite: P.steam, color: [1, 1, 1], drag: 0.5, wind: 0.25, alpha: 0.5, fadeIn: 0.3, flutter: 0.12,
+      life: 1.8 + Math.random() * 0.9, size: 0.1 * k, size1: 0.34 * k, sprite: P.steam, color: [1, 0.98, 0.95], drag: 0.5, wind: 0.25, alpha: 0.6, fadeIn: 0.3, flutter: 0.12,
     });
     // the ropes follow the hands and the coffin
     let ropesOn = false;
@@ -628,13 +628,14 @@ function funeral(story) {
     const walk = N.walkTo([at(-1.05, 1.45), at(...kneelAt)].map((p) => [p.x, p.z]), 0.7, 'walk+cradle');
     await S.cam(L3(1.6, -0.2, 1.3), L3(-0.8, 0.4, 0.6), 0, 42, N, { creep: 0.02 });
     await Promise.race([walk, S.wait(9)]);
+    if (N.path) { const p = at(...kneelAt); N.path = null; N.pos.set(p.x, gy(p.x, p.z), p.z); }
     turnTo(N, -0.4, -0.78);
     N.play('kneelPlace', 'sad');
     const MUG = FOOD.cocoaClassic(), MS = 1.25;
     const mugAt = at(-0.52, -0.76);
     const mugY = gy(mugAt.x, mugAt.z) - 0.005;
     // low by the headstone, the mug about to come into frame
-    await S.cam(XZ(at(-0.2, 0.15), moundTop(-0.2, 0.15) + 0.28), V(mugAt.x, mugY + 0.12, mugAt.z), 0, 40, V(mugAt.x, mugY + 0.1, mugAt.z), { creep: 0.04 });
+    await S.cam(XZ(at(0.15, 0.75), moundTop(0.15, 0.75) + 0.55), V(mugAt.x - 0.0, mugY + 0.25, mugAt.z), 0, 44, V(mugAt.x, mugY + 0.1, mugAt.z), { creep: 0.04 });
     await S.wait(1.2);
     const from = N.held.R ? N.held.R.getWorldPosition(V(0, 0, 0)) : V(mugAt.x, mugY + 0.3, mugAt.z);
     N.play('kneel', 'sad');
@@ -649,8 +650,9 @@ function funeral(story) {
     await S.wait(1.6);
     await S.say('grandma', 'There. Still hot, just how you like it.', { actor: N, expr: 'happy' });
     N.play('mourn', 'sad');
+    turnTo(N, 0.2, 0.4);
     await S.wait(1.0);
-    await S.faceShot(N, { dist: 1.9, side: 0.45, dur: 0, fov: 36, creep: 0.06 });
+    await S.faceShot(N, { dist: 1.9, side: 0.2, dur: 0, fov: 36, creep: 0.06 });
     await S.say('grandma', 'Goodnight, Hank.', { actor: N, expr: 'sad', speed: 18 });
     // she goes, into the low sun
     N.walkTo([at(-1.1, -1.6), ...EXIT.map(([lx, lz]) => at(lx, lz))].map((p) => [p.x, p.z]), 0.75, 'walk').then(() => (N.visible = false));
@@ -662,7 +664,7 @@ function funeral(story) {
       const cw = V(crow.x, crow.y, crow.z);
       const d = V(pc.x - cw.x, 0, pc.z - cw.z).normalize();
       const sd = V(-d.z, 0, d.x);
-      await S.cam(cw.clone().addScaledVector(d, 1.5).addScaledVector(sd, -0.5).add(V(0, -1.25, 0)), cw.clone().add(V(0, 0.2, 0)), 0, 34, cw, { creep: 0.04 });
+      await S.cam(cw.clone().addScaledVector(d, 1.25).addScaledVector(sd, -0.75).add(V(0, -0.45, 0)), cw.clone().add(V(0, 0.18, 0)), 0, 32, cw, { creep: 0.04 });
       crow.yaw = Math.atan2(d.x, d.z) + 0.6;
       await S.wait(1.0);
       crow.yaw = Math.atan2(d.x, d.z);
