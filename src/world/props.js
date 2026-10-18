@@ -585,6 +585,9 @@ function wilds(ctx, B) {
 }
 
 export function buildProps(ctx, A) {
+  // with the voxel town on, these only lay down physics, lights and decor spots: the voxel
+  // structures (structures.js) and props stand where their smooth geometry would have been
+  if (DECOR.on) { const scrap = new Builder(); A = { misc: scrap, village: scrap, grave: scrap, home: scrap }; }
   coveredBridge(ctx, A.misc);
   boardwalk(ctx, A.village);
   ramps(ctx, A.misc);

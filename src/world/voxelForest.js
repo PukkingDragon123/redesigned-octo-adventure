@@ -29,8 +29,8 @@ export const SHAKES = 16;
 // distance (m, times lodScale) where each LOD ends; past the last one the thing is gone.
 // Roughly where a voxel shrinks to ~5 px on a 1080p screen.
 const POLICY = {
-  tree: { d: [24, 55, 130, 320, 900], cast: [1, 1, 0, 0, 0], far: 3 },
-  dead: { d: [24, 55, 130, 320, 900], cast: [1, 1, 0, 0, 0], far: 3 },
+  tree: { d: [24, 52, 120, 270, 900], cast: [1, 1, 0, 0, 0], far: 3 },
+  dead: { d: [24, 52, 120, 270, 900], cast: [1, 1, 0, 0, 0], far: 3 },
   bush: { d: [16, 34, 80], cast: [1, 1, 0], far: 6 },
   sapling: { d: [12, 28, 60], cast: [1, 0, 0], far: 6 },
   fern: { d: [12, 26, 50], cast: [1, 0, 0], far: 6 },

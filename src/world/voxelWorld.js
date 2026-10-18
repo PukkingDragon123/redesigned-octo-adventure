@@ -18,6 +18,7 @@ import { dressContest } from './contest.js';
 import { buildingSpecPure } from './foundations.js';
 import { Fences3D } from './fences3d.js';
 import { Doors } from './doors.js';
+import { voxelStructures } from './structures.js';
 
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _s = new THREE.Vector3(1, 1, 1), _p = new THREE.Vector3();
 const UP = new THREE.Vector3(0, 1, 0);
@@ -463,6 +464,8 @@ export class VoxelWorld {
     });
     // the rest of the remade map: streets, green, harbour, farm, beach, campground...
     dressPlaces(this, physprops);
+    // the boardwalk, docks, cemetery fence, homestead and the rest that props.js only lays physics for
+    voxelStructures(this);
     // the pumpkin carving contest at the west end of Main Street
     dressContest(this, physprops);
     // and the 2D street clutter (bins, stalls...), fitted around everything above
