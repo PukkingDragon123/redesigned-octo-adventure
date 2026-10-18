@@ -94,7 +94,7 @@
 
 /* ---------------------------------------------------------------- less on the screen */
 /* the touch controls stay, but see-through until a thumb is on them (opacity steps, no fades) */
-#touch .twheel, #touch .tbtn, #touch .t-talk { opacity: 0.7; }
+#touch .twheel, #touch .tbtn { opacity: 0.7; }
 #touch .twheel:active, #touch .tbtn.down, #touch.foot .twheel { opacity: 1; }
 #touch .tbtn.tsq { display: none; }
 .crank-hud { opacity: 0.7; }
