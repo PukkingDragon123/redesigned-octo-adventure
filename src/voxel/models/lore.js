@@ -327,11 +327,12 @@ export function gravePit({ w = 20, l = 46, d = 34, seed = 5 } = {}) {
     if (x > x0 && x < x1 && z > z0 && z < z1) continue;
     const ex = Math.max(x0 - x, x - x1, 0), ez = Math.max(z0 - z, z - z1, 0);
     const out = Math.hypot(ex, ez);
-    const n = vhash(x, 7, z, seed);
+    const n = vhash(x >> 1, 7, z >> 1, seed); // (in 2x2 clumps: blocky turned soil)
     if (out > M - 0.5 - n * 1.5) continue;
     const c = n < 0.3 ? 0x3e2a1c : n < 0.7 ? 0x4a3222 : 0x56402a;
     v.set(x, d, z, c);
-    if (out < 1.6 + n * 1.2) v.set(x, d + 1, z, tone(c, 0.04));
+    if (out < 1.6 + n * 1.6) v.set(x, d + 1, z, tone(c, 0.04));
+    if (out < 1 && n > 0.75) v.set(x, d + 2, z, tone(c, 0.08));
   }
   return { vox: v, size: 0.05, origin: [x0 + 1 + w / 2, d + 1, z0 + 1 + l / 2] };
 }
@@ -354,6 +355,47 @@ export function toque({ color = 0x2f5e3a, band = 0xe8b23a, pom = 0xe8b23a } = {}
   // the pompom
   v.ellipsoid(c + 1.5, 10, c - 1, 2.3, 2.3, 2.3, (x, y, z) => ((x + y + z) % 2 ? pom : tone(pom, -0.1)));
   return { vox: v, size: 0.05, origin: [c + 0.5, 0, c + 0.5] };
+}
+
+// The heap of earth dug out of Hank's grave, beside it: chunky 10 cm blocks stacked in
+// stepped terraces (damp dark earth below, lighter dry crumbs on the top steps, a few
+// stones and root ends poking out). Origin: the middle of its footprint on the ground.
+export const PILE_SIZE = 0.1;
+export function dirtPile({ w = 14, l = 25, h = 6, seed = 7 } = {}) {
+  const v = new Vox(w, h + 1, l);
+  const DAMP = [0x3a2819, 0x42301e, 0x4a3422], MID = [0x5a3e28, 0x624430], DRY = [0x7a5a3c, 0x86664a, 0x92724e];
+  for (let x = 0; x < w; x++) for (let z = 0; z < l; z++) {
+    const dx = (x + 0.5 - w / 2) / (w / 2), dz = (z + 0.5 - l / 2) / (l / 2);
+    const r = dx * dx + dz * dz + (vhash(x, 0, z, seed) - 0.5) * 0.35;
+    if (r > 1) continue;
+    // terraces: whole blocks, a step every few cells, ragged at the edges
+    const top = Math.max(1, Math.min(h, Math.floor((1 - r) * (h + 0.6) + vhash(x, 1, z, seed) * 0.8)));
+    for (let y = 0; y < top; y++) {
+      const n = vhash(x, y, z, seed + 1);
+      let c;
+      if (y === top - 1) c = (y >= h - 2 ? DRY : MID)[Math.floor(n * 3) % (y >= h - 2 ? 3 : 2)];
+      else c = DAMP[Math.floor(n * 3)];
+      if (n < 0.05) c = 0x8a8680; // a stone
+      else if (n > 0.965) c = 0x2e2016; // a root end
+      v.set(x, y, z, c);
+    }
+    // loose crumbs: the odd single block lying on a step
+    if (vhash(x, 9, z, seed) < 0.05 && top < h) v.set(x, top, z, DRY[Math.floor(vhash(x, 8, z, seed) * 3)]);
+  }
+  return { vox: v, size: PILE_SIZE, origin: [w / 2, 0, l / 2] };
+}
+
+// the gravedigger's spade, driven into the heap at a lean (origin: where the blade meets
+// the dirt, so the blade's lower half sits buried)
+export function spade() {
+  const v = new Vox(6, 30, 10);
+  const BL = 0x8a8a92, BL_D = 0x6a6a72;
+  // the blade, tilted back with the handle
+  for (let y = 0; y < 8; y++) for (let x = 1; x <= 4; x++) v.set(x, y, 1 + Math.floor(y / 4), y === 7 ? BL_D : x === 1 || x === 4 ? BL_D : BL);
+  // ash handle leaning back, then the D-grip
+  for (let y = 8; y < 27; y++) { const z = 2 + Math.floor((y - 8) / 3); v.set(2, y, z, y % 5 ? WOOD : WOOD_D); v.set(3, y, z, WOOD); }
+  v.fill(1, 27, 8, 4, 27, 8, WOOD_D); v.set(1, 28, 8, WOOD_D); v.set(4, 28, 8, WOOD_D); v.fill(1, 29, 8, 4, 29, 8, WOOD_L);
+  return { vox: v, size: 0.05, origin: [3, 4, 2] };
 }
 
 // a length of hemp rope one metre long along +z (stretched to fit by the scene)
@@ -382,6 +424,8 @@ export function stake() {
 export const PREVIEW = {
   gravePit: () => gravePit({ w: 12, l: 20, d: 10 }),
   toque: () => toque(),
+  dirtPile: () => dirtPile(),
+  spade: () => spade(),
   plank: () => plank(),
   leafPile: () => leafPile(),
   axe: () => axe(),

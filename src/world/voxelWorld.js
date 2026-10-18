@@ -8,6 +8,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import * as L from './layout.js';
 import { buildVoxelBuilding, lowDetail } from '../voxel/models/buildings.js';
 import * as PR from '../voxel/models/props.js';
+import { dirtPile, spade } from '../voxel/models/lore.js';
 import { meshVox } from '../voxel/mesh.js';
 import { voxMesh, sharedVoxelMaterial, createFlatMaterial } from '../render/voxelMaterial.js';
 import { PhysProps } from './physprops.js';
@@ -362,6 +363,14 @@ export class VoxelWorld {
         case 'rocker':
           this.addStatic(this.model('rocker', () => PR.rockingChair({ blanket: true })), d.x, d.y, d.z, d.yaw ?? 0);
           break;
+        case 'gravePile': {
+          // the earth dug out of Hank's grave, the spade driven in at its head end
+          const yw = d.yaw ?? 0, c = Math.cos(yw), sn = Math.sin(yw);
+          this.addStatic(this.model('gravePile', () => dirtPile()), d.x, d.y, d.z, yw);
+          const sx = -0.05, sz = -0.55; // pile-local spot, on its second step
+          this.addStatic(this.model('graveSpade', () => spade()), d.x + sx * c + sz * sn, d.y + 0.32, d.z - sx * sn + sz * c, yw + 0.5);
+          break;
+        }
         case 'tomb': {
           const variants = ['rounded', 'cross', 'obelisk', 'cracked', 'leaning', 'mossy', 'cute'];
           const v = variants[d.v ?? seed % variants.length];

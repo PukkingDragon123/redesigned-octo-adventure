@@ -392,9 +392,12 @@ function graveyard(ctx, B) {
   const y = terrain.heightAt(hg.x, hg.z);
   const M = buildingMatrix(hg.x, y, hg.z, Math.PI * 0.75);
   // (no open pit: a flat black box read as a hole in the world; the scenes lay a voxel mound here)
-  B.geom(new THREE.SphereGeometry(0.9, 8, 5, 0, Math.PI * 2, 0, Math.PI / 2), [1.4, -0.05, 0.1], null, [0.8, 0.55, 1.4], { tile: 'leaves', keepUV: true, color: 0x9a7a5a }, M);
-  B.tube([1.4, 0.2, -0.4], [1.6, 1.4, -0.5], 0.03, 0.03, { color: 0x8a5a30 }, 4, M);
-  B.box([1.62, 0.15, -0.38], [0.24, 0.32, 0.03], { color: 0x8a8a92 }, [0.2, 0, 0], M);
+  // the heap of dug earth beside it, a blocky voxel pile with the spade stuck in it
+  const pile = toWorld(M, 1.4, 0, 0.1);
+  if (!(DECOR.on && decor('gravePile', pile.x, terrain.heightAt(pile.x, pile.z) - 0.02, pile.z, { yaw: Math.PI * 0.75 }))) {
+    for (const [w, h, l] of [[1.3, 0.2, 2.3], [1.0, 0.4, 1.8], [0.6, 0.55, 1.1]]) B.box([1.4, h / 2 - 0.02, 0.1], [w, h, l], { color: 0x5a3e28 }, null, M);
+  }
+  ctx.physics.addCircle({ x: pile.x, z: pile.z, r: 0.75, y0: y - 1, y1: y + 0.5, kind: 'grave' });
   B.box([0, 0.55, -1.25], [0.85, 1.1, 0.2], { tile: 'gravestone', keepUV: true, color: 0xd0d0d4 }, [0.08, 0, 0], M);
   ctx.physics.addCircle({ x: toWorld(M, 0, 0, -1.25).x, z: toWorld(M, 0, 0, -1.25).z, r: 0.5, y0: y - 1, y1: y + 1.3, kind: 'grave' });
   // gnarled dead tree with crows (kept ~9 m from Hank's grave: the funeral is staged there)
