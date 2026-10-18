@@ -1,7 +1,7 @@
 // Lit material for voxel meshes (characters, props, buildings, trees).
 // Vertex colour carries baked AO in rgb and an emissive amount in alpha.
 import * as THREE from 'three';
-import { worldUniforms, LIGHT_PARS_VERT, SHADOW_VERT, LIGHT_PARS_FRAG, NOISE_GLSL, SEE_GLSL } from './shaderlib.js';
+import { worldUniforms, LIGHT_PARS_VERT, SHADOW_VERT, LIGHT_PARS_FRAG, NOISE_GLSL, SEE_GLSL, VOXEL_LOOK_GLSL } from './shaderlib.js';
 
 // Posed creatures (render/voxelRig.js): every vertex names its part ("bone"); each instance
 // row of uBones holds a fade texel, then one 3x4 world matrix (three texels) per bone.
@@ -29,7 +29,10 @@ const VERT = /* glsl */ `
 ${LIGHT_PARS_VERT}
 attribute vec4 color4;
 attribute vec4 detail;
+attribute vec4 qbox;
 varying vec3 vDetail;
+varying vec4 vQBox;
+varying vec2 vEdge; // face axis, convex-edge flags
 uniform float uSway;      // wind sway amount per metre of height (trees)
 uniform float uSwayY0;    // height (model space) where sway starts
 uniform float uWobble;    // jelly wobble (squash bounce on props)
@@ -40,6 +43,8 @@ ${RIG_PARS}
 void main() {
   vColor = color4;
   vDetail = detail.xyz;
+  vQBox = qbox;
+  vEdge = vec2(mod(detail.w, 4.0), floor(detail.w / 4.0 + 0.001));
   vec3 p = position;
   mat4 M = modelMatrix;
   #ifdef USE_INSTANCING
@@ -68,6 +73,7 @@ const FRAG = /* glsl */ `
 ${LIGHT_PARS_FRAG}
 ${NOISE_GLSL}
 ${SEE_GLSL}
+${VOXEL_LOOK_GLSL}
 uniform vec3 uTint;
 uniform float uFade;
 uniform float uFlash;
@@ -78,6 +84,8 @@ varying vec4 vColor;
 varying vec3 vWorldPos;
 varying vec3 vNormal;
 varying vec3 vDetail;
+varying vec4 vQBox;
+varying vec2 vEdge;
 #ifdef VOX_RIG
 varying float vRigFade;
 #endif
@@ -109,6 +117,11 @@ void main() {
   float seeR = seeThrough(vWorldPos);
   vec3 albedo = vColor.rgb * uTint * surfaceDetail();
   vec3 n = normalize(vNormal);
+  float em = vColor.a;
+  if (em < 0.25) {
+    albedo *= voxJitter(vDetail.xy, vEdge.x);
+    albedo = bevelTone(albedo, voxBevel(vDetail.xy, vQBox, vEdge.y, n));
+  }
   // snow settles on upward faces
   if (uSnow > 0.0 && n.y > 0.6) {
     float h = hash12(floor(vWorldPos.xz * 8.0));
@@ -116,18 +129,13 @@ void main() {
   }
   albedo *= mix(1.0, 0.75, uWet * step(0.5, n.y));
   float shadow = getShadowMask();
-  float ndl = dot(n, uSunDir);
-  // soft clay light: wrapped diffuse with a gentle step, so voxel faces read clearly
-  float diff = clamp(ndl * 0.75 + 0.25, 0.0, 1.0);
-  diff = mix(diff, smoothstep(0.15, 0.85, diff), 0.35) * shadow;
-  vec3 light = hemiAmbient(n) * 1.05 + uSunColor * diff * 0.95 + pointLightsAt(vWorldPos, n, 0.35);
-  vec3 col = albedo * light;
+  // the pixel-art light ramp (shaderlib VOXEL_LOOK_GLSL)
+  vec3 col = voxLight(albedo, n, vWorldPos, shadow, 0.25);
   // back-lit rim from the sun
   vec3 v = normalize(uCamPos - vWorldPos);
   float rim = pow(1.0 - max(dot(n, v), 0.0), 3.0) * max(dot(-v, uSunDir), 0.0) * shadow;
   // (only on upright faces: soil, mounds and floors stay matte)
   col += albedo * uSunColor * rim * 0.12 * (1.0 - smoothstep(0.3, 0.7, n.y));
-  float em = vColor.a;
   if (em > 0.75) col = mix(col, albedo * (1.6 + uNight * 1.6), 0.85);
   else if (em > 0.25) {
     // window glass: dark sheen by day, warm lamp light at night (a gentle drift of tint from window

@@ -113,7 +113,7 @@ function mergeParts(bones, size, jitter, seed, slot) {
   });
   let nv = 0, ni = 0, faces = 0;
   for (const { g } of geos) { nv += g.attributes.position.count; ni += g.index.count; faces += g.userData.faces; }
-  const pos = new Float32Array(nv * 3), nor = new Float32Array(nv * 3), col = new Float32Array(nv * 4), det = new Float32Array(nv * 4);
+  const pos = new Float32Array(nv * 3), nor = new Float32Array(nv * 3), col = new Float32Array(nv * 4), det = new Float32Array(nv * 4), qb = new Float32Array(nv * 4);
   const bone = new Uint8Array(nv);
   const idx = nv > 65535 ? new Uint32Array(ni) : new Uint16Array(ni);
   let v0 = 0, i0 = 0;
@@ -123,6 +123,7 @@ function mergeParts(bones, size, jitter, seed, slot) {
     nor.set(g.attributes.normal.array, v0 * 3);
     col.set(g.attributes.color4.array, v0 * 4);
     det.set(g.attributes.detail.array, v0 * 4);
+    if (g.attributes.qbox) qb.set(g.attributes.qbox.array, v0 * 4);
     bone.fill(b, v0, v0 + n);
     const src = g.index.array;
     for (let k = 0; k < src.length; k++) idx[i0 + k] = src[k] + v0;
@@ -135,6 +136,7 @@ function mergeParts(bones, size, jitter, seed, slot) {
   geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
   geo.setAttribute('color4', new THREE.BufferAttribute(col, 4));
   geo.setAttribute('detail', new THREE.BufferAttribute(det, 4));
+  geo.setAttribute('qbox', new THREE.BufferAttribute(qb, 4));
   geo.setAttribute('bone', new THREE.BufferAttribute(bone, 1));
   geo.setIndex(new THREE.BufferAttribute(idx, 1));
   geo.userData.faces = faces;

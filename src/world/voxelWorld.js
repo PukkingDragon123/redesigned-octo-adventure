@@ -539,6 +539,7 @@ function geometryOf(a) {
   geo.setAttribute('normal', new THREE.BufferAttribute(a.nor, 3, !(a.nor instanceof Float32Array)));
   geo.setAttribute('color4', new THREE.BufferAttribute(a.col, 4, !(a.col instanceof Float32Array)));
   if (a.det) geo.setAttribute('detail', new THREE.BufferAttribute(a.det, 4));
+  if (a.qb) geo.setAttribute('qbox', new THREE.BufferAttribute(a.qb, 4));
   geo.setIndex(new THREE.BufferAttribute(a.idx, 1));
   geo.computeBoundingSphere();
   geo.computeBoundingBox();

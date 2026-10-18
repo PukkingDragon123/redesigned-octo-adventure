@@ -19,7 +19,7 @@ import { Atmosphere } from './atmosphere.js';
 import { G } from '../render/shaderlib.js';
 import { DECOR } from './decor.js';
 import { VoxelWorld, startBuildingJobs } from './voxelWorld.js';
-import { Forest2D } from './forest2d.js';
+import { VoxelForest } from './voxelForest.js';
 import { PhysProps } from './physprops.js';
 import * as VOXPROPS from '../voxel/models/props.js';
 import { meshVox } from '../voxel/mesh.js';
@@ -56,11 +56,11 @@ export class World {
     this.scene.add(this.forest.buildMeshes());
     console.log('forest', JSON.stringify(this.forest.stats));
     if (!this.noVoxelTrees) {
-      // pixel-art trees; voxelForest is the old name (settings and cutscenes still use it)
-      this.forest2d = this.voxelForest = new Forest2D(this.forest);
+      // every tree a voxel model, near to the horizon (settings and cutscenes reach it as voxelForest)
+      this.voxelForest = new VoxelForest(this.forest);
       const t0 = performance.now();
-      this.scene.add(await this.forest2d.build((k) => this.progress(0.32 + k * 0.06, 'growing the trees')));
-      console.log(`forest sprites in ${(performance.now() - t0).toFixed(0)}ms`, JSON.stringify(this.forest2d.stats));
+      this.scene.add(await this.voxelForest.build((k) => this.progress(0.32 + k * 0.06, 'growing the trees')));
+      console.log(`voxel forest in ${(performance.now() - t0).toFixed(0)}ms`, JSON.stringify(this.voxelForest.stats));
     }
 
     await step(0.4, 'raising the village');
@@ -112,6 +112,7 @@ export class World {
     this.scene.add(sun);
     this.scene.add(sun.target);
     this.sun = sun;
+    this.voxelForest?.attachShadowCamera(sun.shadow.camera);
     this.atmosphere = new Atmosphere(this.pipeline, sun);
   }
 
@@ -261,7 +262,7 @@ export class World {
     G.uTime.value += dt;
     this.atmosphere.update(dt);
     this.sky.position.copy(camera.position);
-    this.forest2d?.update(camera.position, camera);
+    this.voxelForest?.update(camera.position, camera);
     this.fences?.update(camera);
     this.forest?.updateVisibility(camera.position);
     this.voxel?.updateFar?.(camera.position);

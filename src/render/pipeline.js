@@ -555,6 +555,8 @@ export class Pipeline {
     P.uVignette.value = this.retro ? 1.0 : 0.8;
     // the see-through dissolve dithers in cells about as big as a retro pixel
     G.uSeePx.value = this.retro ? 1 : Math.max(1, Math.round(this.h / 400));
+    // the voxel bevel lines: one pixel up to ~1000 px tall frames, then two
+    G.uEdgePx.value = this.retro ? 1 : Math.max(1, Math.round(this.h / 1000));
     this.makeTargets();
   }
 
