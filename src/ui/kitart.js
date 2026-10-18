@@ -527,9 +527,14 @@ export function buttonArt(state = 'normal', face = 'leather') {
 }
 
 // a little arrow board pointing at whatever is chosen (16x16)
-export function pointerArt() {
+export function pointerArt(left = false) {
   const S = 16;
   const p = new Pix(S, S);
+  if (left) {
+    const r = pointerArt(false), q = new Pix(S, S);
+    q.blit(r, 0, 0, true);
+    return q;
+  }
   const R = PAINT.gold;
   const shape = (x, y) => (x >= 1 && x <= 9 && y >= 4 && y <= 11) || (x >= 9 && x <= 14 && Math.abs(y + 0.5 - 8) <= 14.5 - x + 0.2);
   const f = field(S, S, shape);

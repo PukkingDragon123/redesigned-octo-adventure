@@ -106,7 +106,7 @@
 .dlg-choices { display: flex; flex-direction: column; margin-top: calc(var(--u) * 2); }
 .choice { cursor: pointer; padding-left: calc(var(--u) * 18); position: relative; }
 .choice.sel { color: #c0452a; }
-.choice.sel::before { content: ''; position: absolute; left: 0; top: calc(var(--u) * -2); width: calc(var(--u) * 16); height: calc(var(--u) * 16); background: var(--g-hand) 0 0 / 100% 100% no-repeat; }
+.choice.sel::before { content: ''; position: absolute; left: 0; top: calc(var(--u) * -2); width: calc(var(--u) * 16); height: calc(var(--u) * 16); background: var(--k-pointer) 0 0 / 100% 100% no-repeat; }
 
 /* ---------------------------------------------------------------- overlays */
 .overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(16, 9, 8, 0.66); pointer-events: auto; z-index: 4; animation: k-fade 0.2s steps(2); }

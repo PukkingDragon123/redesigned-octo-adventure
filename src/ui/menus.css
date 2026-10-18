@@ -56,7 +56,7 @@
 .k-item:hover, .k-item.sel { background: rgba(168, 50, 30, 0.14); color: #8a2214; }
 .k-panel:not(.k-parchment) > .m-body > .k-item:hover, .k-panel:not(.k-parchment) > .m-body > .k-item.sel { background: rgba(255, 216, 74, 0.16); color: var(--k-gold); }
 .k-item.sel > .k-g:first-child { visibility: hidden; }
-.k-item.sel::before { content: ''; position: absolute; left: calc(var(--u) * 2); top: calc(var(--u) * 1); width: calc(var(--u) * 16); height: calc(var(--u) * 16); background: var(--g-hand) 0 0 / 100% 100% no-repeat; animation: k-poke 0.6s steps(1) infinite; }
+.k-item.sel::before { content: ''; position: absolute; left: calc(var(--u) * 2); top: calc(var(--u) * 1); width: calc(var(--u) * 16); height: calc(var(--u) * 16); background: var(--k-pointer) 0 0 / 100% 100% no-repeat; animation: k-poke 0.6s steps(1) infinite; }
 .k-item.quit { color: #8a2214; }
 
 /* ---------------------------------------------------------------- the journal */
@@ -104,12 +104,12 @@
 .k-setrow .lbl { flex: 1; white-space: nowrap; }
 .k-setrow.sel, .k-setrow:hover { background: rgba(255, 216, 74, 0.16); color: var(--k-gold); }
 .k-setrow.sel > .k-g:first-child { visibility: hidden; }
-.k-setrow.sel::before { content: ''; position: absolute; left: calc(var(--u) * 2); top: calc(var(--u) * 2); width: calc(var(--u) * 16); height: calc(var(--u) * 16); background: var(--g-hand) 0 0 / 100% 100% no-repeat; animation: k-poke 0.6s steps(1) infinite; }
+.k-setrow.sel::before { content: ''; position: absolute; left: calc(var(--u) * 2); top: calc(var(--u) * 2); width: calc(var(--u) * 16); height: calc(var(--u) * 16); background: var(--k-pointer) 0 0 / 100% 100% no-repeat; animation: k-poke 0.6s steps(1) infinite; }
 .k-setrow .k-slider { width: calc(var(--u) * 80); }
 .k-cycle { display: flex; align-items: center; gap: calc(var(--u) * 1); flex: none; }
-.k-cycle .v { display: inline-block; box-sizing: border-box; width: calc(var(--u) * 60); height: calc(var(--u) * 18); text-align: center; border-style: solid; border-color: transparent; border-width: calc(var(--u) * 3); border-image: var(--k-plate-dark) 8 fill / calc(var(--u) * 8) / 0 repeat; color: var(--k-cream); line-height: calc(var(--u) * 12); }
-.k-cycle i { display: block; width: calc(var(--u) * 16); height: calc(var(--u) * 16); background: var(--g-arrowL) 0 0 / 100% 100% no-repeat; cursor: pointer; }
-.k-cycle i.r { background-image: var(--g-arrowR); }
+.k-cycle .v { display: inline-block; box-sizing: border-box; width: calc(var(--u) * 66); height: calc(var(--u) * 19); text-align: center; white-space: nowrap; border-style: solid; border-color: transparent; border-width: calc(var(--u) * 3) calc(var(--u) * 3) calc(var(--u) * 4); border-image: var(--k-tag) 7 fill / calc(var(--u) * 7) / 0 repeat; color: #3e2414; text-shadow: none; line-height: calc(var(--u) * 12); }
+.k-cycle i { display: block; width: calc(var(--u) * 16); height: calc(var(--u) * 16); background: var(--k-pointer-l) 0 0 / 100% 100% no-repeat; cursor: pointer; }
+.k-cycle i.r { background-image: var(--k-pointer); }
 
 /* ---------------------------------------------------------------- controls */
 .menu.controls { width: min(calc(var(--u) * 360), calc(100% - var(--u) * 8)); }

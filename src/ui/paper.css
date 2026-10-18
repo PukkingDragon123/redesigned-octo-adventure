@@ -106,7 +106,7 @@
   animation: k-rin 0.2s steps(1) both;
 }
 .reply.sel { left: calc(var(--u) * 3); color: #5e1a0e; }
-.reply .hand { position: absolute; left: calc(var(--u) * -24); top: calc(var(--u) * -2); width: calc(var(--u) * 16); height: calc(var(--u) * 16); background: var(--g-hand) 0 0 / 100% 100% no-repeat; visibility: hidden; }
+.reply .hand { position: absolute; left: calc(var(--u) * -24); top: calc(var(--u) * -2); width: calc(var(--u) * 16); height: calc(var(--u) * 16); background: var(--k-pointer) 0 0 / 100% 100% no-repeat; visibility: hidden; }
 .reply.sel .hand { visibility: visible; animation: k-poke 0.5s steps(1) infinite; }
 @keyframes k-rin { 0% { opacity: 0; left: calc(var(--u) * 12); } 50% { opacity: 1; left: calc(var(--u) * 4); } 100% { left: 0; } }
 

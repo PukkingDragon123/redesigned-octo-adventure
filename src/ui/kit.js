@@ -207,6 +207,7 @@ export const KIT_IMAGES = {
   'btn-green': () => A.buttonArt('normal', 'green'),
   'btn-green-hover': () => A.buttonArt('hover', 'green'),
   pointer: () => A.pointerArt(),
+  'pointer-l': () => A.pointerArt(true),
   tag: () => A.tagArt(),
   'tag-rope': () => A.tagRopeArt(),
   'tag-tail': () => A.tagTailArt(),
@@ -268,7 +269,7 @@ export const kitURL = (name) => URLS[name] || (URLS[name] = url(KIT_IMAGES[name]
 
 // what the HUD needs on the first frame; everything else is painted in idle time
 // (or at once, the moment a menu opens: see kitReady)
-const FIRST = ['pointer', 'tag', 'tag-rope', 'tag-tail', 'plate-leather', 'plate-dark', 'plate-parchment', 'paper-note', 'paper-news', 'key', 'tip', 'tip-tail', 'panel-dark', 'panel-leather', 'bar', 'btn', 'btn-hover', 'ribbon', 'clipboard', 'clip', 'nb-paper', 'nb-coil', 'nb-box', 'nb-check', 'nb-tick', 'bub', 'bub-tail', 'bub-next', 'bub-leaf', 'bub-cloud'];
+const FIRST = ['pointer', 'pointer-l', 'tag', 'tag-rope', 'tag-tail', 'plate-leather', 'plate-dark', 'plate-parchment', 'paper-note', 'paper-news', 'key', 'tip', 'tip-tail', 'panel-dark', 'panel-leather', 'bar', 'btn', 'btn-hover', 'ribbon', 'clipboard', 'clip', 'nb-paper', 'nb-coil', 'nb-box', 'nb-check', 'nb-tick', 'bub', 'bub-tail', 'bub-next', 'bub-leaf', 'bub-cloud'];
 let installed = false, pending = [];
 const put = (name) => document.documentElement.style.setProperty(`--k-${name}`, `url(${kitURL(name)})`);
 export function kitReady() {
