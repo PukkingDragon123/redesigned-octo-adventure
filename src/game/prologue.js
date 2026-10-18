@@ -439,7 +439,10 @@ function funeral(story) {
       a.arms.R.hand.getWorldPosition(_h2);
       return _h.add(_h2).multiplyScalar(0.5).clone();
     };
+    // the top of the lid (what the coffin shots are about: the see-through keeps it solid)
+    const lidPt = V(0, 0, 0);
     S.every(() => {
+      coffin.localToWorld(lidPt.set(0, 0.8, 0));
       if (!ropesOn) { for (const m of segs) m.visible = false; return false; }
       [Lou, Gus].forEach((a, i) => {
         const rz = i ? 0.55 : -0.55;
@@ -468,8 +471,8 @@ function funeral(story) {
     await S.wait(3.2);
     // 2. low along the coffin lid: the axe, the toque, the headstone beyond
     const lidY = top + 0.1 + 0.62;
-    await S.cam(XZ(at(0.5, 2.2), lidY + 0.55), XZ(at(-0.05, -0.6), lidY - 0.05), 0, 40, coffin.position, { creep: 0 });
-    S.cam(XZ(at(0.36, 1.75), lidY + 0.4), XZ(at(-0.05, -0.6), lidY - 0.02), 6.5, 38, coffin.position, { ease: 'glide' });
+    await S.cam(XZ(at(0.5, 2.2), lidY + 0.55), XZ(at(-0.05, -0.6), lidY - 0.05), 0, 40, lidPt, { creep: 0 });
+    S.cam(XZ(at(0.36, 1.75), lidY + 0.4), XZ(at(-0.05, -0.6), lidY - 0.02), 6.5, 38, lidPt, { ease: 'glide' });
     await S.wait(1.2);
     await S.narrate('They laid Hank to rest on a grey October afternoon.');
     // 3. Father Gilles
@@ -508,15 +511,15 @@ function funeral(story) {
     // 8. the coffin goes down
     who.doug.play('salute');
     const lowerCam = (lx, lz, h) => XZ(at(lx, lz), top + h);
-    await S.cam(lowerCam(3.7, -0.5, 2.5), lowerCam(-0.6, 0.35, 0.3), 0, 46, coffin.position, { creep: 0 });
-    S.cam(lowerCam(3.4, -1.25, 2.8), lowerCam(-0.6, 0.35, 0.1), 6, 46, coffin.position, { ease: 'glide' });
+    await S.cam(lowerCam(3.7, -0.5, 2.5), lowerCam(-0.6, 0.35, 0.3), 0, 46, lidPt, { creep: 0 });
+    S.cam(lowerCam(3.4, -1.25, 2.8), lowerCam(-0.6, 0.35, 0.1), 6, 46, lidPt, { ease: 'glide' });
     S.sfx('funeral_bell', { volume: 0.55 });
     const cy0 = coffin.position.y, cy1 = top - 1.7 + 0.01;
     const lowering = S.anim(8.5, (k) => (coffin.position.y = cy0 + (cy1 - cy0) * smooth(k)));
     await S.wait(4.6);
     // from behind the headstone, down into the grave as it settles
-    await S.cam(lowerCam(0.3, -1.75, 3.3), lowerCam(0, 0.45, -1.5), 0, 44, coffin.position, { creep: 0 });
-    S.cam(lowerCam(0.25, -1.6, 3.1), lowerCam(0, 0.45, -1.6), 5, 42, coffin.position, { ease: 'glide' });
+    await S.cam(lowerCam(0.3, -1.75, 3.3), lowerCam(0, 0.45, -1.5), 0, 44, lidPt, { creep: 0 });
+    S.cam(lowerCam(0.25, -1.6, 3.1), lowerCam(0, 0.45, -1.6), 5, 42, lidPt, { ease: 'glide' });
     await lowering;
     S.sfx('coffin_thud', { volume: 0.3 });
     await S.wait(0.8);
@@ -573,7 +576,7 @@ function funeral(story) {
       if (q) q.groundHit = false;
     }
     await S.wait(0.9);
-    await S.cam(lowerCam(0.25, -1.6, 3.1), lowerCam(0, 0.45, -1.6), 0, 42, coffin.position, { creep: 0.04 });
+    await S.cam(lowerCam(0.25, -1.6, 3.1), lowerCam(0, 0.45, -1.6), 0, 42, lidPt, { creep: 0.04 });
     await S.wait(3.4);
     await S.fade(1, 1.8);
 
