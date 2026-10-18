@@ -170,6 +170,14 @@ void main() {
   vec3 n = normalize(vN + vec3(rip.x, 0.0, rip.y) * 0.35);
   vec3 v = normalize(uCamPos - vWorldPos);
   float fres = 0.1 + 0.9 * pow(1.0 - max(dot(v, n), 0.0), 4.0);
+  // pixel-art water: the sheen falls into a few flat steps, dithered on a world grid of 25 cm
+  // water pixels (8 cm close up), so the sea reads as crisp hand-dithered bands, not airbrush
+  float wpx = length(uCamPos - vWorldPos) < 14.0 ? 12.0 : 4.0;
+  // (far off, where a water pixel would be under two screen pixels, the dither goes to the
+  // screen's own grid instead of beating against it in moire)
+  float wcell = max(fwidth(wp.x), fwidth(wp.y)) * wpx;
+  float wdith = (wcell < 0.5 ? bayer4(floor(wp * wpx)) : bayer4(gl_FragCoord.xy)) - 0.5;
+  fres = clamp(floor(fres * 7.0 + 0.5 + wdith * 0.9) / 7.0, 0.0, 1.0);
 
   // body colour by depth; shallows over sand look clear and turquoise
   float dk = smoothstep(0.0, 6.0, depth);
@@ -181,6 +189,7 @@ void main() {
   body = mix(uWetSand, body, smoothstep(0.0, 0.22, thick) * 0.85 + 0.15 * (1.0 - vExpo));
   float shadow = getShadowMask();
   float ndl = max(dot(n, uSunDir), 0.0);
+  ndl = floor(ndl * 4.0 + 0.5 + wdith) / 4.0;
   body *= hemiAmbient(vec3(0.0, 1.0, 0.0)) * 1.1 + uSunColor * (0.18 + 0.2 * ndl) * shadow;
   // light glowing through thin wave crests
   float sss = pow(max(dot(-v, uSunDir), 0.0), 3.0) * smoothstep(0.3, 1.0, vCrest) * vExpo;
