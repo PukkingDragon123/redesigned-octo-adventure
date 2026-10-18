@@ -65,6 +65,7 @@ sun.shadow.camera.left = sun.shadow.camera.bottom = -span;
 sun.shadow.camera.right = sun.shadow.camera.top = span;
 sun.shadow.camera.far = span * 4;
 scene.add(sun);
+G.uCamPos.value.copy(cam.position); // (the see-through bubble sits round the lens)
 renderer.render(scene, cam);
 const v = new THREE.Vector3();
 lbl.innerHTML = items.map(({ m, n, faces }) => {

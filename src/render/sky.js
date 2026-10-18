@@ -118,8 +118,8 @@ export function createSky() {
 // west round through the west and north to the north-east; the open sea to the east
 // keeps a clear horizon). Rockies / Coast Mountains: the far range is tall, pale and
 // snow-capped, the middle one blue slate with snow on its tops, the near foothills
-// dark firs with gold larches and a few red maples. Each range is one low-poly strip
-// of flat-shaded facets lit in hard bands, with chunky world-space texture cells; the
+// dark firs with gold larches and a few red maples. Each range is a heightfield of big
+// voxel columns (9 to 18 m) lit in hard bands, every voxel one colour; the
 // pipeline's fog then fades them with distance like the rest of the world.
 const MTN_VERT = /* glsl */ `
 varying vec3 vN;
@@ -165,19 +165,20 @@ void main() {
   if (p.y < uClipY) discard;
   vec3 n = normalize(vN);
   // chunky world-space cells a few metres across: a crisp pixel texture that never shimmers
-  vec3 cell = floor(p / uPix);
+  vec3 cell = floor((p - n * uPix * 0.5) / uPix);
   float h1 = hash13(cell), h2 = hash13(cell + 17.0);
   // rock with sedimentary strata and the odd darker cell
-  float strata = hash12(vec2(floor(p.y / (uPix * 1.6)), uSeed));
+  float strata = hash12(vec2(floor((cell.y + 0.5) / 1.6), uSeed));
+  vec3 pc = (cell + 0.5) * uPix; // the voxel's centre: every face of a voxel takes its colour
   vec3 alb = mix(uRock, uShade, step(0.6, strata) * 0.5 + step(0.82, h1) * 0.3);
   // forest below a ragged tree line: firs, gold larches, red maples low down
   float tl = uTreeLine + (h2 - 0.5) * uTop * 0.18;
-  float tree = uForest * (1.0 - step(tl, p.y)) * step(0.12, n.y);
-  vec3 trees = h1 < 0.6 ? uFir : h1 < 0.84 ? uLarch : (p.y < uTreeLine * 0.55 ? uMaple : uFir);
+  float tree = uForest * (1.0 - step(tl, pc.y)) * (n.y > 0.5 ? 1.0 : step(0.5, hash13(cell + 5.0)));
+  vec3 trees = h1 < 0.6 ? uFir : h1 < 0.84 ? uLarch : (pc.y < uTreeLine * 0.55 ? uMaple : uFir);
   alb = mix(alb, trees, tree);
   // snow caps with a jagged edge, a little lower on gentler faces and in a snowy spell
-  float sl = uSnowLine - uSnow * uTop * 0.3 - n.y * uTop * 0.1 + (h1 - 0.5) * uPix * 3.0;
-  float snow = step(sl, p.y) * step(0.06, n.y);
+  float sl = uSnowLine - uSnow * uTop * 0.3 + (h1 - 0.5) * uPix * 3.0;
+  float snow = step(sl, pc.y) * (n.y > 0.5 ? 1.0 : step(sl + uPix * 1.5, pc.y));
   alb = mix(alb, vec3(0.94, 0.95, 1.0), snow);
   // hard-banded light, like the rest of the world
   float ndl = clamp(dot(n, uSunDir), 0.0, 1.0);
@@ -188,7 +189,7 @@ void main() {
   vec3 d = normalize(p - cameraPosition);
   col += uSunGlow * pow(max(dot(d, uSunDir), 0.0), 4.0) * 0.2;
   // mist pooled along the foot of the range, then its own distance haze
-  float mist = 1.0 - smoothstep(0.0, uTop * 0.5, p.y);
+  float mist = 1.0 - smoothstep(0.0, uTop * 0.5, pc.y);
   col = mix(col, uHorizon, clamp(mist * 0.6 + uHaze, 0.0, 1.0));
   // so far off that the composite pass takes this for sky (depth ~1) and skips its fog:
   // fog it here the same way, so the range doesn't darken past that distance
@@ -209,11 +210,11 @@ const LAND_ARC = [1.55, Math.PI * 2 - 0.62];
 const TAPER = 0.55; // each end falls away to the sea over this much angle
 const RANGES = [
   // far: the big snowy peaks, pale with distance
-  { r: 1560, depth: 300, h0: 250, h1: 630, step: 10, wave: 400, snow: 315, tree: 0, forest: 0, pix: 8, haze: 0.16, rock: 0x9a9fd0, shade: 0x6c70a8, seed: 3 },
+  { r: 1560, depth: 300, h0: 250, h1: 630, step: 10, wave: 400, snow: 315, tree: 0, forest: 0, pix: 8, vox: 18, haze: 0.16, rock: 0x9a9fd0, shade: 0x6c70a8, seed: 3 },
   // middle: blue-grey slate, snow on the tallest tops, larch gold low down
-  { r: 1160, depth: 200, h0: 150, h1: 360, step: 9, wave: 250, snow: 240, tree: 115, forest: 0.6, pix: 6, haze: 0.07, rock: 0x66729e, shade: 0x464f7e, seed: 7 },
+  { r: 1160, depth: 200, h0: 150, h1: 360, step: 9, wave: 250, snow: 240, tree: 115, forest: 0.6, pix: 6, vox: 13, haze: 0.07, rock: 0x66729e, shade: 0x464f7e, seed: 7 },
   // near: forested foothills
-  { r: 800, depth: 130, h0: 60, h1: 190, step: 7, wave: 150, snow: 9999, tree: 150, forest: 1, pix: 4, haze: 0.02, rock: 0x4a5652, shade: 0x313b3a, seed: 11 },
+  { r: 800, depth: 130, h0: 60, h1: 190, step: 7, wave: 150, snow: 9999, tree: 150, forest: 1, pix: 4, vox: 9, haze: 0.02, rock: 0x4a5652, shade: 0x313b3a, seed: 11 },
 ];
 
 const smooth01 = (a, b, x) => {
@@ -243,6 +244,7 @@ export function createMountains(fog = null) {
   const ROWS = [-1, -0.62, -0.28, 0, 0.45, 1];
   const BASE = [0, 0.2, 0.58, 1, 0.7, 0.28];
   for (const R of RANGES) {
+    // the range's profile along its arc, sampled every `step` metres: per column, the rows' (u, y)
     const segs = Math.ceil(((a1 - a0) * R.r) / R.step);
     const cols = [];
     for (let i = 0; i <= segs; i++) {
@@ -264,28 +266,73 @@ export function createMountains(fog = null) {
           const sp = ridge(s + 37 * j, R.wave * 0.55, R.seed + j) - 0.5;
           y = Math.max(-20, H * (BASE[j] + sp * 0.3));
         }
-        const rr = R.r + u * R.depth + (j > 0 && j < 5 && j !== 3 ? sx.noise(s / 40, j * 13 + R.seed) * R.depth * 0.06 : 0);
-        col.push([WORLD_CX + Math.cos(th) * rr, y, WORLD_CZ + Math.sin(th) * rr]);
+        col.push(u, y);
       }
       cols.push(col);
     }
-    // flat-shaded facets: unindexed triangles, alternating diagonals; the winding makes the
-    // front faces (foot to crest) face in towards the map
-    const pos = new Float32Array(segs * (ROWS.length - 1) * 18);
-    let o = 0;
-    const put = (p) => { pos[o++] = p[0]; pos[o++] = p[1]; pos[o++] = p[2]; };
-    const tri = (a, b, c) => { put(a); put(b); put(c); };
-    for (let i = 0; i < segs; i++) {
-      const A = cols[i], B = cols[i + 1];
-      for (let j = 0; j < ROWS.length - 1; j++) {
-        const p00 = A[j], p01 = A[j + 1], p10 = B[j], p11 = B[j + 1];
-        if ((i + j) & 1) { tri(p00, p10, p11); tri(p00, p11, p01); }
-        else { tri(p00, p10, p01); tri(p10, p11, p01); }
+    // Voxel mountains: a heightfield of world-aligned columns `vs` metres square, each cell's
+    // top where the profile is at its centre (in whole voxels), its sides wherever it stands
+    // above a neighbour. The fragment shader paints each voxel face one colour (rock strata,
+    // forest, snow) by the voxel it belongs to.
+    const vs = R.vox;
+    const ext = R.r + R.depth + vs;
+    const n = Math.ceil((ext * 2) / vs);
+    const gx0 = WORLD_CX - (n * vs) / 2, gz0 = WORLD_CZ - (n * vs) / 2;
+    const hgt = new Int16Array(n * n).fill(-32768);
+    const yBot = Math.floor(-70 / vs);
+    for (let k = 0; k < n; k++) for (let i = 0; i < n; i++) {
+      const x = gx0 + (i + 0.5) * vs - WORLD_CX, z = gz0 + (k + 0.5) * vs - WORLD_CZ;
+      const rr = Math.hypot(x, z);
+      const u = (rr - R.r) / R.depth;
+      if (u <= -1 || u >= 1) continue;
+      let th = Math.atan2(z, x);
+      if (th < 0) th += Math.PI * 2;
+      if (th <= a0 || th >= a1) continue;
+      const f = ((th - a0) / (a1 - a0)) * segs, ci = Math.min(segs - 1, Math.floor(f)), ft = f - ci;
+      const yAt = (c) => {
+        const C = cols[c];
+        for (let j = 0; j < ROWS.length - 1; j++) {
+          const ua = C[j * 2], ub = C[j * 2 + 2];
+          if (u >= ua && u <= ub) { const t = (u - ua) / Math.max(1e-6, ub - ua); return C[j * 2 + 1] + (C[j * 2 + 3] - C[j * 2 + 1]) * t; }
+        }
+        return -70;
+      };
+      const y = yAt(ci) * (1 - ft) + yAt(ci + 1) * ft;
+      if (y < -20) continue;
+      hgt[k * n + i] = Math.round(y / vs);
+    }
+    // quads: tops (runs of equal height along x merged), then exposed sides
+    const P = [], N = [];
+    const quad = (ax, ay, az, bx, by, bz, cx, cy, cz, dx, dy, dz, nx, ny, nz) => {
+      P.push(ax, ay, az, bx, by, bz, cx, cy, cz, ax, ay, az, cx, cy, cz, dx, dy, dz);
+      for (let q = 0; q < 6; q++) N.push(nx, ny, nz);
+    };
+    const H = (i, k) => (i < 0 || k < 0 || i >= n || k >= n ? -32768 : hgt[k * n + i]);
+    for (let k = 0; k < n; k++) {
+      for (let i = 0; i < n;) {
+        const h = hgt[k * n + i];
+        if (h === -32768) { i++; continue; }
+        let w = 1;
+        while (i + w < n && hgt[k * n + i + w] === h) w++;
+        const x0 = gx0 + i * vs, x1 = gx0 + (i + w) * vs, z0 = gz0 + k * vs, z1 = z0 + vs, y = h * vs;
+        quad(x0, y, z0, x0, y, z1, x1, y, z1, x1, y, z0, 0, 1, 0);
+        i += w;
       }
     }
+    for (let k = 0; k < n; k++) for (let i = 0; i < n; i++) {
+      const h = hgt[k * n + i];
+      if (h === -32768) continue;
+      const x0 = gx0 + i * vs, x1 = x0 + vs, z0 = gz0 + k * vs, z1 = z0 + vs, y1 = h * vs;
+      const side = (nh, fn) => { const lo = Math.max(nh === -32768 ? yBot : nh, yBot) * vs; if (lo < y1) fn(lo); };
+      side(H(i + 1, k), (lo) => quad(x1, lo, z0, x1, y1, z0, x1, y1, z1, x1, lo, z1, 1, 0, 0));
+      side(H(i - 1, k), (lo) => quad(x0, lo, z1, x0, y1, z1, x0, y1, z0, x0, lo, z0, -1, 0, 0));
+      side(H(i, k + 1), (lo) => quad(x1, lo, z1, x1, y1, z1, x0, y1, z1, x0, lo, z1, 0, 0, 1));
+      side(H(i, k - 1), (lo) => quad(x0, lo, z0, x0, y1, z0, x1, y1, z0, x1, lo, z0, 0, 0, -1));
+    }
+    const pos = new Float32Array(P);
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    geo.computeVertexNormals();
+    geo.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(N), 3));
     geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(WORLD_CX, 0, WORLD_CZ), R.r + R.depth + R.h1);
     const C = (hex) => new THREE.Color(hex);
     const mat = new THREE.ShaderMaterial({
@@ -306,7 +353,7 @@ export function createMountains(fog = null) {
         uTreeLine: { value: R.tree },
         uForest: { value: R.forest },
         uTop: { value: R.h1 },
-        uPix: { value: R.pix },
+        uPix: { value: R.vox },
         uSeed: { value: R.seed },
         uSnow: G.uSnow,
         uClipY: G.uClipY,

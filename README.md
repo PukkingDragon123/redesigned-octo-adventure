@@ -226,16 +226,26 @@ its heat, more the harder the crash.
   `src/game/camera.js`): whatever stands between the camera and Hank (or a
   cutscene's subject) dissolves in a pixel dither with a glowing ember edge.
 - **Voxels** (`src/voxel`): models are painted in code into voxel grids and
-  meshed with face culling, baked ambient occlusion and greedy merging.
-  Buildings, props, food, animals, characters and the cabin interior each have a model
-  module; `tools/voxpreview.html?mod=/src/voxel/models/props.js` previews any
-  of them, `tools/charpreview.html` previews the characters.
-- **Forest** (`src/world/forest2d.js`, `src/art/trees2d.js`): every tree is
-  pixel art: maples, birches, aspens, oaks, spruces, pines, tamaracks, bushes,
-  ferns, saplings, stumps, logs and mushrooms are sculpted in code into
-  outlined, shaded sprites (with baked normals so the sun lights them from the
-  side), baked in Web Workers into one atlas and drawn as one instanced batch
-  of upright camera-facing cards that sway, cast shadows and shake when hit.
+  meshed with face culling, baked ambient occlusion and greedy merging; the mesher
+  also flags every quad's convex edges. Buildings, props, food, animals, characters
+  and the cabin interior each have a model module;
+  `tools/voxpreview.html?mod=/src/voxel/models/props.js` previews any of them,
+  `tools/charpreview.html` previews the characters.
+- **The pixel-voxel look** (`VOXEL_LOOK_GLSL` in `src/render/shaderlib.js`): every
+  voxel surface gets a crisp one- or two-pixel bevel on its convex edges (light along
+  top rims, dark underneath), a hair of per-voxel colour jitter, and light that falls
+  into a palette ramp (three crisp tone steps, tops a step up, undersides a step down,
+  warm light and cool plum shade); both fade out once a voxel is a few pixels small, so
+  nothing shimmers. The ground shares the ramp and reads as half-metre voxel tiles with
+  terrace lips on the hills; grass is voxel blades; the far mountain ranges are voxel
+  heightfields; the water's sheen falls into dithered steps on a grid of water pixels.
+- **Forest** (`src/world/voxelForest.js`, `src/voxel/models/trees.js`,
+  `src/world/treeBake.js`): every tree, stump and mushroom is a voxel model at every
+  distance: maples, birches, aspens, oaks, spruces, tamaracks and dead trees, several
+  seeded models a species, baked in workers at up to five resolutions (0.125 m up close
+  to 2 m on the far hills) and drawn instanced per model and LOD from 32 m cells in (or
+  casting shadows into) the view. Crowns sway, leaves flutter, the sun shines through
+  them, and a bumped or kicked tree wobbles like a spring and sheds leaves.
 - **Villagers** (`src/game/npcs.js`, `npcBrain.js`, `npcRoutines.js`,
   `npcNav.js`, `npcPets.js`): everyone is terrified of the walking skeleton at
   first. They scream, drop things, run for cover, hide and peek, faint, throw
@@ -256,10 +266,14 @@ its heat, more the harder the crash.
   `src/art/furniture2d.js`, `src/world/deco2d.js`, `src/world/furniture2d.js`,
   `src/game/deco2d.js`): bins, crates, barrels, hay, mailboxes,
   market stalls with fish, porch rockers and swings, café terraces, shop window
-  displays, beach and harbour gear, with simple physics so small things tip
-  over, roll and spill when knocked, then tidy themselves up off-screen.
-  Fences are voxel geometry (`src/world/fences3d.js`) that follow the ground
-  post by post and topple when hit.
+  displays, beach and harbour gear. Each piece is sculpted from boxes, tubes and
+  ellipsoids and voxelised (`src/voxel/sculptVox.js`, one sprite pixel per voxel, its
+  painted details and lettering stamped on), built in a worker and drawn as instances of
+  one BatchedMesh; things tip over about their foot, roll, flop and spill when knocked,
+  then tidy themselves up off-screen. Fences are voxel geometry
+  (`src/world/fences3d.js`) that follow the ground post by post and topple when hit; the
+  boardwalk, docks, cemetery fence, homestead and the other old structures are voxel
+  models too (`src/world/structures.js`).
 - **Nana's cabin** (`src/world/cabinInterior.js`, `src/game/interior.js`,
   `src/voxel/models/interior.js`): a walkable voxel room inside the real
   cabin, with its own colliders, camera box, firelight and things to use.

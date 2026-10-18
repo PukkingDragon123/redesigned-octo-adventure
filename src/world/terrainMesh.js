@@ -1,6 +1,6 @@
 // Terrain rendering: chunked meshes + a pixel-art splat shader.
 import * as THREE from 'three';
-import { G, worldUniforms, LIGHT_PARS_VERT, SHADOW_VERT, LIGHT_PARS_FRAG, NOISE_GLSL, HEIGHT_GLSL } from '../render/shaderlib.js';
+import { G, worldUniforms, LIGHT_PARS_VERT, SHADOW_VERT, LIGHT_PARS_FRAG, NOISE_GLSL, HEIGHT_GLSL, VOXEL_LOOK_GLSL } from '../render/shaderlib.js';
 import { SEA, SEA_GLSL, buildSeaTexture } from './water.js';
 import { pixTexture, dataTexture } from '../render/textures.js';
 import { grassTex, dirtTex, litterTex, rockTex, sandTex, gravelTex, asphaltTex } from '../art/groundtex.js';
@@ -27,6 +27,7 @@ ${LIGHT_PARS_FRAG}
 ${NOISE_GLSL}
 ${HEIGHT_GLSL}
 ${SEA_GLSL}
+${VOXEL_LOOK_GLSL}
 uniform sampler2D tGrass;
 uniform sampler2D tGrass2;
 uniform sampler2D tDirt;
@@ -195,8 +196,28 @@ void main() {
     col = s > 0.85 ? vec3(0.78, 0.84, 0.95) : (s > 0.15 ? vec3(0.92, 0.94, 0.98) : vec3(0.7, 0.76, 0.9));
   }
 
+  // the ground as voxel tiles: every half-metre tile a hair lighter or darker, and on the hills
+  // a terrace lip every half metre of height (a lit pixel row on the step's top edge, a dark
+  // one under it), so slopes read as stacked voxel steps; whole pixels, gone when too fine
+  {
+    vec2 tile = floor(wp * 2.0);
+    col *= 1.0 + (hash12(tile + 41.0) - 0.5) * 0.06;
+    float slope = 1.0 - n.y;
+    if (bare < 0.5 && slope > 0.025 && snowMask < 0.5) {
+      float hq = vWorldPos.y * 2.0;
+      float fw = fwidth(hq);
+      float fade = (1.0 - smoothstep(0.18, 0.4, fw)) * smoothstep(0.025, 0.06, slope);
+      if (fade > 0.0) {
+        float f = fract(hq);
+        float px = fw * uEdgePx;
+        if (f < px) col *= 1.0 - 0.2 * fade;
+        else if (f > 1.0 - px) col *= 1.0 + 0.14 * fade;
+      }
+    }
+  }
   float shadow = getShadowMask();
-  vec3 lit = shadeWorld(col, n, vWorldPos, shadow, 1.0);
+  // the pixel-art light ramp shared with the voxels (warm light, cool plum shade)
+  vec3 lit = voxLight(col, n, vWorldPos, shadow, 0.25);
   // the ground is matte: rain only darkens it (wet sand reads a touch darker too)
   lit *= 1.0 - wetSand * 0.12;
   gl_FragColor = vec4(lit, 1.0);

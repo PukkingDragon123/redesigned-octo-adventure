@@ -1,6 +1,9 @@
-// Harold's lost keepsakes, glittering around the world.
+// Harold's lost keepsakes, glittering around the world: each one its pixel-art icon pressed
+// into a little voxel model (voxel/extrude.js) that bobs and turns in the air.
 import * as THREE from 'three';
-import { Billboard } from '../render/sprites.js';
+import { extrudeSprite } from '../voxel/extrude.js';
+import { meshVox } from '../voxel/mesh.js';
+import { voxMesh, sharedVoxelMaterial } from '../render/voxelMaterial.js';
 import { KEEPSAKES } from '../world/layout.js';
 import { P } from '../render/particles.js';
 
@@ -11,8 +14,11 @@ export class Keepsakes {
     this.game = game;
     this.items = [];
     for (const k of KEEPSAKES) {
-      const bb = new Billboard(game.atlas, `icon:${KEEPSAKE_ICON[k.id]}`, { castShadow: true, lit: 0.55, upright: 0.6 });
-      game.scene.add(bb.mesh);
+      const r = extrudeSprite(game.atlas, `icon:${KEEPSAKE_ICON[k.id]}`, { depth: 3, size: 1.25 / 32 });
+      const mesh = new THREE.Group();
+      if (r) mesh.add(voxMesh(meshVox(r.vox, { size: r.size, origin: r.origin }), sharedVoxelMaterial()));
+      const bb = { mesh };
+      game.scene.add(mesh);
       const g = game.physics.groundAt(k.x, k.z, 50);
       this.items.push({ ...k, bb, y: g.h, t: Math.random() * 6, light: null });
     }
@@ -38,9 +44,7 @@ export class Keepsakes {
       it.bb.mesh.visible = d < 160 && g.mode !== 'cutscene' && g.mode !== 'title' && !g.currentScene;
       const bob = Math.sin(it.t * 2) * 0.12;
       it.bb.mesh.position.set(it.x, it.y + 0.9 + bob, it.z);
-      const spin = Math.cos(it.t * 1.6);
-      it.bb.setScale(Math.max(0.15, Math.abs(spin)) * 1.25, 1.25);
-      it.bb.uniforms.uFlip.value = spin < 0 ? 1 : 0;
+      it.bb.mesh.rotation.y = it.t * 1.6;
       if (d < 45 && Math.random() < dt * 6) {
         g.effects.ps.spawn({ x: it.x + (Math.random() - 0.5) * 0.8, y: it.y + 0.6 + Math.random() * 0.8, z: it.z + (Math.random() - 0.5) * 0.8, vy: 0.4, life: 1, size: 0.16, sprite: P.star, color: [1, 0.92, 0.6], emissive: 1, drag: 1 });
       }

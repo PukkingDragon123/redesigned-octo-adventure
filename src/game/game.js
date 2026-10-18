@@ -461,11 +461,9 @@ export class Game {
       this.world.water.material.uniforms.uReflOn.value = this.pipeline.reflections ? 1 : 0;
       this.world.forest.lodScale = lo ? 0.55 : q === 'medium' ? 0.8 : 1;
       if (this.world.voxelForest) {
-        // 3D trees only up close; past that the pixel-art cards carry the forest
-        this.world.voxelForest.lodScale = lo ? 0.42 : q === 'medium' ? 0.6 : touch ? 0.8 : 1;
+        // the voxel LODs step down sooner on smaller GPUs (the far hills keep their trees)
+        this.world.voxelForest.lodScale = lo ? 0.6 : q === 'medium' ? 0.78 : touch ? 0.85 : 1;
         this.world.voxelForest.last.set(1e9, 0, 1e9);
-        const L3 = this.world.voxelForest.f3d?.L;
-        if (L3) L3.mid.mesh.castShadow = hi; // the far 3D band adds little to the shadow map
       }
       const grid = lo ? 70 : q === 'medium' ? (touch ? 96 : 120) : touch ? 120 : 150;
       if (this.world.grass.gridN !== grid) {

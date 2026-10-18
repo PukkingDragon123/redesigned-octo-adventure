@@ -533,7 +533,13 @@ void main() {
   vec2 uv = (vCell + (pc + 0.5) * vSpan) / ${N2}.0;
   vec4 tx = texture2D(tAtlas, uv);
   float a = tx.a * vAlpha;
-  if (a < bayer4(gl_FragCoord.xy) * 0.98 + 0.01) discard;
+  // fade by whole art pixels (an ordered dither on the sprite's own texel grid), so a thinning
+  // puff of steam or dust breaks up into crisp pixel squares instead of screen-pixel speckle;
+  // tiny far particles (texels under a screen pixel) fall back to the screen grid
+  vec2 tc = (pc + 0.5) * vSpan * ${C2}.0;
+  vec2 tw = fwidth(tc);
+  float th = max(tw.x, tw.y) < 0.75 ? bayer4(floor(tc)) : bayer4(gl_FragCoord.xy);
+  if (a < th * 0.98 + 0.01) discard;
   bool tuck = tx.a > 0.975 && tx.a < 0.995 && vBackDepth > 0.0;
   gl_FragDepth = tuck ? vBackDepth : gl_FragCoord.z;
   vec3 col = tx.rgb * vColor.rgb;

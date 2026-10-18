@@ -53,6 +53,17 @@ function classify(c) {
 // face axes: a = normal axis; (u, v) = the in-plane axes the quads are laid out on. For y the
 // pair is (x, z) so faces come out of the scan already sorted row by row (flip marks the swapped
 // handedness, which reverses the winding).
+// convex-edge bit for (face axis a, in-plane axis k * 2 + side): in the face's detail axes U, V
+// (side faces: U horizontal, V = y; top/bottom: U = x, V = z), 1 = -U, 2 = +U, 4 = -V, 8 = +V
+const EB = [0, 1, 2].map((a) => {
+  const fu = a === 0 ? 2 : 0, fv = a === 1 ? 2 : 1;
+  const r = [0, 0, 0, 0, 0, 0];
+  for (let k = 0; k < 3; k++) {
+    if (k === fu) { r[k * 2] = 1; r[k * 2 + 1] = 2; }
+    if (k === fv) { r[k * 2] = 4; r[k * 2 + 1] = 8; }
+  }
+  return r;
+});
 const AX = [
   { a: 0, u: 1, v: 2, flip: 1 },
   { a: 1, u: 0, v: 2, flip: -1 },
@@ -69,6 +80,7 @@ export function meshVox(vox, opts = {}) {
   const seed = opts.seed ?? 0;
   const aoK = opts.aoStrength ?? 1;
   const aoOn = opts.ao !== false;
+  const edgesOn = opts.edges !== false;
   // compact: small integer vertex formats (needs a whole-voxel origin); see the output below
   const compact = !!opts.compact && (opts.origin ?? [0, 0, 0]).every((v) => Number.isInteger(v));
   const W = vox.w, H = vox.h, D = vox.d;
@@ -145,12 +157,15 @@ export function meshVox(vox, opts = {}) {
   let pos = new Float32Array(cap * 3), nor = new Float32Array(cap * 3), col = new Float32Array(cap * 4), idx = new Uint32Array(cap * 1.5);
   // face-local detail coords: (u, v) in voxels on the face (v up on side faces) + detail id
   let fuv = new Int16Array(cap * 4);
+  // the quad's own box in face coords (u0, v0, u1, v1), the same on its four corners
+  let qb = new Int16Array(cap * 4);
   let nIdx = 0, vcount = 0;
   const grow = () => {
     cap *= 2;
     const g3 = (arr, k) => { const n = new Float32Array(cap * k); n.set(arr); return n; };
     pos = g3(pos, 3); nor = g3(nor, 3); col = g3(col, 4);
     const nf = new Int16Array(cap * 4); nf.set(fuv); fuv = nf;
+    const nq = new Int16Array(cap * 4); nq.set(qb); qb = nq;
     const ni = new Uint32Array(cap * 1.5); ni.set(idx); idx = ni;
   };
   const aos = [0, 0, 0, 0], cu = [0, 0, 0, 0], cv = [0, 0, 0, 0], pt = [0, 0, 0];
@@ -161,6 +176,11 @@ export function meshVox(vox, opts = {}) {
   const maskC = new Uint32Array(maxMask);
   const maskA = new Uint8Array(maxMask);
   const maskJ = jitter ? new Float32Array(maxMask) : null;
+  // convex edges: per face cell, which of its four sides is an outside corner of the model
+  // (no voxel beside it in the plane, none in front of that): bits in the face's detail axes,
+  // 1 = -U, 2 = +U, 4 = -V, 8 = +V (see detail below). The shader draws the pixel-art bevel there.
+  const maskE = edgesOn ? new Uint8Array(maxMask) : null;
+  const occ3 = (x, y, z) => (x < 0 || y < 0 || z < 0 || x >= W || y >= H || z >= D ? 0 : bit(x, y, z));
   const ms = new Uint32Array(maxMask); // the current slice's mask cells, in order
   let sorted = new Uint32Array(1024);
 
@@ -225,6 +245,17 @@ export function meshVox(vox, opts = {}) {
           ao = c0 | (c1 << 2) | (c2 << 4) | (c3 << 6);
         }
         maskA[m] = ao;
+        if (maskE) {
+          // the four in-plane neighbours (same slice) and the cells in front of them
+          let e = 0;
+          for (let q2 = 0; q2 < 4; q2++) {
+            const ax = q2 < 2 ? u : v, sg = q2 & 1 ? 1 : -1;
+            const nx = x + (ax === 0 ? sg : 0), ny = y + (ax === 1 ? sg : 0), nz = z + (ax === 2 ? sg : 0);
+            if (occ3(nx, ny, nz) || occ3(nx + (a === 0 ? s : 0), ny + (a === 1 ? s : 0), nz + (a === 2 ? s : 0))) continue;
+            e |= EB[a][ax * 2 + (sg > 0 ? 1 : 0)];
+          }
+          maskE[m] = e;
+        }
         if (maskJ) { pt[0] = x; pt[1] = y; pt[2] = z; maskJ[m] = (vhash(pt[0], pt[1], pt[2], seed) - 0.5) * 2 * jitter; }
         ms[nm++] = m;
       }
@@ -236,14 +267,30 @@ export function meshVox(vox, opts = {}) {
         const ao = maskA[m];
         const i = m % du, j = (m - i) / du;
         let w = 1, h = 1;
+        // (edge bits: a row keeps one v-side status all along, rows keep the quad's u-side ends)
+        const bU0 = EB[a][u * 2], bU1 = EB[a][u * 2 + 1], VB = EB[a][v * 2] | EB[a][v * 2 + 1];
+        const e0 = maskE ? maskE[m] : 0;
         if (greedy) {
-          while (i + w < du && maskC[m + w] === c && maskA[m + w] === ao) w++;
-          outer: for (; j + h < dv; h++) {
-            const row = m + h * du;
-            for (let k = 0; k < w; k++) if (maskC[row + k] !== c || maskA[row + k] !== ao) break outer;
+          if (maskE) {
+            while (i + w < du && maskC[m + w] === c && maskA[m + w] === ao && (maskE[m + w] & VB) === (e0 & VB)) w++;
+            const eR = maskE[m + w - 1] & bU1;
+            outer: for (; j + h < dv; h++) {
+              const row = m + h * du;
+              const rv = maskE[row] & VB;
+              if ((maskE[row] & bU0) !== (e0 & bU0) || (maskE[row + w - 1] & bU1) !== eR) break;
+              for (let k = 0; k < w; k++) if (maskC[row + k] !== c || maskA[row + k] !== ao || (maskE[row + k] & VB) !== rv) break outer;
+            }
+          } else {
+            while (i + w < du && maskC[m + w] === c && maskA[m + w] === ao) w++;
+            outer: for (; j + h < dv; h++) {
+              const row = m + h * du;
+              for (let k = 0; k < w; k++) if (maskC[row + k] !== c || maskA[row + k] !== ao) break outer;
+            }
           }
         }
-        emit(a, u, v, s * A.flip, s, sl, i, j, w, h, c, ao, maskJ ? maskJ[m] : 0);
+        let ef = 0;
+        if (maskE) ef = (e0 & bU0) | (maskE[m + w - 1] & bU1) | (e0 & EB[a][v * 2]) | (maskE[m + (h - 1) * du] & EB[a][v * 2 + 1]);
+        emit(a, u, v, s * A.flip, s, sl, i, j, w, h, c, ao, maskJ ? maskJ[m] : 0, ef);
         for (let jj = 0; jj < h; jj++) { const row = m + jj * du; for (let ii = 0; ii < w; ii++) maskC[row + ii] = 0; }
       }
       q = qe;
@@ -256,7 +303,7 @@ export function meshVox(vox, opts = {}) {
     return id >>> BXY;
   }
 
-  function emit(a, u, v, wind, s, sl, i, j, w, h, c, ao, jit) {
+  function emit(a, u, v, wind, s, sl, i, j, w, h, c, ao, jit, ef) {
     if (vcount + 4 > cap) grow();
     const plane = s > 0 ? sl + 1 : sl;
     cu[0] = i; cv[0] = j; cu[1] = i + w; cv[1] = j; cu[2] = i + w; cv[2] = j + h; cu[3] = i; cv[3] = j + h;
@@ -269,6 +316,12 @@ export function meshVox(vox, opts = {}) {
     // side faces: u = the horizontal in-plane axis, v = y; top/bottom: (x, z)
     const fu = a === 0 ? 2 : 0, fv = a === 1 ? 2 : 1;
     const base = vcount;
+    // the quad's extent in its detail axes (the shader measures the bevel from its sides)
+    let q0 = 1e9, q1 = 1e9, q2 = -1e9, q3 = -1e9;
+    for (let k = 0; k < 4; k++) {
+      pt[a] = plane; pt[u] = cu[k]; pt[v] = cv[k];
+      q0 = Math.min(q0, pt[fu]); q1 = Math.min(q1, pt[fv]); q2 = Math.max(q2, pt[fu]); q3 = Math.max(q3, pt[fv]);
+    }
     for (let k = 0; k < 4; k++) {
       pt[a] = plane;
       pt[u] = cu[k];
@@ -280,7 +333,8 @@ export function meshVox(vox, opts = {}) {
       aos[k] = aov;
       const lit = em ? 1 : 1 - (1 - AO[aov]) * aoK;
       col[o4] = r * lit * tint; col[o4 + 1] = g * lit * tint; col[o4 + 2] = b * lit * tint; col[o4 + 3] = em;
-      fuv[o4] = pt[fu]; fuv[o4 + 1] = pt[fv]; fuv[o4 + 2] = did; fuv[o4 + 3] = a;
+      fuv[o4] = pt[fu]; fuv[o4 + 1] = pt[fv]; fuv[o4 + 2] = did; fuv[o4 + 3] = a | (ef << 2);
+      qb[o4] = q0; qb[o4 + 1] = q1; qb[o4 + 2] = q2; qb[o4 + 3] = q3;
       vcount++;
     }
     // flip the diagonal so AO gradients don't crease
@@ -306,6 +360,7 @@ export function meshVox(vox, opts = {}) {
     g.setAttribute('color4', new THREE.BufferAttribute(col.slice(0, vcount * 4), 4));
   }
   g.setAttribute('detail', new THREE.BufferAttribute(fuv.slice(0, vcount * 4), 4));
+  g.setAttribute('qbox', new THREE.BufferAttribute(qb.slice(0, vcount * 4), 4));
   g.setIndex(vcount > 65535 ? new THREE.BufferAttribute(idx.slice(0, nIdx), 1) : new THREE.BufferAttribute(Uint16Array.from(idx.subarray(0, nIdx)), 1));
   g.computeBoundingSphere();
   g.computeBoundingBox();

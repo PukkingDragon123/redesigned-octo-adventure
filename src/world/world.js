@@ -19,11 +19,12 @@ import { Atmosphere } from './atmosphere.js';
 import { G } from '../render/shaderlib.js';
 import { DECOR } from './decor.js';
 import { VoxelWorld, startBuildingJobs } from './voxelWorld.js';
-import { Forest2D } from './forest2d.js';
+import { VoxelForest } from './voxelForest.js';
 import { PhysProps } from './physprops.js';
 import * as VOXPROPS from '../voxel/models/props.js';
 import { meshVox } from '../voxel/mesh.js';
 import { voxMesh, sharedVoxelMaterial } from '../render/voxelMaterial.js';
+import { Vox } from '../voxel/vox.js';
 
 const _fwd = new THREE.Vector3(), _up = new THREE.Vector3(), _right = new THREE.Vector3(), _lup = new THREE.Vector3(), _snap = new THREE.Vector3();
 
@@ -56,11 +57,11 @@ export class World {
     this.scene.add(this.forest.buildMeshes());
     console.log('forest', JSON.stringify(this.forest.stats));
     if (!this.noVoxelTrees) {
-      // pixel-art trees; voxelForest is the old name (settings and cutscenes still use it)
-      this.forest2d = this.voxelForest = new Forest2D(this.forest);
+      // every tree a voxel model, near to the horizon (settings and cutscenes reach it as voxelForest)
+      this.voxelForest = new VoxelForest(this.forest);
       const t0 = performance.now();
-      this.scene.add(await this.forest2d.build((k) => this.progress(0.32 + k * 0.06, 'growing the trees')));
-      console.log(`forest sprites in ${(performance.now() - t0).toFixed(0)}ms`, JSON.stringify(this.forest2d.stats));
+      this.scene.add(await this.voxelForest.build((k) => this.progress(0.32 + k * 0.06, 'growing the trees')));
+      console.log(`voxel forest in ${(performance.now() - t0).toFixed(0)}ms`, JSON.stringify(this.voxelForest.stats));
     }
 
     await step(0.4, 'raising the village');
@@ -112,6 +113,7 @@ export class World {
     this.scene.add(sun);
     this.scene.add(sun.target);
     this.sun = sun;
+    this.voxelForest?.attachShadowCamera(sun.shadow.camera);
     this.atmosphere = new Atmosphere(this.pipeline, sun);
   }
 
@@ -195,17 +197,13 @@ export class World {
       if (bt.kind !== 'canoe') this.physics.addBox({ x: bt.x, z: bt.z, yaw: bt.yaw, w: bt.kind === 'fishing' ? 2.3 : 1.4, l: bt.kind === 'fishing' ? 6.5 : 3.2, y0: -2, y1: 2.5, kind: 'boat' });
       return m;
     });
-    // flags
+    // flags: a one-voxel-thick Maple Leaf, every column its own vertices so it can ripple
     this.flags = ctx.flags.map((f) => {
-      const g = new THREE.PlaneGeometry(f.w, f.h, 8, 3);
-      g.translate(f.w / 2, 0, 0);
-      const B = new Builder();
-      B.add(g, new THREE.Matrix4(), { tile: 'flag' });
-      B.add(g.clone().rotateY(Math.PI), new THREE.Matrix4(), { tile: 'flag' });
-      const geo = B.build();
-      const m = propMesh(geo, this.propMat, { cast: true });
+      const geo = meshVox(flagVox(), { size: f.w / 48, origin: [0, 12, 0.5], greedy: false, ao: false });
+      const m = voxMesh(geo, sharedVoxelMaterial());
       m.position.copy(f.pos);
       m.userData.base = Float32Array.from(geo.attributes.position.array);
+      m.userData.w = f.w;
       this.scene.add(m);
       return m;
     });
@@ -226,7 +224,7 @@ export class World {
       const wind = 0.6 + G.uWindStrength.value;
       for (let i = 0; i < pos.count; i++) {
         const x = base[i * 3];
-        const k = x / 1.8;
+        const k = x / f.userData.w;
         pos.setZ(i, base[i * 3 + 2] + Math.sin(t * 6 * wind - x * 3) * 0.12 * k * wind);
         pos.setY(i, base[i * 3 + 1] - k * k * 0.12 / wind);
       }
@@ -261,7 +259,7 @@ export class World {
     G.uTime.value += dt;
     this.atmosphere.update(dt);
     this.sky.position.copy(camera.position);
-    this.forest2d?.update(camera.position, camera);
+    this.voxelForest?.update(camera.position, camera);
     this.fences?.update(camera);
     this.forest?.updateVisibility(camera.position);
     this.voxel?.updateFar?.(camera.position);
@@ -270,4 +268,25 @@ export class World {
     this.updateTown(dt);
     this.lightPool?.update(dt, focus, G.uNight.value);
   }
+}
+
+// the Maple Leaf, 48 x 24 voxels (as the old flag tile)
+function flagVox() {
+  const v = new Vox(48, 24, 1);
+  const red = 0xd52b1e, white = 0xf8f6f2;
+  const leaf = [[0, -9], [2, -5], [4, -6], [3, -1], [7, -4], [6, -1], [8, 0], [4, 3], [5, 5], [1, 4], [1, 8], [-1, 8], [-1, 4], [-5, 5], [-4, 3], [-8, 0], [-6, -1], [-7, -4], [-3, -1], [-4, -6], [-2, -5]]
+    .map(([a, b]) => [24 + a * (24 / 22), 12 - b * (24 / 22)]);
+  const inside = (x, y) => {
+    let c = false;
+    for (let i = 0, j = leaf.length - 1; i < leaf.length; j = i++) {
+      const [xi, yi] = leaf[i], [xj, yj] = leaf[j];
+      if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) c = !c;
+    }
+    return c;
+  };
+  for (let y = 0; y < 24; y++) for (let x = 0; x < 48; x++) {
+    const bar = x < 12 || x >= 36;
+    v.set(x, y, 0, bar || inside(x + 0.5, y + 0.5) ? red : white);
+  }
+  return v;
 }

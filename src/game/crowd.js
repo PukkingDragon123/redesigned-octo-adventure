@@ -151,7 +151,7 @@ function bake(a, pose) {
     const src = o.geometry;
     if (!src.attributes.color4 || !src.index) return;
     const g = new THREE.BufferGeometry();
-    for (const k of ['position', 'normal', 'color4', 'detail']) if (src.attributes[k]) g.setAttribute(k, src.attributes[k].clone());
+    for (const k of ['position', 'normal', 'color4', 'detail', 'qbox']) if (src.attributes[k]) g.setAttribute(k, src.attributes[k].clone());
     g.setIndex(src.index.clone());
     g.applyMatrix4(_rel);
     if (_rel.determinant() < 0) {

@@ -6,20 +6,22 @@
 // sends cod, salmon, mackerel and lobsters flopping across the street. Things
 // put themselves back once they have been down a while and nobody is looking.
 //
-// The same goes for the 2D furniture all over town (src/art/furniture2d.js):
+// The same goes for the furniture all over town (src/art/furniture2d.js):
 // porch rockers tip back, café chairs and deck chairs fall over, mugs and books
 // fly, leaf piles burst into leaves, beach balls roll, mums spill their dirt.
 // Flat things (welcome mats, beach towels, the goods in the shop windows) are
-// cards fixed to the ground or the glass in one static mesh.
+// fixed voxel pieces on the ground or behind the glass.
 //
 // Placement lives in src/world/deco2d.js (world.deco2d.items / cards); the art in
-// src/art/deco2d.js and furniture2d.js, baked into atlas pages in a worker
-// (decoPaint.js). Each page is drawn by one instanced SpriteBatch.
+// src/art/deco2d.js and furniture2d.js, sculpted pieces that are voxelised into real
+// voxel models in a worker (voxel/models/clutter.js, art/decoVox.js). Every pose of every
+// kind lives in one BatchedMesh and every piece is an instance of it (one draw per pass);
+// each frame the pieces in range are posed (tipping over about their foot, rolling,
+// flopping, wobbling) and switched to the pose they show.
 import * as THREE from 'three';
-import { SpriteAtlas, SpriteBatch } from '../render/sprites.js';
-import { createFlatMaterial } from '../render/voxelMaterial.js';
-import { CATALOGUE, bakeAllSync, viewName } from '../art/decoPaint.js';
-import { startDecoPaint } from '../art/decoStart.js';
+import { createVoxelMaterial } from '../render/voxelMaterial.js';
+import { CATALOGUE } from '../art/decoPaint.js';
+import { startDecoPaint, bakeDecoSync } from '../art/decoStart.js';
 import { SpatialHash } from '../core/spatial.js';
 import { clamp } from '../core/math.js';
 
@@ -113,7 +115,9 @@ const FAR = {
 const SMALL = 55;
 const ANIM = { laundry: 1.6, scarecrow: 0.5, chimes: 1.3 };
 
-const _right = new THREE.Vector3(), _fwd = new THREE.Vector3(), _p = new THREE.Vector3();
+const _right = new THREE.Vector3(), _fwd = new THREE.Vector3(), _p = new THREE.Vector3(), _ax = new THREE.Vector3();
+const _m1 = new THREE.Matrix4(), _m2 = new THREE.Matrix4(), _q = new THREE.Quaternion();
+const _o = { roll: 0, sx: 1, sy: 1, tip: 0, tdx: 0, tdz: 1, foot: 0, q: null, lift: 0 };
 // porch pieces land on their deck's floor while they are over it (the physics may not have the deck)
 const floorAt = (fl, x, z, h) => (fl && h < fl.y && fl.inside(x, z, 0) ? fl.y : h);
 
@@ -137,80 +141,57 @@ export class Deco2D {
     this.cards = game.world.deco2d?.cards || [];
     this.ready = false;
     this.t0 = performance.now();
-    if (game.params?.has('frames')) this.install(bakeAllSync());
-    else (game.world.deco2d?.paint || startDecoPaint()).then((pages) => { this.pages = pages; });
+    if (game.params?.has('frames')) this.install(bakeDecoSync());
+    else (game.world.deco2d?.paint || startDecoPaint()).then((models) => { this.pages = models; });
   }
 
-  // the baked pages arrive: one atlas texture and one sprite batch per page
-  install(pages) {
-    const byName = new Map();
-    this.batches = pages.map((pg, pi) => {
-      const atlas = new SpriteAtlas(pg.size);
-      atlas.pix.data.set(pg.data);
-      for (const f of pg.frames) { const fr = { ...f, page: pi }; atlas.frames.set(f.name, fr); byName.set(f.name, fr); }
-      atlas.finalize({ mips: true });
-      // cut-outs standing on their spot, lit alike from every side, only a hint of the night rim
-      const B = new SpriteBatch(atlas, 1500, { castShadow: true, upright: 0.9, flatDepth: true, steadyLight: true, moonRim: 0.3 });
-      B.mesh.name = `deco2d:${pi}`;
-      this.game.scene.add(B.mesh);
-      return B;
-    });
-    this.frames = {};
-    for (const [kind, K] of Object.entries(CATALOGUE)) {
-      const fk = (this.frames[kind] = {});
-      K.views.forEach((view, vi) => { fk[viewName(view, vi)] = Array.from({ length: K.n }, (_, i) => byName.get(`${kind}:${viewName(view, vi)}:${i}`)); });
-      if (K.flat) continue;
-      if (K.sym) { fk.mirror = true; fk.back ||= fk.front; fk.back3 ||= fk.front3; }
-      fk.front ||= fk.front3 || fk.side; fk.back ||= fk.back3 || fk.side;
-      fk.front3 ||= fk.side; fk.back3 ||= fk.side;
-    }
-    this.buildCards(byName);
-    this.ready = true;
-    console.log(`deco2d: ${this.items.length} pieces, ${this.cards.length} cards, ${byName.size} frames on ${pages.length} page(s), ready ${(performance.now() - this.t0).toFixed(0)}ms after start`);
-  }
-
-  // flat cards (welcome mats, towels, window displays): static quads in one mesh per page
-  buildCards(byName) {
-    const per = new Map();
-    for (const c of this.cards) {
-      const f = byName.get(`${c.kind}:v0:${c.v || 0}`);
-      if (!f) continue;
-      if (!per.has(f.page)) per.set(f.page, []);
-      per.get(f.page).push({ c, f });
-    }
-    for (const [pi, list] of per) {
-      const atlas = this.batches[pi].atlas, S = atlas.size;
-      const n = list.length;
-      const pos = new Float32Array(n * 12), nor = new Float32Array(n * 12), uv = new Float32Array(n * 8), idx = [];
-      list.forEach(({ c, f }, i) => {
-        // card axes: R (image right), U (image up), N (towards the viewer)
-        let R, U, N;
-        if (c.flat === 'ground') { const a = c.yaw; U = [Math.sin(a), 0, Math.cos(a)]; R = [-Math.cos(a), 0, Math.sin(a)]; N = [0, 1, 0]; }
-        else { N = [c.nx, 0, c.nz]; U = [0, 1, 0]; R = [c.nz, 0, -c.nx]; }
-        const k = 1 / f.ppm, P = [c.x, c.y, c.z];
-        const corner = (px, py) => [0, 1, 2].map((j) => P[j] + R[j] * (px - f.ax) * k + U[j] * (f.ay - py) * k);
-        [[0, f.h], [f.w, f.h], [f.w, 0], [0, 0]].forEach(([px, py], q) => {
-          pos.set(corner(px, py), (i * 4 + q) * 3);
-          nor.set(N, (i * 4 + q) * 3);
-          uv.set([(f.x + px) / S, (f.y + py) / S], (i * 4 + q) * 2);
-        });
-        idx.push(i * 4, i * 4 + 1, i * 4 + 2, i * 4, i * 4 + 2, i * 4 + 3);
-      });
+  // the voxel models arrive: every pose of every kind goes into one BatchedMesh, and every piece,
+  // fixed flat thing and flying bit is an instance of it (one draw call per pass for the lot)
+  install(models) {
+    this.mat = createVoxelMaterial();
+    this.models = new Map();
+    let nv = 0, ni = 0;
+    const geos = [];
+    for (const m of models) {
       const geo = new THREE.BufferGeometry();
-      geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-      geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
-      geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
-      geo.setIndex(idx);
-      geo.computeBoundingSphere();
-      const mat = createFlatMaterial(atlas.texture);
-      // (mats and towels lie a hair above the ground or deck: pulled forward so they never flicker in it)
-      mat.polygonOffset = true; mat.polygonOffsetFactor = -2; mat.polygonOffsetUnits = -4;
-      const mesh = new THREE.Mesh(geo, mat);
-      mesh.receiveShadow = true;
-      mesh.name = `deco2d:cards:${pi}`;
-      mesh.matrixAutoUpdate = false;
-      this.game.scene.add(mesh);
+      geo.setAttribute('position', new THREE.BufferAttribute(m.pos, 3));
+      geo.setAttribute('normal', new THREE.BufferAttribute(m.nor, 3, true));
+      geo.setAttribute('color4', new THREE.BufferAttribute(m.col, 4, true));
+      geo.setAttribute('detail', new THREE.BufferAttribute(m.det, 4));
+      geo.setAttribute('qbox', new THREE.BufferAttribute(m.qb, 4));
+      geo.setIndex(new THREE.BufferAttribute(m.idx instanceof Uint32Array ? m.idx : Uint32Array.from(m.idx), 1));
+      nv += m.pos.length / 3; ni += m.idx.length;
+      geos.push({ m, geo });
     }
+    const nInst = this.items.length + this.cards.length + MAX_BITS + 8;
+    const B = (this.batch = new THREE.BatchedMesh(nInst, nv, ni, this.mat));
+    B.name = 'deco-voxels';
+    B.castShadow = true;
+    B.receiveShadow = true;
+    B.customDepthMaterial = this.mat.userData.depth;
+    B.perObjectFrustumCulled = true;
+    B.sortObjects = false;
+    // (not in the water's mirror: small clutter there costs a pass and is never missed)
+    B.layers.set(1);
+    for (const { m, geo } of geos) {
+      const id = B.addGeometry(geo);
+      geo.dispose();
+      this.models.set(m.key, { key: m.key, kind: m.kind, size: m.size, h: m.h, id, faces: m.faces });
+    }
+    const first = this.models.values().next().value;
+    const add = () => { const k = B.addInstance(first.id); B.setVisibleAt(k, false); return k; };
+    for (const it of this.items) it.bi = add();
+    for (const c of this.cards) c.bi = add();
+    this.bitSlots = Array.from({ length: MAX_BITS }, add);
+    this.game.scene.add(B);
+    // flat things: fixed pieces facing out of their window, or lying on the ground
+    for (const c of this.cards) {
+      c.yaw3 = c.flat === 'ground' ? (c.yaw || 0) + Math.PI : Math.atan2(c.nx, c.nz);
+      c.model = this.models.get(`${c.kind}:${c.v || 0}`) || this.models.get(`${c.kind}:0`);
+    }
+    this.ready = true;
+    const faces = [...this.models.values()].reduce((a, m) => a + m.faces, 0);
+    console.log(`deco voxels: ${this.items.length} pieces, ${this.cards.length} fixed, ${this.models.size} models (${faces} faces), ready ${(performance.now() - this.t0).toFixed(0)}ms after start`);
   }
 
   // ---------------------------------------------------------------- knocking things over
@@ -550,63 +531,101 @@ export class Deco2D {
   }
 
   // ---------------------------------------------------------------- drawing
+  // pose instance k as model M: at (x, y, z) turned by yaw; o.roll about its own front axis
+  // round a point o.lift up; o.sx / o.sy squash; o.q a free rotation round that point (rolling);
+  // o.tip tips it over towards (o.tdx, o.tdz) about its foot, o.foot metres out
+  pose(k, M, x, y, z, yaw, o) {
+    const s = M.size, lift = o.lift || 0;
+    _m1.makeScale(s * o.sx, s * o.sy, s * o.sx);
+    if (lift) _m1.premultiply(_m2.makeTranslation(0, -lift, 0));
+    if (o.roll) _m1.premultiply(_m2.makeRotationZ(o.roll));
+    _m1.premultiply(_m2.makeRotationY(yaw));
+    if (o.q) _m1.premultiply(_m2.makeRotationFromQuaternion(o.q));
+    if (lift) _m1.premultiply(_m2.makeTranslation(0, lift, 0));
+    if (o.tip) {
+      const fx = o.tdx * o.foot, fz = o.tdz * o.foot;
+      _ax.set(o.tdz, 0, -o.tdx).normalize();
+      _m1.premultiply(_m2.makeTranslation(-fx, 0, -fz));
+      _m1.premultiply(_m2.makeRotationAxis(_ax, o.tip));
+      _m1.premultiply(_m2.makeTranslation(fx, 0, fz));
+    }
+    _m1.premultiply(_m2.makeTranslation(x, y, z));
+    const B = this.batch;
+    if (B.getGeometryIdAt(k) !== M.id) B.setGeometryIdAt(k, M.id);
+    B.setMatrixAt(k, _m1);
+    if (!B.getVisibleAt(k)) B.setVisibleAt(k, true);
+  }
+
+  hide(k) {
+    if (this.batch.getVisibleAt(k)) this.batch.setVisibleAt(k, false);
+  }
+
   draw() {
-    const BS = this.batches, cam = this.game.camera, cp = cam.position;
+    const cam = this.game.camera, cp = cam.position;
     cam.getWorldDirection(_fwd);
     const fx = _fwd.x, fy = _fwd.y, fz = _fwd.z;
-    const rx = this.rx, rz = this.rz;
-    for (const B of BS) B.begin();
+    const dtv = this._drawT == null ? 0 : Math.min(0.1, Math.max(0, this.t - this._drawT));
+    this._drawT = this.t;
+    const o = _o;
+    const reset = () => { o.roll = 0; o.sx = 1; o.sy = 1; o.tip = 0; o.q = null; o.lift = 0; };
     for (const it of this.items) {
-      if (it.st === 3 || it.fence3d) continue; // (the fences are voxel geometry: world/fences3d.js)
+      if (it.st === 3 || it.fence3d) { this.hide(it.bi); continue; } // (the fences are voxel geometry: world/fences3d.js)
       const dx = it.x - cp.x, dy = it.y - cp.y, dz = it.z - cp.z;
       const far = FAR[it.kind] ?? (it.goods ? SMALL : 90);
       const dd = dx * dx + dy * dy + dz * dz;
-      if (dd > far * far) continue;
-      if (dx * fx + dy * fy + dz * fz < -4 - (it.len || 0)) continue;
+      if (dd > far * far || dx * fx + dy * fy + dz * fz < -4 - (it.len || 0)) { this.hide(it.bi); continue; }
       const kind = it.st !== 0 && it.def.fallTo && it.tip > 0.5 ? it.def.fallTo : it.kind;
-      const F = this.frames[kind];
-      if (!F) continue;
-      const toCam = Math.atan2(-dx, -dz);
-      let rel = toCam - it.yaw;
-      rel = Math.abs(Math.atan2(Math.sin(rel), Math.cos(rel)));
-      const view = rel < Math.PI / 8 ? 'front' : rel < (3 * Math.PI) / 8 ? 'front3' : rel < (5 * Math.PI) / 8 ? 'side' : rel < (7 * Math.PI) / 8 ? 'back3' : 'back';
-      const arr = F[view] || F.side;
-      const l = Math.hypot(dx, dz) || 1;
-      let flip = view !== 'front' && view !== 'back' && Math.sin(it.yaw) * (-dz / l) + Math.cos(it.yaw) * (dx / l) < 0;
-      // symmetric things show their front views, mirrored, from behind
-      if (F.mirror && (view === 'back' || view === 'back3')) flip = !flip;
+      const K = CATALOGUE[kind];
       let fi = 0;
-      if (arr.length > 1) {
-        if (it.vary) fi = it.v % arr.length;
+      if (K?.n > 1) {
+        if (it.vary) fi = it.v % K.n;
         else if (it.def.mode === 'flop') fi = it.st === 1 && this.t - it.kt < 11 ? (Math.floor(this.t * 10 + it.ph) % 2 ? 0 : 2) : 1;
-        else fi = Math.floor((this.t + it.ph) * (ANIM[it.kind] || 1)) % arr.length;
+        else fi = Math.floor((this.t + it.ph) * (ANIM[it.kind] || 1)) % K.n;
       }
-      const f = arr[fi];
-      if (!f) continue;
-      let roll = 0, sy = 1, sx = 1, y = it.y;
-      if (it.tip > 0) {
-        const fxl = dx / l, fzl = dz / l;
-        const dr = it.tdx * rx + it.tdz * rz, df = it.tdx * fxl + it.tdz * fzl;
-        roll = -it.tip * dr;
-        sy = 1 - (1 - Math.cos(it.tip)) * Math.abs(df) * 0.72;
-        y += Math.sin(it.tip) * Math.abs(dr) * (f.w / (f.ppm || 40)) * 0.32;
-      } else if (it.spin) roll = it.spin;
+      const M = this.models.get(`${kind}:${fi}`);
+      if (!M) { this.hide(it.bi); continue; }
+      reset();
       if (it.wob > 0) {
         const w = Math.sin(this.t * 28 + it.ph) * 0.07 * it.wob;
-        sy *= 1 + w; sx = 1 - w * 0.6;
-        if (it.def.mode === 'fixed') roll += Math.sin(this.t * 17 + it.ph) * 0.05 * it.wob;
+        o.sy = 1 + w; o.sx = 1 - w * 0.6;
+        if (it.def.mode === 'fixed') o.roll = Math.sin(this.t * 17 + it.ph) * 0.05 * it.wob;
       }
-      BS[f.page].push(f, it.x, y, it.z, { flip, roll, sx, sy });
+      if (it.tip > 0) {
+        o.tip = it.tip; o.tdx = it.tdx; o.tdz = it.tdz; o.foot = Math.min(it.r, M.h * 0.5);
+      } else if (it.def.mode === 'ball') {
+        // roll for real: about the level axis across the way it is going
+        const sp = Math.hypot(it.vx, it.vz);
+        it.q3 ||= new THREE.Quaternion();
+        if (sp > 0.02 && dtv > 0) {
+          _ax.set(it.vz / sp, 0, -it.vx / sp);
+          it.q3.premultiply(_q.setFromAxisAngle(_ax, (sp * dtv) / Math.max(0.12, it.r)));
+        }
+        o.q = it.q3; o.lift = M.h * 0.5;
+      } else if (it.def.mode === 'flop') {
+        // fish and lobsters flop about lying on their sides
+        o.roll = Math.PI / 2 + (it.spin || 0); o.lift = 0.06;
+      } else if (it.spin) o.roll = it.spin;
+      this.pose(it.bi, M, it.x, it.y, it.z, it.yaw, o);
     }
+    // fixed flat things: mats, towels, shop-window displays
+    for (const c of this.cards) {
+      const dx = c.x - cp.x, dy = c.y - cp.y, dz = c.z - cp.z;
+      if (!c.model || dx * dx + dy * dy + dz * dz > 60 * 60 || dx * fx + dy * fy + dz * fz < -3) { this.hide(c.bi); continue; }
+      reset();
+      this.pose(c.bi, c.model, c.x, c.y, c.z, c.yaw3, o);
+    }
+    // flying bits: litter, apples, lids, logs, leaves
+    let slot = 0;
     for (const b of this.bits) {
+      if (slot >= this.bitSlots.length) break;
       const dx = b.x - cp.x, dy = b.y - cp.y, dz = b.z - cp.z;
       if (dx * dx + dy * dy + dz * dz > SMALL * SMALL || dx * fx + dy * fy + dz * fz < -2) continue;
-      const F = this.frames[b.kind];
-      if (!F) continue;
-      let arr = F.side;
-      if (F.front && F.front !== F.side) { const rel = Math.abs(Math.atan2(Math.sin(Math.atan2(-dx, -dz) - b.yaw), Math.cos(Math.atan2(-dx, -dz) - b.yaw))); arr = rel < 0.5 || rel > 2.6 ? F.front : rel < 1.1 || rel > 2.0 ? F.front3 : F.side; }
-      BS[arr[0].page].push(arr[0], b.x, b.y, b.z, { roll: b.spin, flip: (b.yaw % TAU) > Math.PI });
+      const M = this.models.get(`${b.kind}:0`);
+      if (!M) continue;
+      reset();
+      o.roll = b.spin; o.lift = M.h * 0.5;
+      this.pose(this.bitSlots[slot++], M, b.x, b.y, b.z, b.yaw, o);
     }
-    for (const B of BS) B.end();
+    for (; slot < this.bitSlots.length; slot++) this.hide(this.bitSlots[slot]);
   }
 }

@@ -32,6 +32,11 @@ export const G = {
   uSeeP: { value: new THREE.Vector4(1.25, 0.75, 0.9, -1e5) },
   uSeePx: { value: 2 }, // dither cell size in screen pixels
   uSeeCamR: { value: 0.3 }, // ring radius at the lens end (wide when a building is in the way)
+  // the pixel-voxel look (VOXEL_LOOK_GLSL): bevel line width in screen pixels, its strength,
+  // per-voxel colour jitter
+  uEdgePx: { value: 1 },
+  uEdge: { value: 1 },
+  uVoxJit: { value: 1 },
 };
 
 // Per-material light uniforms are cloned (three writes shadow maps into them),
@@ -222,5 +227,71 @@ float seeThrough(vec3 wp) {
 }
 vec3 seeRim(vec3 col, float rim) {
   return rim > 0.0 ? mix(col, vec3(2.6, 1.0, 0.3), rim * 0.8) : col;
+}
+`;
+
+// The pixel-voxel look, shared by every voxel surface (props, buildings, characters, trees).
+//  - voxBevel: a hand-pixelled bevel on the model's convex edges (the mesher flags them per
+//    quad, see voxel/mesh.js): a light line where a top face meets the air and along the top
+//    of every wall, a dark line under overhangs and along bottoms. One or two screen pixels
+//    wide, never more than a quarter of a voxel, gone once a voxel is under ~3 px (no shimmer).
+//  - voxJitter: each voxel a hair lighter or darker than its neighbours, like hand-placed
+//    MagicaVoxel colours (fades out with distance the same way).
+//  - voxLight: a palette ramp rather than smooth shading: the sun's diffuse falls into three
+//    crisp tone steps, tops a step up and undersides a step down, light leaning warm and shade
+//    leaning cool plum with a touch more saturation, as a pixel artist would hue-shift a ramp.
+// Needs LIGHT_PARS_FRAG and NOISE_GLSL first.
+export const VOXEL_LOOK_GLSL = /* glsl */ `
+uniform float uEdgePx;
+uniform float uEdge;
+uniform float uVoxJit;
+float flagBit(float f, float b) { return mod(floor(f / b + 0.001), 2.0); }
+// g: face coords in voxels, q: the quad's box (u0, v0, u1, v1), fl: edge flags (1 -U, 2 +U, 4 -V, 8 +V)
+// returns > 0 for a light bevel, < 0 for a dark one
+float voxBevel(vec2 g, vec4 q, float fl, vec3 n) {
+  if (fl < 0.5 || uEdge <= 0.0) return 0.0;
+  vec2 px = fwidth(g);
+  float pm = max(px.x, px.y);
+  float fade = 1.0 - smoothstep(0.2, 0.36, pm);
+  if (fade <= 0.0) return 0.0;
+  vec2 w = min(px * uEdgePx, vec2(0.26));
+  float u0 = flagBit(fl, 1.0) * step(g.x - q.x, w.x);
+  float u1 = flagBit(fl, 2.0) * step(q.z - g.x, w.x);
+  float v0 = flagBit(fl, 4.0) * step(g.y - q.y, w.y);
+  float v1 = flagBit(fl, 8.0) * step(q.w - g.y, w.y);
+  float e;
+  if (n.y > 0.5) e = max(max(u0, u1), max(v0, v1));            // a top face: every rim catches the light
+  else if (n.y < -0.5) e = -max(max(u0, u1), max(v0, v1));     // an underside: dark rims
+  else e = v1 > 0.5 ? 1.0 : v0 > 0.5 ? -1.0 : max(u0, u1) * 0.55; // walls: light top, dark foot, soft corners
+  return e * fade * uEdge;
+}
+float voxJitter(vec2 g, float axis) {
+  vec2 px = fwidth(g);
+  float fade = 1.0 - smoothstep(0.25, 0.5, max(px.x, px.y));
+  if (fade <= 0.0 || uVoxJit <= 0.0) return 1.0;
+  float h = hash12(floor(g + 0.001) + vec2(axis * 31.7, axis * 17.3));
+  return 1.0 + (h - 0.5) * 0.07 * fade * uVoxJit;
+}
+vec3 bevelTone(vec3 albedo, float e) {
+  if (e > 0.0) return mix(albedo, albedo * 1.3 + vec3(0.03, 0.025, 0.01), e);
+  return mix(albedo, albedo * vec3(0.6, 0.56, 0.66), -e);
+}
+// the pixel-art light ramp (sun bands, warm light / cool shade, tops up, undersides down)
+vec3 voxLight(vec3 albedo, vec3 n, vec3 wp, float shadow, float wrap) {
+  float ndl = dot(n, uSunDir);
+  float d = clamp(ndl * (1.0 - wrap) + wrap, 0.0, 1.0);
+  // three tone steps with hairline transitions
+  float band = smoothstep(0.04, 0.1, d) * 0.45 + smoothstep(0.38, 0.44, d) * 0.33 + smoothstep(0.72, 0.78, d) * 0.22;
+  band = mix(d, band, 0.75);
+  float lit = band * shadow;
+  float face = n.y > 0.5 ? 1.08 : n.y < -0.5 ? 0.78 : 1.0;
+  vec3 amb = hemiAmbient(n) * 1.05;
+  vec3 col = albedo * face * (amb + uSunColor * lit * 0.95 + pointLightsAt(wp, n, 0.35));
+  // hue-shift the ramp: the shade side cooler (plum-blue) and a little richer, the light side warmer
+  float l = dot(col, vec3(0.2126, 0.7152, 0.0722));
+  float shade = 1.0 - clamp(lit * 1.4, 0.0, 1.0);
+  col = mix(col, max(mix(vec3(l), col, 1.18), 0.0) * vec3(0.9, 0.92, 1.12), shade * 0.55 * (1.0 - uNight * 0.6));
+  col *= mix(vec3(1.0), vec3(1.05, 1.0, 0.92), clamp(lit, 0.0, 1.0) * 0.6);
+  return col;
 }
 `;

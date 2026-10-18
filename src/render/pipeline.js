@@ -488,7 +488,8 @@ export class Pipeline {
     // reflections don't need full resolution once the frame is HD
     const rk = this.retro ? 0.75 : 0.5;
     const rw = Math.max(2, Math.floor(w * rk)), rh = Math.max(2, Math.floor(h * rk));
-    this.reflRT = new THREE.WebGLRenderTarget(rw, rh, { type: THREE.HalfFloatType, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, depthBuffer: true });
+    // (nearest: the mirrored world keeps its crisp pixels, it's only drawn at a whole fraction)
+    this.reflRT = new THREE.WebGLRenderTarget(rw, rh, { type: THREE.HalfFloatType, minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, depthBuffer: true });
     const bw = Math.max(2, Math.floor(w / 4)), bh = Math.max(2, Math.floor(h / 4));
     this.bloomA = new THREE.WebGLRenderTarget(bw, bh, { type: THREE.HalfFloatType, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, depthBuffer: false });
     this.bloomB = this.bloomA.clone();
@@ -549,12 +550,16 @@ export class Pipeline {
     this.renderer.setSize(this.w, this.h, false);
     this.post.uRes.value.set(this.w, this.h);
     const P = this.post;
-    P.uLevels.value = this.retro ? 40 : 255;
-    P.uDither.value = this.retro ? 0.85 : 0.5;
+    // a palette-friendly quantise even at full resolution: 64 steps a channel with an ordered
+    // dither, so the sky's and the fog's long gradients break into fine pixel-art dither bands
+    P.uLevels.value = this.retro ? 40 : 64;
+    P.uDither.value = this.retro ? 0.85 : 0.9;
     P.uOutlineW.value = this.retro ? 1 : Math.max(1, Math.round(this.h / 620));
     P.uVignette.value = this.retro ? 1.0 : 0.8;
     // the see-through dissolve dithers in cells about as big as a retro pixel
     G.uSeePx.value = this.retro ? 1 : Math.max(1, Math.round(this.h / 400));
+    // the voxel bevel lines: one pixel up to ~1000 px tall frames, then two
+    G.uEdgePx.value = this.retro ? 1 : Math.max(1, Math.round(this.h / 1000));
     this.makeTargets();
   }
 

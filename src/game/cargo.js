@@ -6,8 +6,9 @@
 // packs them into the crate one by one (skippable like any cutscene). handOff() lifts a
 // cup out of the crate into a customer's hands when they come over for it (npcs.js).
 import * as THREE from 'three';
-import { Builder } from '../render/builder.js';
-import { propMesh } from '../render/propMaterial.js';
+import { VoxPad } from '../voxel/pad.js';
+import { meshVox } from '../voxel/mesh.js';
+import { voxMesh, sharedVoxelMaterial } from '../render/voxelMaterial.js';
 import { clamp } from '../core/math.js';
 import * as L from '../world/layout.js';
 
@@ -21,30 +22,42 @@ const _w = new THREE.Vector3();
 const _q = new THREE.Quaternion();
 
 const geoCache = new Map();
+const vgeo = (P) => { const r = P.result(); return meshVox(r.vox, { size: r.size, origin: r.origin }); };
+// a cocoa to go as a little voxel model: tapered paper cup, a card sleeve with a cream stripe,
+// a snap-on lid with a sip hole
 function cupGeometry(cocoa) {
   if (geoCache.has(cocoa)) return geoCache.get(cocoa);
-  const B = new Builder();
   const sleeve = SLEEVE[cocoa] ?? 0xb98250;
-  // tapered paper cup, a card sleeve with a cream stripe, a snap-on lid with a sip hole
-  B.tube([0, 0, 0], [0, 0.13, 0], 0.042, 0.054, { color: 0xf6efe2 }, 10);
-  B.tube([0, 0.034, 0], [0, 0.092, 0], 0.0472, 0.0528, { color: sleeve }, 10);
-  B.tube([0, 0.058, 0], [0, 0.068, 0], 0.0496, 0.0508, { color: 0xf4e4c0 }, 10);
-  B.tube([0, 0.127, 0], [0, 0.142, 0], 0.059, 0.057, { color: 0xffffff }, 10);
-  B.tube([0, 0.142, 0], [0, 0.153, 0], 0.05, 0.038, { color: 0xeee6dc }, 10);
-  B.box([0, 0.154, 0.024], [0.02, 0.006, 0.01], { color: 0x3a2418 });
-  const g = B.build();
+  const P = new VoxPad(0.0075, [-0.062, 0, -0.062], [0.062, 0.158, 0.062]);
+  P.sample((x, y, z) => {
+    const d = Math.hypot(x, z);
+    if (y < 0.127) {
+      const r = 0.042 + (0.054 - 0.042) * (y / 0.13);
+      if (d > r) return 0;
+      if (y > 0.058 && y < 0.068) return 0xf4e4c0;
+      if (y > 0.034 && y < 0.092) return sleeve;
+      return 0xf6efe2;
+    }
+    if (y < 0.142) return d <= 0.058 ? 0xfaf6ee : 0;
+    if (y < 0.155) {
+      if (Math.abs(x) < 0.01 && z > 0.014 && z < 0.032) return 0x3a2418; // the sip hole
+      return d <= 0.05 - (y - 0.142) * 1.0 ? 0xeee6dc : 0;
+    }
+    return 0;
+  });
+  const g = vgeo(P);
   geoCache.set(cocoa, g);
   return g;
 }
 function trayGeometry() {
-  const B = new Builder();
   const W = 0xa0703a, D = 0x6e4622;
-  B.box([0, 0, 0], [0.34, 0.02, 0.26], { color: W });
+  const P = new VoxPad(0.01, [-0.18, -0.012, -0.14], [0.18, 0.05, 0.14]);
+  P.box([0, 0, 0], [0.17, 0.01, 0.13], W);
   for (const s of [-1, 1]) {
-    B.box([0, 0.025, s * 0.125], [0.34, 0.04, 0.012], { color: D });
-    B.box([s * 0.165, 0.025, 0], [0.012, 0.04, 0.26], { color: D });
+    P.box([0, 0.025, s * 0.125], [0.17, 0.02, 0.006], D);
+    P.box([s * 0.165, 0.025, 0], [0.006, 0.02, 0.13], D);
   }
-  return B.build();
+  return vgeo(P);
 }
 
 export class Cargo {
@@ -69,7 +82,7 @@ export class Cargo {
     const g = new THREE.Group();
     g.rotation.order = 'YXZ';
     g.scale.setScalar(CUP_SCALE);
-    const mesh = propMesh(cupGeometry(o.cocoa), this.game.world.propMat, { cast: false });
+    const mesh = voxMesh(cupGeometry(o.cocoa), sharedVoxelMaterial(), { cast: false });
     g.add(mesh);
     const steam = new THREE.Object3D(); // effects puff steam 0.1 m above this
     steam.position.y = 0.06;
@@ -357,9 +370,9 @@ export class Cargo {
       // the tray of cups he carries, held out in front between his hands
       const tray = new THREE.Group();
       tray.scale.setScalar(1.25);
-      tray.add(propMesh(trayGeometry(), g.world.propMat, { cast: false }));
+      tray.add(voxMesh(trayGeometry(), sharedVoxelMaterial(), { cast: false }));
       const onTray = pending.map((o, i) => {
-        const m = propMesh(cupGeometry(o.cocoa), g.world.propMat, { cast: false });
+        const m = voxMesh(cupGeometry(o.cocoa), sharedVoxelMaterial(), { cast: false });
         m.position.set(-0.08 + (i % 3) * 0.08, 0.01, i < 3 ? 0.04 : -0.06);
         m.scale.setScalar(0.86);
         tray.add(m);
