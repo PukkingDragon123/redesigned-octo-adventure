@@ -296,7 +296,7 @@ export class VoxelWorld {
       draw();
       const tex = new THREE.CanvasTexture(c);
       tex.magFilter = THREE.NearestFilter;
-      tex.minFilter = THREE.LinearMipmapLinearFilter;
+      tex.minFilter = THREE.NearestMipmapNearestFilter; // (crisp lettering: whole texels at every distance)
       tex.colorSpace = THREE.SRGBColorSpace;
       // one merged mesh of quads per atlas
       const n = at.items.length;
