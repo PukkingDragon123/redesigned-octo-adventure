@@ -4,11 +4,10 @@ import './kit.css';
 import './ui.css';
 import './paper.css';
 import './menus.css';
-import './notebook.css';
 import { Bubbles, WorldBubbles, nameTab, frame } from './bubbles.js';
 import { Popups, htmlToMarkup } from './popup.js';
 import { buildPaperHUD, updatePaperHUD, Gauge } from './paperhud.js';
-import { installKit, kitReady, kButton, kPanel, el, snapBox, scale, snap as snapPx } from './kit.js';
+import { installKit, kButton, el, snapBox, scale, snap as snapPx } from './kit.js';
 import { Vector3 } from 'three';
 
 const _pp = new Vector3();
@@ -19,7 +18,6 @@ import { CHARACTERS } from '../art/characters.js';
 import { input } from '../core/input.js';
 import { sound } from '../game/sound.js';
 import { loadSettings } from '../game/state.js';
-import { leaves } from './leaves.js';
 
 // a pixel icon by name: the UI set first, then the food sprites
 export function anyIcon(name) {
@@ -36,13 +34,6 @@ export function firstSentence(s) {
   const m = t.match(/^.{4,72}?[.!?]+(?=\s|$)/);
   if (m) return m[0];
   return t.length > 64 ? `${t.slice(0, 62).replace(/\s+\S*$/, '')}…` : t;
-}
-
-// old callers styled elements with a frame name; map those onto kit panels
-const FRAME_CLASS = { wood: [], paper: ['k-parchment'], dark: ['k-dark'], order: ['k-parchment'] };
-export function frameStyle(e, style = 'wood') {
-  e.classList.add('k-panel', ...(FRAME_CLASS[style] || []));
-  return e;
 }
 
 // ---------------------------------------------------------------- UI
@@ -344,32 +335,6 @@ export class UI {
   // ---------------------------------------------------------------- menus
   // A menu is { ov, items: [elements], sel, onBack, grid }; navigation handled here.
   // Items that have a nudge(dir) method (sliders, cycles, toggles) take left/right.
-  openOverlay(contentEl, { onBack = null, items = null, grid = 0 } = {}) {
-    kitReady();
-    const ov = el('div', 'overlay');
-    ov.appendChild(contentEl);
-    this.root.appendChild(ov);
-    const m = { ov, items: items || [...contentEl.querySelectorAll(MENU_ITEMS)], sel: 0, onBack, grid };
-    this.menuStack.push(m);
-    this.highlight(m);
-    sound.play('ui_open');
-    snapBox(contentEl);
-    // a few leaves shaken loose as the sheet lands, and a little gust across
-    requestAnimationFrame(() => {
-      leaves.flutter(contentEl, 7);
-      leaves.gust(5, { speed: 1.3 });
-    });
-    return m;
-  }
-  closeOverlay(m = this.menuStack[this.menuStack.length - 1]) {
-    if (!m) return;
-    const sheet = m.ov.firstElementChild;
-    if (sheet) leaves.flutter(sheet, 6);
-    m.ov.remove();
-    this.menuStack = this.menuStack.filter((x) => x !== m);
-    this.swallowInput();
-    sound.play('ui_close');
-  }
   refreshItems(m, selector = MENU_ITEMS) {
     m.items = [...m.ov.querySelectorAll(selector)];
     m.sel = Math.min(m.sel, m.items.length - 1);
@@ -380,7 +345,7 @@ export class UI {
     const cur = m.items[m.sel];
     cur?.dispatchEvent(new CustomEvent('focus-item'));
     // keep the focused row in view inside a scrolling list or menu (never scroll the page)
-    const box = cur?.closest('.k-list, .menu, .bk-c');
+    const box = cur?.closest('.k-list, .bk-page');
     if (box && box.scrollHeight > box.clientHeight) {
       const r = cur.getBoundingClientRect(), b = box.getBoundingClientRect();
       if (r.top < b.top) box.scrollTop -= b.top - r.top + 8;
@@ -436,25 +401,12 @@ export class UI {
     b.addEventListener('click', () => {
       if (b.disabled) return;
       sound.play('ui_click');
-      leaves.burstFrom(b, 6);
       onClick?.();
     });
     return this.hoverSelect(b);
   }
 
-  // style: wood/leather | paper/parchment | dark
-  panel(style = 'wood', cls = 'menu') {
-    const kind = { wood: 'leather', leather: 'leather', paper: 'parchment', parchment: 'parchment', dark: 'dark' }[style] || 'leather';
-    return kPanel(kind, cls);
-  }
-
   update(dt) {
-    // a few leaves drift past while a menu (or the title) is open
-    const menu = this.menuStack.length > 0;
-    if (menu !== this._leafAmb) {
-      this._leafAmb = menu;
-      leaves.ambient('menu', menu, 4);
-    }
     // (the world wasn't drawn since last frame: place the bubbles now)
     this.late();
     this.hookRender();

@@ -1,5 +1,8 @@
-// The 3D interface: everything Hank holds up in front of his face, and the two little
-// 3D things in the screen corners.
+// The 3D interface: the brass compass Hank holds up in front of his face, and the
+// little 3D compass in the screen corner. Both are drawn as pixel art: rendered small,
+// one render pixel per art pixel of the UI kit (--u), into a target with no
+// anti-aliasing, then blown up nearest-neighbour onto the canvas, so their edges are
+// the same crisp whole pixels as the rest of the interface.
 //
 // It is drawn straight onto the game canvas after the frame is finished (main.js calls
 // render() once the pipeline has composited the world), with its own small scene,
@@ -13,6 +16,7 @@
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { G } from '../render/shaderlib.js';
+import { scale } from './kit.js';
 
 const ease = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
 const _v = new THREE.Vector3(), _q = new THREE.Quaternion(), _e = new THREE.Euler(0, 0, 0, 'YXZ');
@@ -111,6 +115,13 @@ export class View3D {
     // things that register: { visible(), render(view, r) } for full-screen and corner widgets
     this.held = [];
     this.widgets = [];
+    // the low-resolution pass and the nearest-neighbour blow-up
+    this.rt = new THREE.WebGLRenderTarget(2, 2, { type: THREE.HalfFloatType, minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, generateMipmaps: false, depthBuffer: true });
+    this.blitMat = new THREE.MeshBasicMaterial({ map: this.rt.texture, transparent: true, depthTest: false, depthWrite: false });
+    this.blitScene = new THREE.Scene();
+    this.blitScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.blitMat));
+    this.blitCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+    this._cc = new THREE.Color();
     this.canvasRect = null;
     window.addEventListener('resize', () => (this.canvasRect = null));
   }
@@ -161,6 +172,31 @@ export class View3D {
   late(dt) {
     this.fp.late(dt);
   }
+  // one art pixel in canvas pixels
+  artPx() {
+    const R = this.rect();
+    return Math.max(1, Math.round((scale.u * this.g.pipeline.w) / R.width));
+  }
+  // draw a scene into the canvas box [x, y-from-bottom, w, h] at k canvas pixels a pixel
+  pixelRender(scene, cam, x, y, w, h, k) {
+    const r = this.r;
+    const lw = Math.max(1, Math.ceil(w / k)), lh = Math.max(1, Math.ceil(h / k));
+    if (this.rt.width !== lw || this.rt.height !== lh) this.rt.setSize(lw, lh);
+    r.setRenderTarget(this.rt);
+    r.setScissorTest(false);
+    r.setViewport(0, 0, lw, lh);
+    r.clear(true, true, false);
+    cam.aspect = (lw * k) / (lh * k);
+    cam.updateProjectionMatrix();
+    r.render(scene, cam);
+    r.setRenderTarget(null);
+    // the top-left corner stays put (on the UI's pixel grid); the overhang is clipped
+    r.setScissorTest(true);
+    r.setScissor(x, y, w, h);
+    r.setViewport(x, y + h - lh * k, lw * k, lh * k);
+    r.render(this.blitScene, this.blitCam);
+    r.setScissorTest(false);
+  }
   render() {
     const P = this.g.pipeline, r = this.r;
     const held = this.held.filter((h) => h.visible());
@@ -168,36 +204,29 @@ export class View3D {
     const corners = fade < 0.25 ? this.widgets.filter((w) => w.visible()) : [];
     if (!held.length && !corners.length) return;
     const prevAuto = r.autoClear, prevCS = r.outputColorSpace;
-    r.setRenderTarget(null);
+    r.getClearColor(this._cc);
+    const prevA = r.getClearAlpha();
+    r.setClearColor(0x000000, 0);
     r.autoClear = false;
     r.outputColorSpace = THREE.SRGBColorSpace;
     this.light();
+    const k = this.artPx();
     if (held.length) {
-      r.setViewport(0, 0, P.w, P.h);
-      r.clearDepth();
-      this.cam.aspect = P.w / P.h;
-      this.cam.updateProjectionMatrix();
       for (const h of this.held) h.root.visible = held.includes(h);
-      r.render(this.scene, this.cam);
+      this.pixelRender(this.scene, this.cam, 0, 0, P.w, P.h, k);
     }
     if (corners.length) {
-      r.setScissorTest(true);
       for (const w of this.widgets) w.root.visible = false;
       for (const w of corners) {
         const [x, y, cw, ch] = this.toCanvas(w.box());
         if (cw < 2 || ch < 2) continue;
         w.root.visible = true;
-        r.setViewport(x, y, cw, ch);
-        r.setScissor(x, y, cw, ch);
-        r.clearDepth();
-        w.cam.aspect = cw / ch;
-        w.cam.updateProjectionMatrix();
-        r.render(this.corner, w.cam);
+        this.pixelRender(this.corner, w.cam, x, y, cw, ch, k);
         w.root.visible = false;
       }
-      r.setScissorTest(false);
-      r.setViewport(0, 0, P.w, P.h);
     }
+    r.setViewport(0, 0, P.w, P.h);
+    r.setClearColor(this._cc, prevA);
     r.autoClear = prevAuto;
     r.outputColorSpace = prevCS;
   }

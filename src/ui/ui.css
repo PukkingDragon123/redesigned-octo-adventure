@@ -51,8 +51,6 @@
 .hud-dist { box-sizing: border-box; width: calc(var(--u) * 64); height: calc(var(--u) * 24); margin-top: calc(var(--u) * -5); display: flex; align-items: center; gap: calc(var(--u) * 2); padding: 0 0 0 calc(var(--u) * 3); white-space: nowrap; }
 .hud-dist.off { visibility: hidden; }
 
-/* Nana's list on its clipboard: see notebook.css */
-
 .hud-gauge { position: absolute; left: calc(var(--u) * 3 + var(--safe-l)); bottom: calc(var(--u) * 3 + var(--safe-b)); transition: transform 0.3s steps(3); }
 .hud-gauge.away { transform: translateY(calc(var(--u) * 90)); }
 .hud-speedo { width: calc(var(--u) * 72); height: calc(var(--u) * 72); display: block; }
