@@ -20,6 +20,7 @@ import { input } from '../core/input.js';
 import { sound } from '../game/sound.js';
 import { loadSettings } from '../game/state.js';
 import { leaves } from './leaves.js';
+import { CineUI } from './cine.js';
 
 // a pixel icon by name: the UI set first, then the food sprites
 export function anyIcon(name) {
@@ -58,16 +59,8 @@ export class UI {
     this.bubbles = new Bubbles(this);
     this.chatter = new WorldBubbles(this);
     this.popups = new Popups(this);
-    this.skipHint = el('div', 'skiphint', '<span class="k-key">Esc</span><span class="k-shadow">skip</span>');
-    this.skipHint.addEventListener('pointerdown', (e) => {
-      e.stopPropagation();
-      const sc = this.game.currentScene;
-      if (sc) {
-        sc.skip = true;
-        this.hideDialogue();
-      }
-    });
-    this.root.appendChild(this.skipHint);
+    // the letterbox bars, the narrator's scroll and the hold-to-skip tag (cine.js)
+    this.cine = new CineUI(this);
     this.overlay = null;
     this.menuStack = [];
     this.prompted = null;
@@ -459,6 +452,7 @@ export class UI {
     this.late();
     this.hookRender();
     this.placePrompt();
+    this.cine.update(dt);
     if (this.dialogueTick) this.dialogueTick(dt);
     else this.menuTick();
     this._late = true;

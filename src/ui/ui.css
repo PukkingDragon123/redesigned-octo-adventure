@@ -86,9 +86,6 @@
 .letterbox::before, .letterbox::after { content: ''; position: absolute; left: 0; right: 0; height: 9%; background: #0c0608; z-index: 1; }
 .letterbox::before { top: 0; }
 .letterbox::after { bottom: 0; }
-.skiphint { display: none; position: absolute; right: calc(var(--u) * 6 + var(--safe-r)); bottom: calc(var(--u) * 3 + var(--safe-b)); z-index: 2; align-items: center; gap: calc(var(--u) * 2); color: var(--k-cream2); }
-.letterbox .skiphint { display: flex; }
-.touchmode .skiphint { pointer-events: auto; padding: calc(var(--u) * 2); }
 
 /* ---------------------------------------------------------------- classic dialogue box (unused by default) */
 /* the speech bubble's look (paper.css), docked along the bottom with a portrait */

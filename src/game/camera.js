@@ -76,6 +76,9 @@ export class ChaseCamera {
     // (a character, a point, or null: the character nearest the middle of the frame)
     this.scene = null;
     this.subject = null;
+    // a cutscene, the title or any staged shot (game.js sets it each frame): no see-through
+    // at all, the shots are framed clear instead (cutscene.js clear())
+    this.cine = false;
     this.see = { k: 0, who: null, focus: new THREE.Vector3(), last: new THREE.Vector3(), floor: -1e5, rad: 1.25, gap: 0.75, wide: 0.3 };
   }
 
@@ -289,6 +292,7 @@ export class ChaseCamera {
   // building is in the way, so its near wall goes entirely.
   updateSee(dt, player) {
     const S = this.see, cam = this.pos;
+    if (this.cine || this.scene) return this.seeOff();
     let have = false, who = null, floor = -1e5, rad = 1.25, gap = 0.75, bubble = 0.9;
     const f = _f;
     if (this.mode === 'chase' || !this.scene) {
@@ -353,6 +357,16 @@ export class ChaseCamera {
     G.uSee.value.set(S.focus.x, S.focus.y, S.focus.z, e);
     G.uSeeP.value.set(S.rad, S.gap, bubble, S.floor);
     G.uSeeCamR.value = S.wide;
+  }
+  // cutscenes and the title: nothing melts, no ring, no bubble round the lens, everyone solid
+  seeOff() {
+    const S = this.see;
+    S.k = 0;
+    S.who = null;
+    S.wide = 0.3;
+    G.uSee.value.w = 0;
+    G.uSeeP.value.z = 0;
+    for (const ch of LIVE) ch.setSeeThrough(false);
   }
   // the character a cutscene shot is looking at: nearest the middle of the frame (someone
   // talking counts a little nearer), not too far off it, and not someone a building hides

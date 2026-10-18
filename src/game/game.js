@@ -784,10 +784,8 @@ export class Game {
       }
       this.interactions();
       if (this.world.atmosphere.hour > 23.6 && !this.forcedHome && !this.interior?.active) this.forceHome();
-    } else if (this.mode === 'cutscene' && this.currentScene && input.pressed('pause')) {
-      this.currentScene.skip = true;
-      this.ui.hideDialogue();
     }
+    // (a cutscene is skipped by holding Esc / Start or the skip tag: ui/cine.js)
     // (re-check: an interaction above may have just opened a talk or a menu)
     if (this.mode === 'menu' && !(this.ui.dialogueTick || this.ui.menuStack.length)) this.mode = this.prevMode && this.prevMode !== 'menu' ? this.prevMode : 'ride';
     if (this.mode !== 'ride') this.ui.prompt(null);
@@ -828,8 +826,12 @@ export class Game {
     this.bikeModel.update(sdt, this.bike, c.steer);
     this.cargo.update(sdt);
     G.uPlayer.value.copy(this.playerPos);
-    if (this.mode === 'title') this.title ? this.title.update(dt) : this.titleCamera(dt);
-    else {
+    // (cutscenes, the prologue, the entry shots, the cat scene and the title: no see-through)
+    this.chase.cine = this.mode === 'title' || this.mode === 'cutscene' || this.mode === 'boot' || !!this.currentScene;
+    if (this.mode === 'title') {
+      this.title ? this.title.update(dt) : this.titleCamera(dt);
+      this.chase.seeOff();
+    } else {
       this.interior.update(dt);
       this.chase.walk = this.onFoot;
       this.chase.update(dt, this.onFoot ? this.walker : this.bike, this.mode === 'ride' && !busy ? input.look() : { x: 0, y: 0 });
