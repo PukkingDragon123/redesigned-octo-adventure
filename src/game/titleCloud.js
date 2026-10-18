@@ -55,25 +55,30 @@ varying float vH;
 varying float vBias;
 void main() {
   vec3 n = normalize(vN);
-  vec3 s = normalize(uSunDir);
-  // soft wrap light from the low sun, plus the sky above
+  vec3 v = normalize(uCamPos - vW);
+  // (a title cheats a little: the low sun's gold comes from over the viewer's shoulder, so
+  // the letters' faces catch it whichever way the real sun is; the real one rims the edges)
+  vec3 s = normalize(v * 0.75 + vec3(0.0, 0.75, 0.0) + normalize(uSunDir) * 0.35);
   float sun = clamp(dot(n, s) * 0.55 + 0.45, 0.0, 1.0);
   float sky = n.y * 0.5 + 0.5;
-  float lit = sun * 0.68 + sky * 0.32;
+  float lit = sun * 0.7 + sky * 0.3;
   // the lower parts of the cloud sit in its own shade
   lit *= mix(0.72, 1.0, clamp(vH, 0.0, 1.0));
   lit = clamp(lit + vBias, 0.0, 1.0);
   // a few flat tones (pixel-art clouds, like the sky's): cream-gold where the low sun
   // falls, rose in the half-light, lavender in the shade (tinted by the sky's own colours)
   float band = floor(lit * 4.0 + 0.5) / 4.0;
-  vec3 sunC = mix(vec3(1.0, 0.78, 0.48) * 1.2, uCloudLit * 0.45 + uSunColor * 0.8, 0.3);
-  vec3 midC = mix(vec3(0.94, 0.6, 0.58), uCloudLit, 0.25);
-  vec3 shadeC = mix(vec3(0.46, 0.4, 0.66), uCloudShade, 0.25);
+  // (the light's colour only: the sun's own brightness is far past a cloud's)
+  vec3 tint = uSunColor / max(max(uSunColor.r, max(uSunColor.g, uSunColor.b)), 1e-3);
+  vec3 litK = uCloudLit / max(max(uCloudLit.r, max(uCloudLit.g, uCloudLit.b)), 1e-3);
+  vec3 shK = uCloudShade / max(max(uCloudShade.r, max(uCloudShade.g, uCloudShade.b)), 1e-3);
+  vec3 sunC = mix(vec3(1.0, 0.7, 0.36), tint, 0.2) * 1.12;
+  vec3 midC = mix(vec3(0.95, 0.52, 0.46), litK * 0.8, 0.15);
+  vec3 shadeC = mix(vec3(0.36, 0.29, 0.6), shK * 0.5, 0.15);
   vec3 col = band > 0.6 ? mix(midC, sunC, (band - 0.5) * 2.0) : mix(shadeC, midC, band * 1.6);
-  vec3 v = normalize(uCamPos - vW);
   float facing = max(dot(n, v), 0.0);
   // the gold lining where the sun catches the edges (on its side only)
-  float rim = pow(1.0 - facing, 3.0) * smoothstep(0.45, 0.85, sun);
+  float rim = pow(1.0 - facing, 3.0) * smoothstep(0.2, 0.9, dot(n, normalize(uSunDir)) * 0.5 + 0.5);
   col += uSunGlow * step(0.4, rim) * 0.5;
   // the glow of the low sun under the belly
   col += uSunGlow * max(-n.y, 0.0) * (1.0 - clamp(vH, 0.0, 1.0)) * 0.3;
@@ -110,7 +115,7 @@ function puffsFor(lines, px) {
       const wx = ox + x + (rnd() - 0.5) * 0.35;
       const wy = oy + (m.base - y) + (rnd() - 0.5) * 0.35;
       const wz = Math.min(d, 3) * 0.45 + (rnd() - 0.5) * 0.5;
-      out.push([wx, wy, wz, r, (rnd() - 0.5) * 0.08]);
+      out.push([wx, wy, wz, r, 0.06 + (rnd() - 0.5) * 0.08]);
     }
   });
   const H = (lines.length - 1) * lh + Math.max(...masks.map((m) => m.base));
@@ -132,8 +137,8 @@ export class CloudTitle extends THREE.Group {
     for (let x = -3; x <= W + 3; x += 2.2) {
       const e = Math.min(x + 3, W + 3 - x) / 8; // thinning at the ends
       const k = Math.min(1, Math.max(0.25, e));
-      bank.push([x + rnd() * 1.4, -2.2 + rnd() * 1.8 * k, -2.6 - rnd() * 2, (2.0 + rnd() * 1.6) * (0.4 + 0.6 * k), -0.1 - rnd() * 0.06]);
-      if (rnd() < 0.5 * k) bank.push([x + 1 + rnd(), -0.6 + rnd() * 1.6 * k, -4 - rnd() * 1.5, (2.2 + rnd() * 1.4) * k, -0.08]);
+      bank.push([x + rnd() * 1.4, -2.2 + rnd() * 1.8 * k, -2.6 - rnd() * 2, (2.0 + rnd() * 1.6) * (0.4 + 0.6 * k), -0.2 - rnd() * 0.06]);
+      if (rnd() < 0.5 * k) bank.push([x + 1 + rnd(), -0.6 + rnd() * 1.6 * k, -4 - rnd() * 1.5, (2.2 + rnd() * 1.4) * k, -0.18]);
     }
     for (const side of [-1, 1]) {
       let x = side < 0 ? -3 : W + 3, y = -1.4, r = 1.9;

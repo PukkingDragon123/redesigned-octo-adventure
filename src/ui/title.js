@@ -38,7 +38,7 @@ const CAM_WIDE = { a: 2.5, lean: 2.3, d: 4.7, y: 2.0, sx: 0.68, pitch: -0.19, hf
 const CAM_TALL = { a: 2.7, lean: 2.5, d: 4.9, y: 2.3, sx: 0.53, pitch: -0.22, hfov: 58 };
 // Where the cloud and the signpost go on the screen (NDC: -1 left/bottom .. 1 right/top),
 // how much of the screen they may take, and the cloud's distance (m)
-const CLOUD_WIDE = { x: -0.02, y: 0.62, w: 0.66, h: 0.32, d: 40 };
+const CLOUD_WIDE = { x: -0.02, y: 0.7, w: 0.66, h: 0.3, d: 40 };
 const CLOUD_TALL = { x: 0, y: 0.66, w: 0.84, h: 0.26, d: 40 };
 const SIGN_WIDE = { x: -0.5, y: -0.08, w: 0.4, h: 0.48 };
 const SIGN_TALL = { x: -0.12, y: -0.62, w: 0.84, h: 0.3 };
