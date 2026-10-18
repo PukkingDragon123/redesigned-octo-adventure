@@ -80,8 +80,8 @@ void main() {
   vec3 away = base - uPlayer;
   float pd = length(away.xz);
   float push = (1.0 - smoothstep(0.3, 1.8, pd)) * step(abs(away.y), 2.5);
-  wp.xz += normalize(away.xz + 1e-4) * push * hf * hgt * 0.7;
-  wp.y -= push * hf * hgt * 0.3;
+  wp.xz += normalize(away.xz + 1e-4) * push * hf * hgt * 0.45;
+  wp.y -= push * hf * hgt * 0.18;
   vWorldPos = wp;
   vN = nrm;
   vLevel = lp.y;

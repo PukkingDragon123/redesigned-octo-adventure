@@ -7,13 +7,14 @@
 // shimmies its handlebars, pivots on the back wheel for wheelies and on the front
 // wheel for stoppies, and flops over in a crash.
 import * as THREE from 'three';
-import { Builder } from '../render/builder.js';
-import { createPropMaterial, propMesh } from '../render/propMaterial.js';
-import { worldUniforms, LIGHT_PARS_VERT, LIGHT_PARS_FRAG, SHADOW_VERT } from '../render/shaderlib.js';
+import { createPropMaterial } from '../render/propMaterial.js';
+import { worldUniforms, LIGHT_PARS_VERT, LIGHT_PARS_FRAG, SHADOW_VERT, NOISE_GLSL } from '../render/shaderlib.js';
 import { damp, clamp } from '../core/math.js';
 import { bikeFrame, bikeFront, bikeCrate, bikeLamp } from '../voxel/models/bike.js';
 import { meshVox } from '../voxel/mesh.js';
 import { voxMesh, sharedVoxelMaterial } from '../render/voxelMaterial.js';
+import { VoxPad } from '../voxel/pad.js';
+import { EMIT } from '../voxel/vox.js';
 
 const R = 0.34; // wheel radius
 const WB = 0.54; // half wheelbase
@@ -30,11 +31,12 @@ const _q = new THREE.Quaternion();
 const _e = new THREE.Euler();
 const _p = new THREE.Vector3();
 
-// the spoke blur: a see-through disc between hub and rim, lit like the rest of the world
+// the spoke blur: a see-through disc between hub and rim, lit like the rest of the world,
+// its haze an ordered dither of whole pixels (no soft blending)
 function blurMaterial() {
   const uniforms = worldUniforms({ uBlur: { value: 0 }, uSpin: { value: 0 } });
   return new THREE.ShaderMaterial({
-    uniforms, lights: true, transparent: true, depthWrite: false, side: THREE.DoubleSide,
+    uniforms, lights: true, side: THREE.DoubleSide,
     vertexShader: /* glsl */ `
 ${LIGHT_PARS_VERT}
 varying vec3 vWorldPos;
@@ -51,6 +53,7 @@ void main() {
 }`,
     fragmentShader: /* glsl */ `
 ${LIGHT_PARS_FRAG}
+${NOISE_GLSL}
 uniform float uBlur;
 uniform float uSpin;
 varying vec3 vWorldPos;
@@ -66,76 +69,121 @@ void main() {
   vec3 n = normalize(vNormal);
   if (!gl_FrontFacing) n = -n;
   vec3 col = shadeWorld(vec3(0.62, 0.64, 0.68), n, vWorldPos, 1.0, 1.0);
-  gl_FragColor = vec4(col, uBlur * haze * streak * 0.55);
+  if (uBlur * haze * streak * 0.55 < bayer4(gl_FragCoord.xy) * 0.98 + 0.01) discard;
+  gl_FragColor = vec4(col, 1.0);
 }`,
   });
 }
 
+// ---- the machine parts as fine voxel models (VoxPad: metres in, the same frame out)
+const vgeo = (pad) => { const r = pad.result(); return meshVox(r.vox, { size: r.size, origin: r.origin }); };
+const WV = 0.0115; // wheel voxels
+const ang = (y, z) => Math.atan2(z, y);
+
 // one wheel's parts, built once: tyre + rim + hub (always shown), spokes (hidden at speed)
 function wheelGeometry() {
-  const T = new Builder();
   const r = R;
-  const ry = [0, Math.PI / 2, 0];
-  // fat balloon tyre, a cream gumwall either side and a chunky zig-zag tread
-  T.geom(new THREE.TorusGeometry(r - 0.03, 0.03, 6, 44), [0, 0, 0], ry, [1, 1, 1], { color: COL.tyre });
-  for (const s of [-1, 1]) T.geom(new THREE.TorusGeometry(r - 0.047, 0.011, 4, 44), [s * 0.02, 0, 0], ry, [1, 1, 1], { color: COL.wall });
-  const N = 36;
-  for (let i = 0; i < N; i++) {
-    const a = (i / N) * Math.PI * 2;
-    const off = i % 2 ? 0.009 : -0.009;
-    T.box([off, Math.cos(a) * (r - 0.003), Math.sin(a) * (r - 0.003)], [0.036, 0.012, 0.026], { color: COL.tread }, [-a, 0, 0]);
-  }
-  // chrome rim with a darker braking track, the valve, and the hub with its two flanges
-  T.geom(new THREE.TorusGeometry(r - 0.064, 0.01, 4, 44), [0, 0, 0], ry, [1, 1, 1.6], { color: COL.rim });
-  T.geom(new THREE.TorusGeometry(r - 0.058, 0.006, 3, 44), [0, 0, 0], ry, [1, 1, 2.2], { color: COL.chromeD });
-  T.box([0, r - 0.085, 0], [0.012, 0.03, 0.012], { color: COL.chrome });
-  T.box([0, r - 0.102, 0], [0.008, 0.008, 0.008], { color: COL.black });
-  T.tube([-0.05, 0, 0], [0.05, 0, 0], 0.016, 0.016, { color: COL.hub }, 8);
-  T.tube([-0.035, 0, 0], [0.035, 0, 0], 0.024, 0.024, { color: COL.hub }, 8);
-  for (const s of [-1, 1]) T.tube([s * 0.03, 0, 0], [s * 0.038, 0, 0], 0.036, 0.036, { color: COL.chromeD }, 10);
-  T.tube([-0.065, 0, 0], [0.065, 0, 0], 0.008, 0.008, { color: COL.chromeD }, 6); // axle nuts
+  const P = new VoxPad(WV, [-0.07, -r - 0.01, -r - 0.01], [0.07, r + 0.01, r + 0.01]);
+  const TAU = Math.PI * 2;
+  P.sample((x, y, z) => {
+    const d = Math.hypot(y, z), ax = Math.abs(x);
+    // fat balloon tyre: a chunky zig-zag tread on the crown, a cream gumwall either side
+    const tt = Math.hypot(d - (r - 0.03), x);
+    if (tt <= 0.031) {
+      if (d > r - 0.03 && ax > 0.016) return COL.wall;
+      if (d > r - 0.014) {
+        const bin = Math.floor((ang(y, z) / TAU) * 36 + 36);
+        return (bin + (x > 0 ? 1 : 0)) % 2 ? COL.tread : COL.tyre;
+      }
+      return COL.tyre;
+    }
+    // chrome rim with its darker braking track
+    if (Math.abs(d - (r - 0.064)) <= 0.013 && ax <= 0.017) return Math.abs(d - (r - 0.056)) < 0.006 ? COL.chromeD : COL.rim;
+    // the hub, its two flanges and the axle nuts
+    if (d <= 0.025 && ax <= 0.05) return COL.hub;
+    if (d <= 0.038 && ax >= 0.026 && ax <= 0.04) return COL.chromeD;
+    if (d <= 0.012 && ax <= 0.066) return COL.chromeD;
+    return 0;
+  });
+  // the valve
+  P.box([0, r - 0.088, 0], [0.006, 0.016, 0.006], COL.chrome);
   // 32 spokes laced three-cross: each leaves a flange at a tangent and crosses its neighbours
-  const S = new Builder();
+  const S = new VoxPad(WV * 0.75, [-0.05, -r, -r], [0.05, r, r]);
   const rr = r - 0.07, rf = 0.034;
   for (let side = 0; side < 2; side++) {
     const sx = side ? 0.034 : -0.034;
     for (let i = 0; i < 16; i++) {
-      const ah = (i / 16) * Math.PI * 2 + (side ? Math.PI / 16 : 0);
+      const ah = (i / 16) * TAU + (side ? Math.PI / 16 : 0);
       const dir = i % 2 ? 1 : -1;
-      const ar = ah + dir * ((3 * Math.PI * 2) / 16) * 0.5;
-      S.tube([sx, Math.cos(ah) * rf, Math.sin(ah) * rf], [sx * 0.15, Math.cos(ar) * rr, Math.sin(ar) * rr], 0.0045, 0.0045, { color: COL.spoke }, 3);
+      const ar = ah + dir * ((3 * TAU) / 16) * 0.5;
+      S.line([sx, Math.cos(ah) * rf, Math.sin(ah) * rf], [sx * 0.15, Math.cos(ar) * rr, Math.sin(ar) * rr], 0.003, COL.spoke);
     }
   }
-  return { body: T.build(), spokes: S.build() };
+  return { body: vgeo(P), spokes: vgeo(S) };
 }
 
 // chainring with teeth and a five-arm spider (turns with the cranks), and the rear cog
 function ringGeometry(rad, teeth, spider) {
-  const B = new Builder();
-  B.geom(new THREE.TorusGeometry(rad - 0.008, 0.008, 4, 32), [0, 0, 0], [0, Math.PI / 2, 0], [1, 1, 1.2], { color: COL.chrome });
-  for (let i = 0; i < teeth; i++) {
-    const a = (i / teeth) * Math.PI * 2;
-    B.box([0, Math.cos(a) * rad, Math.sin(a) * rad], [0.008, 0.012, 0.009], { color: COL.chromeD }, [-a, 0, 0]);
+  const s = 0.006;
+  const P = new VoxPad(s, [-0.012, -rad - 0.012, -rad - 0.012], [0.012, rad + 0.012, rad + 0.012]);
+  const TAU = Math.PI * 2;
+  P.sample((x, y, z) => {
+    const d = Math.hypot(y, z), ax = Math.abs(x);
+    if (ax > 0.009) return 0;
+    if (d <= rad && d >= rad - 0.016) return COL.chrome;
+    if (d > rad && d <= rad + 0.009 && ax <= 0.005) return Math.floor((ang(y, z) / TAU) * teeth * 2 + teeth * 2) % 2 ? COL.chromeD : 0;
+    if (!spider && d <= rad * 0.6 && ax <= 0.006) return COL.chromeD;
+    return 0;
+  });
+  if (spider) for (let i = 0; i < 5; i++) {
+    const a = (i / 5) * TAU;
+    P.line([0, 0, 0], [0, Math.cos(a) * (rad - 0.012), Math.sin(a) * (rad - 0.012)], 0.007, COL.chrome);
   }
-  if (spider) {
-    for (let i = 0; i < 5; i++) {
-      const a = (i / 5) * Math.PI * 2;
-      B.tube([0, 0, 0], [0, Math.cos(a) * (rad - 0.012), Math.sin(a) * (rad - 0.012)], 0.009, 0.006, { color: COL.chrome }, 4);
-    }
-  } else B.tube([-0.006, 0, 0], [0.006, 0, 0], rad * 0.6, rad * 0.6, { color: COL.chromeD }, 8);
-  return B.build();
+  return vgeo(P);
 }
 
 // one straight run of chain: alternating inner/outer plates, a spare link each end so it can scroll
 function chainRun(len) {
-  const B = new Builder();
   const n = Math.ceil(len / PITCH) + 1;
+  const P = new VoxPad(0.004, [-0.01, -0.006, -PITCH * 1.5], [0.01, 0.006, n * PITCH + PITCH]);
   for (let i = -1; i < n; i++) {
     const z = i * PITCH;
     const outer = (i & 1) === 0;
-    B.box([0, 0, z + PITCH / 2], [outer ? 0.014 : 0.01, 0.009, PITCH * 0.98], { color: outer ? COL.chainHi : COL.chain });
+    P.box([0, 0, z + PITCH / 2], [outer ? 0.007 : 0.005, 0.0045, PITCH * 0.49], outer ? COL.chainHi : COL.chain);
   }
-  return B.build();
+  return vgeo(P);
+}
+
+// the rod-brake levers in front of the grips, with a cable stub down to the head tube
+function leverGeometry() {
+  const P = new VoxPad(0.006, [-0.4, 0.22, -0.18], [0.4, 0.41, -0.02]);
+  for (const s of [-1, 1]) {
+    P.box([s * 0.27, 0.383, -0.158], [0.011, 0.013, 0.013], COL.chromeD);
+    P.line([s * 0.27, 0.378, -0.142], [s * 0.37, 0.352, -0.098], 0.006, COL.chrome);
+    P.box([s * 0.375, 0.35, -0.094], [0.007, 0.006, 0.006], COL.chrome);
+    P.line([s * 0.27, 0.383, -0.158], [s * 0.06, 0.25, -0.04], 0.003, COL.black);
+  }
+  return vgeo(P);
+}
+
+// tapered cotterless crank arms and the axle through the bottom bracket
+function crankGeometry() {
+  const P = new VoxPad(0.007, [-0.12, -0.17, -0.03], [0.12, 0.17, 0.03]);
+  P.line([0.1, 0, 0], [0.1, -0.15, 0], 0.013, COL.chrome);
+  P.line([-0.1, 0, 0], [-0.1, 0.15, 0], 0.013, COL.chrome);
+  P.line([-0.1, 0, 0], [0.1, 0, 0], 0.011, COL.chromeD);
+  for (const s of [-1, 1]) P.line([s * 0.09, 0, 0], [s * 0.106, 0, 0], 0.019, COL.chrome);
+  return vgeo(P);
+}
+
+// rubber block pedals with an amber reflector front and back
+function pedalGeometry(x) {
+  const P = new VoxPad(0.006, [-0.06, -0.02, -0.04], [0.06, 0.02, 0.04]);
+  P.box([0, 0, 0], [0.042, 0.012, 0.027], COL.rubber);
+  for (const s of [-1, 1]) P.box([0, 0.004, s * 0.022], [0.044, 0.01, 0.006], 0x3a3230);
+  for (const s of [-1, 1]) P.box([0, 0, s * 0.03], [0.02, 0.006, 0.003], COL.amber | EMIT);
+  P.line([x > 0 ? -0.05 : 0.05, 0, 0], [x > 0 ? 0.045 : -0.045, 0, 0], 0.005, COL.chrome);
+  return vgeo(P);
 }
 
 export class BikeModel {
@@ -184,15 +232,7 @@ export class BikeModel {
     this.gripR.position.set(-0.34, 0.39, -0.18);
     steerG.add(this.gripL, this.gripR);
     // rod-brake levers in front of the grips, with a cable stub down to the head tube
-    const lv = new Builder();
-    for (const s of [-1, 1]) {
-      lv.box([s * 0.27, 0.383, -0.158], [0.022, 0.026, 0.026], { color: COL.chromeD });
-      lv.tube([s * 0.27, 0.378, -0.142], [s * 0.37, 0.352, -0.098], 0.008, 0.006, { color: COL.chrome }, 5);
-      lv.box([s * 0.375, 0.35, -0.094], [0.014, 0.012, 0.012], { color: COL.chrome });
-    }
-    lv.tube([0.27, 0.383, -0.158], [0.06, 0.25, -0.04], 0.0045, 0.0045, { color: COL.black }, 3);
-    lv.tube([-0.27, 0.383, -0.158], [-0.06, 0.25, -0.04], 0.0045, 0.0045, { color: COL.black }, 3);
-    steerG.add(propMesh(lv.build(), this.mat));
+    steerG.add(voxMesh(leverGeometry(), sharedVoxelMaterial()));
 
     // wheels: tyre/rim/hub bodies, spokes, and a blur disc that takes over at speed
     const wg = wheelGeometry();
@@ -203,8 +243,8 @@ export class BikeModel {
       parent.add(w);
       const spin = new THREE.Group();
       w.add(spin);
-      spin.add(propMesh(wg.body, this.mat));
-      const spokes = propMesh(wg.spokes, this.mat, { cast: false });
+      spin.add(voxMesh(wg.body, sharedVoxelMaterial()));
+      const spokes = voxMesh(wg.spokes, sharedVoxelMaterial(), { cast: false });
       spin.add(spokes);
       const bm = blurMaterial();
       this.blurMats.push(bm);
@@ -224,30 +264,18 @@ export class BikeModel {
     crank.position.set(...BB);
     g.add(crank);
     this.crank = crank;
-    const cb = new Builder();
-    // tapered cotterless arms and the axle through the bottom bracket
-    cb.tube([0.1, 0, 0], [0.1, -0.15, 0], 0.016, 0.011, { color: COL.chrome }, 5);
-    cb.tube([-0.1, 0, 0], [-0.1, 0.15, 0], 0.016, 0.011, { color: COL.chrome }, 5);
-    cb.tube([-0.1, 0, 0], [0.1, 0, 0], 0.012, 0.012, { color: COL.chromeD }, 6);
-    for (const s of [-1, 1]) cb.tube([s * 0.09, 0, 0], [s * 0.106, 0, 0], 0.02, 0.02, { color: COL.chrome }, 8);
-    crank.add(propMesh(cb.build(), this.mat));
-    const ring = propMesh(ringGeometry(RING_R, 30, true), this.mat);
+    crank.add(voxMesh(crankGeometry(), sharedVoxelMaterial()));
+    const ring = voxMesh(ringGeometry(RING_R, 30, true), sharedVoxelMaterial());
     ring.position.x = DRIVE_X;
     crank.add(ring);
     this.pedals = [];
     for (const [x, y] of [[0.15, -0.15], [-0.15, 0.15]]) {
-      const pb = new Builder();
-      // rubber block pedals with an amber reflector front and back
-      pb.box([0, 0, 0], [0.085, 0.024, 0.055], { color: COL.rubber });
-      for (const s of [-1, 1]) pb.box([0, 0.004, s * 0.022], [0.088, 0.02, 0.012], { color: 0x3a3230 });
-      for (const s of [-1, 1]) pb.box([0, 0, s * 0.03], [0.04, 0.012, 0.006], { color: COL.amber, emissive: 0.4 });
-      pb.tube([x > 0 ? -0.05 : 0.05, 0, 0], [x > 0 ? 0.045 : -0.045, 0, 0], 0.006, 0.006, { color: COL.chrome }, 4);
-      const p = propMesh(pb.build(), this.mat);
+      const p = voxMesh(pedalGeometry(x), sharedVoxelMaterial());
       p.position.set(x, y, 0);
       crank.add(p);
       this.pedals.push(p);
     }
-    this.cog = propMesh(ringGeometry(COG_R, 16, false), this.mat);
+    this.cog = voxMesh(ringGeometry(COG_R, 16, false), sharedVoxelMaterial());
     this.cog.position.set(DRIVE_X, R, -WB);
     g.add(this.cog);
     // the chain: two straight runs between ring and cog that scroll with the cranks
@@ -259,7 +287,7 @@ export class BikeModel {
       const pivot = new THREE.Group();
       pivot.position.copy(b);
       pivot.rotation.set(Math.atan2(-(a.y - b.y), a.z - b.z), 0, 0);
-      const m = propMesh(chainRun(len), this.mat, { cast: false });
+      const m = voxMesh(chainRun(len), sharedVoxelMaterial(), { cast: false });
       pivot.add(m);
       g.add(pivot);
       this.chain.push({ m, top, len });
