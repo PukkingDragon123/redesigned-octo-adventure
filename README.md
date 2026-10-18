@@ -19,7 +19,7 @@ that you earn by actually pulling the moves off.
 
 Everything runs in the browser. Terrain, voxel models, characters, icons,
 music and sound effects are all generated in code; the only asset files are
-two pixel fonts.
+the fonts (Pixelify Sans for every word, with two small pixel fonts behind it).
 
 ## Running it
 
@@ -57,8 +57,8 @@ audio starts.
 | Esc | Start | Hank's journal (pause); skips a cutscene while one is playing |
 | Tab, [ ], PgUp / PgDn | LB / RB | In the journal: turn to the next / previous bookmark |
 
-There is almost nothing on the screen while you play: what you can do right here (the
-prompt), a little leather journal in the top left corner and Harold's brass compass in
+There is almost nothing on the screen while you play: what you can do right here (on a
+little cream tag hanging over Hank's head), a little leather journal in the top left corner and Harold's brass compass in
 the top right, both real 3D things. The compass needle swings round to wherever you
 should go next (it lags and overshoots as you turn, and the case tilts into the
 corners); click or tap it and the camera goes into Hank's skull while he holds it up in
@@ -81,17 +81,19 @@ crooked one wobbles; a bad one is a bail.
 On a touch screen, on-screen controls appear after your first tap: a floating
 steering stick on the left (pull it back to wheelie, push it up for a stoppie)
 and, bottom right, Bessie's crank: circle your thumb round the chainring to
-pedal (backwards brakes; spin it as fast as you dare and the crank arm smears),
-with the gear shifter beside it (up and down arrows, the gear number between
-them), and brake, hop, bell and a TRICK button (Hank pulling a wheelie) round it.
+pedal (backwards brakes; spin it as fast as you dare and the crank arm smears;
+tap the rear cogs to change gear, the top half up and the bottom half down, and
+tap the chainring to ring the bell), with just three buttons round it: brake,
+hop and TRICK (Hank pulling a wheelie). The buttons are round log slices with a
+dab of paint and a picture.
 The crank also shows the gear (the chain hops across three rear cogs, the number
 sits top left), whether the pedals are catching the back wheel, and how winded
 Hank is: the bone along the bottom is his wind (red once he's puffed, cracked
 when he's spent), the brass glows red and the chain sags. Touch riding gets
 assists (steadier balance, forgiving landings, no slide-outs). On foot the stick
 walks (a gentle push ambles, half way out walks briskly, all the way out jogs),
-hold SPRINT to run flat out, and there is a jump button; a paper tag shows
-whatever you can do right here (talk, hop on, kick the pumpkin...): tap it.
+hold SPRINT to run flat out, and there is a jump button; the tag over Hank's head
+shows whatever you can do right here (talk, hop on, kick the pumpkin...): tap it.
 
 Crash with cocoa in the crate and the cups go flying: every cup loses a chunk of
 its heat, more the harder the crash.
@@ -196,8 +198,20 @@ its heat, more the harder the crash.
   a steaming mug of cocoa, the rink, the green and the rooftops below; now and
   then a blue jay flutters in and lands on his toque, he freezes, eyes up, then
   turns and smiles while it hops, chirps and fluffs, and waves when it flies
-  off. The camera drifts slowly over his shoulder, under a pixel logo painted in
-  code. At the end of each day a bedtime scene
+  off. The camera drifts slowly over his shoulder. There is no flat interface:
+  the game's name is written across the sky as one fluffy 3D cloud
+  (`src/game/titleCloud.js`: a soft puff for every pixel of the letters, banded
+  gold, peach and lavender like the sky's clouds, condensing out of the air,
+  bobbing, wisps trailing off and cloudlets drifting by), and the menu is a
+  wooden signpost in the grass beside him (`src/game/titleSign.js`, voxels like
+  the rest of the village): painted arrow boards for Continue (with a little
+  Day plank hanging under it), New Game, Settings and Controls point off in
+  different directions. Point at one or step through them with the arrow keys
+  or the d-pad and it lights up (lantern-gold letters) and wiggles; click, tap
+  or press Enter / A and it swings round on its nail, and for Continue and New
+  Game the camera heads off the way the arrow points as the picture fades. (Plain
+  buttons hidden behind the boards keep the keyboard, gamepad and screen readers
+  working like every other menu.) At the end of each day a bedtime scene
   (`src/game/bedtime.js`, `Story.bedtime`) puts him in striped pajamas and
   Nana tucks him in on the sofa.
 - **Leaves and transitions** (`src/ui/leaves.js`, `src/ui/leafart.js`): pixel
@@ -283,18 +297,25 @@ its heat, more the harder the crash.
   frame (distance across the nearest road and its style) to draw wheel ruts,
   tyre grooves, worn centre lines, grassy crowns, ragged grass edges, leaves
   blown in from the forest and puddles that gather in the ruts when it rains.
-- **UI** (`src/ui`): a pixel kit of carved wood panels with brass nails, buttons,
-  slots, books and bezels (`kit.js`, `kitart.js`), shaded 32 px icons
+- **UI** (`src/ui`): a pixel kit of carved wood panels with brass nails, slots,
+  books and bezels (`kit.js`, `kitart.js`); every button is a little painted
+  signboard like the ones on the title's signpost (planks in slate blue, barn red
+  or leaf green, worn back to the wood at the corners, two iron nails; hot ones
+  get a lantern-gold rim), with maple key tiles, painted toggle pegs and slider
+  pegs, a round painted close board and a little gold arrow board pointing at
+  whatever is chosen; shaded 32 px icons
   (`src/art/icons.js`), and simple cosy speech bubbles over the real 3D
   speaker (cream, round pixel corners, a brown outline, the speaker's name on a
   coloured tab). Everything is drawn on one chunky integer pixel grid (5 device
-  pixels per art pixel on a 1080-wide phone, 4 at 1080p) with pixel fonts at
-  whole multiples of their size, so it stays crisp.
+  pixels per art pixel on a 1080-wide phone, 4 at 1080p) with the type
+  (Pixelify Sans, `src/ui/type.js`) at whole multiples of its size, so it stays
+  crisp.
   Orders and customers live in a spiral notebook. Touch controls have a
   floating thumb stick (pull back to wheelie, push to stoppie), a pixel-art
   crank to spin as fast as you like (`crank.js`, with Hank's wind as a bone and
-  the gear number on it), a gear shifter, brake, hop and one trick button (a
-  skeleton pulling a wheelie); on foot a jump and a sprint button.
+  the gear number on it; tap its cogs to shift and its chainring for the bell),
+  brake, hop and one trick button (a skeleton pulling a wheelie); on foot a jump
+  and a sprint button.
 - **Rendering** (`src/render`): three.js renders at the screen's own pixels
   (or a whole fraction of them, upscaled nearest) into an HDR target. Sun
   shadows get a soft filtered edge on desktops; a half-resolution contact-AO
@@ -347,7 +368,9 @@ quality or pixel size in Settings turns that off.
 
 ## Credits
 
-- Fonts: [monogram](https://datagoblin.itch.io/monogram) by datagoblin (CC0)
-  and [BoldPixels](https://yukipixels.itch.io/boldpixels) by YukiPixels
-  (CC BY-SA 4.0).
+- Type: [Pixelify Sans](https://github.com/eifetx/Pixelify-Sans) by Stefie
+  Justprince (SIL Open Font License 1.1, `src/ui/fonts/PixelifySans-OFL.txt`),
+  with [monogram](https://datagoblin.itch.io/monogram) by datagoblin (CC0) for
+  the odd symbol and [BoldPixels](https://yukipixels.itch.io/boldpixels) by
+  YukiPixels (CC BY-SA 4.0) on the village TV.
 - Everything else is generated in code.
