@@ -15,8 +15,9 @@
 // Placement lives in src/world/deco2d.js (world.deco2d.items / cards); the art in
 // src/art/deco2d.js and furniture2d.js, sculpted pieces that are voxelised into real
 // voxel models in a worker (voxel/models/clutter.js, art/decoVox.js). Every pose of every
-// kind is one instanced voxel mesh; each frame the pieces in range are posed into them
-// (tipping over about their foot, rolling, flopping, wobbling).
+// kind lives in one BatchedMesh and every piece is an instance of it (one draw per pass);
+// each frame the pieces in range are posed (tipping over about their foot, rolling,
+// flopping, wobbling) and switched to the pose they show.
 import * as THREE from 'three';
 import { createVoxelMaterial } from '../render/voxelMaterial.js';
 import { CATALOGUE } from '../art/decoPaint.js';
@@ -144,10 +145,13 @@ export class Deco2D {
     else (game.world.deco2d?.paint || startDecoPaint()).then((models) => { this.pages = models; });
   }
 
-  // the voxel models arrive: one instanced mesh per pose of each kind, made on first use
+  // the voxel models arrive: every pose of every kind goes into one BatchedMesh, and every piece,
+  // fixed flat thing and flying bit is an instance of it (one draw call per pass for the lot)
   install(models) {
     this.mat = createVoxelMaterial();
     this.models = new Map();
+    let nv = 0, ni = 0;
+    const geos = [];
     for (const m of models) {
       const geo = new THREE.BufferGeometry();
       geo.setAttribute('position', new THREE.BufferAttribute(m.pos, 3));
@@ -155,13 +159,31 @@ export class Deco2D {
       geo.setAttribute('color4', new THREE.BufferAttribute(m.col, 4, true));
       geo.setAttribute('detail', new THREE.BufferAttribute(m.det, 4));
       geo.setAttribute('qbox', new THREE.BufferAttribute(m.qb, 4));
-      geo.setIndex(new THREE.BufferAttribute(m.idx, 1));
-      geo.computeBoundingSphere();
-      this.models.set(m.key, { key: m.key, kind: m.kind, size: m.size, h: m.h, geo, im: null, n: 0, buf: new Float32Array(16 * 8), faces: m.faces });
+      geo.setIndex(new THREE.BufferAttribute(m.idx instanceof Uint32Array ? m.idx : Uint32Array.from(m.idx), 1));
+      nv += m.pos.length / 3; ni += m.idx.length;
+      geos.push({ m, geo });
     }
-    this.group = new THREE.Group();
-    this.group.name = 'deco-voxels';
-    this.game.scene.add(this.group);
+    const nInst = this.items.length + this.cards.length + MAX_BITS + 8;
+    const B = (this.batch = new THREE.BatchedMesh(nInst, nv, ni, this.mat));
+    B.name = 'deco-voxels';
+    B.castShadow = true;
+    B.receiveShadow = true;
+    B.customDepthMaterial = this.mat.userData.depth;
+    B.perObjectFrustumCulled = true;
+    B.sortObjects = false;
+    // (not in the water's mirror: small clutter there costs a pass and is never missed)
+    B.layers.set(1);
+    for (const { m, geo } of geos) {
+      const id = B.addGeometry(geo);
+      geo.dispose();
+      this.models.set(m.key, { key: m.key, kind: m.kind, size: m.size, h: m.h, id, faces: m.faces });
+    }
+    const first = this.models.values().next().value;
+    const add = () => { const k = B.addInstance(first.id); B.setVisibleAt(k, false); return k; };
+    for (const it of this.items) it.bi = add();
+    for (const c of this.cards) c.bi = add();
+    this.bitSlots = Array.from({ length: MAX_BITS }, add);
+    this.game.scene.add(B);
     // flat things: fixed pieces facing out of their window, or lying on the ground
     for (const c of this.cards) {
       c.yaw3 = c.flat === 'ground' ? (c.yaw || 0) + Math.PI : Math.atan2(c.nx, c.nz);
@@ -509,11 +531,10 @@ export class Deco2D {
   }
 
   // ---------------------------------------------------------------- drawing
-  // pose one instance of model M: at (x, y, z) turned by yaw; o.roll about its own front axis
+  // pose instance k as model M: at (x, y, z) turned by yaw; o.roll about its own front axis
   // round a point o.lift up; o.sx / o.sy squash; o.q a free rotation round that point (rolling);
   // o.tip tips it over towards (o.tdx, o.tdz) about its foot, o.foot metres out
-  pose(M, x, y, z, yaw, o) {
-    if ((M.n + 1) * 16 > M.buf.length) { const nb = new Float32Array(M.buf.length * 2); nb.set(M.buf); M.buf = nb; }
+  pose(k, M, x, y, z, yaw, o) {
     const s = M.size, lift = o.lift || 0;
     _m1.makeScale(s * o.sx, s * o.sy, s * o.sx);
     if (lift) _m1.premultiply(_m2.makeTranslation(0, -lift, 0));
@@ -529,37 +550,40 @@ export class Deco2D {
       _m1.premultiply(_m2.makeTranslation(fx, 0, fz));
     }
     _m1.premultiply(_m2.makeTranslation(x, y, z));
-    _m1.toArray(M.buf, M.n * 16);
-    M.n++;
+    const B = this.batch;
+    if (B.getGeometryIdAt(k) !== M.id) B.setGeometryIdAt(k, M.id);
+    B.setMatrixAt(k, _m1);
+    if (!B.getVisibleAt(k)) B.setVisibleAt(k, true);
+  }
+
+  hide(k) {
+    if (this.batch.getVisibleAt(k)) this.batch.setVisibleAt(k, false);
   }
 
   draw() {
     const cam = this.game.camera, cp = cam.position;
     cam.getWorldDirection(_fwd);
     const fx = _fwd.x, fy = _fwd.y, fz = _fwd.z;
-    for (const M of this.models.values()) M.n = 0;
     const dtv = this._drawT == null ? 0 : Math.min(0.1, Math.max(0, this.t - this._drawT));
     this._drawT = this.t;
     const o = _o;
     const reset = () => { o.roll = 0; o.sx = 1; o.sy = 1; o.tip = 0; o.q = null; o.lift = 0; };
     for (const it of this.items) {
-      if (it.st === 3 || it.fence3d) continue; // (the fences are voxel geometry: world/fences3d.js)
+      if (it.st === 3 || it.fence3d) { this.hide(it.bi); continue; } // (the fences are voxel geometry: world/fences3d.js)
       const dx = it.x - cp.x, dy = it.y - cp.y, dz = it.z - cp.z;
       const far = FAR[it.kind] ?? (it.goods ? SMALL : 90);
       const dd = dx * dx + dy * dy + dz * dz;
-      if (dd > far * far) continue;
-      if (dx * fx + dy * fy + dz * fz < -4 - (it.len || 0)) continue;
+      if (dd > far * far || dx * fx + dy * fy + dz * fz < -4 - (it.len || 0)) { this.hide(it.bi); continue; }
       const kind = it.st !== 0 && it.def.fallTo && it.tip > 0.5 ? it.def.fallTo : it.kind;
       const K = CATALOGUE[kind];
-      if (!K) continue;
       let fi = 0;
-      if (K.n > 1) {
+      if (K?.n > 1) {
         if (it.vary) fi = it.v % K.n;
         else if (it.def.mode === 'flop') fi = it.st === 1 && this.t - it.kt < 11 ? (Math.floor(this.t * 10 + it.ph) % 2 ? 0 : 2) : 1;
         else fi = Math.floor((this.t + it.ph) * (ANIM[it.kind] || 1)) % K.n;
       }
       const M = this.models.get(`${kind}:${fi}`);
-      if (!M) continue;
+      if (!M) { this.hide(it.bi); continue; }
       reset();
       if (it.wob > 0) {
         const w = Math.sin(this.t * 28 + it.ph) * 0.07 * it.wob;
@@ -581,53 +605,27 @@ export class Deco2D {
         // fish and lobsters flop about lying on their sides
         o.roll = Math.PI / 2 + (it.spin || 0); o.lift = 0.06;
       } else if (it.spin) o.roll = it.spin;
-      this.pose(M, it.x, it.y, it.z, it.yaw, o);
+      this.pose(it.bi, M, it.x, it.y, it.z, it.yaw, o);
     }
     // fixed flat things: mats, towels, shop-window displays
     for (const c of this.cards) {
-      if (!c.model) continue;
       const dx = c.x - cp.x, dy = c.y - cp.y, dz = c.z - cp.z;
-      if (dx * dx + dy * dy + dz * dz > 60 * 60 || dx * fx + dy * fy + dz * fz < -3) continue;
+      if (!c.model || dx * dx + dy * dy + dz * dz > 60 * 60 || dx * fx + dy * fy + dz * fz < -3) { this.hide(c.bi); continue; }
       reset();
-      this.pose(c.model, c.x, c.y, c.z, c.yaw3, o);
+      this.pose(c.bi, c.model, c.x, c.y, c.z, c.yaw3, o);
     }
     // flying bits: litter, apples, lids, logs, leaves
+    let slot = 0;
     for (const b of this.bits) {
+      if (slot >= this.bitSlots.length) break;
       const dx = b.x - cp.x, dy = b.y - cp.y, dz = b.z - cp.z;
       if (dx * dx + dy * dy + dz * dz > SMALL * SMALL || dx * fx + dy * fy + dz * fz < -2) continue;
       const M = this.models.get(`${b.kind}:0`);
       if (!M) continue;
       reset();
       o.roll = b.spin; o.lift = M.h * 0.5;
-      this.pose(M, b.x, b.y, b.z, b.yaw, o);
+      this.pose(this.bitSlots[slot++], M, b.x, b.y, b.z, b.yaw, o);
     }
-    for (const M of this.models.values()) this.flush(M);
-  }
-
-  // hand a model's instances to its mesh (made, or grown, as needed)
-  flush(M) {
-    if (!M.n) { if (M.im) M.im.visible = false; return; }
-    if (!M.im || M.im.instanceMatrix.count < M.n) {
-      if (M.im) { this.group.remove(M.im); M.im.dispose(); }
-      const cap = Math.max(4, Math.ceil(M.n * 1.5));
-      const im = new THREE.InstancedMesh(M.geo, this.mat, cap);
-      im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-      // (small things - litter, apples, mats - throw no shadow worth the pass)
-      im.castShadow = M.h > 0.22 && !M.kind.startsWith('bit_');
-      im.receiveShadow = true;
-      im.customDepthMaterial = this.mat.userData.depth;
-      im.frustumCulled = false;
-      im.matrixAutoUpdate = false;
-      im.name = `deco:${M.key}`;
-      this.group.add(im);
-      M.im = im;
-    }
-    const im = M.im;
-    im.visible = true;
-    im.count = M.n;
-    im.instanceMatrix.array.set(M.buf.subarray(0, M.n * 16));
-    im.instanceMatrix.clearUpdateRanges();
-    im.instanceMatrix.addUpdateRange(0, M.n * 16);
-    im.instanceMatrix.needsUpdate = true;
+    for (; slot < this.bitSlots.length; slot++) this.hide(this.bitSlots[slot]);
   }
 }

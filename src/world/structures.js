@@ -22,8 +22,8 @@ import { nearestRoad } from './terrain.js';
 const S16 = 1 / 16;
 // weathered, sun-greyed boards (a groove a couple of shades down between them: dark enough to
 // read up close, soft enough not to shimmer far off)
-const PLANK = [0xb0906a, 0xa48660, 0xbc9c76, 0xa98a66];
-const GROOVE = 0x8a6c4e;
+const PLANK = [0xb0906a, 0xaa8a64, 0xb6966e, 0xac8c66];
+const GROOVE = 0x9a7c5a;
 const PILE = [0x4e3828, 0x5a4230, 0x46301f];
 const BEAM = 0x5e4028;
 const TRIM = 0xf2ece0, TRIM_D = 0xd6cec0;
@@ -68,7 +68,9 @@ function plankFn(C, pw, seed, { grooveTop = 0, dark = false } = {}) {
   return (i, j, k) => {
     const kk = k + C.k0, p = Math.floor(kk / n);
     const top = j >= grooveTop;
-    if (top && ((kk % n) + n) % n === n - 1) return GROOVE;
+    // (the seam between boards: only a voxel a shade down at each board's end, never a dark line
+    // every fourth voxel - that period shimmered into moire rings across the far docks)
+    if (top && ((kk % n) + n) % n === n - 1 && vhash(i + C.i0, 5, p, seed) < 0.35) return GROOVE;
     let c = PLANK[Math.floor(vhash(p, 7, 3, seed) * PLANK.length)];
     if (dark) c = tone(c, -0.22);
     const h = vhash(i + C.i0, j, kk, seed);

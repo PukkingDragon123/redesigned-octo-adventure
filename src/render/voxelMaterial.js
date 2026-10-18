@@ -25,8 +25,17 @@ const RIG_VERT = /* glsl */ `
 #endif
 `;
 
+// (BatchedMesh: each draw's matrix from three's batching texture; see game/deco2d.js)
+const BATCH_PARS = '#include <batching_pars_vertex>';
+const BATCH_VERT = /* glsl */ `
+  #ifdef USE_BATCHING
+  M = modelMatrix * getBatchingMatrix( getIndirectIndex( gl_DrawID ) );
+  #endif
+`;
+
 const VERT = /* glsl */ `
 ${LIGHT_PARS_VERT}
+${BATCH_PARS}
 attribute vec4 color4;
 attribute vec4 detail;
 attribute vec4 qbox;
@@ -50,6 +59,7 @@ void main() {
   #ifdef USE_INSTANCING
   M = modelMatrix * instanceMatrix;
   #endif
+  ${BATCH_VERT}
   ${RIG_VERT}
   vec4 worldPosition = M * vec4(p, 1.0);
   if (uSway > 0.0) {
@@ -154,6 +164,7 @@ void main() {
 
 const DEPTH_VERT = /* glsl */ `
 ${LIGHT_PARS_VERT}
+${BATCH_PARS}
 uniform float uSway;
 uniform float uSwayY0;
 ${RIG_PARS}
@@ -162,6 +173,7 @@ void main() {
   #ifdef USE_INSTANCING
   M = modelMatrix * instanceMatrix;
   #endif
+  ${BATCH_VERT}
   ${RIG_VERT}
   vec4 wp = M * vec4(position, 1.0);
   gl_Position = projectionMatrix * viewMatrix * wp;
