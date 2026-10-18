@@ -1070,9 +1070,11 @@ export class VoxelCharacter {
       this.mat.uniforms.uFlash.value = f;
       this.faceMat.uniforms.uFlash.value = f;
     }
-    this.root.visible = this.visible;
+    // (camHide: a passer-by standing right in a cutscene shot's line of sight, camera.js)
+    const shown = this.visible && !this.camHide;
+    this.root.visible = shown;
     if (this.broken) this.updateBroken(dt);
-    for (const c of this.cloths) { c.setVisible(this.visible); if (this.visible) c.update(dt); }
+    for (const c of this.cloths) { c.setVisible(shown); if (shown) c.update(dt); }
   }
 
   followPath(dt) {

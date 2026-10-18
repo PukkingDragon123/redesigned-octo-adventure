@@ -119,6 +119,7 @@ export class ChaseCamera {
     this.shot = { fromPos: this.pos.clone(), fromLook: this.look.clone(), fromFov: this.fov, fromRoll: this.shotRoll, pos: pos.clone(), look: look.clone(), dur, t: 0, fov, ...shotOpts(o) };
   }
   release() {
+    for (const ch of LIVE) ch.camHide = false;
     this.mode = 'chase';
     this.shot = null;
     this.subject = null;
@@ -150,6 +151,7 @@ export class ChaseCamera {
         this.fov = s.fov * (1 - k * 0.5);
         this.shotRoll = s.roll;
       }
+      if (this.cine) this.guardLens();
       this.updateSee(dt, bike);
       this.apply(dt);
       return;
@@ -293,6 +295,7 @@ export class ChaseCamera {
   updateSee(dt, player) {
     const S = this.see, cam = this.pos;
     if (this.cine || this.scene) return this.seeOff();
+    if (this._hid) { this._hid = false; for (const ch of LIVE) ch.camHide = false; }
     let have = false, who = null, floor = -1e5, rad = 1.25, gap = 0.75, bubble = 0.9;
     const f = _f;
     if (this.mode === 'chase' || !this.scene) {
@@ -357,6 +360,43 @@ export class ChaseCamera {
     G.uSee.value.set(S.focus.x, S.focus.y, S.focus.z, e);
     G.uSeeP.value.set(S.rad, S.gap, bubble, S.floor);
     G.uSeeCamR.value = S.wide;
+  }
+  // A cutscene shot has no see-through, so its lens is kept clear instead, every frame (a
+  // move or an arc can drift into trouble part way): out of walls, in front of any building
+  // between it and what it looks at, above the ground, and a passer-by standing right in the
+  // line of sight steps out of the picture (camHide; never the cast: an over-the-shoulder
+  // shot is meant to have a shoulder in it). Indoors (Nana's cabin) the room is the shot's own.
+  guardLens() {
+    const ph = this.ph, P = this.pos, L = this.look;
+    const indoors = ph.segmentHit(L.x, L.y, L.z, L.x, L.y, L.z, 0.05) < 1;
+    if (!indoors) {
+      let h = ph.segmentHit(L.x, L.y, L.z, P.x, P.y, P.z, 0.12);
+      if (h < 1) P.lerpVectors(L, P, Math.max(0.08, h - 0.04));
+      if (ph.segmentHit(P.x, P.y, P.z, P.x, P.y, P.z, 0.2) < 1) {
+        h = ph.segmentHit(L.x, L.y, L.z, P.x, P.y, P.z, 0.3);
+        if (h < 1) P.lerpVectors(L, P, Math.max(0.08, h - 0.04));
+      }
+    }
+    const gh = ph.groundAt(P.x, P.z, P.y + 0.5).h;
+    if (P.y < gh + 0.22) P.y = gh + 0.22;
+    // passers-by in the way
+    const dx = L.x - P.x, dy = L.y - P.y, dz = L.z - P.z, len = Math.hypot(dx, dy, dz) || 1;
+    const sub = this.subject && !this.subject.isVector3 ? this.subject : null;
+    for (const ch of LIVE) {
+      let hide = false;
+      if (!ch.scripted && ch !== sub && !ch._char?.startsWith('hank') && ch.visible) {
+        const x = ch.pos.x - P.x, z = ch.pos.z - P.z;
+        const along = (x * dx + z * dz) / Math.hypot(dx, dz || 1e-6);
+        const k = along / Math.hypot(dx, dz || 1e-6); // 0 at the lens, 1 at the look point (flat)
+        if (k > 0 && k < 1 && along < len - 1.2) {
+          const perp = Math.abs(x * dz - z * dx) / Math.hypot(dx, dz || 1e-6);
+          const y = P.y + dy * k; // the sight line's height over them
+          hide = perp < 0.55 && y > ch.pos.y - 0.2 && y < ch.pos.y + (ch.P?.height ?? 1.7) + 0.3;
+        }
+      }
+      ch.camHide = hide;
+    }
+    this._hid = true;
   }
   // cutscenes and the title: nothing melts, no ring, no bubble round the lens, everyone solid
   seeOff() {
