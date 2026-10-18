@@ -1,109 +1,67 @@
-/* The pages of the 3D journal (src/ui/book.js pins them onto the paper of the book
-   drawn by src/ui/book3d.js) and the little 3D things in the corners
-   (src/ui/compass3d.js). All sizes in whole art pixels. */
-.bk-layer { position: absolute; inset: 0; display: none; pointer-events: auto; z-index: 4; overflow: hidden; }
-.bk-layer.on { display: block; }
-.bk-page {
-  position: absolute; left: 0; top: 0; transform-origin: 0 0; visibility: hidden;
-  color: #3a2418; text-shadow: none; pointer-events: none; opacity: 0;
-  transition: opacity 0.14s steps(3);
+/* The menu screen: Hank's journal as flat pixel art (src/ui/book.js, art painted by
+   src/ui/bookart.js), and the little things in the screen corners. All sizes are whole
+   art pixels (--u); nothing is scaled smoothly, nothing is blurred. */
+.bk-layer {
+  position: absolute; inset: 0; display: none; pointer-events: auto; z-index: 4; overflow: hidden;
+  /* the world dims behind the book: a flat shade with a 2 x 2 art-pixel checker over it */
+  background:
+    conic-gradient(rgba(18, 10, 12, 0.32) 25%, transparent 0 50%, rgba(18, 10, 12, 0.32) 0 75%, transparent 0) 0 0 / calc(var(--u) * 2) calc(var(--u) * 2),
+    rgba(18, 10, 12, 0.42);
 }
-.bk-page.shown { opacity: 1; }
-.bk-layer.live .bk-page { pointer-events: auto; }
-/* the writing area inside the page's margins (the bottom one leaves room for his thumbs) */
-.bk-c {
-  position: absolute; top: calc(var(--u) * 6); bottom: calc(var(--u) * 14);
-  left: calc(var(--u) * 9); right: calc(var(--u) * 6);
+.bk-layer.on { display: block; }
+.bk { position: absolute; animation: bk-up 0.2s steps(1); }
+@keyframes bk-up { 0% { translate: 0 calc(var(--u) * 12); opacity: 0; } 25% { translate: 0 calc(var(--u) * 6); opacity: 1; } 50% { translate: 0 calc(var(--u) * 2); } 75% { translate: 0 calc(var(--u) * -1); } 100% { translate: 0 0; } }
+.bk-art { position: absolute; left: 0; top: 0; display: block; image-rendering: pixelated; image-rendering: crisp-edges; pointer-events: none; }
+/* a page turn: the writing blinks off for a frame or two */
+.bk.turn .bk-page { animation: bk-turn 0.12s steps(1); }
+@keyframes bk-turn { 0% { visibility: hidden; } 100% { visibility: visible; } }
+
+.bk-page {
+  position: absolute; color: #3a2418; text-shadow: none;
   overflow-x: hidden; overflow-y: auto; scrollbar-width: none;
 }
-.bk-c::-webkit-scrollbar { display: none; }
-.bk-r .bk-c { left: calc(var(--u) * 6); right: calc(var(--u) * 9); }
-.bk-in { position: relative; min-height: 100%; isolation: isolate; }
-.single .bk-in { min-height: 0; }
-.single .bk-c { bottom: calc(var(--u) * 30); }
-.single .bk-in + .bk-in { margin-top: calc(var(--u) * 6); padding-top: calc(var(--u) * 6); background: linear-gradient(90deg, rgba(90, 58, 34, 0.4) 0 calc(var(--u) * 3), transparent calc(var(--u) * 3)) 0 0 / calc(var(--u) * 6) var(--u) repeat-x; }
+.bk-page::-webkit-scrollbar { display: none; }
+.bk-in { position: relative; }
+.single .bk-in + .bk-in { margin-top: calc(var(--u) * 5); padding-top: calc(var(--u) * 6); background: linear-gradient(90deg, #c8a670 0 calc(var(--u) * 2), transparent 0) 0 0 / calc(var(--u) * 4) var(--u) repeat-x; }
+.single .bk-in + .bk-in:empty { display: none; }
+.bk-x { position: absolute; right: calc(var(--u) * -4); top: calc(var(--u) * -6); z-index: 3; }
 
-/* headings in red ink with a pencil note under them */
-.bk-head { margin: 0 0 calc(var(--u) * 4); }
-.bk-h { color: #8a2a14; font-family: var(--font-b); line-height: calc(var(--u) * 14); white-space: nowrap; overflow: hidden; }
-.bk-sub { color: #6e6070; line-height: calc(var(--u) * 12); white-space: nowrap; overflow: hidden; }
-.bk-page .k-h { color: #8a2a14; text-shadow: none; margin: calc(var(--u) * 4) 0 calc(var(--u) * 2); }
-.bk-page .hint { color: #6e5038; white-space: normal; margin: calc(var(--u) * 3) 0 0; }
-.bk-page p { margin: calc(var(--u) * 2) 0; white-space: normal; }
+/* headings in red ink, a pencilled line under them */
+.bk-head { margin: 0 0 calc(var(--u) * 4); padding-bottom: calc(var(--u) * 2); background: linear-gradient(90deg, #c8a670 0 calc(var(--u) * 2), transparent 0) 0 100% / calc(var(--u) * 3) var(--u) repeat-x; }
+.bk-h { color: #a02a16; font-family: var(--font-b); line-height: calc(var(--u) * 14); white-space: nowrap; overflow: hidden; }
+.bk-sub { color: #7a5a40; line-height: calc(var(--u) * 12); white-space: nowrap; overflow: hidden; }
+.bk-page .hint { color: #7a5a40; white-space: normal; margin: calc(var(--u) * 4) 0 0; }
 
-/* rows and things on paper (the kit's dark-panel highlights don't read on cream) */
-.bk-page .k-item:hover, .bk-page .k-item.sel { background: rgba(168, 50, 30, 0.12); color: #8a2214; }
-.bk-page .k-setrow { flex-wrap: wrap; height: auto; min-height: calc(var(--u) * 20); row-gap: 0; padding-top: var(--u); padding-bottom: var(--u); }
-.bk-page .k-setrow .lbl { flex: 1 1 auto; min-width: calc(var(--u) * 60); }
-.bk-page .k-setrow > :last-child { margin-left: auto; }
-.bk-page .k-setrow.sel, .bk-page .k-setrow:hover { background: rgba(168, 50, 30, 0.12); color: #8a2214; }
-.bk-page .k-setrow .k-slider { width: calc(var(--u) * 72); }
-.bk-page .m-foot { margin-top: calc(var(--u) * 6); }
-.bk-page .m-foot .k-btn { min-width: calc(var(--u) * 70); }
+/* rows on paper: a red-ink wash and the bony pointer when picked */
+.bk-page .k-item { min-height: calc(var(--u) * 20); padding: calc(var(--u) * 2) calc(var(--u) * 2); }
+.bk-page .k-item .k-g { width: calc(var(--u) * 16); height: calc(var(--u) * 16); image-rendering: pixelated; }
+.bk-page .k-item:hover, .bk-page .k-item.sel { background: #ecd29c; color: #a02a16; box-shadow: inset 0 calc(var(--u) * -1) 0 #d8b47a; }
+.bk-page .k-item.sel::before { top: calc(var(--u) * 2); }
+.bk-page .k-setrow { height: calc(var(--u) * 20); padding: 0 calc(var(--u) * 2); gap: calc(var(--u) * 2); }
+.bk-page .k-setrow .lbl { flex: 1 1 auto; min-width: 0; overflow: hidden; }
+.bk-page .k-setrow.sel, .bk-page .k-setrow:hover { background: #ecd29c; color: #a02a16; box-shadow: inset 0 calc(var(--u) * -1) 0 #d8b47a; }
+.bk-page .k-setrow.sel::before { display: none; }
+.bk-page .k-setrow .k-slider { width: calc(var(--u) * 64); flex: none; }
+.bk-page .k-cycle .v { width: calc(var(--u) * 52); }
+.bk-page .m-foot { margin-top: calc(var(--u) * 8); }
+.bk-page .m-foot .k-btn { min-width: calc(var(--u) * 72); }
 
-/* the journal */
-.jcup { display: flex; align-items: center; gap: calc(var(--u) * 2); min-height: calc(var(--u) * 16); }
-.jcup .nm { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; }
-.jcup .k-food { margin-top: calc(var(--u) * -4); margin-bottom: calc(var(--u) * -4); }
+/* the contents page */
+.bk-stats { display: flex; flex-direction: column; }
+.bk-stat { display: flex; align-items: center; gap: calc(var(--u) * 3); min-height: calc(var(--u) * 18); white-space: nowrap; }
+.bk-stat .k-g { flex: none; width: calc(var(--u) * 16); height: calc(var(--u) * 16); image-rendering: pixelated; }
+#ui .bk-stat b { color: #3a2418; font-family: var(--font-b); font-weight: normal; line-height: calc(var(--u) * 14); }
+.bk-stat span { color: #7a5a40; }
+.bk-index { display: flex; flex-direction: column; }
 
-/* the notebook pages: tick boxes in the margin */
-.nb-list { padding-left: calc(var(--u) * 16); }
-.bk-page .nb-head { height: auto; margin-bottom: calc(var(--u) * 2); }
-.bk-page .nb-card { margin-bottom: calc(var(--u) * 4); }
-.bk-page .nb-tip { padding-right: 0; margin-top: calc(var(--u) * 4); }
-.bk-page .nb-pencil { right: calc(var(--u) * 4); bottom: calc(var(--u) * -10); }
-
-/* the map */
-.bk-page .mapwrap { margin: 0 auto; padding: calc(var(--u) * 3); background: #f0e2c0; box-shadow: 0 0 0 var(--u) #b89a70, var(--u) var(--u) 0 var(--u) rgba(60, 40, 30, 0.25); }
-.mplaces { display: flex; flex-direction: column; }
-.mplace { display: flex; align-items: center; gap: calc(var(--u) * 2); min-height: calc(var(--u) * 16); white-space: nowrap; }
-.mplace .nm { flex: 1; min-width: 0; overflow: hidden; }
-.mplace .d { color: #6e6070; }
-.bk-page .maplegend { justify-content: flex-start; gap: calc(var(--u) * 6); margin-top: calc(var(--u) * 6); flex-wrap: wrap; }
-
-/* recipes: one card a row */
-.bk-page .rgrid { display: flex; flex-direction: column; gap: calc(var(--u) * 3); }
-.bk-page .rcard { padding: calc(var(--u) * 1) 0; background: linear-gradient(90deg, rgba(90, 58, 34, 0.3) 0 calc(var(--u) * 2), transparent calc(var(--u) * 2)) 0 100% / calc(var(--u) * 4) var(--u) repeat-x; }
-.bk-page .rcard .big { margin: calc(var(--u) * -2) 0 0 calc(var(--u) * -4); }
-
-/* keepsakes */
-.bk-page .slots { gap: calc(var(--u) * 2); justify-content: start; }
-.kdetail .warn { color: #a8321e; }
-.kdetail .okay { color: #2f6e2c; }
-
-/* controls */
-.bk-page .crow { min-height: calc(var(--u) * 16); align-items: flex-start; }
-.bk-page .crow .ck { min-width: calc(var(--u) * 44); padding-top: var(--u); }
-
-/* Mo's shelf: a list on paper */
-.shoplist { display: flex; flex-direction: column; }
-.shoprow { position: relative; display: flex; align-items: center; gap: calc(var(--u) * 2); width: 100%; min-height: calc(var(--u) * 18); padding: 0 calc(var(--u) * 2); border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; outline: none; white-space: nowrap; }
-.shoprow .k-food { margin-top: calc(var(--u) * -5); margin-bottom: calc(var(--u) * -3); }
-.shoprow .nm { flex: 1; min-width: 0; overflow: hidden; }
-.shoprow .have { color: #8a7a6a; }
-.shoprow .pr { color: #2f6e2c; min-width: calc(var(--u) * 16); text-align: right; }
-.shoprow .qty { position: static; margin-left: calc(var(--u) * 1); }
-.shoprow:hover, .shoprow.sel { background: rgba(168, 50, 30, 0.12); color: #8a2214; }
-.shoprow.taken .nm { color: #2f6e2c; }
-.bk-page .shopbar { margin-bottom: calc(var(--u) * 4); }
-.shopbasket .bline { display: flex; align-items: center; gap: calc(var(--u) * 2); min-height: calc(var(--u) * 16); white-space: nowrap; }
-.shopbasket .bline .nm { flex: 1; overflow: hidden; }
-
-/* the receipt */
-.bk-page .receipt { margin-top: calc(var(--u) * 2); }
-.rnote { color: #2e4c9e; }
-
-/* the bookmark tabs: icons on the 3D leather tabs sticking out of the fore-edge */
-.bk-tabs { position: absolute; left: 0; top: 0; width: 0; height: 0; }
-.bk-tab { position: absolute; display: flex; align-items: center; justify-content: center; padding: 0; margin: 0; border: 0; background: none; cursor: pointer; outline: none; }
-.bk-tab img { width: calc(var(--u) * 16); height: calc(var(--u) * 16); image-rendering: pixelated; filter: drop-shadow(var(--u) var(--u) 0 rgba(20, 8, 4, 0.55)); opacity: 0.86; }
-.bk-tab.on img, .bk-tab:hover img { opacity: 1; }
-.bk-x { position: absolute; right: calc(var(--u) * -12); top: calc(var(--u) * -12); z-index: 3; }
-.single .bk-x { right: calc(var(--u) * -6); }
+/* controls: key caps and what they do */
+.bk-page .crow { display: flex; align-items: flex-start; gap: calc(var(--u) * 3); min-height: calc(var(--u) * 18); }
+.bk-page .crow .ck { display: flex; gap: calc(var(--u) * 1); flex: none; min-width: calc(var(--u) * 40); }
+.bk-page .crow span:last-child { white-space: normal; padding-top: calc(var(--u) * 2); }
 
 /* ---------------------------------------------------------------- the corner things */
-/* the compass (top right) and the little journal (top left): 3D, drawn on the game
-   canvas; these are only their tap targets */
+/* the compass (top right, 3D, drawn pixelated on the game canvas: this is its tap
+   target) and the little journal (top left: the way into the menu on a touch screen) */
 .cmp-hit, .jr-hit {
   position: absolute; top: calc(var(--u) * 4 + var(--safe-t, 0px));
   width: calc(var(--u) * 46); height: calc(var(--u) * 46);
@@ -111,9 +69,11 @@
   -webkit-tap-highlight-color: transparent;
 }
 .cmp-hit { right: calc(var(--u) * 4 + var(--safe-r, 0px)); }
-.jr-hit { left: calc(var(--u) * 4 + var(--safe-l, 0px)); width: calc(var(--u) * 34); height: calc(var(--u) * 34); }
+.jr-hit { left: calc(var(--u) * 6 + var(--safe-l, 0px)); top: calc(var(--u) * 6 + var(--safe-t, 0px)); width: calc(var(--u) * 22); height: calc(var(--u) * 28); }
+.jr-hit canvas { display: block; width: 100%; height: 100%; image-rendering: pixelated; image-rendering: crisp-edges; }
+.jr-hit:hover canvas, .jr-hit:active canvas { translate: 0 calc(var(--u) * -1); }
 .cmp-hit.hide, .jr-hit.hide { visibility: hidden; }
-/* a small pencilled tag under the compass now and then */
+/* a small tag under the compass now and then */
 .cmp-lbl {
   position: absolute; top: calc(var(--u) * 58 + var(--safe-t, 0px)); right: calc(var(--u) * 10 + var(--safe-r, 0px));
   display: flex; align-items: center; gap: calc(var(--u) * 2); height: calc(var(--u) * 18); max-width: calc(var(--u) * 160);
@@ -127,17 +87,16 @@
 /* the compass held up: an X and a short hint */
 .cmp-fp { position: absolute; inset: 0; display: none; pointer-events: auto; z-index: 3; touch-action: none; cursor: grab; }
 .cmp-fp.on { display: block; }
-.cmp-fp-hint { position: absolute; left: 0; right: 0; margin: 0 auto; width: max-content; bottom: calc(var(--u) * 6 + var(--safe-b, 0px)); display: flex; align-items: center; gap: calc(var(--u) * 2); height: calc(var(--u) * 18); white-space: nowrap; opacity: 0.85; }
+.cmp-fp-hint { position: absolute; left: 0; right: 0; margin: 0 auto; width: max-content; bottom: calc(var(--u) * 6 + var(--safe-b, 0px)); display: flex; align-items: center; gap: calc(var(--u) * 2); height: calc(var(--u) * 18); white-space: nowrap; }
 .cmp-fp-hint .sep { width: calc(var(--u) * 6); }
 .touchmode .cmp-fp-hint .k-key, .touchmode .cmp-fp-hint .k-key + span { display: none; }
 .cmp-fp-x { position: absolute; top: calc(var(--u) * 6 + var(--safe-t, 0px)); right: calc(var(--u) * 6 + var(--safe-r, 0px)); }
 
 /* ---------------------------------------------------------------- less on the screen */
-/* the touch controls stay, but see-through until a thumb is on them; the journal and map
-   buttons went (the 3D journal and compass in the corners do that now) */
-#touch .twheel, #touch .tbtn, #touch .t-talk { opacity: 0.6; transition: opacity 0.18s; }
-#touch .twheel:active, #touch .tbtn.down, #touch.foot .twheel { opacity: 0.92; }
+/* the touch controls stay, but see-through until a thumb is on them (opacity steps, no fades) */
+#touch .twheel, #touch .tbtn, #touch .t-talk { opacity: 0.7; }
+#touch .twheel:active, #touch .tbtn.down, #touch.foot .twheel { opacity: 1; }
 #touch .tbtn.tsq { display: none; }
-.crank-hud { opacity: 0.55; transition: opacity 0.25s; }
-.crank-hud:hover, .crank-hud.held, .touchmode .crank-hud.on { opacity: 0.9; }
+.crank-hud { opacity: 0.7; }
+.crank-hud:hover, .crank-hud.held, .touchmode .crank-hud.on { opacity: 1; }
 .pop.bk-hide { visibility: hidden; }

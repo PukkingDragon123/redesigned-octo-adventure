@@ -96,10 +96,10 @@ export class Game {
     this.sfx = (name, pos, vol = 1) => this.spatial(name, pos, vol);
     this.ui = new UI(this);
     this.touch = new TouchControls(this);
-    // the 3D interface: the journal every menu is written in, the brass compass, and the
-    // first-person camera for holding them up (src/ui/view3d.js)
+    // the menu screen (Hank's journal, flat pixel art: src/ui/book.js), the brass compass
+    // and the first-person camera for holding it up (src/ui/view3d.js)
     this.view3d = new View3D(this);
-    this.book = new BookUI(this, this.view3d);
+    this.book = new BookUI(this);
     this.compass3d = new Compass3D(this.view3d, this);
     this.menus = new Menus(this);
     this.orders = new Orders(this);
@@ -394,13 +394,8 @@ export class Game {
       this.story.ending();
       return;
     }
-    if (typeof this.menus.skillBook === 'function') {
-      this.openMenu(() => this.menus.skillBook(() => this.resumeFromMenu()));
-      sound.play('book_open');
-    } else {
-      const t = this.skills.total();
-      this.ui.pop(`Harold's notes say ${t} marks: ${this.skills.summary()}. Next: ${this.skills.list().find((s) => s.tier < s.maxTier)?.goal || 'nothing! I mastered it all!'}`, { expr: 'think', ms: 6000 });
-    }
+    const t = this.skills.total();
+    this.ui.pop(`Harold's notes say ${t} marks: ${this.skills.summary()}. Next: ${this.skills.list().find((s) => s.tier < s.maxTier)?.goal || 'nothing! I mastered it all!'}`, { expr: 'think', ms: 6000 });
   }
   save() {
     this.state.hour = this.world.atmosphere.hour;
@@ -776,8 +771,6 @@ export class Game {
       this.world.atmosphere.hour += (dt * GAME_MIN_PER_SEC) / 60;
       const free = !this.ui.inputSwallowed();
       if (free && input.pressed('pause')) this.openMenu(() => this.menus.pause());
-      else if (free && input.pressed('map')) this.openMenu(() => this.menus.map());
-      else if (free && input.pressed('keepsakes')) this.openMenu(() => this.menus.keepsakes());
       if (input.pressed('bell')) {
         sound.play(this.bike.stats.bellType || 'bell');
         this.villagers.onBell();
@@ -866,11 +859,10 @@ export class Game {
       this.plan.update();
     }
     // the held things move, the camera goes into his skull if something is held up, the
-    // compass reads the final view, and the book's pages are pinned onto the paper
+    // compass reads the final view
     this.view3d.update(dt);
     this.view3d.late(dt);
     this.compass3d.update(dt);
-    this.book.place();
     if (this.fpsEl) {
       this.fpsFrames++;
       this.fpsT += dt;
