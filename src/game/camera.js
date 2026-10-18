@@ -382,16 +382,22 @@ export class ChaseCamera {
     // passers-by in the way
     const dx = L.x - P.x, dy = L.y - P.y, dz = L.z - P.z, len = Math.hypot(dx, dy, dz) || 1;
     const sub = this.subject && !this.subject.isVector3 ? this.subject : null;
+    const flat = Math.hypot(dx, dz) || 1e-6;
     for (const ch of LIVE) {
       let hide = false;
-      if (!ch.scripted && ch !== sub && !ch._char?.startsWith('hank') && ch.visible) {
-        const x = ch.pos.x - P.x, z = ch.pos.z - P.z;
-        const along = (x * dx + z * dz) / Math.hypot(dx, dz || 1e-6);
-        const k = along / Math.hypot(dx, dz || 1e-6); // 0 at the lens, 1 at the look point (flat)
-        if (k > 0 && k < 1 && along < len - 1.2) {
-          const perp = Math.abs(x * dz - z * dx) / Math.hypot(dx, dz || 1e-6);
-          const y = P.y + dy * k; // the sight line's height over them
-          hide = perp < 0.55 && y > ch.pos.y - 0.2 && y < ch.pos.y + (ch.P?.height ?? 1.7) + 0.3;
+      if (ch !== sub && ch.visible && !(ch.talking > 0)) {
+        const x = ch.pos.x - P.x, z = ch.pos.z - P.z, top = ch.pos.y + (ch.P?.height ?? 1.7) + 0.3;
+        const along = (x * dx + z * dz) / flat, k = along / flat; // k: 0 at the lens, 1 at the look point
+        const perp = Math.abs(x * dz - z * dx) / flat;
+        const y = P.y + dy * Math.max(0, k); // the sight line's height over them
+        const across = y > ch.pos.y - 0.2 && y < top;
+        const nearLook = Math.hypot(ch.pos.x - L.x, ch.pos.z - L.z) < 1.1;
+        // pressed right up against the lens (a blur of coat filling half the frame)
+        if (Math.hypot(x, z) < 0.8 && P.y > ch.pos.y - 0.3 && P.y < top && !nearLook) hide = true;
+        // standing in the line of sight: passers-by anywhere along it; the cast only well
+        // clear of the lens (an over-the-shoulder shot keeps its shoulder)
+        else if (k > 0 && k < 1 && along < len - 1.1 && across && !nearLook && !ch._char?.startsWith('hank')) {
+          hide = ch.scripted ? along > 1.4 && perp < 0.38 : perp < 0.55;
         }
       }
       ch.camHide = hide;
