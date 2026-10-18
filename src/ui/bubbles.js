@@ -24,6 +24,7 @@ import { bubbleArt, bubbleTailArt, nameTabArt, BUBBLE_JOIN, BUBBLE_TAIL, CLOUD_A
 import { glyphURL } from '../art/icons.js';
 import { el, scale, snap } from './kit.js';
 import { EM, artWidth } from './type.js';
+import { narratorPlate, barH } from './cine.js';
 
 // ---------------------------------------------------------------- art (cached data URLs)
 const URLS = new Map();
@@ -276,30 +277,19 @@ export class Bubbles {
     this.active.replySpeaker = this.findSpeaker('hank', {});
   }
 
-  // narration: a dark cocoa bubble (no tail) across the top
+  // narration: a parchment scroll in the bottom letterbox bar (cine.js), typed in
+  // letter by letter, a little gold arrow blinking once it's all there
   narrate(text, opts) {
     this.clear();
-    const p = el('div', 'bubble b-dark narr-plate');
-    p.style.borderImageSource = `url(${frame('dark')})`;
-    const txt = el('div', 'n-text');
-    const next = el('div', 'b-next');
-    p.appendChild(txt);
-    p.appendChild(next);
-    this.layer.appendChild(p);
-    const u = scale.u;
-    const fit = () => {
-      const w = Math.min(268, scale.cols - 16) * u;
-      p.style.width = `${w}px`;
-      p.style.left = `${snap((innerWidth - w) / 2)}px`;
-      const box = this.ui.root.classList.contains('letterbox') ? Math.ceil((innerHeight * 0.09) / u) * u : 0;
-      p.style.top = `${snap(box + 6 * u)}px`;
-    };
-    fit();
     const parts = tokenize(text);
+    const N = narratorPlate(this.ui, parts);
+    const p = N.root, txt = N.text, next = N.next, fit = N.fit;
+    this.layer.appendChild(p);
     return new Promise((resolve) => {
       let i = 0, acc = 0, done = false;
-      this.active = { wrap: p, narr: true, fit };
+      this.active = { wrap: p, narr: true, fit, refit: N.refit };
       const letters = layoutText(txt, parts);
+      N.refit();
       const add = () => letters[i - 1]?.classList.remove('hid');
       const close = () => {
         this.ui.dialogueTick = null;
@@ -362,7 +352,7 @@ export class Bubbles {
     }
     const m = 6 * u;
     // keep clear of the cutscene letterbox bars and leave room for the name tab
-    const box = this.ui.root.classList.contains('letterbox') ? H * 0.09 : 0;
+    const box = this.ui.root.classList.contains('letterbox') ? barH() : 0;
     const top = m + box + (A.hasName ? 12 * u : 0);
     const join = tailJoin(A.style);
     const tailBelow = (TAIL_H - join) * u; // how far the tail tip hangs below the bubble box

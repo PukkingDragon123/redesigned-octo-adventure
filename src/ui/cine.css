@@ -1,0 +1,141 @@
+/* Cutscene furniture (cine.js, art in cineart.js): letterbox bars, the narrator's
+   parchment scroll and the wooden skip tag. Every size is a whole number of art
+   pixels (--u), every image a pixel-art 9-slice drawn with nearest filtering, every
+   motion a steps() hop of whole art pixels. */
+
+/* ---------------------------------------------------------------- the bars */
+/* (cine.js keeps --cn-bar a whole number of art pixels) a warm rim and a stitched line
+   along their inner edges */
+#ui.letterbox::before, #ui.letterbox::after {
+  height: var(--cn-bar, 9%);
+  background:
+    linear-gradient(#3a2016, #3a2016) 0 100% / 100% var(--u) no-repeat,
+    repeating-linear-gradient(90deg, #2c1812 0 calc(var(--u) * 3), transparent 0 calc(var(--u) * 6)) 0 calc(100% - var(--u) * 3) / 100% var(--u) no-repeat,
+    #0c0608;
+  pointer-events: none;
+}
+#ui.letterbox::after {
+  background:
+    linear-gradient(#3a2016, #3a2016) 0 0 / 100% var(--u) no-repeat,
+    repeating-linear-gradient(90deg, #2c1812 0 calc(var(--u) * 3), transparent 0 calc(var(--u) * 6)) 0 calc(var(--u) * 3) / 100% var(--u) no-repeat,
+    #0c0608;
+}
+
+/* ---------------------------------------------------------------- the narrator's scroll */
+.cn-narr {
+  position: absolute;
+  left: 0;
+  top: 0;
+  box-sizing: border-box;
+  border-style: solid;
+  border-color: transparent;
+  border-width: calc(var(--u) * 8) calc(var(--u) * 14) calc(var(--u) * 12) calc(var(--u) * 13);
+  border-image: var(--cn-plate) 8 14 12 13 fill / calc(var(--u) * 8) calc(var(--u) * 14) calc(var(--u) * 12) calc(var(--u) * 13) / 0 stretch;
+  padding: 0 calc(var(--u) * 3);
+  color: #3e2218;
+  text-shadow: none;
+  image-rendering: pixelated;
+  pointer-events: auto;
+  animation: cn-in 0.28s steps(1);
+}
+.cn-ntext { min-height: calc(var(--u) * 12); white-space: normal; overflow-wrap: break-word; }
+.cn-narr .tb { color: #b0381e; text-shadow: var(--u) 0 0 currentColor; margin-right: var(--u); }
+.cn-narr .tsm { color: #8a6a4a; }
+@keyframes cn-in {
+  0% { opacity: 0; margin-top: calc(var(--u) * 6); }
+  25% { opacity: 1; margin-top: calc(var(--u) * 2); }
+  50% { margin-top: calc(var(--u) * -1); }
+  75%, 100% { margin-top: 0; }
+}
+/* the maple-leaf seal pinned to the top edge (cine.js centres it in whole art pixels) */
+.cn-seal {
+  position: absolute;
+  top: calc(var(--u) * -14);
+  left: var(--cn-seal-x, 0);
+  width: calc(var(--u) * 13);
+  height: calc(var(--u) * 13);
+  background: var(--cn-leaf) 0 0 / 100% 100% no-repeat;
+  image-rendering: pixelated;
+  pointer-events: none;
+  animation: cn-seal 0.5s steps(1);
+}
+@keyframes cn-seal { 0% { margin-top: calc(var(--u) * -4); } 40% { margin-top: calc(var(--u) * -2); } 70% { margin-top: calc(var(--u) * 1); } 100% { margin-top: 0; } }
+/* the little gold arrow, blinking on the bottom rule once the words are all in */
+.cn-next {
+  position: absolute;
+  right: calc(var(--u) * -1);
+  bottom: calc(var(--u) * -7);
+  width: calc(var(--u) * 7);
+  height: calc(var(--u) * 5);
+  background: var(--cn-arrow) 0 0 / 100% 100% no-repeat;
+  image-rendering: pixelated;
+  visibility: hidden;
+}
+.cn-next.on { visibility: visible; animation: cn-blink 1s steps(1) infinite; }
+@keyframes cn-blink {
+  0% { margin-bottom: 0; visibility: visible; }
+  25% { margin-bottom: calc(var(--u) * -1); }
+  50% { margin-bottom: 0; }
+  75% { visibility: hidden; }
+}
+
+/* ---------------------------------------------------------------- the skip tag */
+.cn-skipwrap {
+  position: absolute;
+  right: calc(var(--u) * 6 + var(--safe-r, 0px));
+  top: calc(var(--cn-skip-y, 0px) + var(--safe-t, 0px));
+  display: none;
+  align-items: flex-start;
+  gap: calc(var(--u) * 3);
+  z-index: 31;
+}
+.cn-skipwrap.on { display: flex; }
+.cn-hint {
+  margin-top: calc(var(--u) * 3);
+  color: #a88a6a;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.cn-hint b { font-family: var(--font-b); font-weight: normal; color: #f2dcb4; }
+.cn-skip {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: calc(var(--u) * 2);
+  box-sizing: border-box;
+  height: calc(var(--u) * 19);
+  margin: 0;
+  border-style: solid;
+  border-color: transparent;
+  border-width: 0 calc(var(--u) * 5) 0 calc(var(--u) * 9);
+  border-image: var(--cn-tag) 0 5 0 9 fill / 0 calc(var(--u) * 5) 0 calc(var(--u) * 9) / 0 stretch;
+  padding: var(--u) calc(var(--u) * 2) 0 var(--u);
+  background: none;
+  color: #3e2218;
+  font-size: var(--tf);
+  line-height: calc(var(--u) * 12);
+  image-rendering: pixelated;
+  cursor: pointer;
+  pointer-events: auto;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  outline: none;
+}
+.cn-skip:hover, .cn-skip.hot { border-image-source: var(--cn-tag-hot); }
+.cn-skip.hot { animation: cn-shiver 0.12s steps(1) infinite; }
+.cn-ff { flex: none; width: calc(var(--u) * 7); height: calc(var(--u) * 5); margin-top: calc(var(--u) * 3); background: var(--cn-ff) 0 0 / 100% 100% no-repeat; image-rendering: pixelated; }
+.cn-fill {
+  position: absolute;
+  left: calc(var(--u) * -3);
+  top: calc(var(--u) * 14);
+  width: 0;
+  height: calc(var(--u) * 2);
+  background: linear-gradient(#ffdc52 0 50%, #f0ae26 50% 100%);
+  pointer-events: none;
+}
+.cn-skipwrap.nudge .cn-skip { animation: cn-wiggle 0.36s steps(1); }
+.cn-skipwrap.nudge .cn-hint { color: #ffd84a; }
+@keyframes cn-wiggle { 0% { left: var(--u); } 25% { left: calc(var(--u) * -1); } 50% { left: var(--u); } 75% { left: 0; } }
+@keyframes cn-shiver { 0% { top: 0; } 50% { top: var(--u); } }

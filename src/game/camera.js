@@ -76,6 +76,9 @@ export class ChaseCamera {
     // (a character, a point, or null: the character nearest the middle of the frame)
     this.scene = null;
     this.subject = null;
+    // a cutscene, the title or any staged shot (game.js sets it each frame): no see-through
+    // at all, the shots are framed clear instead (cutscene.js clear())
+    this.cine = false;
     this.see = { k: 0, who: null, focus: new THREE.Vector3(), last: new THREE.Vector3(), floor: -1e5, rad: 1.25, gap: 0.75, wide: 0.3 };
   }
 
@@ -116,6 +119,7 @@ export class ChaseCamera {
     this.shot = { fromPos: this.pos.clone(), fromLook: this.look.clone(), fromFov: this.fov, fromRoll: this.shotRoll, pos: pos.clone(), look: look.clone(), dur, t: 0, fov, ...shotOpts(o) };
   }
   release() {
+    for (const ch of LIVE) ch.camHide = false;
     this.mode = 'chase';
     this.shot = null;
     this.subject = null;
@@ -147,6 +151,7 @@ export class ChaseCamera {
         this.fov = s.fov * (1 - k * 0.5);
         this.shotRoll = s.roll;
       }
+      if (this.cine) this.guardLens();
       this.updateSee(dt, bike);
       this.apply(dt);
       return;
@@ -289,6 +294,8 @@ export class ChaseCamera {
   // building is in the way, so its near wall goes entirely.
   updateSee(dt, player) {
     const S = this.see, cam = this.pos;
+    if (this.cine || this.scene) return this.seeOff();
+    if (this._hid) { this._hid = false; for (const ch of LIVE) ch.camHide = false; }
     let have = false, who = null, floor = -1e5, rad = 1.25, gap = 0.75, bubble = 0.9;
     const f = _f;
     if (this.mode === 'chase' || !this.scene) {
@@ -353,6 +360,59 @@ export class ChaseCamera {
     G.uSee.value.set(S.focus.x, S.focus.y, S.focus.z, e);
     G.uSeeP.value.set(S.rad, S.gap, bubble, S.floor);
     G.uSeeCamR.value = S.wide;
+  }
+  // A cutscene shot has no see-through, so its lens is kept clear instead, every frame (a
+  // move or an arc can drift into trouble part way): out of walls, in front of any building
+  // between it and what it looks at, above the ground, and a passer-by standing right in the
+  // line of sight steps out of the picture (camHide; never the cast: an over-the-shoulder
+  // shot is meant to have a shoulder in it). Indoors (Nana's cabin) the room is the shot's own.
+  guardLens() {
+    const ph = this.ph, P = this.pos, L = this.look;
+    const indoors = ph.segmentHit(L.x, L.y, L.z, L.x, L.y, L.z, 0.05) < 1;
+    if (!indoors) {
+      let h = ph.segmentHit(L.x, L.y, L.z, P.x, P.y, P.z, 0.12);
+      if (h < 1) P.lerpVectors(L, P, Math.max(0.08, h - 0.04));
+      if (ph.segmentHit(P.x, P.y, P.z, P.x, P.y, P.z, 0.2) < 1) {
+        h = ph.segmentHit(L.x, L.y, L.z, P.x, P.y, P.z, 0.3);
+        if (h < 1) P.lerpVectors(L, P, Math.max(0.08, h - 0.04));
+      }
+    }
+    const gh = ph.groundAt(P.x, P.z, P.y + 0.5).h;
+    if (P.y < gh + 0.22) P.y = gh + 0.22;
+    // passers-by in the way
+    const dx = L.x - P.x, dy = L.y - P.y, dz = L.z - P.z, len = Math.hypot(dx, dy, dz) || 1;
+    const sub = this.subject && !this.subject.isVector3 ? this.subject : null;
+    const flat = Math.hypot(dx, dz) || 1e-6;
+    for (const ch of LIVE) {
+      let hide = false;
+      if (ch !== sub && ch.visible && !(ch.talking > 0)) {
+        const x = ch.pos.x - P.x, z = ch.pos.z - P.z, top = ch.pos.y + (ch.P?.height ?? 1.7) + 0.3;
+        const along = (x * dx + z * dz) / flat, k = along / flat; // k: 0 at the lens, 1 at the look point
+        const perp = Math.abs(x * dz - z * dx) / flat;
+        const y = P.y + dy * Math.max(0, k); // the sight line's height over them
+        const across = y > ch.pos.y - 0.2 && y < top;
+        const nearLook = Math.hypot(ch.pos.x - L.x, ch.pos.z - L.z) < 1.1;
+        // pressed right up against the lens (a blur of coat filling half the frame)
+        if (Math.hypot(x, z) < 0.8 && P.y > ch.pos.y - 0.3 && P.y < top && !nearLook) hide = true;
+        // standing in the line of sight: passers-by anywhere along it; the cast only well
+        // clear of the lens (an over-the-shoulder shot keeps its shoulder)
+        else if (k > 0 && k < 1 && along < len - 1.1 && across && !nearLook && !ch._char?.startsWith('hank')) {
+          hide = ch.scripted ? along > 1.4 && perp < 0.38 : perp < 0.55;
+        }
+      }
+      ch.camHide = hide;
+    }
+    this._hid = true;
+  }
+  // cutscenes and the title: nothing melts, no ring, no bubble round the lens, everyone solid
+  seeOff() {
+    const S = this.see;
+    S.k = 0;
+    S.who = null;
+    S.wide = 0.3;
+    G.uSee.value.w = 0;
+    G.uSeeP.value.z = 0;
+    for (const ch of LIVE) ch.setSeeThrough(false);
   }
   // the character a cutscene shot is looking at: nearest the middle of the frame (someone
   // talking counts a little nearer), not too far off it, and not someone a building hides
