@@ -676,7 +676,7 @@ function funeral(story) {
     const mugAt = at(-0.52, -0.76);
     const mugY = gy(mugAt.x, mugAt.z) - 0.005;
     // low by the headstone, the mug about to come into frame
-    await S.cam(XZ(at(0.38, -0.4), moundTop(0.38, -0.4) + 0.42), V(mugAt.x - 0.0, mugY + 0.3, mugAt.z), 0, 46, V(mugAt.x, mugY + 0.1, mugAt.z), { creep: 0.04 });
+    await S.cam(XZ(at(0.45, -0.3), moundTop(0.45, -0.3) + 0.6), V(mugAt.x - 0.0, mugY + 0.45, mugAt.z), 0, 50, V(mugAt.x, mugY + 0.1, mugAt.z), { creep: 0.04 });
     await S.wait(1.2);
     const from = N.held.R ? N.held.R.getWorldPosition(V(0, 0, 0)) : V(mugAt.x, mugY + 0.3, mugAt.z);
     N.play('kneel', 'sad');
@@ -690,10 +690,10 @@ function funeral(story) {
     S.every(() => { if (Math.random() < 0.75) steam(mugTop, 1); return false; });
     await S.wait(1.6);
     await S.say('grandma', 'There. Still hot, just how you like it.', { actor: N, expr: 'happy' });
-    N.play('mourn', 'sad');
+    N.play('idle', 'sad');
     turnTo(N, 0.2, 0.4);
     await S.wait(1.0);
-    await S.faceShot(N, { dist: 1.9, side: 0.2, dur: 0, fov: 36, creep: 0.06 });
+    await S.faceShot(N, { dist: 2.0, side: 0.25, up: -0.12, lookDown: 0.05, dur: 0, fov: 36, creep: 0.06 });
     await S.say('grandma', 'Goodnight, Hank.', { actor: N, expr: 'sad', speed: 18 });
     // she goes, into the low sun
     N.walkTo([at(-1.1, -1.6), ...EXIT.map(([lx, lz]) => at(lx, lz))].map((p) => [p.x, p.z]), 0.75, 'walk').then(() => (N.visible = false));
