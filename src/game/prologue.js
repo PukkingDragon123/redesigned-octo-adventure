@@ -521,9 +521,47 @@ function funeral(story) {
     S.sfx('coffin_thud', { volume: 0.3 });
     await S.wait(0.8);
     ropesOn = false;
-    Lou.play('mourn', 'sad');
     Gus.play('mourn', 'sad');
     who.doug.play('mourn');
+    const inGrave = [];
+    // Lou throws in a handful of earth: little cube clods patter on the lid
+    Lou.play('toss', 'sad');
+    await S.wait(0.7);
+    if (!S.skip) {
+      const h = hands(Lou);
+      const clods = [];
+      for (let k = 0; k < 7; k++) {
+        const r = LORE.clod({ seed: k + 1 });
+        const geo = meshVox(r.vox, { size: r.size, origin: r.origin, greedy: true });
+        const m = voxMesh(geo, sharedVoxelMaterial());
+        m.renderOrder = IN_PIT_ORDER;
+        m.position.set(h.x + (Math.random() - 0.5) * 0.12, h.y, h.z + (Math.random() - 0.5) * 0.12);
+        m.rotation.y = Math.random() * 6.28;
+        g.scene.add(m);
+        inGrave.push(m);
+        S.temp.push({ remove: () => { m.parent?.remove(m); geo.dispose(); } });
+        const aim = coffin.localToWorld(V((Math.random() - 0.5) * 0.4, 0.6, (Math.random() - 0.5) * 1.2));
+        clods.push({ m, v: V((aim.x - h.x) * 1.4, 0.6 + Math.random() * 0.4, (aim.z - h.z) * 1.4), rest: false });
+      }
+      const _l = V(0, 0, 0);
+      S.every((dt) => {
+        let moving = false;
+        for (const c of clods) {
+          if (c.rest) continue;
+          moving = true;
+          c.v.y -= 9.8 * dt;
+          c.m.position.addScaledVector(c.v, dt);
+          coffin.worldToLocal(_l.copy(c.m.position));
+          const onLid = Math.abs(_l.x) < 0.3 && Math.abs(_l.z) < 0.9;
+          const floor = onLid ? coffin.position.y + 0.55 : top - 1.7;
+          if (c.m.position.y < floor) { c.m.position.y = floor; c.rest = true; }
+        }
+        return !moving;
+      });
+      S.sfx('shovel_dirt', { volume: 0.35 });
+      await S.wait(1.6);
+    }
+    Lou.play('mourn', 'sad');
     // 9. Nana lets a maple leaf fall in after him
     N.play('toss', 'cry');
     await S.cam(L3(0.95, 0.15, 1.05), L3(-0.15, 1.85, 0.75), 0, 40, N, { creep: 0.03 });
@@ -542,7 +580,7 @@ function funeral(story) {
     // ================================================================ afterwards
     // the grave filled in and heaped with flowers; the drizzle easing off
     pitOpen = false;
-    for (const o of [pit, hole, coffin, ...stakes]) o.visible = false;
+    for (const o of [pit, hole, coffin, ...stakes, ...inGrave]) o.visible = false;
     S.prop(LORE.graveMound({}), gr.x, gr.z, { yaw: GRAVE_YAW, y: y0 - 0.02 });
     const moundTop = (lx, lz) => {
       const dx = lx / 0.65, dz = lz / 1.15, r = dx * dx + dz * dz;

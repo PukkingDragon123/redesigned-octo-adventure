@@ -398,6 +398,17 @@ export function spade() {
   return { vox: v, size: 0.05, origin: [3, 4, 2] };
 }
 
+// a little cube clod of earth (a handful thrown into the grave)
+export function clod({ seed = 1 } = {}) {
+  const v = new Vox(3, 2, 3);
+  for (let x = 0; x < 3; x++) for (let y = 0; y < 2; y++) for (let z = 0; z < 3; z++) {
+    const n = vhash(x, y, z, seed);
+    if ((x === 2 || z === 2) && n < 0.5) continue;
+    v.set(x, y, z, n < 0.3 ? 0x3e2a1c : n < 0.7 ? 0x4a3422 : 0x5a3e28);
+  }
+  return { vox: v, size: 0.05, origin: [1, 0, 1] };
+}
+
 // a length of hemp rope one metre long along +z (stretched to fit by the scene)
 export function rope() {
   const v = new Vox(1, 1, 20);
