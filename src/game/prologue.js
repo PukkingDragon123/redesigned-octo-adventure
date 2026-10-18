@@ -428,7 +428,7 @@ function funeral(story) {
     // steam off a mug of cocoa (held, or set down)
     const steam = (p, k = 1) => g.effects.ps.spawn({
       x: p.x + (Math.random() - 0.5) * 0.03, y: p.y, z: p.z + (Math.random() - 0.5) * 0.03, vy: 0.2 + Math.random() * 0.12,
-      life: 1.8 + Math.random() * 0.9, size: 0.1 * k, size1: 0.34 * k, sprite: P.steam, color: [1, 0.98, 0.95], drag: 0.5, wind: 0.25, alpha: 0.6, fadeIn: 0.3, flutter: 0.12,
+      life: 2 + Math.random() * 0.9, size: 0.13 * k, size1: 0.5 * k, sprite: P.steam, color: [1, 0.98, 0.95], emissive: 0.25, drag: 0.5, wind: 0.25, alpha: 0.85, fadeIn: 0.3, flutter: 0.12,
     });
     // the ropes follow the hands and the coffin
     let ropesOn = false;
@@ -550,7 +550,7 @@ function funeral(story) {
       const dx = lx / 0.65, dz = lz / 1.15, r = dx * dx + dz * dz;
       return y0 - 0.045 + (Math.round((1 - Math.min(1, r)) * 6) + 1) * 0.05;
     };
-    for (const [lx, lz, seed, yaw] of [[0.22, 0.3, 3, 0.5], [-0.2, 0.62, 1, -0.4], [0.05, -0.3, 4, 1.2]]) {
+    for (const [lx, lz, seed, yaw] of [[0.22, 0.3, 3, 0.5], [-0.2, 0.62, 1, -0.4], [0.14, 0.02, 4, 1.2]]) {
       const p = at(lx, lz);
       S.prop(LORE.bouquet({ seed }), p.x, p.z, { yaw: GRAVE_YAW + yaw, y: moundTop(lx, lz) + 0.05 });
     }
@@ -619,7 +619,7 @@ function funeral(story) {
     N.play('cradle', 'sad');
     S.every(() => {
       const m = N.held.R;
-      if (m && N.visible && Math.random() < 0.3) { const p = m.getWorldPosition(V(0, 0, 0)); p.y += 0.16; steam(p, 0.8); }
+      if (m && N.visible && Math.random() < 0.5) { const p = m.getWorldPosition(V(0, 0, 0)); p.y += 0.16; steam(p, 0.8); }
       return false;
     });
     await S.faceShot(N, { dist: 2.0, side: -0.55, dur: 0, fov: 38, creep: 0.06 });
@@ -628,7 +628,7 @@ function funeral(story) {
     // round the mound to the headstone, down on one knee, the mug set on the ground
     const kneelAt = [-0.98, -0.72];
     const walk = N.walkTo([at(-1.05, 1.45), at(...kneelAt)].map((p) => [p.x, p.z]), 0.7, 'walk+cradle');
-    await S.cam(L3(1.6, -0.2, 1.3), L3(-0.8, 0.4, 0.6), 0, 42, N, { creep: 0.02 });
+    await S.cam(L3(2.0, 0.2, 1.45), L3(-0.8, 0.4, 0.8), 0, 46, N, { creep: 0.02 });
     await Promise.race([walk, S.wait(9)]);
     if (N.path) { const p = at(...kneelAt); N.path = null; N.pos.set(p.x, gy(p.x, p.z), p.z); }
     turnTo(N, -0.4, -0.78);
@@ -637,7 +637,7 @@ function funeral(story) {
     const mugAt = at(-0.52, -0.76);
     const mugY = gy(mugAt.x, mugAt.z) - 0.005;
     // low by the headstone, the mug about to come into frame
-    await S.cam(XZ(at(0.15, 0.75), moundTop(0.15, 0.75) + 0.55), V(mugAt.x - 0.0, mugY + 0.25, mugAt.z), 0, 44, V(mugAt.x, mugY + 0.1, mugAt.z), { creep: 0.04 });
+    await S.cam(XZ(at(0.38, -0.4), moundTop(0.38, -0.4) + 0.42), V(mugAt.x - 0.0, mugY + 0.3, mugAt.z), 0, 46, V(mugAt.x, mugY + 0.1, mugAt.z), { creep: 0.04 });
     await S.wait(1.2);
     const from = N.held.R ? N.held.R.getWorldPosition(V(0, 0, 0)) : V(mugAt.x, mugY + 0.3, mugAt.z);
     N.play('kneel', 'sad');
@@ -648,7 +648,7 @@ function funeral(story) {
     });
     const sp = MUG.meta.steam[0];
     const mugTop = V(mugAt.x, mugY + sp.y * MS + 0.01, mugAt.z);
-    S.every(() => { if (Math.random() < 0.4) steam(mugTop, 1); return false; });
+    S.every(() => { if (Math.random() < 0.75) steam(mugTop, 1); return false; });
     await S.wait(1.6);
     await S.say('grandma', 'There. Still hot, just how you like it.', { actor: N, expr: 'happy' });
     N.play('mourn', 'sad');
