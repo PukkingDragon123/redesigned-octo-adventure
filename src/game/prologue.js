@@ -516,7 +516,7 @@ function funeral(story) {
     const cy0 = coffin.position.y, cy1 = top - 1.7 + 0.01;
     const lowering = S.anim(8.5, (k) => (coffin.position.y = cy0 + (cy1 - cy0) * smooth(k)));
     await S.wait(4.6);
-    // looking straight down into the grave as it settles
+    // from behind the headstone, down into the grave as it settles
     await S.cam(lowerCam(0.15, -1.95, 1.9), lowerCam(0, 0.55, -1.3), 0, 44, coffin.position, { creep: 0 });
     S.cam(lowerCam(0.12, -1.75, 1.75), lowerCam(0, 0.55, -1.45), 5, 42, coffin.position, { ease: 'glide' });
     await lowering;
@@ -599,7 +599,7 @@ function funeral(story) {
     leave(Lou);
     await S.wait(0.6);
     leave(who.marie, FAR);
-    leave(Pa, [[1.0, -2.3], [-1.6, -2.2]]);
+    leave(Pa, [[1.0, -2.6], [-2.6, -2.6]]);
     // Nana watches them go
     await S.ots(N, Lou, { side: 1, back: 1.0, up: 0.35, fov: 44 });
     await S.wait(7);
