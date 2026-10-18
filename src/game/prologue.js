@@ -374,7 +374,7 @@ function funeral(story) {
 
     // ---- everyone came (in their dark coats), under black umbrellas
     const cast = [
-      ['pastor', 'pastor', -0.95, -1.6, 'preach'],
+      ['pastor', 'pastor', 0.95, -1.6, 'preach'],
       ['lou', 'louMourn', -1.1, -0.25, 'mourn'], ['gus', 'gusMourn', -1.1, 0.85, 'mourn'],
       ['grandma', 'grandmaMourn', -0.1, 2.05, 'mourn'], ['marie', 'marieMourn', 0.55, 2.3, 'brolly'],
       ['pip', 'pip', -0.7, 2.45, 'sad'], ['pop', 'pop', -1.2, 2.7, 'sad'],
@@ -468,8 +468,8 @@ function funeral(story) {
     await S.wait(3.2);
     // 2. low along the coffin lid: the axe, the toque, the headstone beyond
     const lidY = top + 0.1 + 0.62;
-    await S.cam(XZ(at(0.22, 2.25), lidY + 0.5), XZ(at(-0.02, -0.7), lidY - 0.05), 0, 40, coffin.position, { creep: 0 });
-    S.cam(XZ(at(0.14, 1.75), lidY + 0.36), XZ(at(-0.02, -0.7), lidY - 0.02), 6.5, 38, coffin.position, { ease: 'glide' });
+    await S.cam(XZ(at(0.5, 2.2), lidY + 0.55), XZ(at(-0.05, -0.6), lidY - 0.05), 0, 40, coffin.position, { creep: 0 });
+    S.cam(XZ(at(0.36, 1.75), lidY + 0.4), XZ(at(-0.05, -0.6), lidY - 0.02), 6.5, 38, coffin.position, { ease: 'glide' });
     await S.wait(1.2);
     await S.narrate('They laid Hank to rest on a grey October afternoon.');
     // 3. Father Gilles
@@ -479,7 +479,7 @@ function funeral(story) {
     await S.ots(N, Pa, { side: -1, back: 0.85, up: 0.16, fov: 40 });
     await S.say('ollie', 'Rest easy now, Hank. Lord knows you were good at it.', { actor: Pa, expr: 'happy', name: 'Father Gilles' });
     // 5. a slow push in on Nana
-    await S.faceShot(N, { dist: 2.6, side: 0.55, dur: 0, fov: 40, creep: 0 });
+    await S.faceShot(N, { dist: 2.6, side: -0.45, dur: 0, fov: 40, creep: 0 });
     S.push(0.32, 7);
     await S.wait(1.4);
     await S.say('grandma', 'He waved at my porch every morning. Every single one.', { actor: N, expr: 'sad' });
@@ -500,7 +500,7 @@ function funeral(story) {
       const sd = V(-d.z, 0, d.x);
       const cp = cw.clone().addScaledVector(d, 1.15).addScaledVector(sd, 0.42);
       cp.y += 0.32;
-      await S.cam(cp, V(pc.x, top + 0.7, pc.z), 0, 30, V(pc.x, top + 0.7, pc.z), { creep: 0.05 });
+      await S.cam(cp, V(pc.x, top + 0.7, pc.z), 0, 30, cw.clone().add(V(0, 0.2, 0)), { creep: 0.05 });
       await S.wait(0.9);
       caw(0.7);
       await S.wait(1.7);
@@ -517,8 +517,8 @@ function funeral(story) {
     const lowering = S.anim(8.5, (k) => (coffin.position.y = cy0 + (cy1 - cy0) * smooth(k)));
     await S.wait(4.6);
     // looking straight down into the grave as it settles
-    await S.cam(lowerCam(0.06, 0.8, 3.6), lowerCam(0, 0.3, -1.6), 0, 46, coffin.position, { creep: 0 });
-    S.cam(lowerCam(0.04, 0.65, 3.0), lowerCam(0, 0.3, -1.6), 5, 46, coffin.position, { ease: 'glide' });
+    await S.cam(lowerCam(1.75, 0.55, 2.4), lowerCam(-0.1, 0.3, -1.5), 0, 44, coffin.position, { creep: 0 });
+    S.cam(lowerCam(1.5, 0.4, 2.1), lowerCam(-0.1, 0.3, -1.55), 5, 42, coffin.position, { ease: 'glide' });
     await lowering;
     S.sfx('coffin_thud', { volume: 0.3 });
     await S.wait(0.8);
@@ -537,7 +537,7 @@ function funeral(story) {
       if (q) q.groundHit = false;
     }
     await S.wait(0.9);
-    await S.cam(lowerCam(0.05, 0.8, 3.1), lowerCam(0, 0.3, -1.6), 0, 46, coffin.position, { creep: 0.04 });
+    await S.cam(lowerCam(1.5, 0.4, 2.1), lowerCam(-0.1, 0.35, -1.5), 0, 42, coffin.position, { creep: 0.04 });
     await S.wait(3.4);
     await S.fade(1, 1.8);
 
@@ -565,7 +565,7 @@ function funeral(story) {
       a.walkTo(pts, 1.1, umb ? 'walk+brolly' : 'walk').then(() => (a.visible = false));
       a.setExpr('sad');
     };
-    await S.cam(L3(3.6, 3.6, 4.3), L3(-5, -3.5, 0.2), 0, 42, N, { creep: 0.03 });
+    await S.cam(L3(-6.2, -2.6, 1.5), L3(-0.6, 0.8, 0.9), 0, 44, N, { creep: 0.03 });
     S.fade(0, 1.6);
     await S.wait(1.2);
     leave(who.ollie);
@@ -590,7 +590,7 @@ function funeral(story) {
     await S.ots(N, Lou, { side: 1, back: 0.8, up: 0.2, fov: 40 });
     await S.say('lou', 'Come on, Nana. You\'ll catch cold out here.', { actor: Lou, expr: 'sad' });
     turnTo(N, -1.1, -0.25);
-    await S.closeUp(N, { side: 0.45, creep: 0.04 });
+    await S.faceShot(N, { dist: 2.2, side: 0.5, dur: 0, fov: 36, creep: 0.04 });
     await S.say('grandma', 'In a minute, dear. You go on ahead.', { actor: N, expr: 'sad' });
     Lou.react('nod');
     leave(Gus);
@@ -598,7 +598,10 @@ function funeral(story) {
     leave(Lou);
     await S.wait(0.6);
     leave(who.marie, [[0.6, 3.6]]);
-    leave(Pa, [[-1.6, -1.9]]);
+    leave(Pa, [[1.0, -2.3], [-1.6, -2.2]]);
+    // Nana watches them go
+    await S.ots(N, Lou, { side: 1, back: 1.0, up: 0.35, fov: 44 });
+    await S.wait(5);
     // Nana alone, small, as the others reach the gate
     await S.cam(L3(4.6, -1.6, 2.6), L3(-1.2, 0.6, 0.7), 0, 42, N, { creep: 0.03 });
     turnTo(N, 0, 0);

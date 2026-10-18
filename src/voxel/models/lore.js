@@ -302,7 +302,7 @@ export function gravePit({ w = 20, l = 46, d = 34, seed = 5 } = {}) {
     else if (n < 0.09) c = 0x5a4430;
     else if (n > 0.93) c = tone(c, 0.08);
     // (darker the deeper it goes, never black)
-    return tone(c, -0.28 * (1 - k));
+    return tone(c, -0.14 * (1 - k));
   };
   for (let z = z0; z <= z1; z++) for (let x = x0; x <= x1; x++) {
     const wall = x === x0 || x === x1 || z === z0 || z === z1;
