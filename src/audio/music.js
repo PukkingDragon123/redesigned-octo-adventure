@@ -17,6 +17,7 @@ const MAJOR = [0, 2, 4, 5, 7, 9, 11];
 const LYDIAN = [0, 2, 4, 6, 7, 9, 11];
 const DORIAN = [0, 2, 3, 5, 7, 9, 10];
 const HMINOR = [0, 2, 3, 5, 7, 8, 11];
+const AEOLIAN = [0, 2, 3, 5, 7, 8, 10];
 
 // One-bar rhythm templates in eighth-note steps.
 const R4 = [[2, 2, 2, 2], [2, 1, 1, 2, 2], [3, 1, 2, 2], [2, 2, 4], [1, 1, 2, 2, 2], [4, 2, 2], [2, 2, 2, 1, 1], [3, 3, 2], [2, 1, 1, 4]];
@@ -25,6 +26,7 @@ const R4_BUSY = [[1, 1, 1, 1, 2, 2], [2, 1, 1, 2, 1, 1], [1, 1, 2, 1, 1, 2], [2,
 const R3 = [[2, 2, 2], [4, 2], [2, 1, 1, 2], [3, 1, 2], [2, 4], [1, 1, 2, 2]];
 const CAD4 = [[4, 4], [2, 2, 4], [8], [2, 6]];
 const CAD3 = [[6], [2, 4]];
+const R3_SLOW = [[4, 2], [2, 4], [6], [3, 1, 2], [2, 2, 2]];
 
 const mod = (a, n) => ((a % n) + n) % n;
 const d2m = (def, d) => def.root + def.scale[mod(d, 7)] + 12 * Math.floor(d / 7);
@@ -259,6 +261,26 @@ const MOODS = {
       if (s.sib === 4) P.brush(s.t, 0.06, 0.2);
       if (s.mel) P.piano(s.mel.midi, s.t, 0.2, s.mel.dur, 1);
     },
+  },
+};
+
+// (the funeral) a slow lament in three: rolling piano under a hushed pad, the tune on
+// piano, a solo fiddle taking it in the middle, a music box answering it an octave up
+MOODS.requiem = {
+  gain: 1.15, bpm: 54, meter: 3, root: 62, scale: AEOLIAN, verb: 0.55, mel: [5, 12], rest: 0.2, rhythms: R3_SLOW, vib: 6,
+  prog: { A: [0, 5, 2, 6], A2: [0, 5, 3, 0], B: [5, 2, 3, 4] },
+  arrange(P, s) {
+    const v = P.voice(s.deg, 53);
+    if (s.sib === 0) {
+      P.pad(P.voice(s.deg, 50), s.t, s.barDur, 0.045, { attack: 1.6, release: 2.4, cutoff: 700 });
+      P.bass(P.root(s.deg, 38), s.t, 0.2, s.barDur * 0.9);
+    }
+    if (s.sib === 0 || s.sib === 2 || s.sib === 4) P.piano(v[(s.sib / 2) | 0] ?? v[0], s.t, 0.07, s.sd * 4);
+    if (s.mel) {
+      if (s.sec === 'B') P.fiddle(s.mel.midi, s.t, s.mel.dur, 0.075);
+      else P.piano(s.mel.midi, s.t, 0.17, s.mel.dur, 1);
+      if (s.sec === 'A2' && s.mel.dur > s.sd * 2 && chance(0.5)) P.bell(s.mel.midi + 12, s.t, 0.04, 'musicbox');
+    }
   },
 };
 
