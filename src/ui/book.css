@@ -25,7 +25,7 @@
 
 /* headings in red ink with a pencil note under them */
 .bk-head { margin: 0 0 calc(var(--u) * 4); }
-.bk-h { color: #8a2a14; font-family: 'BoldPixels', monospace; line-height: calc(var(--u) * 14); white-space: nowrap; overflow: hidden; }
+.bk-h { color: #8a2a14; font-family: var(--font-b); line-height: calc(var(--u) * 14); white-space: nowrap; overflow: hidden; }
 .bk-sub { color: #6e6070; line-height: calc(var(--u) * 12); white-space: nowrap; overflow: hidden; }
 .bk-page .k-h { color: #8a2a14; text-shadow: none; margin: calc(var(--u) * 4) 0 calc(var(--u) * 2); }
 .bk-page .hint { color: #6e5038; white-space: normal; margin: calc(var(--u) * 3) 0 0; }
@@ -115,11 +115,15 @@
 .cmp-hit.hide, .jr-hit.hide { visibility: hidden; }
 /* a small pencilled tag under the compass now and then */
 .cmp-lbl {
-  position: absolute; top: calc(var(--u) * 50 + var(--safe-t, 0px)); right: calc(var(--u) * 4 + var(--safe-r, 0px));
+  position: absolute; top: calc(var(--u) * 58 + var(--safe-t, 0px)); right: calc(var(--u) * 10 + var(--safe-r, 0px));
   display: flex; align-items: center; gap: calc(var(--u) * 2); height: calc(var(--u) * 18); max-width: calc(var(--u) * 160);
   white-space: nowrap; overflow: hidden; pointer-events: none;
 }
 .cmp-lbl.off { display: none; }
+/* (its string runs up to the compass at the right-hand end; no pointer underneath) */
+.cmp-lbl.k-tag { overflow: visible; height: calc(var(--u) * 20); }
+.cmp-lbl.k-tag::before { left: auto; right: calc(var(--u) * 12); }
+.cmp-lbl.k-tag::after { display: none; }
 /* the compass held up: an X and a short hint */
 .cmp-fp { position: absolute; inset: 0; display: none; pointer-events: auto; z-index: 3; touch-action: none; cursor: grab; }
 .cmp-fp.on { display: block; }

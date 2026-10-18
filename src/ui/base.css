@@ -1,6 +1,5 @@
-/* Every word on screen is a bitmap-style pixel font (Monogram / BoldPixels, see kit.css)
-   drawn at a whole multiple of its 16 px design size, so glyph pixels land on device
-   pixels: no vector fonts anywhere. */
+/* Every word on screen is set in the cosy pixel face Pixelify Sans (see kit.css) at a
+   whole multiple of its ~11 px design size, so glyph pixels land on device pixels. */
 
 :root {
   --ink: #2a1a14;
@@ -32,8 +31,8 @@ body {
   overflow: hidden;
   background: #120a10;
   color: var(--cream);
-  font-family: 'Monogram', monospace;
-  font-size: var(--tf, 16px);
+  font-family: var(--font);
+  font-size: var(--tf, 22px);
   line-height: calc(var(--u, 1px) * 12);
   font-variant-ligatures: none;
   font-feature-settings: 'liga' 0, 'clig' 0;

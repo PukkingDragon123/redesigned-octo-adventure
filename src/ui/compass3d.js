@@ -9,6 +9,7 @@
 // view with the world behind it, and the name of where it is pointing is inked on a
 // little paper tag tied to its bow. Drag to look about; Esc / the X puts it away.
 import * as THREE from 'three';
+import { cfont, fontsReady, fontsOK } from './type.js';
 import { BonyHand } from './hands3d.js';
 import { el, onScale } from './kit.js';
 import { iconSmallURL, glyphURL } from '../art/icons.js';
@@ -25,7 +26,19 @@ const _d = new THREE.Vector3();
 function cardTexture() {
   const S = 512, c = document.createElement('canvas');
   c.width = c.height = S;
+  paintCard(c);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 4;
+  // the letters again once the pixel font is in
+  fontsReady().then(() => { paintCard(c); t.needsUpdate = true; });
+  return t;
+}
+function paintCard(c) {
+  const S = c.width;
   const g = c.getContext('2d');
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  g.clearRect(0, 0, S, S);
   const R = S / 2;
   g.translate(R, R);
   const gr = g.createRadialGradient(0, 0, 10, 0, 0, R);
@@ -65,16 +78,12 @@ function cardTexture() {
   // the letters
   g.textAlign = 'center';
   g.textBaseline = 'middle';
-  g.font = `bold ${Math.round(R * 0.2)}px Georgia, serif`;
+  g.font = cfont(R * 0.2, true);
   ['N', 'E', 'S', 'W'].forEach((t, i) => {
     const a = (i * Math.PI) / 2;
     g.fillStyle = i === 0 ? '#a8241a' : '#2a1a14';
     g.fillText(t, Math.sin(a) * R * 0.62 * 1.25, -Math.cos(a) * R * 0.62 * 1.25 + 2);
   });
-  const t = new THREE.CanvasTexture(c);
-  t.colorSpace = THREE.SRGBColorSpace;
-  t.anisotropy = 4;
-  return t;
 }
 
 // the paper tag: the place's name in Nana's ink, the distance in pencil
@@ -102,13 +111,13 @@ function drawTag(c, name, sub) {
   g.textBaseline = 'middle';
   g.textAlign = 'left';
   // whole-pixel pixel fonts at a whole multiple of their size
-  let px = 64;
-  g.font = `${px}px BoldPixels, monospace`;
-  while (g.measureText(name).width > 412 && px > 32) { px -= 16; g.font = `${px}px BoldPixels, monospace`; }
+  let px = 66;
+  g.font = cfont(px, true);
+  while (g.measureText(name).width > 412 && px > 33) { px -= 11; g.font = cfont(px, true); }
   g.fillStyle = '#7a1a10';
   g.fillText(name, 88, sub ? 96 : 128);
   if (sub) {
-    g.font = '64px Monogram, monospace';
+    g.font = cfont(55);
     g.fillStyle = '#4a4a5a';
     g.fillText(sub, 88, 176);
   }
@@ -272,7 +281,8 @@ export class Compass3D {
       if (this.cornerOn()) this.openFP();
     });
     ui.root.appendChild(hit);
-    this.label = el('div', 'k-plate k-dark cmp-lbl off');
+    // (a little tag hanging under the compass)
+    this.label = el('div', 'k-tag cmp-lbl off');
     ui.root.appendChild(this.label);
     // the first-person view's own little bar: what to do, and an X
     this.fpEl = el('div', 'cmp-fp', '<div class="k-plate k-dark cmp-fp-hint"><span class="k-key">Esc</span><span>put it away</span><span class="sep"></span><span>drag to look about</span></div>');
@@ -453,7 +463,7 @@ export class Compass3D {
     const G = this.goal;
     const name = G ? markName(this.g, G) : 'Nowhere just now';
     const sub = G ? fmtD(G.d) : 'free time!';
-    const key = `${name}|${sub}`;
+    const key = `${name}|${sub}|${fontsOK()}`;
     if (key !== this.tagKey) {
       this.tagKey = key;
       drawTag(H.tagCanvas, name, sub);

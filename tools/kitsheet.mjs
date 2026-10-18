@@ -76,6 +76,8 @@ if (what === 'kit' || what === 'all') {
   for (const s of ['normal', 'hover', 'pressed', 'disabled']) putNine(K.buttonArt(s), 72, 30, K.BTN_SLICE);
   putNine(K.buttonArt('normal', 'red'), 60, 30, K.BTN_SLICE);
   putNine(K.buttonArt('normal', 'green'), 60, 30, K.BTN_SLICE);
+  putNine(K.buttonArt('normal', 'leather'), 72, 44, K.BTN_SLICE);
+  put(K.pointerArt());
   nl();
   for (const s of ['empty', 'filled', 'selected', 'locked']) put(K.slotArt(s));
   put(K.slotArt('filled', 30));

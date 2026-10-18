@@ -2,7 +2,8 @@
 // pixel-art widget in the bottom right corner. It is how Hank pedals:
 //
 //   touch / mouse  drag round the chainring (it turns with your finger; clockwise is forwards,
-//                  backwards back-pedals into the coaster brake)
+//                  backwards back-pedals into the coaster brake); a quick tap on it rings
+//                  the bell; tap the rear cogs to change gear (top half up, bottom half down)
 //   keyboard       W and S (or Up and Down) are the two feet: each time the other one goes
 //                  down the crank winds on half a turn. Holding a key does nothing.
 //   gamepad        turn the right stick in circles, or alternate RT and LT
@@ -82,11 +83,22 @@ export class CrankHUD {
     this.buf = new Uint32Array(this.img.data.buffer);
     this.tmp = new Uint32Array(W * H);
     this.hit = el('div', 'crank-hit');
+    // the rear cogs: tap the top half to shift up, the bottom half to shift down
+    this.cogHit = el('div', 'crank-cog');
+    this.cogHit.addEventListener('pointerdown', (e) => {
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const r = this.cogHit.getBoundingClientRect();
+      const up = e.clientY < r.top + r.height / 2;
+      input.tapAction(up ? 'shiftUp' : 'shiftDown');
+      this.flash = Math.max(this.flash, 0.4);
+    });
     this.keys = el('div', 'ck', '<span class="k-key">W</span><span class="k-key">S</span>');
     this.keyA = this.keys.children[0];
     this.keyB = this.keys.children[1];
     this.keyMode = 'kb';
-    this.root.append(this.canvas, this.keys, this.hit);
+    this.root.append(this.canvas, this.keys, this.hit, this.cogHit);
     document.getElementById('ui')?.appendChild(this.root);
     this.on = false;
     // ---- palettes (packed once): the chainring heats from brass to red as Hank tires
@@ -169,6 +181,8 @@ export class CrankHUD {
     this.centre.u = u;
     this.lastA = Math.atan2(e.clientY - this.centre.y, e.clientX - this.centre.x);
     this.root.classList.add('held');
+    // (a tap that hardly turns it rings the bell)
+    this.tap = { t: performance.now(), turned: 0 };
   }
   drag(e) {
     const dx = e.clientX - this.centre.x, dy = e.clientY - this.centre.y;
@@ -178,12 +192,16 @@ export class CrankHUD {
     const d = wrap(a - this.lastA);
     this.lastA = a;
     if (Math.abs(d) < 1.4) input.pedal.turn(d); // (y is down: clockwise on screen is forwards)
+    if (this.tap) this.tap.turned += Math.abs(d);
   }
   letGo() {
     if (this.ptr == null) return;
     try { if (this.hit.hasPointerCapture?.(this.ptr)) this.hit.releasePointerCapture(this.ptr); } catch { /* gone */ }
     this.ptr = null;
     this.root.classList.remove('held');
+    const T = this.tap;
+    this.tap = null;
+    if (T && performance.now() - T.t < 280 && T.turned < 0.3) input.tapAction('bell');
   }
 
   // ---------------------------------------------------------------- per frame

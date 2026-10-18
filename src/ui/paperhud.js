@@ -228,8 +228,8 @@ export function buildPaperHUD(ui) {
   // the objective's text (the compass tag pencils it in for a while when it changes)
   ui.objective = el('div', 'hud-obj');
   ui.orderCards = new Map();
-  // prompt: what E does right now
-  ui.promptEl = el('div', 'k-plate k-dark hud-prompt');
+  // prompt: what E does right now, on a little tag hanging over Hank's head (ui.js placePrompt)
+  ui.promptEl = el('div', 'k-tag hud-prompt');
   h.appendChild(ui.promptEl);
   ui.root.appendChild(h);
 }

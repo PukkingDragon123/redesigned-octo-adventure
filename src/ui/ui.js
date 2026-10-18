@@ -8,7 +8,10 @@ import './notebook.css';
 import { Bubbles, WorldBubbles, nameTab, frame } from './bubbles.js';
 import { Popups, htmlToMarkup } from './popup.js';
 import { buildPaperHUD, updatePaperHUD, Gauge } from './paperhud.js';
-import { installKit, kitReady, kButton, kPanel, el, snapBox, scale } from './kit.js';
+import { installKit, kitReady, kButton, kPanel, el, snapBox, scale, snap as snapPx } from './kit.js';
+import { Vector3 } from 'three';
+
+const _pp = new Vector3();
 import { iconURL, hasIcon } from '../art/icons.js';
 import { foodIconURL, FOOD_INFO } from '../art/foodsprites.js';
 import { LivePortrait } from './live3d.js';
@@ -160,6 +163,36 @@ export class UI {
       prev.apply(sc, a);
       this.late();
     };
+  }
+
+  // The prompt (and, on a touch screen, the tag you tap) hangs over Hank's head out in the
+  // world rather than sitting on the bottom of the screen; if he's off the picture it
+  // drops back to the bottom middle.
+  placePrompt() {
+    const g = this.game, cam = g.camera;
+    const list = [this.promptEl, g.touch?.talk];
+    for (const e of list) {
+      if (!e) continue;
+      const shown = e.classList.contains('on') || e.classList.contains('lit');
+      if (!shown || !cam || !g.state || g.mode === 'title') { if (e._wx !== undefined) { e.classList.remove('world'); e.style.left = e.style.top = ''; e._wx = undefined; } continue; }
+      const p = g.playerPos;
+      _pp.set(p.x, p.y + (g.onFoot ? 2.2 : 2.45), p.z).project(cam);
+      const W = innerWidth, H = innerHeight;
+      if (_pp.z > 1 || Math.abs(_pp.x) > 0.95 || _pp.y > 0.9 || _pp.y < -0.6) {
+        if (e._wx !== undefined) { e.classList.remove('world'); e.style.left = e.style.top = ''; e._wx = undefined; }
+        continue;
+      }
+      const u = scale.u, w = e.offsetWidth, h = e.offsetHeight;
+      const x = Math.round(Math.max(6 * u, Math.min(W - w - 6 * u, (_pp.x * 0.5 + 0.5) * W - w / 2)) / u) * u;
+      const y = Math.round(Math.max(14 * u, (-_pp.y * 0.5 + 0.5) * H - h - 9 * u) / u) * u;
+      if (x !== e._wx || y !== e._wy) {
+        e._wx = x;
+        e._wy = y;
+        e.classList.add('world');
+        e.style.left = `${snapPx(x)}px`;
+        e.style.top = `${snapPx(y)}px`;
+      }
+    }
   }
 
   // ---------------------------------------------------------------- dialogue (the classic box; speech bubbles are the default)
@@ -425,6 +458,7 @@ export class UI {
     // (the world wasn't drawn since last frame: place the bubbles now)
     this.late();
     this.hookRender();
+    this.placePrompt();
     if (this.dialogueTick) this.dialogueTick(dt);
     else this.menuTick();
     this._late = true;
