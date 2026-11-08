@@ -379,8 +379,8 @@ export class Pipeline {
     // pixel budget: phones are dense but small GPUs; desktops can afford more
     const touch = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches;
     this.touch = touch;
-    this.maxPixels = touch ? 1.4e6 : 5.2e6;
-    this.maxDpr = touch ? 1.5 : 3; // device pixels per CSS pixel we ever render
+    this.maxPixels = touch ? 1.4e6 : 1.6e6;
+    this.maxDpr = touch ? 1.5 : 1.5; // device pixels per CSS pixel we ever render
     this.reflections = !touch;
     this.bloom = !touch;
     this.rays = !touch;
